@@ -1,6 +1,7 @@
 import {request, setCsrf, endpoint} from './api.js';
 import {el, icon, button, badge, heading, loading, empty, errorPanel, notice, dataTable, number, fileSize, dateTime, quoteIdentifier, toast, copyText, sqlDisclosure, confirmAction} from './ui.js';
 import {DatabaseModal} from './database-modal.js';
+import {QueryBuilder} from './query-builder.js';
 
 const routes = {
     overzicht: {label: 'Overzicht', icon: 'grid'},
@@ -18,6 +19,9 @@ const state = {
     queryId: null,
     queryResult: null,
     queryRevision: 0,
+    queryDesign: null,
+    builderDraft: null,
+    builderOpen: true,
     restoring: false,
 };
 const page = document.getElementById('page');
@@ -114,6 +118,7 @@ function openResearch(sql) {
     state.queryName = '';
     state.queryNotes = '';
     state.queryResult = null;
+    state.queryDesign = null;
     go('onderzoeken');
 }
 
@@ -371,13 +376,27 @@ async function renderStructure(scope) {
 }
 
 async function renderResearch(scope) {
-    page.append(heading('ONDERZOEKEN', 'Stel een vraag aan je gegevens.', 'Schrijf een query, bekijk het resultaat en bewaar wat je opnieuw wilt gebruiken.',
+    page.append(heading('ONDERZOEKEN', 'Stel een vraag aan je gegevens.', 'Stel je query samen of schrijf zelf SQL. Bekijk het resultaat en bewaar wat je opnieuw wilt gebruiken.',
         [button('Volledige SQL-editor', () => databaseModal.open(state.table, 'sql'), {symbol: 'external'})]));
     if (!state.queryDraft) state.queryDraft = defaultSql();
     const result = el('div', {class: 'query-result'});
     const editor = el('textarea', {id: 'sql-editor', class: 'sql-editor', spellcheck: 'false', autocapitalize: 'off', autocomplete: 'off', 'aria-label': 'SQL-query'}, state.queryDraft);
     editor.value = state.queryDraft;
-    editor.addEventListener('input', () => { state.queryDraft = editor.value; });
+    editor.addEventListener('input', () => {
+        state.queryRevision += 1;
+        state.queryDraft = editor.value;
+        state.queryDesign = null;
+    });
+    const explanation = el('div', {class: 'query-explanation'});
+    const drawExplanation = () => {
+        const binding = state.queryDesign;
+        explanation.replaceChildren();
+        if (binding && binding.sql === editor.value) {
+            explanation.append(el('h3', {}, icon('book'), 'Wat deze query doet'),
+                el('ul', {}, binding.explanation.map(text => el('li', {}, text))),
+                el('p', {}, 'Je kunt deze SQL zelf aanpassen. Je keuzes in de bouwer blijven beschikbaar voor een volgende query.'));
+        }
+    };
     const runButton = button('Query uitvoeren', () => run(), {kind: 'primary', symbol: 'play'});
     const name = el('input', {class: 'input', type: 'text', maxlength: '160', value: state.queryName, placeholder: 'Bijvoorbeeld: systemen per organisatie', required: true});
     const notes = el('textarea', {class: 'input', rows: '3', placeholder: 'Wat wil je hiermee onderzoeken?', maxlength: '10000'}, state.queryNotes);
@@ -430,11 +449,13 @@ async function renderResearch(scope) {
                     state.queryName = query.name;
                     state.queryNotes = query.notes || '';
                     state.queryResult = null;
+                    state.queryDesign = null;
                     editor.value = query.sql;
                     name.value = query.name;
                     notes.value = query.notes || '';
                     saveLabel.textContent = 'Wijzigingen bewaren';
                     drawResult();
+                    drawExplanation();
                     editor.focus();
                 }}}, el('strong', {}, query.name), el('small', {}, dateTime(query.updated_at))), remove));
         });
@@ -481,12 +502,24 @@ async function renderResearch(scope) {
         state.queryDraft = editor.value;
         state.queryResult = null;
         const sql = editor.value;
+        const binding = state.queryDesign;
+        const body = binding?.sql === sql ? {design: structuredClone(binding.design)} : {sql};
         const revision = state.queryRevision;
         runButton.disabled = true;
         result.replaceChildren(loading('Query uitvoeren…'));
         try {
-            const data = await request('query', {body: {sql}, signal: scope.signal});
+            const data = await request('query', {body, signal: scope.signal});
             if (!scope.live() || revision !== state.queryRevision || editor.value !== sql) return;
+            if (body.design) {
+                if (data.sql !== sql) {
+                    state.queryRevision += 1;
+                    data.notice = [data.notice, 'De SQL is aangepast aan de actuele databasestructuur. De editor toont de uitgevoerde query.'].filter(Boolean).join(' ');
+                }
+                state.queryDraft = data.sql;
+                editor.value = data.sql;
+                state.queryDesign = {design: structuredClone(body.design), sql: data.sql, explanation: [...data.explanation]};
+                drawExplanation();
+            }
             state.queryResult = data;
             drawResult();
         } catch (error) {
@@ -500,6 +533,7 @@ async function renderResearch(scope) {
     editor.addEventListener('input', () => {
         state.queryResult = null;
         drawResult();
+        drawExplanation();
     });
     const newQuery = () => {
         state.queryRevision += 1;
@@ -508,11 +542,13 @@ async function renderResearch(scope) {
         state.queryNotes = '';
         state.queryId = null;
         state.queryResult = null;
+        state.queryDesign = null;
         editor.value = state.queryDraft;
         name.value = '';
         notes.value = '';
         saveLabel.textContent = 'Onderzoek bewaren';
         drawResult();
+        drawExplanation();
         editor.focus();
     };
     const editorCard = el('section', {class: 'card'},
@@ -522,22 +558,44 @@ async function renderResearch(scope) {
             button('Nieuw', newQuery, {kind: 'ghost', symbol: 'plus'}),
             button('Kopiëren', () => copyText(editor.value), {kind: 'ghost', symbol: 'copy'})),
             el('span', {class: 'keyboard-hint'}, 'Ctrl / ⌘ + Enter')),
-        el('p', {class: 'query-hint'}, 'Eén opdracht per keer · maximaal 200 resultaatrijen · wijzigingen kunnen via de volledige SQL-editor.'));
+        el('p', {class: 'query-hint'}, 'Eén opdracht per keer · maximaal 200 resultaatrijen · wijzigingen kunnen via de volledige SQL-editor.'), explanation);
     const help = el('section', {class: 'learning-help'},
         el('h3', {}, icon('book'), 'Begrijpen wat je doet'),
         el('details', {}, el('summary', {}, 'SELECT: welke gegevens wil je zien?'),
             el('p', {}, 'SELECT kiest de kolommen. FROM kiest de tabel. Een ster (*) betekent: alle kolommen. LIMIT beperkt het aantal resultaatrijen.'),
-            button('Gebruik een voorbeeld', () => { editor.value = defaultSql(); state.queryDraft = editor.value; editor.focus(); }, {className: 'button-small'})),
+            button('Gebruik een voorbeeld', () => {
+                state.queryRevision += 1;
+                state.queryDesign = null;
+                state.queryResult = null;
+                editor.value = defaultSql(); state.queryDraft = editor.value;
+                drawResult(); drawExplanation(); editor.focus();
+            }, {className: 'button-small'})),
         el('details', {}, el('summary', {}, 'WHERE: welke rijen horen erbij?'),
             el('p', {}, 'Met WHERE voeg je een voorwaarde toe, bijvoorbeeld WHERE id = 1. Alleen rijen die aan die voorwaarde voldoen verschijnen.')),
         el('details', {}, el('summary', {}, 'JOIN: hoe verbind je tabellen?'),
             el('p', {}, 'Een JOIN haalt gegevens uit gekoppelde tabellen samen op. Bekijk bij Structuur een verwijzing en kies Onderzoek koppeling voor een voorbeeld met jouw eigen velden.'),
             button('Bekijk de structuur', () => go('structuur', {table: state.table}), {className: 'button-small'})));
+    const builder = new QueryBuilder({
+        tables: tables(), database: state.bootstrap.database.name, initialTable: state.table,
+        draft: state.builderDraft, open: state.builderOpen, scope,
+        onDraft: draft => { state.builderDraft = structuredClone(draft); },
+        onToggle: open => { state.builderOpen = open; },
+        getRevision: () => state.queryRevision,
+        onApply: (built, design) => {
+            state.queryRevision += 1;
+            state.queryDraft = built.sql;
+            state.queryDesign = {design: structuredClone(design), sql: built.sql, explanation: [...built.explanation]};
+            state.queryResult = null;
+            editor.value = built.sql;
+            drawResult(); drawExplanation();
+        },
+    });
     page.append(el('div', {class: 'research-layout'},
-        el('div', {}, editorCard, result),
+        el('div', {}, builder.element, editorCard, result),
         el('aside', {class: 'research-aside'},
             el('section', {class: 'card saved-panel'}, el('div', {class: 'card-header'}, el('h2', {}, 'Onderzoek bewaren'), icon('bookmark')), form, savedList), help)));
     drawResult();
+    drawExplanation();
     try { await updateSavedList(); } catch (error) {
         if (error.name !== 'AbortError' && scope.live()) savedList.replaceChildren(errorPanel(error));
     }

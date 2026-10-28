@@ -4,7 +4,7 @@ declare(strict_types=1);
 /**
  * Real database checks. Supply the usual environment and explicitly name an
  * isolated test database: php tests/backend_integration.php --confirm-database=...
- * Creates/removes one random probe table and one saved query. Never use real data.
+ * Creates/removes random probe objects and one saved query. Never use real data.
  */
 require_once dirname(__DIR__) . '/app/src/bootstrap.php';
 
@@ -12,6 +12,7 @@ use Govern\ApiException;
 use Govern\Catalog;
 use Govern\Config;
 use Govern\Database;
+use Govern\QueryDesigner;
 use Govern\QueryRunner;
 use Govern\SavedQueries;
 
@@ -40,6 +41,7 @@ $reject = static function (callable $action, array $statuses, string $message) u
 $database = new Database($config);
 $catalog = new Catalog($database);
 $runner = new QueryRunner($database);
+$designer = new QueryDesigner($database);
 $queries = new SavedQueries($database, $config);
 $pdo = $database->writer();
 $name = 'zz_govern_probe_' . bin2hex(random_bytes(6));
@@ -47,6 +49,10 @@ $quoted = Database::identifier($name);
 $function = Database::identifier($name . '_fn');
 $viewName = $name . '_view';
 $view = Database::identifier($viewName);
+$parentName = $name . '_parent';
+$childName = $name . '_child';
+$parent = Database::identifier($parentName);
+$child = Database::identifier($childName);
 $id = null;
 
 try {
@@ -80,6 +86,129 @@ try {
     $assert($catalog->browse($name, 1, 25, "' OR 1=1 --")['total'] === 0, 'Search values remain bound data.');
     $reject(static fn () => $catalog->structure($name . '`; DROP TABLE x; --'), [404], 'Uncatalogued identifiers rejected.');
 
+    // Exercise the visual compiler through real prepared execution and its
+    // standalone SQL export. Adjacent values expose accidental float conversion.
+    $oddColumn = ':filter_0`name';
+    $pdo->exec('ALTER TABLE ' . $quoted . ' ADD large_id BIGINT UNSIGNED NULL, ADD note VARCHAR(80) NULL,
+        ADD ' . Database::identifier($oddColumn) . ' VARCHAR(80) NULL');
+    $update = $pdo->prepare('UPDATE ' . $quoted . ' SET large_id=?, note=?, ' . Database::identifier($oddColumn) . '=? WHERE id=?');
+    $update->execute(['9007199254740993', null, 'marker', 1]);
+    $update->execute(['9007199254740992', '', 'other', 2]);
+    $insertDesign = $pdo->prepare('INSERT INTO ' . $quoted . ' (label,amount,large_id,note) VALUES (?,?,?,?)');
+    $literalText = "wild%_=\\'nü";
+    $insertDesign->execute([$literalText, '123456789012345678901234.13', '18446744073709551615', 'filled']);
+    $baseDesign = ['table' => $name, 'join' => null,
+        'columns' => [['source' => 'base', 'column' => 'id'], ['source' => 'base', 'column' => 'label']],
+        'filters' => [], 'match' => 'all', 'order' => [['source' => 'base', 'column' => 'id', 'direction' => 'asc']], 'limit' => 200];
+    $filter = static fn (string $column, string $operator, string $value): array => ['source' => 'base', 'column' => $column, 'operator' => $operator, 'value' => $value];
+    $runDesign = static function (array $design) use ($designer, $runner): array {
+        $built = $designer->compile($design);
+        return $runner->execute($built['prepared_sql'], $built['params']);
+    };
+    $design = $baseDesign;
+    $design['filters'] = [$filter('large_id', 'eq', '9007199254740993')];
+    $built = $designer->compile($design);
+    $result = $runner->execute($built['prepared_sql'], $built['params']);
+    $assert($result['rows'] === [['1', 'literal%_value']] && $built['params']['filter_0'] === '9007199254740993', 'Bound BIGINT comparison distinguishes adjacent values above 2^53 without float conversion.');
+    $assert($runner->execute($built['sql'])['rows'] === $result['rows'], 'Standalone SQL has the same exact BIGINT semantics as prepared execution.');
+    $design['filters'] = [$filter('large_id', 'eq', '18446744073709551615')];
+    $assert($runDesign($design)['rows'] === [['3', $literalText]], 'Unsigned BIGINT maximum remains exact.');
+    $design['filters'] = [$filter('amount', 'eq', '123456789012345678901234.12')];
+    $assert($runDesign($design)['rows'] === [['1', 'literal%_value']], 'Large DECIMAL values with adjacent cents remain distinct.');
+    $design['filters'] = [$filter('amount', 'eq', '123456789012345678901234.125')];
+    $assert($runDesign($design)['rows'] === [], 'A filter is not rounded to the target column scale.');
+    foreach (['contains' => '%_=', 'starts_with' => 'wild%_=', 'ends_with' => "\\'nü"] as $operator => $value) {
+        $design['filters'] = [$filter('label', $operator, $value)];
+        $built = $designer->compile($design);
+        $assert($runner->execute($built['prepared_sql'], $built['params'])['rows'] === [['3', $literalText]]
+            && $runner->execute($built['sql'])['rows'] === [['3', $literalText]], 'Literal ' . $operator . ' search agrees in prepared and displayed SQL.');
+    }
+    $design['filters'] = [$filter('note', 'eq', '')];
+    $assert($runDesign($design)['rows'] === [['2', 'nü <tag>']], 'Empty text is distinct from SQL NULL.');
+    $design['filters'] = [['source' => 'base', 'column' => 'note', 'operator' => 'is_null']];
+    $assert($runDesign($design)['rows'] === [['1', 'literal%_value']], 'NULL filter requires no fabricated value.');
+    $design['filters'] = [$filter('label', 'eq', "' OR 1=1 --")];
+    $assert($runDesign($design)['rows'] === [], 'SQL-looking filter values stay bound data.');
+    $design['filters'] = [$filter('note', 'eq', '  text  ')];
+    $assert($designer->compile($design)['params']['filter_0'] === '  text  ', 'Whitespace in a filter value is preserved.');
+
+    $design = $baseDesign;
+    $design['columns'] = [['source' => 'base', 'column' => $oddColumn]];
+    $design['filters'] = [$filter($oddColumn, 'eq', 'marker')];
+    $built = $designer->compile($design);
+    $assert($runner->execute($built['prepared_sql'], $built['params'])['rows'] === [['marker']]
+        && $runner->execute($built['sql'])['rows'] === [['marker']], 'Placeholder-looking identifiers and embedded backticks survive standalone SQL generation.');
+
+    $design = $baseDesign;
+    $design['filters'] = [$filter('id', 'eq', '1'), $filter('note', 'eq', 'filled')];
+    $design['match'] = 'any';
+    $assert(array_column($runDesign($design)['rows'], 0) === ['1', '3'], 'OR combines filters within one explicit group.');
+    $design['match'] = 'all';
+    $assert($runDesign($design)['rows'] === [], 'AND preserves every requested filter.');
+    $design = $baseDesign;
+    $design['order'] = [['source' => 'base', 'column' => 'large_id', 'direction' => 'desc']];
+    $design['limit'] = 2;
+    $assert(array_column($runDesign($design)['rows'], 0) === ['3', '1'], 'Ordering and bound integer LIMIT apply to real data.');
+
+    $design = $baseDesign;
+    $design['join'] = ['foreign_key' => $name . '_parent_fk', 'type' => 'left'];
+    $design['columns'] = [['source' => 'base', 'column' => 'id'], ['source' => 'related', 'column' => 'label']];
+    $result = $runDesign($design);
+    $assert($result['columns'] === ['basis.id', 'gekoppeld.label'] && $result['rows'] === [['1', null], ['2', 'literal%_value'], ['3', null]], 'LEFT self-JOIN preserves unmatched rows and unambiguous source labels.');
+    $design['join']['type'] = 'inner';
+    $assert($runDesign($design)['rows'] === [['2', 'literal%_value']], 'INNER self-JOIN keeps only matching rows.');
+    $design['join']['type'] = 'left';
+    $design['filters'] = [['source' => 'related', 'column' => 'label', 'operator' => 'eq', 'value' => 'literal%_value']];
+    $assert($runDesign($design)['rows'] === [['2', 'literal%_value']], 'Related-field WHERE filters can remove unmatched LEFT JOIN rows.');
+
+    $pdo->exec('CREATE TABLE ' . $parent . ' (tenant INT NOT NULL, id INT NOT NULL, label VARCHAR(30), PRIMARY KEY(tenant,id)) ENGINE=InnoDB');
+    $pdo->exec('CREATE TABLE ' . $child . ' (id INT PRIMARY KEY, tenant INT, parent_id INT,
+        CONSTRAINT ' . Database::identifier($name . '_composite_fk') . ' FOREIGN KEY (tenant,parent_id) REFERENCES ' . $parent . ' (tenant,id)) ENGINE=InnoDB');
+    $pdo->exec('INSERT INTO ' . $parent . " VALUES (1,7,'wrong tenant'),(2,7,'right tenant')");
+    $pdo->exec('INSERT INTO ' . $child . ' VALUES (1,2,7)');
+    $compositeDesign = $baseDesign;
+    $compositeDesign['table'] = $childName;
+    $compositeDesign['join'] = ['foreign_key' => $name . '_composite_fk', 'type' => 'inner'];
+    $compositeDesign['columns'] = [['source' => 'base', 'column' => 'id'], ['source' => 'related', 'column' => 'label']];
+    $assert($runDesign($compositeDesign)['rows'] === [['1', 'right tenant']], 'A composite foreign key joins every part, preventing cross-tenant false matches.');
+
+    foreach ([
+        'unexpected key' => ['raw_sql' => 'SELECT 1'],
+        'non-list columns' => ['columns' => ['source' => 'base', 'column' => 'id']],
+        'no selected columns' => ['columns' => []],
+        'duplicate selection' => ['columns' => [$baseDesign['columns'][0], $baseDesign['columns'][0]]],
+        'missing related source' => ['columns' => [['source' => 'related', 'column' => 'id']]],
+        'missing column' => ['columns' => [['source' => 'base', 'column' => 'does_not_exist']]],
+        'unknown foreign key' => ['join' => ['foreign_key' => 'unknown', 'type' => 'left']],
+        'wrong join type' => ['join' => ['foreign_key' => $name . '_parent_fk', 'type' => 'cross']],
+        'unknown filter field' => ['filters' => [$filter('id', 'eq', '1') + ['raw' => 'OR 1=1']]],
+        'numeric JSON value' => ['filters' => [['source' => 'base', 'column' => 'large_id', 'operator' => 'eq', 'value' => 42]]],
+        'NULL with a value' => ['filters' => [$filter('note', 'is_null', '')]],
+        'missing value' => ['filters' => [['source' => 'base', 'column' => 'note', 'operator' => 'eq']]],
+        'unknown operator' => ['filters' => [$filter('note', 'raw SQL', 'x')]],
+        'LIKE on a number' => ['filters' => [$filter('id', 'contains', '1')]],
+        'invalid numeric text' => ['filters' => [$filter('large_id', 'eq', '12 OR 1=1')]],
+        'inexact numeric magnitude' => ['filters' => [$filter('large_id', 'eq', str_repeat('9', 66))]],
+        'NUL value' => ['filters' => [$filter('note', 'eq', "x\0y")]],
+        'invalid UTF-8 value' => ['filters' => [$filter('note', 'eq', "\xff")]],
+        'non-list filters' => ['filters' => ['x' => $filter('note', 'eq', '')]],
+        'invalid match' => ['match' => 'xor'],
+        'duplicate sort' => ['order' => [$baseDesign['order'][0], $baseDesign['order'][0]]],
+        'invalid direction' => ['order' => [['source' => 'base', 'column' => 'id', 'direction' => 'desc; DROP TABLE x']]],
+        'string limit' => ['limit' => '20'],
+        'floating limit' => ['limit' => 1.5],
+        'empty limit' => ['limit' => 0],
+        'oversized limit' => ['limit' => 201],
+    ] as $label => $change) {
+        $invalid = array_replace($baseDesign, $change);
+        $reject(static fn () => $designer->compile($invalid), [422], 'Designer rejects ' . $label . ' instead of silently changing the question.');
+    }
+    $stale = $baseDesign;
+    $stale['columns'] = [['source' => 'base', 'column' => $oddColumn]];
+    $designer->compile($stale);
+    $pdo->exec('ALTER TABLE ' . $quoted . ' DROP COLUMN ' . Database::identifier($oddColumn));
+    $reject(static fn () => $designer->compile($stale), [422], 'Designer revalidates the live schema after a column is removed.');
+
     $result = $runner->execute('SELECT 1 AS item, 2 AS item, NULL AS missing');
     $assert($result['columns'] === ['item', 'item', 'missing'] && $result['rows'][0] === ['1', '2', null], 'Duplicate labels and NULL retained.');
     $result = $runner->execute("SELECT '; DROP TABLE example' AS literal, ':named' AS another");
@@ -111,6 +240,13 @@ try {
     $pdo->query('SELECT * FROM ' . $view)->fetchAll();
     $assert((int) $pdo->query('SELECT hits FROM ' . $quoted . ' WHERE id=1')->fetchColumn() > 0, 'DEFINER fixture really performs a write under its owner.');
     $pdo->exec('UPDATE ' . $quoted . ' SET hits=0 WHERE id=1');
+    $viewDesign = $baseDesign;
+    $viewDesign['table'] = $viewName;
+    $viewDesign['columns'] = [['source' => 'base', 'column' => 'touched']];
+    $viewDesign['order'] = [];
+    $compiledView = $designer->compile($viewDesign);
+    $assert($pdo->query('SELECT hits FROM ' . $quoted . ' WHERE id=1')->fetchColumn() === '0', 'Compiling a question does not execute even a writing DEFINER view.');
+    $reject(static fn () => $runner->execute($compiledView['prepared_sql'], $compiledView['params']), [403], 'Designed queries use the same READ ONLY protection as handwritten SQL.');
     $reject(static fn () => $runner->execute('SELECT * FROM ' . $view), [403], 'Research query cannot write indirectly through a DEFINER view.');
     try {
         $catalog->browse($viewName, 1, 25, '');
@@ -147,5 +283,7 @@ try {
     }
     $pdo->exec('DROP VIEW IF EXISTS ' . $view);
     $pdo->exec('DROP FUNCTION IF EXISTS ' . $function);
+    $pdo->exec('DROP TABLE IF EXISTS ' . $child);
+    $pdo->exec('DROP TABLE IF EXISTS ' . $parent);
     $pdo->exec('DROP TABLE IF EXISTS ' . $quoted);
 }

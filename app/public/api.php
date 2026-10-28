@@ -10,6 +10,7 @@ use Govern\Config;
 use Govern\Database;
 use Govern\Http;
 use Govern\MaintenanceLock;
+use Govern\QueryDesigner;
 use Govern\QueryRunner;
 use Govern\SavedQueries;
 
@@ -17,7 +18,7 @@ try {
     $config = Config::fromEnvironment();
     $csrf = Http::start($config);
     $action = Http::text($_GET, 'action');
-    $posts = ['query', 'save-query', 'delete-query', 'create-snapshot', 'restore-snapshot'];
+    $posts = ['build-query', 'query', 'save-query', 'delete-query', 'create-snapshot', 'restore-snapshot'];
     $input = in_array($action, $posts, true) ? Http::post($csrf) : [];
     if (!in_array($action, $posts, true)) {
         Http::get();
@@ -82,8 +83,24 @@ try {
             Http::json($catalog->browse(Http::text($_GET, 'table'), Http::integer($_GET, 'page', 1), Http::integer($_GET, 'page_size', 25), Http::text($_GET, 'q', false)));
         case 'structure':
             Http::json($catalog->structure(Http::text($_GET, 'table')));
+        case 'build-query':
+            if (array_keys($input) !== ['design']) {
+                throw new ApiException('Verstuur alleen het ontwerp van de query.', 422);
+            }
+            $built = (new QueryDesigner($database))->compile($input['design']);
+            Http::json(['sql' => $built['sql'], 'explanation' => $built['explanation']]);
         case 'query':
-            Http::json((new QueryRunner($database))->execute(Http::text($input, 'sql')));
+            if (array_keys($input) === ['sql']) {
+                Http::json((new QueryRunner($database))->execute(Http::text($input, 'sql')));
+            }
+            if (array_keys($input) === ['design']) {
+                $built = (new QueryDesigner($database))->compile($input['design']);
+                $result = (new QueryRunner($database))->execute($built['prepared_sql'], $built['params']);
+                $result['sql'] = $built['sql'];
+                $result['explanation'] = $built['explanation'];
+                Http::json($result);
+            }
+            throw new ApiException('Verstuur precies één SQL-vraag of één ontwerp, zonder andere velden.', 422);
         case 'queries':
             Http::json($queries->list());
         case 'save-query':

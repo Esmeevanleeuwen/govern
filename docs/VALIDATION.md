@@ -2,10 +2,33 @@
 
 Stand van de controles: **28 oktober 2026**.
 
-## Uitgevoerd
+## Actuele automatische controle
 
-In één opnieuw ingerichte, afzonderlijke testomgeving zijn **94 controles
-geslaagd**:
+[De GitHub-workflow](../.github/workflows/verify.yml) bouwt de Docker-omgeving
+met PHP **8.4** en voert de PHP-, database-, herstel-, HTTP- en browsercontroles
+uit. De browserproeven gebruiken Playwright **1.62.1** en Chrome van de
+GitHub-runner. Bekijk de uitslag bij de betreffende commit onder
+[Actions](https://github.com/Esmeevanleeuwen/govern/actions).
+
+De uitbreiding voor de visuele querybouwer controleert onder meer:
+
+- Exacte BIGINT- en DECIMAL-filters, NULL tegenover lege tekst en letterlijke zoektekens.
+- Gebonden uitvoering en dezelfde zelfstandig uitvoerbare SQL in de editor.
+- Samengestelde verwijzingen, self-JOINs, LEFT/INNER JOIN, sortering en limiet.
+- Veranderde metadata en ongeldige of ontbrekende kolommen.
+- Het toegepaste ontwerp tegenover een nog niet toegepaste wijziging in de bouwer.
+- Handmatige SQL, late antwoorden, bewaren als gewone SQL en mobiele bediening.
+
+De volledige backend-integratietest vereist PHP 8.4. Bij de native controle op
+PHP 8.3.6 werd een beperking van de oudere PDO-parser gevonden: een dubbelepunt
+binnen een gequote kolomnaam werd als parameter gelezen. Die regressietest blijft
+staan. De Dockerbasis is verhoogd naar 8.4, waarin de MySQL-specifieke parser
+zulke identifiers herkent. Zie de [officiële PHP-documentatie](https://www.php.net/manual/en/migration84.new-features.php#migration84.new-features.pdo-mysql).
+
+## Eerder gecontroleerde basisversie
+
+Voor de eerste basisversie zijn in één opnieuw ingerichte, afzonderlijke
+testomgeving **94 controles geslaagd**:
 
 - 15 backend-unitcontroles.
 - 9 controles van herstelpuntbestanden, namen en controlegetallen.
@@ -35,7 +58,7 @@ Een aanvullende browserproef maakte via de phpMyAdmin SQL-tab een nieuwe tabel
 en een record aan. Govern ontdekte de tabel en toonde het geschreven record
 zonder een wijziging aan de applicatiecode.
 
-## Docker en Windows
+## Eerdere Docker-uitvoering en Windows
 
 De volledige Docker-controle is op **28 oktober 2026** ook geslaagd op GitHub
 Actions, voor codecommit `735135b0eb82ee98102a8737030747c7444e3e81`.
@@ -95,6 +118,7 @@ geïnstalleerde Playwright-browser voer je in de projectmap uit:
 
 ```sh
 BASE_URL=http://127.0.0.1:18080 GOVERN_UI_WRITE_TESTS=1 node tests/frontend-smoke.mjs
+BASE_URL=http://127.0.0.1:18080 node tests/query-builder-smoke.mjs
 ```
 
 De extra schrijvende controle maakt een eigen opgeslagen onderzoek aan en

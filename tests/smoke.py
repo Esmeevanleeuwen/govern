@@ -78,6 +78,39 @@ def main():
     status, result, _ = request("structure", parameters={"table": "system_responsibilities"})
     check(status == 200 and result["data"]["foreign_keys"] and "CREATE TABLE" in result["data"]["create_sql"], "Structure describes actual foreign keys and DDL")
     check(any(c["generated"] for c in result["data"]["columns"]), "Generated columns remain identified")
+    organization_link = next(fk for fk in result["data"]["foreign_keys"] if fk["referenced_table"] == "organizations")
+
+    design = {
+        "table": "digital_systems", "join": None,
+        "columns": [{"source": "base", "column": "code"}, {"source": "base", "column": "name"}],
+        "filters": [{"source": "base", "column": "name", "operator": "contains", "value": "DigiD"}],
+        "match": "all", "order": [{"source": "base", "column": "code", "direction": "asc"}], "limit": 25,
+    }
+    status, result, _ = request("build-query", {"design": design})
+    check(status == 200 and result["ok"] and result["data"]["explanation"], "Visual design produces editable SQL and an explanation")
+    designed_sql = result["data"]["sql"]
+    status, result, _ = request("query", {"design": design})
+    check(status == 200 and result["data"]["columns"] == ["code", "name"] and len(result["data"]["rows"]) == 1
+          and result["data"]["rows"][0][1] == "DigiD", "Visual design executes against actual data with bound filter values")
+    designed_rows = result["data"]["rows"]
+    status, result, _ = request("query", {"sql": designed_sql})
+    check(status == 200 and result["data"]["rows"] == designed_rows, "Editable generated SQL returns the same rows as the bound design")
+
+    join_design = {
+        "table": "system_responsibilities", "join": {"foreign_key": organization_link["name"], "type": "left"},
+        "columns": [{"source": "base", "column": "responsibility_role"}, {"source": "related", "column": "name"}],
+        "filters": [], "match": "all", "order": [{"source": "related", "column": "name", "direction": "asc"}], "limit": 25,
+    }
+    status, result, _ = request("query", {"design": join_design})
+    check(status == 200 and result["data"]["columns"] == ["basis.responsibility_role", "gekoppeld.name"]
+          and result["data"]["returned_rows"] > 0, "Visual JOIN follows the live foreign key and preserves distinct column labels")
+    status, result, _ = request("build-query", {"design": design}, token=False)
+    check(status == 403 and result["ok"] is False, "Visual query generation requires the session CSRF token")
+    status, result, _ = request("query", {"sql": "SELECT 1", "design": design})
+    check(status == 422 and result["ok"] is False, "A request cannot silently choose between a design and manual SQL")
+    invalid_design = {**design, "columns": [{"source": "base", "column": "name` FROM mysql.user --"}]}
+    status, result, _ = request("build-query", {"design": invalid_design})
+    check(status == 422 and result["ok"] is False, "A fabricated identifier cannot bypass live column validation")
 
     status, result, _ = request("query", {"sql": "SELECT 1 AS value, 2 AS value, NULL AS missing"})
     check(status == 200 and result["data"]["columns"] == ["value", "value", "missing"] and result["data"]["rows"] == [["1", "2", None]], "Query preserves duplicate aliases and NULL")
@@ -91,11 +124,14 @@ def main():
     saved_id = None
     try:
         name = "HTTP-check " + uuid.uuid4().hex[:8]
-        status, result, _ = request("save-query", {"name": name, "sql": "SELECT COUNT(*) FROM organizations", "notes": "Herhaalbare HTTP-controle"})
+        status, result, _ = request("save-query", {"name": name, "sql": designed_sql, "notes": "Visueel samengesteld, bewaard als gewone SQL"})
         check(status in (200, 201) and result["ok"], "Save a real investigation")
         saved_id = result["data"]["id"]
         status, result, _ = request("queries")
         check(any(str(q["id"]) == str(saved_id) for q in result["data"]), "Saved investigation is read back")
+        saved_query = next(q for q in result["data"] if str(q["id"]) == str(saved_id))
+        status, result, _ = request("query", {"sql": saved_query["sql"]})
+        check(status == 200 and result["data"]["rows"] == designed_rows, "Saved visual investigation remains executable ordinary SQL")
         status, context, headers = request("context")
         check(status == 200 and context["format"] == "govern-context" and "attachment" in headers.get("Content-Disposition", ""), "Schema and query context can be downloaded")
         check("rows" not in context and "password" not in context and len(context["schema"]) >= 23, "Context is schema-based, without record export or credentials")

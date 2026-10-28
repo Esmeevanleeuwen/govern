@@ -12,7 +12,7 @@ final class QueryRunner
 
     public function __construct(private readonly Database $database) {}
 
-    public function execute(string $sql): array
+    public function execute(string $sql, array $parameters = []): array
     {
         $sql = trim($sql);
         if ($sql === '') {
@@ -31,6 +31,10 @@ final class QueryRunner
         try {
             $pdo->exec('START TRANSACTION READ ONLY');
             $statement = $pdo->prepare($sql);
+            foreach ($parameters as $name => $value) {
+                $type = $value === null ? PDO::PARAM_NULL : (is_int($value) ? PDO::PARAM_INT : PDO::PARAM_STR);
+                $statement->bindValue(':' . $name, $value, $type);
+            }
             $statement->execute();
             $columns = [];
             for ($index = 0; $index < $statement->columnCount(); $index++) {

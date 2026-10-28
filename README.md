@@ -25,6 +25,9 @@ je lokale `.env`, die niet in Git wordt opgenomen.
 - **Gegevens:** bekijk records, zoek, blader en bekijk de gebruikte SQL.
 - **Structuur:** lees velden, sleutels, relaties en de echte tabeldefinitie.
 - **Onderzoeken:** voer leesvragen uit, bekijk resultaten en bewaar queries met uitleg.
+- **Visueel samenstellen:** kies een tabel, kolommen, filters en een sorteervolgorde.
+  Voeg eventueel een bestaande verwijzing naar een tweede tabel toe. Govern maakt
+  de SQL zichtbaar; je kunt die daarna zelf aanpassen.
 - **Experimenten:** maak een herstelpunt, download het als SQL en zet het terug.
 - **Databasevenster:** open de echte phpMyAdmin in een groot venster met de tabs
   **Browse**, **Structure** en **SQL**. Hier kun je ook invoegen, aanpassen,
@@ -50,6 +53,24 @@ blijft zijn volledige interface tonen, inclusief functies buiten de drie snelkeu
 Zo leer je met echte gegevens wat een tabel, een verwijzing en een query doen.
 De korte uitleg in het scherm is vaste uitleg over deze handeling; er wordt geen
 extern AI-model aangeroepen.
+
+### Een vraag maken zonder eerst SQL te schrijven
+
+Open **Onderzoeken → Query samenstellen**. Kies `digital_systems`, selecteer
+bijvoorbeeld `code` en `name`, en voeg een filter op `name` toe met de waarde
+`DigiD`. Met **Query maken** zet je het ontwerp in de SQL-editor. Kies daarna
+**Query uitvoeren** om het resultaat te bekijken en **Onderzoek bewaren** om de
+vraag opnieuw te kunnen gebruiken.
+
+Zolang je de gegenereerde SQL niet bewerkt, voert Govern het ontwerp uit met
+gebonden filterwaarden. Zodra je zelf in de SQL-editor schrijft, gebruik je de
+gewone SQL-route. Opgeslagen onderzoeken blijven zelfstandige SQL-vragen; er is
+geen tweede bestandstype of apart gegevensmodel voor de bouwer.
+
+De visuele bouwer helpt bij één basistabel en eventueel één bestaande verwijzing.
+Voor bijvoorbeeld meerdere koppelingen, groeperingen of berekeningen werk je
+verder in de SQL-editor. De voorbeelden in de bouwer hebben dezelfde grens van
+200 resultaatrijen als de onderzoekweergave.
 
 ## Gegevens en herstelpunten
 
@@ -109,6 +130,18 @@ docker compose up -d --build
 
 Gebruik `docker compose logs --tail=100` om een startfout te bekijken. Verwijder
 geen volumes om een gewone startfout op te lossen; daar staan je gegevens.
+
+## Een nieuwe versie ophalen
+
+Werk bij in dezelfde projectmap. Download de nieuwe ZIP van GitHub en kopieer de
+projectbestanden over de oude versie. **Bewaar je bestaande `.env`**: daarin staan
+de wachtwoorden die bij jouw bestaande database horen. Start daarna opnieuw met
+`start.cmd` of `sh start.sh`. Je database en herstelpunten blijven in hun bestaande
+Docker-volumes staan; de eerste voorbeeldimport wordt niet opnieuw uitgevoerd.
+
+Werk je al met Git, dan kun je vanuit deze map `git pull --ff-only` gebruiken en
+daarna hetzelfde startbestand uitvoeren. Heb je zelf code aangepast, bewaar of
+combineer die wijzigingen voordat je projectbestanden vervangt.
 
 ## Samen verder bouwen
 
