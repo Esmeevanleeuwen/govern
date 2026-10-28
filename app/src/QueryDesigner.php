@@ -25,7 +25,7 @@ final class QueryDesigner
         $catalog = new Catalog($this->database);
         // Only inspect the metadata needed to compose the question. SHOW CREATE
         // VIEW can prepare/evaluate a view; compiling must not execute it.
-        $sources = ['base' => array_column($catalog->columns($table), null, 'name')];
+        $sources = ['base' => self::sourceColumns($catalog, $table)];
         $joinSql = '';
         $joined = $design['join'] !== null;
         $explanation = ['Je leest de tabel of het overzicht ' . $table . '.'];
@@ -41,7 +41,7 @@ final class QueryDesigner
             if ($reference['referenced_schema'] !== $this->database->name()) {
                 throw new ApiException('Deze verwijzing loopt naar een andere database. Gebruik daarvoor de SQL-editor.', 422);
             }
-            $sources['related'] = array_column($catalog->columns($reference['referenced_table']), null, 'name');
+            $sources['related'] = self::sourceColumns($catalog, $reference['referenced_table']);
             $conditions = [];
             foreach ($reference['columns'] as $index => $column) {
                 $left = self::field(['source' => 'base', 'column' => $column], $sources);
@@ -161,6 +161,15 @@ final class QueryDesigner
         }
         return ['sql' => $sql, 'prepared_sql' => $prefix . $preparedWhere . $orderSql . "\nLIMIT :row_limit",
             'params' => $parameters, 'explanation' => $explanation];
+    }
+
+    private static function sourceColumns(Catalog $catalog, string $table): array
+    {
+        $columns = $catalog->columns($table);
+        if ($columns === []) {
+            throw new ApiException('Voor ' . $table . ' zijn geen leesbare kolommen beschikbaar. De querybouwer kan deze bron niet gebruiken.', 422);
+        }
+        return array_column($columns, null, 'name');
     }
 
     private static function field(array $field, array $sources): array

@@ -232,6 +232,18 @@ try {
     $assert(microtime(true) - $start < 7.5, 'Timeout returned before full sleep completed.');
     $assert($runner->execute('SELECT 1 AS recovered')['rows'] === [['1']], 'Next query works after interruption.');
 
+    // A normal view must remain usable by the compiler and both execution
+    // forms. Keep its compiled query for the changed-definition check below.
+    $pdo->exec('CREATE VIEW ' . $view . ' AS SELECT id AS touched FROM ' . $quoted . ' WHERE id=1');
+    $viewDesign = $baseDesign;
+    $viewDesign['table'] = $viewName;
+    $viewDesign['columns'] = [['source' => 'base', 'column' => 'touched']];
+    $viewDesign['order'] = [];
+    $readableCompiled = $designer->compile($viewDesign);
+    $assert($runner->execute($readableCompiled['prepared_sql'], $readableCompiled['params'])['rows'] === [['1']], 'A normal readable view compiles and executes with bound parameters.');
+    $assert($runner->execute($readableCompiled['sql'])['rows'] === [['1']], 'The normal view also works through the standalone SQL export.');
+    $pdo->exec('DROP VIEW ' . $view);
+
     // SELECT grants alone do not stop writes performed by a DEFINER view's
     // stored function. Prove the fixture writes, then verify both read paths.
     $pdo->exec('CREATE FUNCTION ' . $function . '() RETURNS INT MODIFIES SQL DATA SQL SECURITY DEFINER
@@ -240,13 +252,24 @@ try {
     $pdo->query('SELECT * FROM ' . $view)->fetchAll();
     $assert((int) $pdo->query('SELECT hits FROM ' . $quoted . ' WHERE id=1')->fetchColumn() > 0, 'DEFINER fixture really performs a write under its owner.');
     $pdo->exec('UPDATE ' . $quoted . ' SET hits=0 WHERE id=1');
-    $viewDesign = $baseDesign;
-    $viewDesign['table'] = $viewName;
-    $viewDesign['columns'] = [['source' => 'base', 'column' => 'touched']];
-    $viewDesign['order'] = [];
-    $compiledView = $designer->compile($viewDesign);
-    $assert($pdo->query('SELECT hits FROM ' . $quoted . ' WHERE id=1')->fetchColumn() === '0', 'Compiling a question does not execute even a writing DEFINER view.');
-    $reject(static fn () => $runner->execute($compiledView['prepared_sql'], $compiledView['params']), [403], 'Designed queries use the same READ ONLY protection as handwritten SQL.');
+    // Some MariaDB versions cannot expose columns for a view whose constant
+    // expression invokes a writing function under READ ONLY metadata access.
+    // Reject exactly that unavailable-metadata case; do not hide other errors.
+    $unsafeColumns = $catalog->columns($viewName);
+    if ($unsafeColumns === []) {
+        try {
+            $designer->compile($viewDesign);
+            throw new RuntimeException('An uninspectable view was compiled without usable column metadata.');
+        } catch (ApiException $exception) {
+            $assert($exception->status === 422 && str_contains($exception->getMessage(), 'geen leesbare kolommen'), 'Unavailable view metadata is explicitly rejected before a question is compiled.');
+        }
+    } else {
+        $assert(in_array('touched', array_column($unsafeColumns, 'name'), true), 'Inspectable writing-view metadata exposes the expected column.');
+        $compiledView = $designer->compile($viewDesign);
+        $reject(static fn () => $runner->execute($compiledView['prepared_sql'], $compiledView['params']), [403], 'An inspectable writing view compiles but cannot write during execution.');
+    }
+    $assert($pdo->query('SELECT hits FROM ' . $quoted . ' WHERE id=1')->fetchColumn() === '0', 'Metadata inspection and compilation cannot write through a DEFINER view.');
+    $reject(static fn () => $runner->execute($readableCompiled['prepared_sql'], $readableCompiled['params']), [403], 'A genuinely compiled parameter query stays READ ONLY after its view definition changes.');
     $reject(static fn () => $runner->execute('SELECT * FROM ' . $view), [403], 'Research query cannot write indirectly through a DEFINER view.');
     try {
         $catalog->browse($viewName, 1, 25, '');
