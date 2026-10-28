@@ -63,32 +63,17 @@ final class Catalog
         return $columns;
     }
 
-    public function structure(string $table): array
+    public function foreignKeys(string $table): array
     {
-        $type = $this->requireTable($table);
-        $columns = $this->columns($table);
-        $pdo = $this->database->reader();
-        $params = ['schema' => $this->database->name(), 'table' => $table];
-        $statement = $pdo->prepare(
-            'SELECT INDEX_NAME, NON_UNIQUE, COLUMN_NAME, SUB_PART, INDEX_TYPE
-             FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=:schema AND TABLE_NAME=:table
-             ORDER BY INDEX_NAME, SEQ_IN_INDEX'
-        );
-        $statement->execute($params);
-        $indexes = [];
-        foreach ($statement as $row) {
-            $name = $row['INDEX_NAME'];
-            $indexes[$name] ??= ['name' => $name, 'unique' => $row['NON_UNIQUE'] === '0', 'columns' => [], 'type' => $row['INDEX_TYPE']];
-            $indexes[$name]['columns'][] = $row['COLUMN_NAME'] ?? '(expressie)';
-        }
-        $statement = $pdo->prepare(
+        $this->requireTable($table);
+        $statement = $this->database->reader()->prepare(
             'SELECT CONSTRAINT_NAME, COLUMN_NAME, REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME,
                     REFERENCED_TABLE_SCHEMA
              FROM information_schema.KEY_COLUMN_USAGE
              WHERE TABLE_SCHEMA=:schema AND TABLE_NAME=:table AND REFERENCED_TABLE_NAME IS NOT NULL
              ORDER BY CONSTRAINT_NAME, ORDINAL_POSITION'
         );
-        $statement->execute($params);
+        $statement->execute(['schema' => $this->database->name(), 'table' => $table]);
         $references = [];
         foreach ($statement as $row) {
             $name = $row['CONSTRAINT_NAME'];
@@ -99,9 +84,30 @@ final class Catalog
             $references[$name]['columns'][] = $row['COLUMN_NAME'];
             $references[$name]['referenced_columns'][] = $row['REFERENCED_COLUMN_NAME'];
         }
+        return array_values($references);
+    }
+
+    public function structure(string $table): array
+    {
+        $type = $this->requireTable($table);
+        $columns = $this->columns($table);
+        $pdo = $this->database->reader();
+        $statement = $pdo->prepare(
+            'SELECT INDEX_NAME, NON_UNIQUE, COLUMN_NAME, SUB_PART, INDEX_TYPE
+             FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=:schema AND TABLE_NAME=:table
+             ORDER BY INDEX_NAME, SEQ_IN_INDEX'
+        );
+        $statement->execute(['schema' => $this->database->name(), 'table' => $table]);
+        $indexes = [];
+        foreach ($statement as $row) {
+            $name = $row['INDEX_NAME'];
+            $indexes[$name] ??= ['name' => $name, 'unique' => $row['NON_UNIQUE'] === '0', 'columns' => [], 'type' => $row['INDEX_TYPE']];
+            $indexes[$name]['columns'][] = $row['COLUMN_NAME'] ?? '(expressie)';
+        }
+        $references = $this->foreignKeys($table);
         $create = $pdo->query('SHOW CREATE ' . ($type === 'VIEW' ? 'VIEW ' : 'TABLE ') . Database::identifier($table))->fetch(PDO::FETCH_NUM);
         return ['table' => $table, 'columns' => $columns, 'indexes' => array_values($indexes),
-            'foreign_keys' => array_values($references), 'create_sql' => $create[1] ?? ''];
+            'foreign_keys' => $references, 'create_sql' => $create[1] ?? ''];
     }
 
     public function browse(string $table, int $page, int $pageSize, string $search): array

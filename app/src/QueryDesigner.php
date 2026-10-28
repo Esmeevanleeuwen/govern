@@ -23,8 +23,9 @@ final class QueryDesigner
         $design = self::object($design, ['table', 'join', 'columns', 'filters', 'match', 'order', 'limit'], 'de query');
         $table = self::text($design['table'], 'de tabelnaam');
         $catalog = new Catalog($this->database);
-        $structure = $catalog->structure($table);
-        $sources = ['base' => array_column($structure['columns'], null, 'name')];
+        // Only inspect the metadata needed to compose the question. SHOW CREATE
+        // VIEW can prepare/evaluate a view; compiling must not execute it.
+        $sources = ['base' => array_column($catalog->columns($table), null, 'name')];
         $joinSql = '';
         $joined = $design['join'] !== null;
         $explanation = ['Je leest de tabel of het overzicht ' . $table . '.'];
@@ -32,7 +33,7 @@ final class QueryDesigner
             $join = self::object($design['join'], ['foreign_key', 'type'], 'de koppeling');
             $key = self::text($join['foreign_key'], 'de naam van de verwijzing');
             $joinType = self::choice($join['type'], ['left', 'inner'], 'het soort koppeling');
-            $keys = array_column($structure['foreign_keys'], null, 'name');
+            $keys = array_column($catalog->foreignKeys($table), null, 'name');
             if (!isset($keys[$key])) {
                 throw new ApiException('Deze verwijzing bestaat niet meer. Vernieuw de structuur en kies opnieuw.', 422);
             }
