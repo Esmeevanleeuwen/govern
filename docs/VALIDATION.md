@@ -35,13 +35,19 @@ Een aanvullende browserproef maakte via de phpMyAdmin SQL-tab een nieuwe tabel
 en een record aan. Govern ontdekte de tabel en toonde het geschreven record
 zonder een wijziging aan de applicatiecode.
 
-## Nog niet aangetoond
+## Docker en Windows
 
-Docker was in deze lokale testomgeving niet beschikbaar. De daadwerkelijke
-containerbouw en samenwerking van de Compose-services zijn hier dus nog niet
-uitgevoerd. [De GitHub-workflow](../.github/workflows/verify.yml) voert die
-controles na een push uit. Een definitief oordeel daarover hoort bij de
-uitslag van de workflow voor de betreffende commit.
+De volledige Docker-controle is op **28 oktober 2026** ook geslaagd op GitHub
+Actions, voor codecommit `735135b0eb82ee98102a8737030747c7444e3e81`.
+[Bekijk de geslaagde uitvoering](https://github.com/Esmeevanleeuwen/govern/actions/runs/40756180912).
+Die uitvoering bouwde en startte de Compose-services vanuit een schone omgeving,
+controleerde de PHP-syntax en voerde de unit-, database-, herstel- en HTTP-tests
+uit. Ook de echte phpMyAdmin-ingang maakte deel uit van de HTTP-controle.
+
+Docker was in de lokale testomgeving niet beschikbaar; de containercontrole
+is daarom op de GitHub-runner uitgevoerd.
+[De workflow](../.github/workflows/verify.yml) herhaalt die controles bij pushes.
+Voor een latere codewijziging geldt de uitslag bij die betreffende commit.
 
 Het Windows-startscript is beoordeeld, maar niet op Windows uitgevoerd.
 
