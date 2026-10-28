@@ -26,6 +26,17 @@ De browser gebruikt herbruikbare onderdelen voor tabellen, meldingen, dialoog-
 vensters, SQL-blokken en API-verzoeken. Tabnamen uit de database zijn gegevens,
 geen uitvoerbare JavaScript of HTML.
 
+## Vormgeving
+
+De lichte interface gebruikt systeemlettertypen, neutrale vlakken en één blauwe
+accentkleur. Kleuren, hoekafrondingen en schaduwen staan als gedeelde variabelen
+bovenaan `app/public/assets/styles.css`. Dezelfde knoppen, invoervelden en panelen
+worden op alle schermen hergebruikt. Er zijn geen externe lettertypen of extra
+UI-bibliotheken nodig. Focusranden blijven zichtbaar bij toetsenbordbediening;
+aanraakschermen krijgen ruimere klikvlakken en verminderde beweging wordt gevolgd.
+De vormgeving van het databasevenster hoort bij Govern; de inhoud blijft de
+officiële phpMyAdmin-interface.
+
 ## Visueel een query samenstellen
 
 De querybouwer gebruikt dezelfde catalogus en onderzoekservice. De browser
