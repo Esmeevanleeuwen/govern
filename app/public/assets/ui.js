@@ -1,3 +1,6 @@
+import {t, getLocale, getLanguage, hasMessage} from './i18n.js';
+import './ui-messages.js';
+
 export function el(tag, attributes = {}, ...children) {
     const node = document.createElement(tag);
     for (const [key, value] of Object.entries(attributes)) {
@@ -46,6 +49,16 @@ const iconPaths = {
     copy: ['M8 8h13v13H8z', 'M16 8V3H3v13h5'],
     trash: ['M3 6h18', 'M9 6V3h6v3', 'M5 6l1 15h12l1-15', 'M10 10v7', 'M14 10v7'],
     menu: ['M3 6h18', 'M3 12h18', 'M3 18h18'],
+    settings: ['M4 7h16', 'M4 17h16', 'M8 4v6', 'M16 14v6'],
+    layout: ['M3 4h18v16H3z', 'M9 4v16', 'M9 11h12'],
+    grip: ['M9 5h.01', 'M15 5h.01', 'M9 12h.01', 'M15 12h.01', 'M9 19h.01', 'M15 19h.01'],
+    up: ['m6 15 6-6 6 6'],
+    eye: ['M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z', 'M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0'],
+    hide: ['m3 3 18 18', 'M10 5a10 10 0 0 1 12 7s-2 4-5 5', 'M6 6C3 8 2 12 2 12s4 7 10 7c2 0 3-.5 4-1'],
+    palette: ['M12 3a9 9 0 1 0 0 18h2a3 3 0 0 0 0-6h-1a2 2 0 0 1 0-4h4a4 4 0 0 0 4-4c0-2-4-4-9-4Z', 'M7 8h.01', 'M12 6h.01', 'M6 13h.01'],
+    globe: ['M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0', 'M3 12h18', 'M12 3a17 17 0 0 1 0 18 17 17 0 0 1 0-18'],
+    moon: ['M21 13a9 9 0 0 1-10-10 9 9 0 1 0 10 10Z'],
+    sun: ['M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0', 'M12 2v2', 'M12 20v2', 'M2 12h2', 'M20 12h2', 'm5 5 1 1', 'm18 18 1 1', 'm5 19 1-1', 'm18 6 1-1'],
     book: ['M12 5v16', 'M12 5C8 2 4 2 2 3v16c4-1 7 0 10 2 3-2 6-3 10-2V3c-2-1-6-1-10 2Z'],
 };
 
@@ -79,7 +92,7 @@ export function heading(eyebrow, title, description, actions = []) {
         actions.length ? el('div', {class: 'heading-actions'}, actions) : null);
 }
 
-export function loading(label = 'Gegevens ophalen…') {
+export function loading(label = t('ui.loading')) {
     return el('div', {class: 'loading-state', role: 'status'}, el('span', {class: 'spinner'}), label);
 }
 
@@ -88,18 +101,23 @@ export function empty(title, description, action, symbol = 'table') {
         el('h3', {}, title), el('p', {}, description), action || null);
 }
 
+export function errorText(error) {
+    const key = error?.error_code ? 'error.' + error.error_code : error?.translationKey;
+    return key && hasMessage(key) ? t(key, error.error_params || {}) : (error?.error_i18n?.[getLanguage()] || error?.message || String(error));
+}
+
 export function errorPanel(error, retry) {
     return el('div', {class: 'notice notice-error', role: 'alert'},
-        icon('info'), el('div', {}, el('strong', {}, 'Dit lukte nog niet'), el('p', {}, error.message || String(error)),
-            retry ? button('Opnieuw proberen', retry, {className: 'button-small', symbol: 'refresh'}) : null));
+        icon('info'), el('div', {}, el('strong', {}, t('ui.failed')), el('p', {}, errorText(error)),
+            retry ? button(t('ui.retry'), retry, {className: 'button-small', symbol: 'refresh'}) : null));
 }
 
 export function notice(text, variant = '') {
     return el('div', {class: 'notice ' + variant}, icon('info'), el('p', {}, text));
 }
 
-export function dataTable(columns, rows, {emptyMessage = 'Geen gegevens gevonden.', caption} = {}) {
-    if (!rows.length) return empty('Geen rijen', emptyMessage);
+export function dataTable(columns, rows, {emptyMessage = t('ui.noData'), caption} = {}) {
+    if (!rows.length) return empty(t('ui.noRows'), emptyMessage);
     const normalized = columns.map((column, i) => typeof column === 'string' ? {label: column, key: i} : column);
     const table = el('table', {class: 'data-table'});
     if (caption) table.append(el('caption', {class: 'sr-only'}, caption));
@@ -117,26 +135,26 @@ export function dataTable(columns, rows, {emptyMessage = 'Geen gegevens gevonden
         return cell;
     }))));
     table.append(body);
-    return el('div', {class: 'table-scroll', tabindex: '0', 'aria-label': caption || 'Resultaten, horizontaal te scrollen'}, table);
+    return el('div', {class: 'table-scroll', tabindex: '0', 'aria-label': caption || t('ui.scrollResults')}, table);
 }
 
 export function number(value) {
-    return new Intl.NumberFormat('nl-NL').format(Number(value) || 0);
+    return new Intl.NumberFormat(getLocale()).format(Number(value) || 0);
 }
 
 export function fileSize(bytes) {
     if (bytes < 1024) return number(bytes) + ' B';
-    if (bytes < 1048576) return (bytes / 1024).toLocaleString('nl-NL', {maximumFractionDigits: 1}) + ' kB';
-    return (bytes / 1048576).toLocaleString('nl-NL', {maximumFractionDigits: 1}) + ' MB';
+    if (bytes < 1048576) return (bytes / 1024).toLocaleString(getLocale(), {maximumFractionDigits: 1}) + ' kB';
+    return (bytes / 1048576).toLocaleString(getLocale(), {maximumFractionDigits: 1}) + ' MB';
 }
 
 export function dateTime(value) {
-    if (!value) return 'Nog niet opgeslagen';
+    if (!value) return t('ui.unsaved');
     let normalized = String(value).replace(' ', 'T');
     if (!/[zZ]$|[+-]\d{2}:\d{2}$/.test(normalized)) normalized += 'Z';
     const date = new Date(normalized);
     if (Number.isNaN(date.getTime())) return String(value);
-    return new Intl.DateTimeFormat('nl-NL', {dateStyle: 'medium', timeStyle: 'short'}).format(date);
+    return new Intl.DateTimeFormat(getLocale(), {dateStyle: 'medium', timeStyle: 'short'}).format(date);
 }
 
 export function quoteIdentifier(value) {
@@ -155,39 +173,40 @@ export function toast(message, type = 'success') {
 export async function copyText(value) {
     try {
         await navigator.clipboard.writeText(value);
-        toast('Gekopieerd.');
+        toast(t('ui.copied'));
     } catch {
-        toast('Kopiëren is niet beschikbaar. Selecteer de tekst en kopieer deze zelf.', 'error');
+        toast(t('ui.copyUnavailable'), 'error');
     }
 }
 
 export function sqlDisclosure(sql, params) {
     const details = el('details', {class: 'sql-disclosure'});
-    details.append(el('summary', {}, icon('code'), 'Toon de SQL en uitleg'));
-    details.append(el('p', {}, 'Dit is de opdracht waarmee de gegevens zijn opgehaald. Een SELECT leest gegevens; de waarden bij de filters worden apart meegegeven.'));
+    details.append(el('summary', {}, icon('code'), t('ui.showSql')));
+    details.append(el('p', {}, t('ui.sqlHelp')));
     details.append(el('pre', {class: 'code-block'}, el('code', {}, sql)));
-    if (params && Object.keys(params).length) details.append(el('p', {class: 'muted'}, 'Filterwaarden: ', el('code', {}, JSON.stringify(params))));
+    if (params && Object.keys(params).length) details.append(el('p', {class: 'muted'}, t('ui.filterValues'), el('code', {}, JSON.stringify(params))));
     return details;
 }
 
-export function confirmAction({title, description, requiredText, confirmLabel = 'Bevestigen', danger = false}) {
+export function confirmAction({title, description, requiredText, confirmLabel = t('ui.confirm'), danger = false}) {
     return new Promise(resolve => {
+        const opener = document.activeElement;
         const dialog = el('dialog', {class: 'confirm-dialog', 'aria-labelledby': 'confirmation-title'});
         const form = el('form', {method: 'dialog'});
         const submit = el('button', {class: 'button button-' + (danger ? 'danger' : 'primary'), type: 'submit'}, confirmLabel);
         const field = requiredText !== undefined
-            ? el('input', {class: 'input', autocomplete: 'off', spellcheck: 'false', 'aria-label': 'Typ ' + requiredText + ' om te bevestigen'})
+            ? el('input', {class: 'input', autocomplete: 'off', spellcheck: 'false', 'aria-label': t('ui.confirmInput', {value: requiredText})})
             : null;
         let confirmed = false;
         form.append(el('div', {class: 'confirm-symbol ' + (danger ? 'danger-text' : '')}, icon(danger ? 'refresh' : 'info')),
             el('h2', {id: 'confirmation-title'}, title), el('p', {}, description));
         if (field) {
             submit.disabled = true;
-            form.append(el('label', {class: 'field-label'}, 'Typ ', el('strong', {}, requiredText), ' om door te gaan.', field));
+            form.append(el('label', {class: 'field-label'}, t('ui.confirmLabel', {value: requiredText}), field));
             field.addEventListener('input', () => { submit.disabled = field.value !== requiredText; });
         }
         form.append(el('div', {class: 'dialog-actions'},
-            button('Annuleren', () => dialog.close()), submit));
+            button(t('ui.cancel'), () => dialog.close()), submit));
         form.addEventListener('submit', event => {
             event.preventDefault();
             if (field && field.value !== requiredText) return;
@@ -195,8 +214,9 @@ export function confirmAction({title, description, requiredText, confirmLabel = 
             dialog.close();
         });
         dialog.addEventListener('close', () => {
-            resolve(confirmed ? (field ? field.value : true) : null);
             dialog.remove();
+            if (opener?.isConnected && !opener.disabled) opener.focus({preventScroll: true});
+            resolve(confirmed ? (field ? field.value : true) : null);
         }, {once: true});
         dialog.append(form);
         document.body.append(dialog);

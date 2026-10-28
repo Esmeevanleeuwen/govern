@@ -1,22 +1,74 @@
 # API contract — Govern
 
 Personal local workbench. All endpoints are `GET/POST /api.php?action=...`, JSON.
-Success envelope `{ "ok": true, "data": ... }`; failure `{ "ok": false, "error": "Dutch message" }` with correct HTTP status.
+Success envelope `{ "ok": true, "data": ... }`. A failure keeps the existing
+`error` string and adds stable localization fields, with the same HTTP status:
+
+```json
+{
+  "ok": false,
+  "error": "Enter valid text for sql.",
+  "error_code": "text_invalid",
+  "error_params": {"field": "sql"},
+  "error_i18n": {
+    "nl": "Vul een geldige tekst in voor sql.",
+    "en": "Enter valid text for sql."
+  }
+}
+```
+
 All POST requests use JSON and header `X-CSRF-Token` from bootstrap. PHP session cookie, same origin only.
 No remote services or AI calls. One configurable MySQL/MariaDB database, live schema discovery.
 
+## Language and compatible feedback
+
+Send `Accept-Language: nl` or `Accept-Language: en` for application feedback.
+Regional tags and quality weights are supported; the highest-quality supported
+language wins. Missing, unsupported or excluded preferences fall back to Dutch.
+Regular JSON replies include `Content-Language` for the selected language.
+
+The selected `error`, `warning`, `notice`, `message` and `explanation` fields
+remain readable on their own. Their additive translation maps let the interface
+change language without rerunning an already completed SQL query:
+
+| Field | Shape | Available when |
+| --- | --- | --- |
+| `error_i18n` | `{nl:string,en:string}` | An application error has a known message code |
+| `warning_i18n` | `{nl:string,en:string}` | Bootstrap returns a connection or recovery warning |
+| `notice_i18n` | `{nl:string,en:string}` or `null` | Browse or query preview has been shortened |
+| `message_i18n` | `{nl:string,en:string}` | A restore action returns its completion message |
+| `explanation_i18n` | `{nl:string[],en:string[]}` | A visual query has been compiled |
+
+Clients may use the current language's map entry and fall back to the existing
+selected field. Keep `error_code` independent of its visible wording and treat
+`error_params` as a JSON object, including `{}` when empty. Parameters contain
+bounded diagnostics, identifiers, field label keys or numeric limits as needed;
+render feedback as text. Do not infer error identity by matching a translated
+sentence. The backend catalog is `app/src/Messages.php`.
+
+Language never changes identifiers, SQL, bound values, stored notes or records.
+Driver SQL diagnostics retain their text within the existing display limit.
+Context attachments, backup SQL files and saved restore point labels keep their
+existing contents; changing the interface language does not translate exports.
+
+Appearance and dashboard layout are browser preferences, not API resources or
+database schema. The current keys are `govern.preferences.v1` and
+`govern.dashboard.v1`. They do not change saved research or database data and do
+not provide cross-device syncing. See [the design guide](DESIGN.md) for the
+interface and future feature rules.
+
 ## Endpoints
 
-- GET `bootstrap`: `{csrf, database:{name,version,status,available}, stats:{tables,views,rows_estimate}, tables:[{name,type:"table"|"view",comment,rows_estimate,columns}]}`.
-- GET `browse&table=...&page=1&page_size=25&q=...`: `{table,columns:[{name,type,nullable,default,generated,primary,comment}],rows:[{column:value}],page,page_size,total,sql,params}`. Named identifiers verified against live catalog; values bound; max page_size100. App-owned `_govern_` tables excluded from normal list, remain accessible in phpMyAdmin.
+- GET `bootstrap`: `{csrf, database:{name,version,status,available}, stats:{tables,views,rows_estimate}, tables:[{name,type:"table"|"view",comment,rows_estimate,columns}]}`. An unavailable database can also return `warning` and `warning_i18n`; bootstrap still supplies the configured database name and CSRF token for recovery.
+- GET `browse&table=...&page=1&page_size=25&q=...`: `{table,columns:[{name,type,nullable,default,generated,primary,comment}],rows:[{column:value}],page,page_size,total,sql,params,truncated,notice,notice_i18n}`. Named identifiers verified against live catalog; values bound; max page_size100. App-owned `_govern_` tables excluded from normal list, remain accessible in phpMyAdmin.
 - GET `structure&table=...`: `{table,columns:[...],indexes:[{name,unique,columns:[name]}],foreign_keys:[{name,columns:[name],referenced_table,referenced_columns:[name]}],create_sql}`.
-- POST `query` exactly one of `{sql}` or `{design}`: `{columns:[string],rows:[[value]],truncated,duration_ms,returned_rows,sql}`. A design also returns `explanation:[string]`. Separate SELECT/SHOW-only DB account and READ ONLY transactions enforce research reads (including invocations through definer views). Max200 returned rows; native single statement execution; bounded statement time. Design values are bound parameters; its metadata is revalidated before execution. For writing/DDL use full phpMyAdmin modal.
-- POST `build-query` exactly `{design}`: `{sql,explanation:[string]}`. Validates against the live schema and generates editable, standalone SQL; does not execute the generated question.
+- POST `query` exactly one of `{sql}` or `{design}`: `{columns:[string],rows:[[value]],truncated,duration_ms,returned_rows,sql,notice,notice_i18n}`. A design also returns `explanation:[string]` and `explanation_i18n`. Separate SELECT/SHOW-only DB account and READ ONLY transactions enforce research reads (including invocations through definer views). Max200 returned rows; native single statement execution; bounded statement time. Design values are bound parameters; its metadata is revalidated before execution. For writing/DDL use full phpMyAdmin modal.
+- POST `build-query` exactly `{design}`: `{sql,explanation:[string],explanation_i18n:{nl:[string],en:[string]}}`. Validates against the live schema and generates editable, standalone SQL; does not execute the generated question.
 - GET `queries`: `[{id,name,sql,notes,updated_at}]`.
 - POST `save-query` `{id?,name,sql,notes?}`: saved item. POST `delete-query` `{id}`.
 - GET `snapshots`: `[{id,label,created_at,size_bytes,sha256}]`.
 - POST `create-snapshot` `{label}`: created snapshot descriptor.
-- POST `restore-snapshot` `{id,confirmation}`: confirmation equals configured database name. `{restored:id,safety_snapshot:<descriptor>|null,message}`. Creates safety export before restore when the DB exists; null if already absent. Snapshot service independent of live schema; can restore if target DB was dropped. Bootstrap still returns CSRF and configured DB name with available=false if absent.
+- POST `restore-snapshot` `{id,confirmation}`: confirmation equals configured database name. `{restored:id,safety_snapshot:<descriptor>|null,message,message_i18n}`. Creates safety export before restore when the DB exists; null if already absent. Snapshot service independent of live schema; can restore if target DB was dropped. Bootstrap still returns CSRF and configured DB name with available=false if absent.
 - GET `download-snapshot&id=...`: attachment SQL. Strict server-generated snapshot ids only.
 - GET `context`: attachment JSON of schema and saved queries, no table rows or credentials.
 - GET `health`: `{status:"ok"}` when configured DB readable; no credentials/errors disclosed.
@@ -103,10 +155,16 @@ Root owns database seed, docs, integration tests, review and GitHub.
 
 `DB_HOST=database`, `DB_PORT=3306`, `DB_NAME=bestuursatlas`, `DB_USER=govern`, `DB_PASSWORD`, `DB_READ_USER=govern_reader`, `DB_READ_PASSWORD`; optional `DB_SOCKET` for isolated native validation. `BACKUP_DIR=/var/lib/govern/backups`, `DB_DUMP_BIN=mariadb-dump`, `DB_CLIENT_BIN=mariadb`. Config keys: `host`, `port`, `name`, `user`, `password`, `read_user`, `read_password`, `socket`, `backup_dir`, `dump_bin`, `client_bin`.
 
-PHP8.3+, PDO MySQL, native PHP classes and ES modules, no build framework. Namespace `Govern`, small explicit bootstrap loading or autoloader. Config class `Config::fromEnvironment(): array`. BackupService `__construct(array $config)`, `list(): array`, `create(string $label): array`, `restore(string $id,string $confirmation): array`, `download(string $id): array` returning `{path,filename}`. Backup service verifies files/checksums, invokes clients using argv arrays, credentials only private temporary file. No shell command concatenation.
+PHP8.4+, PDO MySQL, native PHP classes and ES modules, no build framework. Namespace `Govern`, small explicit bootstrap loading or autoloader. Config class `Config::fromEnvironment(): array`. BackupService `__construct(array $config)`, `list(): array`, `create(string $label): array`, `restore(string $id,string $confirmation): array`, `download(string $id): array` returning `{path,filename}`. Backup service verifies files/checksums, invokes clients using argv arrays, credentials only private temporary file. No shell command concatenation.
 
 ## phpMyAdmin integration
 
 Same origin at `/phpmyadmin/` via Nginx. Modal top tabs exactly Browse, Structure, SQL. Iframe uses actual phpMyAdmin, not a partial imitation. URL query route `/sql` (Browse), `/table/structure`, `/table/sql`, with encoded `db` and `table`. No-table fallback `/database/structure` or `/database/sql`. Allow only same-origin framing; config auth uses DB account limited to configured database. Display current DB/table and a separate-window link. Keep full phpMyAdmin capabilities available inside frame.
+
+Explicit database window navigation includes `lang=nl` or `lang=en`. Changing
+Govern's language updates the surrounding controls immediately, but must not
+reload an open phpMyAdmin frame: its editor may contain unsaved work. The new
+language applies on the next explicit open, tab/table navigation or reload.
+The embedded application's own interface remains phpMyAdmin's responsibility.
 
 Snapshots are real SQL exports, not container volume snapshots. Restoring overwrites current selected DB contents; user confirmation and automatic safety export required. DDL is not represented as transactionally undoable. No database or phpMyAdmin host port; only proxy bound127.0.0.1:8080. Nothing runs on the user computer until they start this project.

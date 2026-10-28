@@ -100,6 +100,22 @@ try {
     $baseDesign = ['table' => $name, 'join' => null,
         'columns' => [['source' => 'base', 'column' => 'id'], ['source' => 'base', 'column' => 'label']],
         'filters' => [], 'match' => 'all', 'order' => [['source' => 'base', 'column' => 'id', 'direction' => 'asc']], 'limit' => 200];
+    $previousLanguage = $_SERVER['HTTP_ACCEPT_LANGUAGE'] ?? null;
+    try {
+        unset($_SERVER['HTTP_ACCEPT_LANGUAGE']);
+        $nlBuilt = $designer->compile($baseDesign);
+        $_SERVER['HTTP_ACCEPT_LANGUAGE'] = 'en-GB';
+        $enBuilt = $designer->compile($baseDesign);
+        $assert($nlBuilt['sql'] === $enBuilt['sql'] && $nlBuilt['prepared_sql'] === $enBuilt['prepared_sql'] && $nlBuilt['params'] === $enBuilt['params'], 'Changing language leaves generated SQL and bound values identical.');
+        $assert(str_starts_with($enBuilt['explanation'][0], 'You are reading') && $enBuilt['explanation_i18n']['nl'] === $nlBuilt['explanation'], 'The compiler returns English feedback and a matching cached Dutch explanation.');
+        $assert($runner->execute($enBuilt['prepared_sql'], $enBuilt['params'])['rows'] === [['1', 'literal%_value'], ['2', 'nü <tag>'], ['3', $literalText]], 'English feedback does not translate or change actual records.');
+    } finally {
+        if ($previousLanguage === null) {
+            unset($_SERVER['HTTP_ACCEPT_LANGUAGE']);
+        } else {
+            $_SERVER['HTTP_ACCEPT_LANGUAGE'] = $previousLanguage;
+        }
+    }
     $filter = static fn (string $column, string $operator, string $value): array => ['source' => 'base', 'column' => $column, 'operator' => $operator, 'value' => $value];
     $runDesign = static function (array $design) use ($designer, $runner): array {
         $built = $designer->compile($design);

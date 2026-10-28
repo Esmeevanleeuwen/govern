@@ -1,14 +1,22 @@
 import {request, setCsrf, endpoint} from './api.js';
-import {el, icon, button, badge, heading, loading, empty, errorPanel, notice, dataTable, number, fileSize, dateTime, quoteIdentifier, toast, copyText, sqlDisclosure, confirmAction} from './ui.js';
+import {el, icon, button, badge, heading, loading, empty, errorPanel, errorText, notice, dataTable, number, fileSize, dateTime, quoteIdentifier, toast, copyText, sqlDisclosure, confirmAction} from './ui.js';
 import {DatabaseModal} from './database-modal.js';
 import {QueryBuilder} from './query-builder.js';
+import {t, getLanguage, setLanguage} from './i18n.js';
+import {getPreferences, updatePreferences, resetAppearance, subscribePreferences} from './preferences.js';
+import {createDashboardLayout} from './dashboard-layout.js';
+import './app-messages.js';
+import './workspace-messages.js';
+
+setLanguage(getPreferences().language);
 
 const routes = {
-    overzicht: {label: 'Overzicht', icon: 'grid'},
-    gegevens: {label: 'Gegevens', icon: 'table'},
-    structuur: {label: 'Structuur', icon: 'layers'},
-    onderzoeken: {label: 'Onderzoeken', icon: 'search'},
-    experimenten: {label: 'Experimenten', icon: 'flask'},
+    overzicht: {labelKey: 'app.route.overview', icon: 'grid'},
+    gegevens: {labelKey: 'app.route.data', icon: 'table'},
+    structuur: {labelKey: 'app.route.structure', icon: 'layers'},
+    onderzoeken: {labelKey: 'app.route.research', icon: 'search'},
+    experimenten: {labelKey: 'app.route.experiments', icon: 'flask'},
+    instellingen: {labelKey: 'app.route.settings', icon: 'settings'},
 };
 const state = {
     bootstrap: null,
@@ -23,7 +31,25 @@ const state = {
     builderDraft: null,
     builderOpen: true,
     restoring: false,
+    dataViews: new Map(),
+    catalogSearch: {},
+    snapshotLabel: '',
+    savedQueries: null,
+    queryDirty: false,
+    savingQuery: false,
+    creatingSnapshot: false,
+    connectionError: null,
+    queryError: null,
+    querySaveError: null,
+    snapshotError: null,
 };
+const blockRegistry = [
+    {id: 'overview.tables', titleKey: 'app.dashboard.tables', defaultSize: 'wide'},
+    {id: 'overview.research', titleKey: 'app.dashboard.research', defaultSize: 'small'},
+    {id: 'overview.learning', titleKey: 'app.dashboard.learning', defaultSize: 'small'},
+    {id: 'overview.restore', titleKey: 'app.dashboard.restore', defaultSize: 'wide'},
+];
+const dashboard = createDashboardLayout(blockRegistry);
 const page = document.getElementById('page');
 const globalNotice = document.getElementById('global-notice');
 const openDatabase = document.getElementById('open-database');
@@ -36,12 +62,18 @@ let routeVersion = 0;
 const databaseModal = new DatabaseModal(() => {
     if (!state.restoring) refreshBootstrap(false).then(() => {
         if (!databaseModal.dialog.open && document.activeElement === document.body) openDatabase.focus();
-    }).catch(error => toast(error.message, 'error'));
+    }).catch(error => toast(errorText(error), 'error'));
 });
-for (const [key, route] of Object.entries(routes)) {
+for (const [key, route] of Object.entries(routes).filter(([key]) => key !== 'instellingen')) {
     navigation.append(el('a', {class: 'nav-link', href: '#' + key, 'data-route': key},
-        icon(route.icon), el('span', {}, route.label), icon('chevron', 'nav-arrow')));
+        icon(route.icon), el('span', {'data-i18n': route.labelKey}, t(route.labelKey)), icon('chevron', 'nav-arrow')));
 }
+document.getElementById('settings-link').prepend(icon('settings'));
+document.getElementById('settings-link').dataset.route = 'instellingen';
+document.getElementById('settings-shortcut').append(icon('settings'));
+document.getElementById('settings-shortcut').addEventListener('click', () => go('instellingen'));
+document.getElementById('language-icon').append(icon('globe'));
+document.getElementById('language-select').addEventListener('change', event => changePreference({language: event.target.value}));
 openDatabase.prepend(icon('database'));
 openDatabase.addEventListener('click', () => databaseModal.open(state.table, 'browse'));
 refreshButton.append(icon('refresh'));
@@ -57,6 +89,7 @@ menuToggle.addEventListener('click', () => {
     if (open) navigation.querySelector('[aria-current="page"]')?.focus();
 });
 navigation.addEventListener('click', event => { if (event.target.closest('a')) closeSidebar(); });
+document.getElementById('settings-link').addEventListener('click', closeSidebar);
 mobileViewport.addEventListener('change', () => {
     if (!mobileViewport.matches) document.body.classList.remove('sidebar-open');
     syncSidebar();
@@ -76,11 +109,70 @@ function closeSidebar() {
 function syncSidebar() {
     const open = document.body.classList.contains('sidebar-open');
     const hidden = mobileViewport.matches && !open;
-    sidebar.inert = hidden;
+    sidebar.inert = hidden || state.restoring;
     sidebar.setAttribute('aria-hidden', String(hidden));
     menuToggle.setAttribute('aria-expanded', String(open));
 }
 syncSidebar();
+
+function localizeShell() {
+    document.querySelectorAll('[data-i18n]').forEach(node => { node.textContent = t(node.dataset.i18n); });
+    document.querySelectorAll('[data-i18n-aria]').forEach(node => node.setAttribute('aria-label', t(node.dataset.i18nAria)));
+    document.querySelectorAll('[data-i18n-title]').forEach(node => node.title = t(node.dataset.i18nTitle));
+    document.getElementById('language-select').value = getLanguage();
+    if (state.connectionError) document.getElementById('connection-state').replaceChildren(el('span', {class: 'status-dot offline'}), el('span', {}, t('app.core.connection.offline')));
+    const current = routes[route().name];
+    document.getElementById('breadcrumb-current').textContent = t(current.labelKey);
+    document.title = t(current.labelKey) + ' — Govern';
+    document.querySelector('meta[name="description"]').content = t('app.shell.description');
+}
+
+function preferenceFeedback(saved) {
+    const status = document.getElementById('preferences-status');
+    if (status) status.textContent = t(saved ? 'app.settings.saved' : 'app.settings.storageUnavailable');
+    if (!saved) toast(t('app.settings.storageUnavailable'), 'error');
+}
+
+function changePreference(patch, options = {}) {
+    const result = updatePreferences(patch, options);
+    if (options.persist !== false) preferenceFeedback(result.saved);
+    return result;
+}
+
+function syncSettingControls() {
+    const preferences = getPreferences();
+    document.querySelectorAll('[data-preference]').forEach(node => {
+        const value = preferences[node.dataset.preference];
+        if (node.type === 'checkbox') node.checked = value;
+        else node.value = value;
+    });
+    document.querySelectorAll('[data-accent]').forEach(node => node.setAttribute('aria-pressed', String(node.dataset.accent === preferences.accent)));
+    document.querySelectorAll('[data-sidebar-choice]').forEach(node => node.setAttribute('aria-pressed', String(node.dataset.sidebarChoice === preferences.sidebar)));
+    const accent = document.getElementById('preference-accent-value');
+    if (accent) accent.textContent = preferences.accent.toUpperCase();
+}
+
+window.addEventListener('govern:languagechange', () => {
+    const active = document.activeElement;
+    const focused = active?.id;
+    const caret = active && typeof active.selectionStart === 'number' ? {start: active.selectionStart, end: active.selectionEnd, direction: active.selectionDirection, top: active.scrollTop, left: active.scrollLeft} : null;
+    const scroll = {left: window.scrollX, top: window.scrollY};
+    localizeShell();
+    databaseModal.refreshLanguage();
+    render();
+    const restored = focused ? document.getElementById(focused) : null;
+    restored?.focus({preventScroll: true});
+    if (restored && caret && typeof restored.setSelectionRange === 'function') {
+        restored.setSelectionRange(caret.start, caret.end, caret.direction);
+        restored.scrollTop = caret.top; restored.scrollLeft = caret.left;
+    }
+    window.scrollTo(scroll);
+});
+subscribePreferences(preferences => {
+    if (preferences.language !== getLanguage()) setLanguage(preferences.language);
+    else { localizeShell(); syncSettingControls(); }
+});
+localizeShell();
 
 function route() {
     const [name, query = ''] = window.location.hash.slice(1).split('?');
@@ -111,7 +203,8 @@ function defaultSql(table = state.table || tables()[0]?.name) {
     return table ? 'SELECT *\nFROM ' + quoteIdentifier(table) + '\nLIMIT 20;' : 'SELECT VERSION() AS databaseversie;';
 }
 
-function openResearch(sql) {
+async function openResearch(sql) {
+    if (!await mayReplaceResearch()) return;
     state.queryRevision += 1;
     state.queryDraft = sql;
     state.queryId = null;
@@ -119,7 +212,35 @@ function openResearch(sql) {
     state.queryNotes = '';
     state.queryResult = null;
     state.queryDesign = null;
+    state.queryDirty = false;
+    state.queryError = null;
+    state.querySaveError = null;
     go('onderzoeken');
+}
+
+function localized(data, field) {
+    return data?.[field + '_i18n']?.[getLanguage()] ?? data?.[field];
+}
+
+function renderConnectionNotice() {
+    globalNotice.replaceChildren();
+    if (state.connectionError && state.bootstrap) globalNotice.append(errorPanel(state.connectionError, () => refreshBootstrap()));
+    else if (state.bootstrap?.warning) globalNotice.append(notice(t('app.core.connection.warningRecovery', {warning: localized(state.bootstrap, 'warning')}), 'notice-warning'));
+}
+
+function syncRestoreControls() {
+    openDatabase.disabled = state.restoring || !state.bootstrap;
+    document.getElementById('language-select').disabled = state.restoring;
+    document.getElementById('settings-shortcut').disabled = state.restoring;
+    menuToggle.disabled = state.restoring;
+    refreshButton.disabled = state.restoring;
+    syncSnapshotControls();
+    syncSidebar();
+}
+
+function syncSnapshotControls() {
+    const busy = state.restoring || state.creatingSnapshot;
+    document.querySelectorAll('[data-snapshot-action]').forEach(control => { control.disabled = busy; });
 }
 
 async function refreshBootstrap(notify = false) {
@@ -129,6 +250,8 @@ async function refreshBootstrap(notify = false) {
     try {
         const data = await request('bootstrap', {signal: bootstrapController.signal});
         state.bootstrap = data;
+        state.connectionError = null;
+        state.savedQueries = null;
         setCsrf(data.csrf);
         databaseModal.configure(data.database.name, data.tables || []);
         openDatabase.disabled = false;
@@ -137,99 +260,278 @@ async function refreshBootstrap(notify = false) {
             el('span', {class: 'status-dot ' + (ready ? '' : 'offline')}),
             el('span', {title: data.database.name}, data.database.name));
         document.getElementById('footer-database').textContent = data.database.name + (data.database.version ? ' · ' + data.database.version : '');
-        globalNotice.replaceChildren();
-        if (data.warning) globalNotice.append(notice(data.warning + ' Je herstelpunten blijven beschikbaar onder Experimenten.', 'notice-warning'));
+        const workspaceName = document.getElementById('workspace-database');
+        workspaceName.removeAttribute('data-i18n');
+        workspaceName.textContent = data.database.name;
+        workspaceName.title = data.database.name;
+        renderConnectionNotice();
         render();
-        if (notify) toast('De werkplek is bijgewerkt.');
+        if (notify) toast(t('app.core.connection.updated'));
     } catch (error) {
         if (error.name === 'AbortError') return;
+        state.connectionError = error;
         if (!state.bootstrap) {
-            page.replaceChildren(heading('VERBINDING', 'Je werkplek staat nog niet klaar.', 'De database of webserver kan nog bezig zijn met starten.'),
+            page.replaceChildren(heading(t('app.core.connection.eyebrow'), t('app.core.connection.title'), t('app.core.connection.help')),
                 errorPanel(error, () => refreshBootstrap()));
         } else globalNotice.replaceChildren(errorPanel(error, () => refreshBootstrap()));
-        document.getElementById('connection-state').replaceChildren(el('span', {class: 'status-dot offline'}), el('span', {}, 'Verbinding onderbroken'));
+        document.getElementById('connection-state').replaceChildren(el('span', {class: 'status-dot offline'}), el('span', {}, t('app.core.connection.offline')));
     } finally {
-        refreshButton.disabled = false;
+        refreshButton.disabled = state.restoring;
     }
 }
 
 function render() {
-    if (!state.bootstrap) return;
+    const location = route();
+    if (!state.bootstrap && location.name !== 'instellingen') {
+        if (state.connectionError) page.replaceChildren(heading(t('app.core.connection.eyebrow'), t('app.core.connection.title'), t('app.core.connection.help')), errorPanel(state.connectionError, () => refreshBootstrap()));
+        return;
+    }
     currentScope?.controller.abort();
     currentScope?.cleanup.forEach(callback => callback());
     const version = ++routeVersion;
     const controller = new AbortController();
     const scope = {controller, signal: controller.signal, cleanup: [], live: () => version === routeVersion && !controller.signal.aborted};
     currentScope = scope;
-    const location = route();
     activeTable(location.params);
-    for (const link of navigation.querySelectorAll('a')) {
+    for (const link of document.querySelectorAll('[data-route]')) {
         const active = link.dataset.route === location.name;
         link.classList.toggle('active', active);
         if (active) link.setAttribute('aria-current', 'page');
         else link.removeAttribute('aria-current');
     }
-    document.getElementById('breadcrumb-current').textContent = routes[location.name].label;
-    document.title = routes[location.name].label + ' — Govern';
+    document.getElementById('breadcrumb-current').textContent = t(routes[location.name].labelKey);
+    document.title = t(routes[location.name].labelKey) + ' — Govern';
+    renderConnectionNotice();
     page.replaceChildren();
-    const views = {overzicht: renderOverview, gegevens: renderData, structuur: renderStructure, onderzoeken: renderResearch, experimenten: renderExperiments};
+    const views = {overzicht: renderOverview, gegevens: renderData, structuur: renderStructure, onderzoeken: renderResearch, experimenten: renderExperiments, instellingen: renderSettings};
     Promise.resolve(views[location.name](scope)).catch(error => {
         if (error.name !== 'AbortError' && scope.live()) page.append(errorPanel(error, () => render()));
     });
 }
 
-function renderOverview() {
+function renderOverview(scope) {
     const data = state.bootstrap;
-    page.append(heading('PERSOONLIJKE WERKPLEK', 'Je data, helder in beeld.', 'Bekijk wat je hebt, ontdek hoe het samenhangt en bouw stap voor stap verder.'));
-    const visual = el('div', {class: 'hero-visual', 'aria-hidden': 'true'},
-        el('div', {class: 'hero-sheet'}, el('div', {class: 'hero-sheet-top'}, icon('table'), 'JOUW GEGEVENS'),
-            el('div', {class: 'hero-sheet-lines'}, Array.from({length: 18}, () => el('span')))),
-        el('div', {class: 'hero-float'}, icon('link'), 'Alles begint met een verband'));
-    page.append(el('section', {class: 'hero-card', 'aria-labelledby': 'hero-title'},
-        el('div', {}, el('h2', {id: 'hero-title'}, 'Wat wil je vandaag uitzoeken?'),
-            el('p', {}, 'Je database is je vertrekpunt. Verken de gegevens, stel een vraag of maak ruimte voor een experiment.'),
+    const edit = button(t('app.layout.edit'), () => { dashboard.begin(); draw(); }, {symbol: 'layout', id: 'edit-layout'});
+    page.append(heading(t('app.dashboard.eyebrow'), t('app.dashboard.title'), '', [edit]));
+    const toolbar = el('div');
+    const heroTitle = el('h2', {id: 'hero-title'});
+    t('app.dashboard.heroTitle').split('\n').forEach((part, index) => { if (index) heroTitle.append(el('br')); heroTitle.append(document.createTextNode(part)); });
+    page.append(toolbar, el('section', {class: 'hero-card', 'aria-labelledby': 'hero-title'},
+        el('div', {}, heroTitle, el('p', {}, t('app.dashboard.heroHelp')),
             el('div', {class: 'hero-actions'},
-                button('Gegevens verkennen', () => go('gegevens'), {kind: 'primary', symbol: 'arrow'}),
-                button('Een query proberen', () => openResearch(defaultSql()), {symbol: 'code'}))), visual));
-    const stats = [
-        ['Tabellen', data.stats.tables, 'table', 'De bouwstenen van je database'],
-        ['Overzichten', data.stats.views, 'layers', 'Bewaarde manieren om data te lezen'],
-        ['Geschatte rijen', data.stats.rows_estimate, 'database', 'Schatting uit de databasecatalogus'],
-    ];
-    page.append(el('div', {class: 'stats-grid'}, stats.map(([label, value, symbol, note]) =>
-        el('div', {class: 'stat-card'}, el('div', {class: 'stat-icon'}, icon(symbol)),
-            el('p', {}, label), el('strong', {class: 'stat-value'}, number(value)), el('span', {class: 'stat-note'}, note)))));
-    const list = el('div', {class: 'home-table-list'});
-    const featured = [...tables()].sort((a, b) => Number(b.rows_estimate || 0) - Number(a.rows_estimate || 0)).slice(0, 5);
-    for (const table of featured) {
-        list.append(el('button', {class: 'home-table-item', type: 'button', on: {click: () => go('gegevens', {table: table.name})}},
-            icon(table.type === 'view' ? 'layers' : 'table'),
-            el('span', {}, el('span', {class: 'home-table-name'}, table.name),
-                el('span', {class: 'home-table-detail'}, number(table.columns) + ' kolommen · ' + (table.type === 'view' ? 'overzicht' : 'tabel'))),
-            icon('chevron', 'row-chevron')));
+                button(t('app.dashboard.explore'), () => go('gegevens'), {kind: 'primary', symbol: 'arrow'}),
+                button(t('app.dashboard.build'), () => openResearch(defaultSql()), {kind: 'ghost'}))),
+        el('div', {class: 'hero-visual', 'aria-hidden': 'true'}, el('div', {class: 'hero-lens'}))));
+    page.append(el('div', {class: 'stats-grid'}, [
+        ['tablesStat', data.stats.tables], ['viewsStat', data.stats.views], ['rowsStat', data.stats.rows_estimate],
+    ].map(([key, value]) => el('div', {class: 'stat-card'},
+        el('strong', {class: 'stat-value'}, number(value)), el('p', {}, t('app.dashboard.' + key))))));
+    const grid = el('div', {class: 'dashboard-grid'});
+    const hidden = el('div', {class: 'layout-hidden'});
+    const announcement = el('p', {class: 'sr-only', role: 'status', 'aria-live': 'polite'});
+    page.append(grid, hidden, announcement);
+    let dragged = null;
+
+    function announceMove(id) {
+        const blocks = dashboard.getBlocks();
+        const block = blocks.find(item => item.id === id);
+        if (block) announcement.textContent = t('app.layout.moved', {title: t(block.titleKey), position: blocks.findIndex(item => item.id === id) + 1});
     }
-    if (!featured.length) list.append(empty('Nog geen tabellen', 'Open het databasevenster om gegevens te importeren, of herstel een eerder herstelpunt.'));
-    const learning = [
-        ['Verkennen', 'Lees een tabel en bekijk wat iedere kolom betekent.'],
-        ['Verbanden begrijpen', 'Volg een verwijzing naar een andere tabel.'],
-        ['Bewust experimenteren', 'Maak eerst een herstelpunt en bekijk daarna wat een wijziging doet.'],
-    ];
-    page.append(el('div', {class: 'home-columns'},
-        el('section', {class: 'card'},
-            el('div', {class: 'card-header'}, el('div', {}, el('h2', {}, 'In je database'), el('p', {}, data.database.name)),
-                button('Alles bekijken', () => go('gegevens'), {kind: 'ghost', className: 'button-small', symbol: 'arrow'})),
-            list),
-        el('section', {class: 'card'},
-            el('div', {class: 'card-header'}, el('div', {}, el('h2', {}, 'Leren door te doen'), el('p', {}, 'Kleine stappen, met je eigen gegevens.')), icon('book')),
-            el('div', {class: 'learning-list'}, learning.map(([title, description], index) =>
-                el('div', {class: 'learning-item'}, el('span', {class: 'step-number'}, String(index + 1)),
-                    el('div', {}, el('h3', {}, title), el('p', {}, description))))),
-            el('div', {class: 'learning-bottom'}, 'Gebruik ‘Toon de SQL en uitleg’ om te zien wat er gebeurt.'))));
+
+    function draw() {
+        const editing = dashboard.isEditing();
+        edit.hidden = editing;
+        toolbar.replaceChildren();
+        if (editing) toolbar.append(el('div', {class: 'layout-toolbar'},
+            el('div', {}, el('strong', {}, t('app.layout.title')), el('p', {}, t('app.layout.help'))),
+            el('div', {class: 'layout-toolbar-actions'},
+                button(t('app.layout.reset'), () => { dashboard.reset(); draw(); }),
+                button(t('app.layout.cancel'), () => { dashboard.cancel(); draw(); edit.focus(); toast(t('app.layout.cancelled')); }, {id: 'cancel-layout'}),
+                button(t('app.layout.save'), () => {
+                    const result = dashboard.commit(); draw(); edit.focus();
+                    toast(t(result.saved ? 'app.layout.saved' : 'app.settings.storageUnavailable'), result.saved ? 'success' : 'error');
+                }, {kind: 'primary', id: 'save-layout'}))));
+        const blocks = dashboard.getBlocks();
+        grid.replaceChildren();
+        if (!blocks.length) grid.append(el('section', {class: 'card dashboard-block', 'data-size': 'full'},
+            empty(t('app.layout.empty'), t('app.layout.emptyHelp'), button(t('app.layout.showAll'), () => {
+                if (!dashboard.isEditing()) dashboard.begin();
+                dashboard.getBlocks({includeHidden: true}).forEach(block => dashboard.setHidden(block.id, false));
+                if (!editing) {
+                    const result = dashboard.commit();
+                    if (!result.saved) toast(t('app.settings.storageUnavailable'), 'error');
+                }
+                draw();
+            }), 'layout')));
+        blocks.forEach((definition, index) => {
+            const title = t(definition.titleKey);
+            const block = el('section', {class: 'card dashboard-block', 'data-block-id': definition.id, 'data-size': definition.size, 'data-editing': editing ? 'true' : null});
+            if (editing) {
+                const move = offset => {
+                    dashboard.move(definition.id, offset); draw(); announceMove(definition.id);
+                    const candidate = grid.querySelector('[data-block-move="' + definition.id + '"][data-direction="' + offset + '"]');
+                    if (candidate && !candidate.disabled) candidate.focus();
+                    else grid.querySelector('[data-block-size="' + definition.id + '"]')?.focus();
+                };
+                const grip = button(t('app.layout.move', {title}), () => { announcement.textContent = t('app.layout.help'); }, {symbol: 'grip', className: 'block-drag icon-button', draggable: 'true'});
+                grip.querySelector('span').className = 'sr-only';
+                grip.addEventListener('keydown', event => {
+                    if (event.key === 'ArrowUp' || event.key === 'ArrowDown') { event.preventDefault(); move(event.key === 'ArrowUp' ? -1 : 1); }
+                });
+                grip.addEventListener('dragstart', event => {
+                    dragged = definition.id;
+                    event.dataTransfer.effectAllowed = 'move';
+                    event.dataTransfer.setData('text/plain', definition.id);
+                });
+                grip.addEventListener('dragend', () => { dragged = null; grid.querySelectorAll('.drag-over').forEach(node => node.classList.remove('drag-over')); });
+                const size = el('select', {class: 'input', 'data-block-size': definition.id, 'aria-label': t('app.layout.width', {title})},
+                    definition.allowedSizes.map(value => el('option', {value, selected: value === definition.size}, t('app.layout.' + value))));
+                size.addEventListener('change', () => { dashboard.setSize(definition.id, size.value); draw(); grid.querySelector('[data-block-size="' + definition.id + '"]')?.focus(); });
+                const earlier = button(t('app.layout.up', {title}), () => move(-1), {symbol: 'up', className: 'icon-button', disabled: index === 0, 'data-block-move': definition.id, 'data-direction': '-1'});
+                const later = button(t('app.layout.down', {title}), () => move(1), {symbol: 'down', className: 'icon-button', disabled: index === blocks.length - 1, 'data-block-move': definition.id, 'data-direction': '1'});
+                const hide = button(t('app.layout.hide', {title}), () => {
+                    dashboard.setHidden(definition.id, true); draw();
+                    hidden.querySelector('[data-block-show="' + definition.id + '"]')?.focus();
+                }, {symbol: 'eye', className: 'icon-button', 'data-block-hide': definition.id});
+                [earlier, later, hide].forEach(node => { node.querySelector('span').className = 'sr-only'; });
+                block.append(el('div', {class: 'block-toolbar'}, grip, earlier, later, size, hide));
+                block.addEventListener('dragover', event => { if (dragged && dragged !== definition.id) {
+                    event.preventDefault(); block.classList.add('drag-over');
+                    const bounds = block.getBoundingClientRect();
+                    block.dataset.dropPosition = event.clientY > bounds.top + bounds.height / 2 ? 'after' : 'before';
+                } });
+                block.addEventListener('dragleave', event => { if (!block.contains(event.relatedTarget)) { block.classList.remove('drag-over'); delete block.dataset.dropPosition; } });
+                block.addEventListener('drop', event => {
+                    if (!dragged) return;
+                    event.preventDefault(); const id = dragged; dragged = null;
+                    const visible = dashboard.getBlocks().filter(item => item.id !== id);
+                    const destination = block.dataset.dropPosition === 'after' ? (visible[visible.findIndex(item => item.id === definition.id) + 1]?.id || null) : definition.id;
+                    dashboard.moveBefore(id, destination); draw(); announceMove(id);
+                    grid.querySelector('[data-block-size="' + id + '"]')?.focus();
+                });
+            }
+            block.append(el('div', {class: 'card-header'}, el('h2', {}, title), icon({
+                'overview.tables': 'table', 'overview.research': 'bookmark', 'overview.learning': 'book', 'overview.restore': 'clock',
+            }[definition.id])));
+            appendDashboardContent(block, definition.id, scope);
+            grid.append(block);
+        });
+        const hiddenBlocks = dashboard.getBlocks({includeHidden: true}).filter(block => block.hidden);
+        hidden.replaceChildren();
+        hidden.hidden = !hiddenBlocks.length;
+        if (hiddenBlocks.length) hidden.append(el('h3', {}, t('app.layout.hidden')), el('div', {class: 'layout-hidden-actions'},
+            hiddenBlocks.map(block => button(t('app.layout.show', {title: t(block.titleKey)}), () => {
+                const alreadyEditing = dashboard.isEditing();
+                if (!alreadyEditing) dashboard.begin();
+                dashboard.setHidden(block.id, false);
+                if (!alreadyEditing) { const result = dashboard.commit(); if (!result.saved) toast(t('app.settings.storageUnavailable'), 'error'); }
+                draw();
+            }, {'data-block-show': block.id, symbol: 'plus'}))));
+    }
+    const unsubscribe = dashboard.subscribe((_layout, info) => { if (info.reason === 'storage' && scope.live()) draw(); });
+    scope.cleanup.push(unsubscribe);
+    draw();
+}
+
+function appendDashboardContent(block, id, scope) {
+    if (id === 'overview.tables') {
+        const featured = [...tables()].sort((a, b) => Number(b.rows_estimate || 0) - Number(a.rows_estimate || 0)).slice(0, 4);
+        const list = el('div', {class: 'home-table-list'});
+        featured.forEach(table => list.append(el('button', {class: 'home-table-item', type: 'button', on: {click: () => go('gegevens', {table: table.name})}},
+            icon(table.type === 'view' ? 'layers' : 'table'),
+            el('span', {}, el('span', {class: 'home-table-name'}, table.name), el('span', {class: 'home-table-detail'},
+                t('app.dashboard.tableDetail', {count: number(table.columns), type: t(table.type === 'view' ? 'app.dashboard.view' : 'app.dashboard.table')}))), icon('external', 'row-chevron'))));
+        if (!featured.length) list.append(empty(t('app.dashboard.noTables'), t('app.dashboard.noTablesHelp')));
+        block.append(list, el('div', {class: 'card-body'}, button(t('app.dashboard.viewAll'), () => go('gegevens'), {kind: 'ghost', symbol: 'arrow'})));
+    } else if (id === 'overview.research') {
+        const content = el('div', {class: 'card-body'}, loading()); block.append(content);
+        const draw = queries => {
+            if (!scope.live() || !content.isConnected) return;
+            content.replaceChildren();
+            if (!queries.length) content.append(el('h3', {}, t('app.dashboard.noResearch')), el('p', {}, t('app.dashboard.noResearchHelp')));
+            queries.slice(0, 4).forEach(query => content.append(el('button', {class: 'home-table-item', type: 'button', on: {click: async () => {
+                if (!await mayReplaceResearch()) return;
+                state.queryRevision += 1; state.queryId = query.id; state.queryDraft = query.sql; state.queryName = query.name; state.queryNotes = query.notes || '';
+                state.queryResult = null; state.queryDesign = null; state.queryDirty = false; state.queryError = null; state.querySaveError = null; go('onderzoeken');
+            }}}, icon('code'), el('span', {}, query.name))));
+            content.append(button(t('app.dashboard.newResearch'), () => openResearch(defaultSql()), {kind: 'ghost', symbol: 'plus'}));
+        };
+        if (state.savedQueries) queueMicrotask(() => draw(state.savedQueries));
+        else request('queries', {signal: scope.signal}).then(queries => { state.savedQueries = queries; draw(queries); }).catch(error => {
+            if (error.name !== 'AbortError' && scope.live() && content.isConnected) content.replaceChildren(errorPanel(error));
+        });
+    } else if (id === 'overview.learning') {
+        block.append(el('div', {class: 'card-body'}, [['stepExplore', 'gegevens'], ['stepConnect', 'structuur'], ['stepQuery', 'onderzoeken']].map(([key, target], i) =>
+            el('button', {class: 'home-table-item', type: 'button', on: {click: () => go(target)}}, el('span', {class: 'step-number'}, String(i + 1)), el('span', {}, t('app.dashboard.' + key))))));
+    } else if (id === 'overview.restore') {
+        block.append(el('div', {class: 'card-body'}, el('p', {}, t('app.dashboard.restoreHelp')),
+            button(t('app.dashboard.createRestore'), () => go('experimenten'), {symbol: 'plus'})));
+    }
+}
+
+async function mayReplaceResearch() {
+    if (!state.queryDirty) return true;
+    return Boolean(await confirmAction({title: t('app.research.discardTitle'), description: t('app.research.discardHelp'), confirmLabel: t('app.research.discard')}));
+}
+
+function renderSettings() {
+    const preferences = getPreferences();
+    page.append(heading(t('app.route.settings'), t('app.settings.title'), t('app.settings.subtitle')));
+    const selectPreference = (key, options, label) => {
+        const select = el('select', {id: 'preference-' + key, class: 'input select', 'data-preference': key, 'aria-label': label},
+            options.map(([value, text]) => el('option', {value, selected: value === preferences[key]}, text)));
+        select.addEventListener('change', () => changePreference({[key]: select.value}));
+        return select;
+    };
+    const row = (label, control, help) => el('label', {class: 'setting-row'}, el('span', {}, label, help ? el('small', {}, help) : null), control);
+    const section = (key, symbol, ...children) => el('section', {class: 'settings-section'}, el('h2', {}, icon(symbol), t('app.settings.' + key)), children);
+    const language = section('language', 'globe',
+        row(t('app.settings.interfaceLanguage'), selectPreference('language', [['nl', 'Nederlands'], ['en', 'English']], t('app.settings.interfaceLanguage'))),
+        el('p', {}, t('app.settings.languageHelp')));
+    const swatches = el('div', {class: 'colour-swatches', role: 'group', 'aria-label': t('app.settings.accent')},
+        [['lagoon', '#0b7476'], ['iris', '#6651c6'], ['cobalt', '#315ee8'], ['clay', '#a54e37']].map(([name, colour]) => {
+            const swatch = el('button', {class: 'colour-swatch', type: 'button', 'data-accent': colour, 'aria-label': t('app.settings.' + name), 'aria-pressed': String(preferences.accent === colour)});
+            swatch.style.setProperty('--swatch', colour);
+            swatch.addEventListener('click', () => changePreference({accent: colour}));
+            return swatch;
+        }));
+    const colour = key => {
+        const input = el('input', {id: 'preference-' + key, type: 'color', value: preferences[key], 'data-preference': key});
+        input.addEventListener('input', () => changePreference({[key]: input.value}, {persist: false}));
+        input.addEventListener('change', () => changePreference({[key]: input.value}));
+        return input;
+    };
+    const reduced = el('input', {id: 'preference-reduceTransparency', type: 'checkbox', checked: preferences.reduceTransparency, 'data-preference': 'reduceTransparency'});
+    reduced.addEventListener('change', () => changePreference({reduceTransparency: reduced.checked}));
+    const appearance = section('appearance', 'palette',
+        row(t('app.settings.theme'), selectPreference('theme', ['light', 'dark', 'system'].map(value => [value, t('app.settings.' + value)]), t('app.settings.theme'))),
+        el('div', {class: 'field-label'}, t('app.settings.accent'), swatches),
+        el('label', {class: 'custom-colour'}, t('app.settings.customAccent'), colour('accent'), el('code', {id: 'preference-accent-value'}, preferences.accent.toUpperCase())),
+        el('label', {class: 'custom-colour'}, t('app.settings.background'), colour('backgroundTint')),
+        el('p', {}, t('app.settings.backgroundHelp')),
+        row(t('app.settings.reduceTransparency'), reduced, t('app.settings.reduceHelp')));
+    const side = el('div', {class: 'setting-actions', role: 'group', 'aria-label': t('app.settings.navigationPosition')},
+        ['left', 'right'].map(value => button(t('app.settings.' + value), () => changePreference({sidebar: value}), {'data-sidebar-choice': value, 'aria-pressed': String(preferences.sidebar === value)})));
+    const layout = section('layout', 'layout',
+        el('div', {class: 'setting-row'}, el('span', {}, t('app.settings.navigationPosition')), side),
+        button(t('app.settings.arrange'), () => { dashboard.begin(); go('overzicht'); }, {symbol: 'grip'}),
+        el('p', {}, t('app.settings.layoutHelp')));
+    const brand = el('div', {class: 'card brand-preview'},
+        el('div', {class: 'brand'}, el('span', {class: 'brand-mark', 'aria-hidden': 'true'}, el('span'), el('span'), el('span'), el('span')), el('strong', {}, 'govern')),
+        el('h2', {}, t('app.settings.brandTitle')), el('p', {}, t('app.settings.brandHelp')));
+    const preview = el('section', {class: 'card'}, el('div', {class: 'appearance-preview'},
+        el('div', {}, badge(t('app.settings.previewBadge')), el('h2', {}, t('app.dashboard.title')), el('p', {}, t('app.settings.previewHelp')),
+            button(t('app.dashboard.explore'), () => go('gegevens'), {kind: 'primary', symbol: 'arrow'}))),
+        el('div', {class: 'card-body'}, el('h3', {}, t('app.settings.preview'))));
+    page.append(el('div', {class: 'settings-grid'}, el('div', {class: 'card'}, language, appearance, layout),
+        el('aside', {class: 'settings-aside'}, preview, brand,
+            button(t('app.settings.reset'), () => { const result = resetAppearance(); syncSettingControls(); preferenceFeedback(result.saved); }, {kind: 'ghost', className: 'settings-reset', id: 'reset-appearance'}))),
+        el('p', {id: 'preferences-status', class: 'settings-status', role: 'status', 'aria-live': 'polite'}));
 }
 
 function catalog(routeName) {
     const list = el('div', {class: 'catalog-list'});
-    const search = el('input', {type: 'search', class: 'input', placeholder: 'Zoek een tabel…', 'aria-label': 'Zoek een tabel of view', autocomplete: 'off'});
+    const search = el('input', {id: 'catalog-search', type: 'search', class: 'input', value: state.catalogSearch[routeName] || '', placeholder: t('app.core.catalog.searchPlaceholder'), 'aria-label': t('app.core.catalog.searchLabel'), autocomplete: 'off'});
     const draw = () => {
         const query = search.value.trim().toLocaleLowerCase();
         const matching = tables().filter(table => table.name.toLocaleLowerCase().includes(query));
@@ -240,41 +542,43 @@ function catalog(routeName) {
             on: {click: () => go(routeName, {table: table.name})},
         }, icon(table.type === 'view' ? 'layers' : 'table'), el('span', {class: 'catalog-item-name'}, table.name),
         el('span', {class: 'catalog-item-count'}, number(table.columns)))));
-        if (!matching.length) list.append(el('p', {class: 'catalog-empty'}, 'Geen tabellen gevonden.'));
+        if (!matching.length) list.append(el('p', {class: 'catalog-empty'}, t('app.core.catalog.noMatches')));
     };
-    search.addEventListener('input', draw);
+    search.addEventListener('input', () => { state.catalogSearch[routeName] = search.value; draw(); });
     draw();
-    return el('aside', {class: 'catalog', 'aria-label': 'Tabellen en views'},
-        el('div', {class: 'catalog-head'}, el('div', {class: 'catalog-title'}, el('h2', {}, 'Tabellen & overzichten'), badge(number(tables().length))),
+    return el('aside', {class: 'catalog', 'aria-label': t('app.core.catalog.aria')},
+        el('div', {class: 'catalog-head'}, el('div', {class: 'catalog-title'}, el('h2', {}, t('app.core.catalog.title')), badge(number(tables().length))),
             el('div', {class: 'search-field'}, icon('search'), search)), list);
 }
 
 function tableHeader(table, tab) {
     return el('div', {class: 'table-heading'},
-        el('div', {}, el('div', {class: 'table-heading-title'}, el('h2', {}, table.name), badge(table.type === 'view' ? 'VIEW' : 'TABEL', table.type === 'view' ? 'badge-blue' : 'badge-green')),
+        el('div', {}, el('div', {class: 'table-heading-title'}, el('h2', {}, table.name), badge(table.type === 'view' ? t('app.core.table.viewBadge') : t('app.core.table.tableBadge'), table.type === 'view' ? 'badge-blue' : 'badge-green')),
             table.comment ? el('p', {}, table.comment) : null),
         el('div', {class: 'table-heading-actions'},
-            button(tab === 'structure' ? 'Open Structure' : 'Open Browse', () => databaseModal.open(table.name, tab), {className: 'button-small', symbol: 'database'})));
+            button(tab === 'structure' ? t('app.core.table.openStructure') : t('app.core.table.openBrowse'), () => databaseModal.open(table.name, tab), {className: 'button-small', symbol: 'database'})));
 }
 
 function noTables() {
-    return empty('Er zijn nog geen tabellen beschikbaar.', 'Open het databasevenster om een SQL-bestand te importeren. Heb je al een herstelpunt? Je vindt dit onder Experimenten.',
-        button('Database openen', () => databaseModal.open('', 'sql'), {kind: 'primary', symbol: 'database'}));
+    return empty(t('app.core.table.emptyTitle'), t('app.core.table.emptyHelp'),
+        button(t('app.core.table.openDatabase'), () => databaseModal.open('', 'sql'), {kind: 'primary', symbol: 'database'}));
 }
 
 async function renderData(scope) {
-    page.append(heading('GEGEVENS', 'Verken je database.', 'Zoek en lees de gegevens. Open het databasevenster wanneer je iets wilt toevoegen of veranderen.'));
+    page.append(heading(t('app.core.data.eyebrow'), t('app.core.data.title'), t('app.core.data.help')));
     if (!tables().length) { page.append(noTables()); return; }
     const table = tables().find(item => item.name === state.table);
+    if (!state.dataViews.has(table.name)) state.dataViews.set(table.name, {search: '', page: 1, pageSize: 25});
+    const viewState = state.dataViews.get(table.name);
     const workspace = el('section', {class: 'table-workspace'});
     const card = el('div', {class: 'card'}, tableHeader(table, 'browse'));
-    const search = el('input', {type: 'search', class: 'input', placeholder: 'Zoek in deze tabel…', 'aria-label': 'Zoek in de gegevens', autocomplete: 'off'});
-    const size = el('select', {class: 'input select', 'aria-label': 'Aantal rijen per pagina'},
-        [25, 50, 100].map(value => el('option', {value}, String(value))));
+    const search = el('input', {id: 'data-search', type: 'search', class: 'input', value: viewState.search, placeholder: t('app.core.data.searchPlaceholder'), 'aria-label': t('app.core.data.searchLabel'), autocomplete: 'off'});
+    const size = el('select', {id: 'data-page-size', class: 'input select', 'aria-label': t('app.core.data.pageSize')},
+        [25, 50, 100].map(value => el('option', {value, selected: value === viewState.pageSize}, String(value))));
     const result = el('div');
     const pagination = el('div', {class: 'table-pagination'});
     const sql = el('div');
-    let currentPage = 1;
+    let currentPage = viewState.page;
     let timer;
     let requestId = 0;
     let rowController;
@@ -290,44 +594,47 @@ async function renderData(scope) {
             const data = await request('browse', {params: {table: table.name, page: currentPage, page_size: size.value, q: search.value.trim()}, signal: rowController.signal});
             if (!scope.live() || id !== requestId) return;
             result.replaceChildren(dataTable(data.columns.map(column => ({key: column.name, label: column.name})), data.rows, {
-                emptyMessage: search.value ? 'Probeer een ander zoekwoord of maak het zoekveld leeg.' : 'Deze tabel bevat nog geen rijen. Via Browse in het databasevenster kun je gegevens toevoegen.',
-                caption: 'Gegevens uit ' + table.name,
+                emptyMessage: search.value ? t('app.core.data.filteredEmpty') : t('app.core.data.empty'),
+                caption: t('app.core.data.caption', {table: table.name}),
             }));
-            if (data.notice) result.append(notice(data.notice));
+            if (localized(data, 'notice')) result.append(notice(localized(data, 'notice')));
             const pages = Math.max(1, Math.ceil(Number(data.total) / Number(data.page_size)));
             currentPage = Number(data.page);
+            viewState.page = currentPage;
             const start = data.total ? (currentPage - 1) * Number(data.page_size) + 1 : 0;
             const end = Math.min(currentPage * Number(data.page_size), Number(data.total));
-            pagination.replaceChildren(el('span', {}, number(start) + '–' + number(end) + ' van ' + number(data.total) + ' rijen'),
+            pagination.replaceChildren(el('span', {}, t('app.core.data.range', {start: number(start), end: number(end), total: number(data.total)})),
                 el('div', {class: 'pagination-buttons'},
-                    button('Vorige', () => { currentPage -= 1; load(); }, {disabled: currentPage <= 1}),
+                    button(t('app.core.data.previous'), () => { currentPage -= 1; load(); }, {disabled: currentPage <= 1}),
                     el('span', {}, currentPage + ' / ' + pages),
-                    button('Volgende', () => { currentPage += 1; load(); }, {disabled: currentPage >= pages})));
+                    button(t('app.core.data.next'), () => { currentPage += 1; load(); }, {disabled: currentPage >= pages})));
             sql.append(sqlDisclosure(data.sql, data.params));
         } catch (error) {
             if (error.name !== 'AbortError' && scope.live() && id === requestId) result.replaceChildren(errorPanel(error, load));
         }
     };
     search.addEventListener('input', () => {
+        viewState.search = search.value;
+        viewState.page = 1;
         clearTimeout(timer);
         timer = setTimeout(() => { currentPage = 1; load(); }, 300);
     });
-    size.addEventListener('change', () => { currentPage = 1; load(); });
+    size.addEventListener('change', () => { currentPage = 1; viewState.page = 1; viewState.pageSize = Number(size.value); load(); });
     card.append(el('div', {class: 'table-toolbar'},
         el('div', {class: 'search-field'}, icon('search'), search),
-        el('div', {class: 'table-toolbar-right'}, el('span', {class: 'small muted'}, 'Rijen'), size,
-            button('Structuur', () => go('structuur', {table: table.name}), {kind: 'ghost', symbol: 'layers', className: 'button-small'}))),
+        el('div', {class: 'table-toolbar-right'}, el('span', {class: 'small muted'}, t('app.core.data.rows')), size,
+            button(t('app.core.data.structure'), () => go('structuur', {table: table.name}), {kind: 'ghost', symbol: 'layers', className: 'button-small'}))),
         result, pagination);
-    workspace.append(card, el('p', {class: 'table-caption'}, 'Dit overzicht leest je gegevens. Browse in het databasevenster biedt ook invoegen, wijzigen en verwijderen.'), sql);
+    workspace.append(card, el('p', {class: 'table-caption'}, t('app.core.data.readOnlyHelp')), sql);
     page.append(el('div', {class: 'explorer-layout'}, catalog('gegevens'), workspace));
     await load();
 }
 
 async function renderStructure(scope) {
-    page.append(heading('STRUCTUUR', 'Begrijp hoe je data samenhangt.', 'Bekijk velden, sleutels en verwijzingen. De structuur wordt rechtstreeks uit je database gelezen.'));
+    page.append(heading(t('app.core.structure.eyebrow'), t('app.core.structure.title'), t('app.core.structure.help')));
     if (!tables().length) { page.append(noTables()); return; }
     const table = tables().find(item => item.name === state.table);
-    const workspace = el('section', {class: 'table-workspace'}, loading('Structuur ophalen…'));
+    const workspace = el('section', {class: 'table-workspace'}, loading(t('app.core.structure.loading')));
     page.append(el('div', {class: 'explorer-layout'}, catalog('structuur'), workspace));
     let data;
     try {
@@ -338,18 +645,18 @@ async function renderStructure(scope) {
     }
     if (!scope.live()) return;
     const columns = [
-        {key: 'name', label: 'Veld', render: (value, row) => el('span', {class: 'column-name'}, row.primary ? icon('key') : null, value)},
-        {key: 'type', label: 'Type'},
-        {key: 'nullable', label: 'Mag leeg zijn', render: value => el('span', {}, value ? 'Ja' : 'Nee')},
-        {key: 'default', label: 'Standaardwaarde'},
-        {key: 'generated', label: 'Invoer', render: value => value ? badge('Berekend', 'badge-blue') : el('span', {class: 'muted'}, 'Gewoon veld')},
-        {key: 'comment', label: 'Betekenis', className: 'cell-wrap', render: value => el('span', {class: 'cell-value'}, value || '—')},
+        {key: 'name', label: t('app.core.structure.field'), render: (value, row) => el('span', {class: 'column-name'}, row.primary ? icon('key') : null, value)},
+        {key: 'type', label: t('app.core.structure.type')},
+        {key: 'nullable', label: t('app.core.structure.nullable'), render: value => el('span', {}, value ? t('app.core.structure.yes') : t('app.core.structure.no'))},
+        {key: 'default', label: t('app.core.structure.default')},
+        {key: 'generated', label: t('app.core.structure.input'), render: value => value ? badge(t('app.core.structure.generated'), 'badge-blue') : el('span', {class: 'muted'}, t('app.core.structure.ordinary'))},
+        {key: 'comment', label: t('app.core.structure.meaning'), className: 'cell-wrap', render: value => el('span', {class: 'cell-value'}, value || '—')},
     ];
-    const card = el('div', {class: 'card'}, tableHeader(table, 'structure'), dataTable(columns, data.columns, {caption: 'Kolommen van ' + table.name}));
-    workspace.replaceChildren(card, el('p', {class: 'table-caption'}, 'Een sleutel herkent een rij. Een verwijzing verbindt die rij met een andere tabel. Berekende velden vult de database zelf in.'));
-    const relations = el('section', {class: 'structure-section'}, el('h3', {}, 'Verwijzingen naar andere tabellen'));
+    const card = el('div', {class: 'card'}, tableHeader(table, 'structure'), dataTable(columns, data.columns, {caption: t('app.core.structure.caption', {table: table.name})}));
+    workspace.replaceChildren(card, el('p', {class: 'table-caption'}, t('app.core.structure.keyHelp')));
+    const relations = el('section', {class: 'structure-section'}, el('h3', {}, t('app.core.structure.relationships')));
     const keys = data.foreign_keys || [];
-    if (!keys.length) relations.append(notice('Deze tabel heeft geen directe foreign keys naar andere tabellen. Andere tabellen kunnen wel naar deze tabel verwijzen.'));
+    if (!keys.length) relations.append(notice(t('app.core.structure.noRelationships')));
     keys.forEach(foreignKey => {
         const target = foreignKey.referenced_table;
         const join = foreignKey.columns.map((column, index) => 'a.' + quoteIdentifier(column) + ' = b.' + quoteIdentifier(foreignKey.referenced_columns[index])).join('\n  AND ');
@@ -357,92 +664,103 @@ async function renderStructure(scope) {
         relations.append(el('div', {class: 'relation-card'}, icon('link'),
             el('div', {class: 'relation-content'}, el('p', {}, foreignKey.columns.join(', ') + ' → ' + target + '.' + foreignKey.referenced_columns.join(', ')),
                 el('small', {}, foreignKey.name)),
-            button('Bekijken', () => go('structuur', {table: target}), {kind: 'ghost', className: 'button-small'}),
-            button('Onderzoek koppeling', () => openResearch(query), {className: 'button-small', symbol: 'code'})));
+            button(t('app.core.structure.view'), () => go('structuur', {table: target}), {kind: 'ghost', className: 'button-small'}),
+            button(t('app.core.structure.researchJoin'), () => openResearch(query), {className: 'button-small', symbol: 'code'})));
     });
     workspace.append(relations);
-    const indexes = el('section', {class: 'structure-section'}, el('h3', {}, 'Indexen en unieke sleutels'));
+    const indexes = el('section', {class: 'structure-section'}, el('h3', {}, t('app.core.structure.indexes')));
     if (data.indexes?.length) {
         indexes.append(el('div', {class: 'index-list'}, data.indexes.map(index => el('div', {class: 'index-item'},
-            el('strong', {}, index.name), el('small', {}, index.columns.join(', ') + (index.unique ? ' · uniek' : ''))))));
-    } else indexes.append(el('p', {class: 'small muted'}, 'Geen indexen voor dit object.'));
+            el('strong', {}, index.name), el('small', {}, index.unique ? t('app.core.structure.uniqueIndex', {columns: index.columns.join(', ')}) : index.columns.join(', '))))));
+    } else indexes.append(el('p', {class: 'small muted'}, t('app.core.structure.noIndexes')));
     workspace.append(indexes);
     const ddl = el('details', {class: 'sql-disclosure'},
-        el('summary', {}, icon('code'), 'Bekijk de SQL-definitie'),
-        el('p', {}, 'Dit is de definitie die de database voor deze tabel of dit overzicht teruggeeft.'),
+        el('summary', {}, icon('code'), t('app.core.structure.showDefinition')),
+        el('p', {}, t('app.core.structure.definitionHelp')),
         el('pre', {class: 'code-block'}, el('code', {}, data.create_sql)),
-        button('Definitie kopiëren', () => copyText(data.create_sql), {kind: 'ghost', className: 'button-small', symbol: 'copy'}));
+        button(t('app.core.structure.copyDefinition'), () => copyText(data.create_sql), {kind: 'ghost', className: 'button-small', symbol: 'copy'}));
     workspace.append(ddl);
 }
 
 async function renderResearch(scope) {
-    page.append(heading('ONDERZOEKEN', 'Stel een vraag aan je gegevens.', 'Stel je query samen of schrijf zelf SQL. Bekijk het resultaat en bewaar wat je opnieuw wilt gebruiken.',
-        [button('Volledige SQL-editor', () => databaseModal.open(state.table, 'sql'), {symbol: 'external'})]));
+    page.append(heading(t('app.core.research.eyebrow'), t('app.core.research.title'), t('app.core.research.help'),
+        [button(t('app.core.research.fullEditor'), () => databaseModal.open(state.table, 'sql'), {symbol: 'external'})]));
     if (!state.queryDraft) state.queryDraft = defaultSql();
     const result = el('div', {class: 'query-result'});
-    const editor = el('textarea', {id: 'sql-editor', class: 'sql-editor', spellcheck: 'false', autocapitalize: 'off', autocomplete: 'off', 'aria-label': 'SQL-query'}, state.queryDraft);
+    const editor = el('textarea', {id: 'sql-editor', class: 'sql-editor', spellcheck: 'false', autocapitalize: 'off', autocomplete: 'off', 'aria-label': t('app.core.research.sqlLabel')}, state.queryDraft);
     editor.value = state.queryDraft;
     editor.addEventListener('input', () => {
         state.queryRevision += 1;
         state.queryDraft = editor.value;
         state.queryDesign = null;
+        state.queryDirty = true;
+        state.queryError = null;
     });
     const explanation = el('div', {class: 'query-explanation'});
     const drawExplanation = () => {
         const binding = state.queryDesign;
         explanation.replaceChildren();
         if (binding && binding.sql === editor.value) {
-            explanation.append(el('h3', {}, icon('book'), 'Wat deze query doet'),
-                el('ul', {}, binding.explanation.map(text => el('li', {}, text))),
-                el('p', {}, 'Je kunt deze SQL zelf aanpassen. Je keuzes in de bouwer blijven beschikbaar voor een volgende query.'));
+            explanation.append(el('h3', {}, icon('book'), t('app.core.research.explanationTitle')),
+                el('ul', {}, (localized(binding, 'explanation') || []).map(text => el('li', {}, text))),
+                el('p', {}, t('app.core.research.explanationHelp')));
         }
     };
-    const runButton = button('Query uitvoeren', () => run(), {kind: 'primary', symbol: 'play'});
-    const name = el('input', {class: 'input', type: 'text', maxlength: '160', value: state.queryName, placeholder: 'Bijvoorbeeld: systemen per organisatie', required: true});
-    const notes = el('textarea', {class: 'input', rows: '3', placeholder: 'Wat wil je hiermee onderzoeken?', maxlength: '10000'}, state.queryNotes);
+    const runButton = button(t('app.core.research.run'), () => run(), {kind: 'primary', symbol: 'play'});
+    const name = el('input', {id: 'query-name', class: 'input', type: 'text', maxlength: '160', value: state.queryName, placeholder: t('app.core.research.namePlaceholder'), required: true});
+    const notes = el('textarea', {id: 'query-notes', class: 'input', rows: '3', placeholder: t('app.core.research.notesPlaceholder'), maxlength: '10000'}, state.queryNotes);
     notes.value = state.queryNotes;
-    name.addEventListener('input', () => { state.queryName = name.value; });
-    notes.addEventListener('input', () => { state.queryNotes = notes.value; });
-    const saveLabel = el('span', {}, state.queryId ? 'Wijzigingen bewaren' : 'Onderzoek bewaren');
-    const saveButton = el('button', {class: 'button button-primary', type: 'submit'}, icon('bookmark'), saveLabel);
-    const savedList = el('div', {class: 'saved-list'}, loading('Opgeslagen onderzoeken ophalen…'));
+    name.addEventListener('input', () => { state.queryName = name.value; state.queryDirty = true; });
+    notes.addEventListener('input', () => { state.queryNotes = notes.value; state.queryDirty = true; });
+    const saveLabel = el('span', {}, state.queryId ? t('app.core.research.saveChanges') : t('app.core.research.save'));
+    const saveButton = el('button', {id: 'save-research', class: 'button button-primary', type: 'submit', disabled: state.savingQuery}, icon('bookmark'), saveLabel);
+    const savedList = el('div', {class: 'saved-list'}, loading(t('app.core.research.loadingSaved')));
     const saveError = el('div');
-    const form = el('form', {class: 'save-query-form'},
-        el('label', {class: 'field-label'}, 'Naam van je onderzoek', name),
-        el('label', {class: 'field-label'}, 'Notitie', notes), saveButton,
-        button('Als nieuw onderzoek bewaren', () => {
+    if (state.querySaveError) saveError.append(errorPanel(state.querySaveError));
+    const form = el('form', {class: 'save-query-form', novalidate: true},
+        el('label', {class: 'field-label'}, t('app.core.research.name'), name),
+        el('label', {class: 'field-label'}, t('app.core.research.note'), notes), saveButton,
+        button(t('app.core.research.saveNew'), () => {
             if (saveButton.disabled) return;
             state.queryRevision += 1;
             state.queryId = null;
-            saveLabel.textContent = 'Onderzoek bewaren';
+            saveLabel.textContent = t('app.core.research.save');
             form.requestSubmit();
         }, {kind: 'ghost', className: 'button-small'}), saveError);
     const updateSavedList = async () => {
-        const queries = await request('queries', {signal: scope.signal});
+        let queries;
+        try { queries = await request('queries', {signal: scope.signal}); }
+        catch (error) {
+            if (error.name !== 'AbortError' && scope.live()) savedList.replaceChildren(errorPanel(error, updateSavedList));
+            return;
+        }
         if (!scope.live()) return;
+        state.savedQueries = queries;
         savedList.replaceChildren();
         if (!queries.length) {
-            savedList.append(el('p', {class: 'catalog-empty'}, 'Je hebt nog geen onderzoeken bewaard.'));
+            savedList.append(el('p', {class: 'catalog-empty'}, t('app.core.research.noSaved')));
             return;
         }
         queries.forEach(query => {
-            const remove = button('Verwijderen', async () => {
-                const confirmed = await confirmAction({title: 'Onderzoek verwijderen?', description: 'Je verwijdert alleen dit opgeslagen onderzoek. Je databasegegevens blijven bestaan.', confirmLabel: 'Onderzoek verwijderen', danger: true});
+            const remove = button(t('app.core.research.remove'), async () => {
+                const confirmed = await confirmAction({title: t('app.core.research.removeTitle'), description: t('app.core.research.removeDescription'), confirmLabel: t('app.core.research.removeConfirm'), danger: true});
                 if (!confirmed) return;
                 remove.disabled = true;
                 try {
                     await request('delete-query', {body: {id: query.id}});
+                    state.savedQueries = null;
                     if (String(state.queryId) === String(query.id)) {
                         state.queryId = null;
-                        saveLabel.textContent = 'Onderzoek bewaren';
+                        saveLabel.textContent = t('app.core.research.save');
                     }
-                    toast('Onderzoek verwijderd.');
+                    toast(t('app.core.research.removed'));
                     await updateSavedList();
-                } catch (error) { toast(error.message, 'error'); remove.disabled = false; }
-            }, {kind: 'ghost', symbol: 'trash', className: 'icon-button', 'aria-label': 'Verwijder onderzoek ' + query.name});
+                } catch (error) { toast(errorText(error), 'error'); remove.disabled = false; }
+            }, {kind: 'ghost', symbol: 'trash', className: 'icon-button', 'aria-label': t('app.core.research.removeLabel', {name: query.name})});
             remove.querySelector('span').className = 'sr-only';
             savedList.append(el('div', {class: 'saved-item'},
-                el('button', {class: 'saved-item-open', type: 'button', on: {click: () => {
+                el('button', {class: 'saved-item-open', type: 'button', on: {click: async () => {
+                    if (!await mayReplaceResearch() || !scope.live()) return;
                     state.queryRevision += 1;
                     state.queryId = query.id;
                     state.queryDraft = query.sql;
@@ -450,10 +768,14 @@ async function renderResearch(scope) {
                     state.queryNotes = query.notes || '';
                     state.queryResult = null;
                     state.queryDesign = null;
+                    state.queryDirty = false;
+                    state.queryError = null;
+                    state.querySaveError = null;
+                    saveError.replaceChildren();
                     editor.value = query.sql;
                     name.value = query.name;
                     notes.value = query.notes || '';
-                    saveLabel.textContent = 'Wijzigingen bewaren';
+                    saveLabel.textContent = t('app.core.research.saveChanges');
                     drawResult();
                     drawExplanation();
                     editor.focus();
@@ -462,69 +784,96 @@ async function renderResearch(scope) {
     };
     form.addEventListener('submit', async event => {
         event.preventDefault();
-        if (saveButton.disabled) return;
-        if (!name.value.trim()) { name.focus(); return; }
+        if (state.savingQuery) return;
+        if (!name.value.trim()) {
+            name.setAttribute('aria-invalid', 'true');
+            state.querySaveError = Object.assign(new Error(t('app.research.nameRequired')), {translationKey: 'app.research.nameRequired'});
+            saveError.replaceChildren(errorPanel(state.querySaveError));
+            name.focus(); return;
+        }
+        name.removeAttribute('aria-invalid');
         saveButton.disabled = true;
+        state.savingQuery = true;
         saveError.replaceChildren();
+        state.querySaveError = null;
         const revision = state.queryRevision;
         const submission = {id: state.queryId || undefined, name: name.value.trim(), sql: editor.value, notes: notes.value};
         try {
             const saved = await request('save-query', {body: submission});
             if (state.queryRevision === revision) state.queryId = saved.id;
+            if (state.queryDraft === submission.sql && state.queryName.trim() === submission.name && state.queryNotes === submission.notes) state.queryDirty = false;
+            state.savedQueries = null;
             if (scope.live()) {
-                saveLabel.textContent = state.queryId ? 'Wijzigingen bewaren' : 'Onderzoek bewaren';
-                toast('Onderzoek bewaard.');
+                saveLabel.textContent = state.queryId ? t('app.core.research.saveChanges') : t('app.core.research.save');
+                toast(t('app.core.research.saved'));
                 await updateSavedList();
             }
         } catch (error) {
+            state.querySaveError = error;
             if (scope.live()) saveError.replaceChildren(errorPanel(error));
-        } finally { saveButton.disabled = false; }
+            else toast(errorText(error), 'error');
+        } finally {
+            state.savingQuery = false;
+            saveButton.disabled = false;
+            if (!scope.live() && route().name === 'onderzoeken') render();
+        }
     });
     const drawResult = () => {
         result.replaceChildren();
+        if (state.queryError) {
+            result.append(errorPanel(state.queryError), el('p', {class: 'table-caption'}, t('app.core.research.writeHelp')));
+            return;
+        }
         const data = state.queryResult;
         if (!data) {
             result.append(el('div', {class: 'card query-placeholder'},
-                empty('Hier verschijnt je resultaat.', 'Voer de query uit om de gegevens te bekijken. In deze werkplaats kun je veilig lezen.', null, 'search')));
+                empty(t('app.core.research.resultPlaceholder'), t('app.core.research.resultHelp'), null, 'search')));
             return;
         }
-        const metrics = el('div', {class: 'query-metrics'}, badge(number(data.returned_rows) + ' rijen', 'badge-green'),
+        const metrics = el('div', {class: 'query-metrics'}, badge(t('app.core.research.rowCount', {count: number(data.returned_rows)}), 'badge-green'),
             el('span', {}, number(data.duration_ms) + ' ms'));
         const card = el('section', {class: 'card'},
-            el('div', {class: 'card-header'}, el('h2', {}, 'Resultaat'), metrics),
-            dataTable(data.columns, data.rows, {caption: 'Queryresultaat', emptyMessage: 'De query is uitgevoerd, maar leverde geen rijen op.'}));
+            el('div', {class: 'card-header'}, el('h2', {}, t('app.core.research.resultTitle')), metrics),
+            dataTable(data.columns, data.rows, {caption: t('app.core.research.resultCaption'), emptyMessage: t('app.core.research.noRows')}));
         result.append(card);
-        if (data.truncated) result.append(notice('Je ziet maximaal 200 rijen. Maak je vraag specifieker met WHERE of bekijk het volledige resultaat in het databasevenster.'));
-        if (data.notice) result.append(notice(data.notice));
+        if (data.truncated) result.append(notice(t('app.core.research.truncated')));
+        if (localized(data, 'notice')) result.append(notice(localized(data, 'notice')));
+        if (data.structureChanged) result.append(notice(t('app.core.research.schemaChanged')));
     };
     const run = async () => {
-        if (runButton.disabled || !editor.value.trim()) { editor.focus(); return; }
+        if (runButton.disabled || !editor.value.trim()) {
+            if (!editor.value.trim()) toast(t('app.research.sqlRequired'), 'error');
+            editor.focus(); return;
+        }
         state.queryDraft = editor.value;
         state.queryResult = null;
+        state.queryError = null;
         const sql = editor.value;
         const binding = state.queryDesign;
         const body = binding?.sql === sql ? {design: structuredClone(binding.design)} : {sql};
         const revision = state.queryRevision;
         runButton.disabled = true;
-        result.replaceChildren(loading('Query uitvoeren…'));
+        result.replaceChildren(loading(t('app.core.research.running')));
         try {
             const data = await request('query', {body, signal: scope.signal});
             if (!scope.live() || revision !== state.queryRevision || editor.value !== sql) return;
             if (body.design) {
                 if (data.sql !== sql) {
                     state.queryRevision += 1;
-                    data.notice = [data.notice, 'De SQL is aangepast aan de actuele databasestructuur. De editor toont de uitgevoerde query.'].filter(Boolean).join(' ');
+                    data.structureChanged = true;
                 }
                 state.queryDraft = data.sql;
                 editor.value = data.sql;
-                state.queryDesign = {design: structuredClone(body.design), sql: data.sql, explanation: [...data.explanation]};
+                state.queryDesign = {design: structuredClone(body.design), sql: data.sql, explanation: [...data.explanation], explanation_i18n: data.explanation_i18n};
                 drawExplanation();
             }
             state.queryResult = data;
             drawResult();
         } catch (error) {
-            if (error.name !== 'AbortError' && scope.live() && revision === state.queryRevision && editor.value === sql) result.replaceChildren(errorPanel(error),
-                el('p', {class: 'table-caption'}, 'Deze werkplaats leest gegevens. Gebruik de volledige SQL-editor in het databasevenster voor wijzigingen aan gegevens of structuur.'));
+            if (error.name !== 'AbortError' && scope.live() && revision === state.queryRevision && editor.value === sql) {
+                state.queryError = error;
+                drawResult();
+            }
         } finally { runButton.disabled = false; }
     };
     editor.addEventListener('keydown', event => {
@@ -535,7 +884,8 @@ async function renderResearch(scope) {
         drawResult();
         drawExplanation();
     });
-    const newQuery = () => {
+    const newQuery = async () => {
+        if (!await mayReplaceResearch() || !scope.live()) return;
         state.queryRevision += 1;
         state.queryDraft = defaultSql();
         state.queryName = '';
@@ -543,38 +893,45 @@ async function renderResearch(scope) {
         state.queryId = null;
         state.queryResult = null;
         state.queryDesign = null;
+        state.queryDirty = false;
+        state.queryError = null;
+        state.querySaveError = null;
+        saveError.replaceChildren();
         editor.value = state.queryDraft;
         name.value = '';
         notes.value = '';
-        saveLabel.textContent = 'Onderzoek bewaren';
+        saveLabel.textContent = t('app.core.research.save');
         drawResult();
         drawExplanation();
         editor.focus();
     };
     const editorCard = el('section', {class: 'card'},
-        el('div', {class: 'editor-topbar'}, el('h2', {}, 'Querywerkplaats'), badge('Alleen lezen', 'badge-green')),
+        el('div', {class: 'editor-topbar'}, el('h2', {}, t('app.core.research.editorTitle')), badge(t('app.core.research.readOnly'), 'badge-green')),
         el('div', {class: 'editor-wrap'}, editor),
         el('div', {class: 'editor-actions'}, el('div', {class: 'editor-action-buttons'}, runButton,
-            button('Nieuw', newQuery, {kind: 'ghost', symbol: 'plus'}),
-            button('Kopiëren', () => copyText(editor.value), {kind: 'ghost', symbol: 'copy'})),
+            button(t('app.core.research.new'), newQuery, {kind: 'ghost', symbol: 'plus'}),
+            button(t('app.core.research.copy'), () => copyText(editor.value), {kind: 'ghost', symbol: 'copy'})),
             el('span', {class: 'keyboard-hint'}, 'Ctrl / ⌘ + Enter')),
-        el('p', {class: 'query-hint'}, 'Eén opdracht per keer · maximaal 200 resultaatrijen · wijzigingen kunnen via de volledige SQL-editor.'), explanation);
+        el('p', {class: 'query-hint'}, t('app.core.research.limits')), explanation);
     const help = el('section', {class: 'learning-help'},
-        el('h3', {}, icon('book'), 'Begrijpen wat je doet'),
-        el('details', {}, el('summary', {}, 'SELECT: welke gegevens wil je zien?'),
-            el('p', {}, 'SELECT kiest de kolommen. FROM kiest de tabel. Een ster (*) betekent: alle kolommen. LIMIT beperkt het aantal resultaatrijen.'),
-            button('Gebruik een voorbeeld', () => {
+        el('h3', {}, icon('book'), t('app.core.research.learnTitle')),
+        el('details', {}, el('summary', {}, t('app.core.research.selectQuestion')),
+            el('p', {}, t('app.core.research.selectHelp')),
+            button(t('app.core.research.useExample'), async () => {
+                if (!await mayReplaceResearch() || !scope.live()) return;
                 state.queryRevision += 1;
                 state.queryDesign = null;
                 state.queryResult = null;
                 editor.value = defaultSql(); state.queryDraft = editor.value;
+                state.queryDirty = true;
+                state.queryError = null;
                 drawResult(); drawExplanation(); editor.focus();
             }, {className: 'button-small'})),
-        el('details', {}, el('summary', {}, 'WHERE: welke rijen horen erbij?'),
-            el('p', {}, 'Met WHERE voeg je een voorwaarde toe, bijvoorbeeld WHERE id = 1. Alleen rijen die aan die voorwaarde voldoen verschijnen.')),
-        el('details', {}, el('summary', {}, 'JOIN: hoe verbind je tabellen?'),
-            el('p', {}, 'Een JOIN haalt gegevens uit gekoppelde tabellen samen op. Bekijk bij Structuur een verwijzing en kies Onderzoek koppeling voor een voorbeeld met jouw eigen velden.'),
-            button('Bekijk de structuur', () => go('structuur', {table: state.table}), {className: 'button-small'})));
+        el('details', {}, el('summary', {}, t('app.core.research.whereQuestion')),
+            el('p', {}, t('app.core.research.whereHelp'))),
+        el('details', {}, el('summary', {}, t('app.core.research.joinQuestion')),
+            el('p', {}, t('app.core.research.joinHelp')),
+            button(t('app.core.research.viewStructure'), () => go('structuur', {table: state.table}), {className: 'button-small'})));
     const builder = new QueryBuilder({
         tables: tables(), database: state.bootstrap.database.name, initialTable: state.table,
         draft: state.builderDraft, open: state.builderOpen, scope,
@@ -584,8 +941,10 @@ async function renderResearch(scope) {
         onApply: (built, design) => {
             state.queryRevision += 1;
             state.queryDraft = built.sql;
-            state.queryDesign = {design: structuredClone(design), sql: built.sql, explanation: [...built.explanation]};
+            state.queryDesign = {design: structuredClone(design), sql: built.sql, explanation: [...built.explanation], explanation_i18n: built.explanation_i18n};
             state.queryResult = null;
+            state.queryDirty = true;
+            state.queryError = null;
             editor.value = built.sql;
             drawResult(); drawExplanation();
         },
@@ -593,7 +952,7 @@ async function renderResearch(scope) {
     page.append(el('div', {class: 'research-layout'},
         el('div', {}, builder.element, editorCard, result),
         el('aside', {class: 'research-aside'},
-            el('section', {class: 'card saved-panel'}, el('div', {class: 'card-header'}, el('h2', {}, 'Onderzoek bewaren'), icon('bookmark')), form, savedList), help)));
+            el('section', {class: 'card saved-panel'}, el('div', {class: 'card-header'}, el('h2', {}, t('app.core.research.save')), icon('bookmark')), form, savedList), help)));
     drawResult();
     drawExplanation();
     try { await updateSavedList(); } catch (error) {
@@ -602,36 +961,40 @@ async function renderResearch(scope) {
 }
 
 async function renderExperiments(scope) {
-    page.append(heading('EXPERIMENTEN', 'Maak ruimte om iets te proberen.', 'Bewaar een herstelpunt voordat je gegevens of de structuur verandert. Je kunt het ook downloaden als gewoon SQL-bestand.',
-        [button('Open databasevenster', () => databaseModal.open(state.table, 'sql'), {symbol: 'database'})]));
+    page.append(heading(t('app.core.experiments.eyebrow'), t('app.core.experiments.title'), t('app.core.experiments.help'),
+        [button(t('app.core.experiments.openWindow'), () => databaseModal.open(state.table, 'sql'), {symbol: 'database'})]));
     const list = el('div', {class: 'snapshot-list'});
     const counter = el('span');
-    const label = el('input', {class: 'input', maxlength: '160', placeholder: 'Bijvoorbeeld: vóór mijn eerste experiment', 'aria-label': 'Naam voor het herstelpunt'});
-    const createButton = button('Herstelpunt maken', () => createSnapshot(), {kind: 'primary', symbol: 'plus'});
+    const label = el('input', {id: 'snapshot-label', class: 'input', maxlength: '160', value: state.snapshotLabel, placeholder: t('app.core.experiments.namePlaceholder'), 'aria-label': t('app.core.experiments.nameLabel')});
+    label.addEventListener('input', () => { state.snapshotLabel = label.value; });
+    const createButton = button(t('app.core.experiments.create'), () => createSnapshot(), {id: 'create-snapshot', kind: 'primary', symbol: 'plus', disabled: state.creatingSnapshot || state.restoring, 'data-snapshot-action': 'create'});
     const status = el('div');
+    if (state.restoring) status.append(notice(t('app.core.experiments.restoring')));
+    else if (state.creatingSnapshot) status.append(notice(t('app.core.experiments.creating')));
+    else if (state.snapshotError) status.append(errorPanel(state.snapshotError));
     const create = el('section', {class: 'card snapshot-create'},
-        el('div', {class: 'card-header'}, el('h2', {}, 'Bewaar de huidige toestand'), icon('shield')),
+        el('div', {class: 'card-header'}, el('h2', {}, t('app.core.experiments.saveState')), icon('shield')),
         el('div', {class: 'card-body'},
-            el('p', {}, 'Een herstelpunt bevat de tabellen, gegevens en overzichten van ' + state.bootstrap.database.name + '.'),
-            el('label', {class: 'field-label'}, 'Geef het een herkenbare naam', label), createButton, status));
+            el('p', {}, t('app.core.experiments.includes', {database: state.bootstrap.database.name})),
+            el('label', {class: 'field-label'}, t('app.core.experiments.recognisableName'), label), createButton, status));
     const load = async () => {
-        list.replaceChildren(loading('Herstelpunten ophalen…'));
+        list.replaceChildren(loading(t('app.core.experiments.loading')));
         try {
             const snapshots = await request('snapshots', {signal: scope.signal});
             if (!scope.live()) return;
             counter.textContent = number(snapshots.length);
             list.replaceChildren();
             if (!snapshots.length) {
-                list.append(el('div', {class: 'card'}, empty('Je eerste herstelpunt begint hier.', 'Bewaar je database voordat je gaat experimenteren. Dan heb je een duidelijk punt om naar terug te keren.', null, 'clock')));
+                list.append(el('div', {class: 'card'}, empty(t('app.core.experiments.emptyTitle'), t('app.core.experiments.emptyHelp'), null, 'clock')));
             }
             snapshots.forEach(snapshot => {
-                const restore = button('Terugzetten', () => restoreSnapshot(snapshot, restore), {className: 'button-small', symbol: 'refresh'});
+                const restore = button(t('app.core.experiments.restore'), () => restoreSnapshot(snapshot, restore), {className: 'button-small', symbol: 'refresh', 'data-snapshot-action': 'restore', disabled: state.restoring || state.creatingSnapshot});
                 list.append(el('article', {class: 'snapshot-card'},
                     el('div', {class: 'snapshot-top'}, el('span', {class: 'snapshot-symbol'}, icon('clock')),
-                        el('div', {class: 'snapshot-info'}, el('h3', {}, snapshot.label || 'Herstelpunt'),
-                            el('p', {}, dateTime(snapshot.created_at) + ' · ' + fileSize(snapshot.size_bytes))), badge('SQL-export')),
+                        el('div', {class: 'snapshot-info'}, el('h3', {}, snapshot.label || t('app.core.experiments.restorePoint')),
+                            el('p', {}, dateTime(snapshot.created_at) + ' · ' + fileSize(snapshot.size_bytes))), badge(t('app.core.experiments.sqlExport'))),
                     el('div', {class: 'snapshot-actions'},
-                        el('a', {class: 'button button-secondary button-small', href: endpoint('download-snapshot', {id: snapshot.id})}, icon('download'), 'Download SQL'),
+                        el('a', {class: 'button button-secondary button-small', href: endpoint('download-snapshot', {id: snapshot.id})}, icon('download'), t('app.core.experiments.download')),
                         restore, el('code', {title: snapshot.sha256}, (snapshot.sha256 || '').slice(0, 12)))));
             });
         } catch (error) {
@@ -639,52 +1002,66 @@ async function renderExperiments(scope) {
         }
     };
     const createSnapshot = async () => {
-        createButton.disabled = true;
-        status.replaceChildren(notice('De SQL-export wordt gemaakt. Voer ondertussen geen structuurwijzigingen uit.'));
+        if (state.creatingSnapshot || state.restoring) return;
+        state.creatingSnapshot = true;
+        state.snapshotError = null;
+        syncSnapshotControls();
+        status.replaceChildren(notice(t('app.core.experiments.creating')));
         try {
-            await request('create-snapshot', {body: {label: label.value.trim()}});
+            const submittedLabel = label.value;
+            await request('create-snapshot', {body: {label: submittedLabel.trim()}});
+            if (state.snapshotLabel === submittedLabel) state.snapshotLabel = '';
             if (!scope.live()) return;
             label.value = '';
             status.replaceChildren();
-            toast('Herstelpunt gemaakt.');
+            toast(t('app.core.experiments.created'));
             await load();
         } catch (error) {
+            state.snapshotError = error;
             if (scope.live()) status.replaceChildren(errorPanel(error));
-        } finally { createButton.disabled = false; }
+            else toast(errorText(error), 'error');
+        } finally {
+            state.creatingSnapshot = false;
+            syncSnapshotControls();
+            if (!scope.live() && route().name === 'experimenten') render();
+        }
     };
     const restoreSnapshot = async (snapshot, restoreButton) => {
+        if (state.restoring || state.creatingSnapshot) return;
         const database = state.bootstrap.database.name;
         const confirmation = await confirmAction({
-            title: 'Herstelpunt terugzetten?',
-            description: 'Je zet ' + database + ' terug naar ‘' + (snapshot.label || 'Herstelpunt') + '’. De huidige tabellen en gegevens worden vervangen. Als de huidige database bereikbaar is, wordt eerst een extra herstelpunt van de huidige toestand gemaakt.',
-            requiredText: database, confirmLabel: 'Database terugzetten', danger: true,
+            title: t('app.core.experiments.restoreTitle'),
+            description: t('app.core.experiments.restoreDescription', {database, label: snapshot.label || t('app.core.experiments.restorePoint')}),
+            requiredText: database, confirmLabel: t('app.core.experiments.restoreConfirm'), danger: true,
         });
-        if (confirmation === null) return;
+        if (confirmation === null || state.restoring || state.creatingSnapshot) return;
         restoreButton.disabled = true;
         createButton.disabled = true;
         state.restoring = true;
-        openDatabase.disabled = true;
+        state.snapshotError = null;
+        syncRestoreControls();
         if (databaseModal.dialog.open) databaseModal.dialog.close();
-        status.replaceChildren(notice('Herstelpunt wordt teruggezet. Laat de werkplek open en voer nu geen databasewijzigingen uit.'));
+        status.replaceChildren(notice(t('app.core.experiments.restoring')));
         try {
             const result = await request('restore-snapshot', {body: {id: snapshot.id, confirmation}});
-            toast(result.message || 'Het herstelpunt is teruggezet.');
+            toast(localized(result, 'message') || t('app.core.experiments.restored'));
             await refreshBootstrap(false);
         } catch (error) {
+            state.snapshotError = error;
             if (scope.live()) status.replaceChildren(errorPanel(error));
-            toast('Terugzetten is niet voltooid. Bekijk de foutmelding voordat je verdergaat.', 'error');
+            toast(t('app.core.experiments.restoreFailed'), 'error');
         } finally {
             state.restoring = false;
-            openDatabase.disabled = false;
+            syncRestoreControls();
             createButton.disabled = false;
             restoreButton.disabled = false;
         }
     };
     page.append(el('div', {class: 'snapshot-layout'},
         el('div', {}, create, el('p', {class: 'snapshot-help'},
-            el('strong', {}, 'Een herstelpunt is een bewuste kopie. '),
-            'Een herstart van Docker draait je wijzigingen niet terug. Downloads kun je apart bewaren of gebruiken om je gegevens mee te nemen.')),
-        el('section', {}, el('div', {class: 'section-title'}, el('h2', {}, 'Je herstelpunten'), counter), list)));
+            el('strong', {}, t('app.core.experiments.copyIntro')),
+            t('app.core.experiments.copyHelp'))),
+        el('section', {}, el('div', {class: 'section-title'}, el('h2', {}, t('app.core.experiments.yourPoints')), counter), list)));
     await load();
 }
 

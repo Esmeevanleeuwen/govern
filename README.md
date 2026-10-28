@@ -22,6 +22,12 @@ je lokale `.env`, die niet in Git wordt opgenomen.
 ## Wat kun je ermee?
 
 - **Overzicht:** zie welke tabellen en overzichten je database bevat.
+- **Nederlands of Engels:** verander de taal bovenaan of bij Instellingen. Je
+  tabellen, records, SQL en notities houden hun oorspronkelijke tekst.
+- **Je eigen werkplek:** kies bij Instellingen een accentkleur, achtergrondtint,
+  licht/donker/systeem, minder transparantie en de plaats van je navigatie.
+- **Dashboard indelen:** verplaats, verbreed of verberg blokken via
+  **Indeling aanpassen**. Je kunt slepen of de verplaatsknoppen gebruiken.
 - **Gegevens:** bekijk records, zoek, blader en bekijk de gebruikte SQL.
 - **Structuur:** lees velden, sleutels, relaties en de echte tabeldefinitie.
 - **Onderzoeken:** voer leesvragen uit, bekijk resultaten en bewaar queries met uitleg.
@@ -39,6 +45,15 @@ je lokale `.env`, die niet in Git wordt opgenomen.
 De eigen schermen lezen de actuele database. Een nieuwe tabel wordt na verversen
 zichtbaar; je hoeft daarvoor geen nieuw onderdeel te programmeren. phpMyAdmin
 blijft zijn volledige interface tonen, inclusief functies buiten de drie snelkeuzes.
+
+Taal, uiterlijk en dashboardindeling worden in deze browser bewaard. Je keuzes
+blijven bij verversen behouden en veranderen geen databasegegevens. Als de browser
+bewaren blokkeert, werkt je keuze voor de huidige sessie en krijg je daar een melding
+over. **Uiterlijk herstellen** wist geen onderzoeken of dashboardindeling.
+
+De glasschermen gebruiken gedeelde kleuren, zachte schaduwen en geen harde
+paneelranden. Het ontwerp en de regels voor uitbreidingen staan in
+[de UX en UI documentatie](docs/DESIGN.md).
 
 ## Eerste oefening
 

@@ -2,6 +2,30 @@
 
 Stand van de controles: **28 oktober 2026**.
 
+## Glasontwerp talen en persoonlijke indeling
+
+De nieuwe vormgeving en voorkeuren zijn gecontroleerd in een afzonderlijke native
+testomgeving met PHP **8.4.27**, MariaDB **10.11.14**, Nginx **1.24.0** en de echte
+phpMyAdmin **5.2.3**. De gewone database van de gebruiker is niet benaderd.
+
+Geslaagd zijn PHP-syntax, de backend- en herstelpuntbestandscontroles, **159**
+lokalisatiecontroles, **89** database-integratiecontroles, **15** echte hersteltests,
+de HTTP-controle en de drie browsersuites. De Node-controles behandelen vertalingen,
+**47** voorkeurcontroles en **16** indelingscontroles. De hersteltests zetten ook na
+het verwijderen van de testdatabase gegevens terug en lezen het resultaat opnieuw.
+
+De browsers controleren Nederlands en Engels, behoud van SQL-concepten en
+querybouwerkeuzes, instellingen en herladen, zoeken en paginagrootte, blokvolgorde,
+breedte, verbergen en bewaren/annuleren. Ook de echte phpMyAdmin-tabs, terugkerende
+toetsenbordfocus, veilige tekstweergave en de mobiele navigatie maken deel uit van
+de controle. Een taalwijziging herlaadt een geopend phpMyAdmin-formulier niet.
+
+De lichte, donkere, Engelse en Nederlandse schermen zijn visueel bekeken op
+desktop en mobiel. Minder transparantie heeft een effen terugval; panelen gebruiken
+geen harde decoratieve randen. De automatische GitHub-workflow herhaalt de tests
+met de Docker-stack. Bekijk voor de containeruitslag de run bij de betreffende
+commit; de native controle alleen bewijst geen Docker-uitvoering.
+
 ## Actuele automatische controle
 
 [De GitHub-workflow](../.github/workflows/verify.yml) bouwt de Docker-omgeving
@@ -104,6 +128,7 @@ docker compose exec -T app sh -c 'find /var/www/src /var/www/public -name "*.php
 
 docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" app php /workspace/tests/backend_unit.php
 docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" app php /workspace/tests/backup_unit.php
+docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" app php /workspace/tests/backend_localization.php
 
 docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" app php /workspace/tests/backend_integration.php --confirm-database=bestuursatlas
 docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" app php /workspace/tests/backup_integration.php --confirm-database=bestuursatlas
@@ -111,14 +136,19 @@ docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" app php /workspace/
 python3 tests/smoke.py --base-url http://127.0.0.1:18080
 ```
 
-Voor de aanvullende browsercontrole is een ontwikkelomgeving met Node en
+Voor de aanvullende browsercontrole is een ontwikkelomgeving met Node 22 of nieuwer en
 Playwright nodig. Installeer deze apart van de gewone Govern-installatie.
 Wijs `PLAYWRIGHT_MODULE` zo nodig naar dat geïnstalleerde pakket. Met een
 geïnstalleerde Playwright-browser voer je in de projectmap uit:
 
 ```sh
+node tests/i18n-unit.mjs
+node tests/frontend-messages-unit.mjs
+node tests/preferences-unit.mjs
+node tests/dashboard-layout-unit.mjs
 BASE_URL=http://127.0.0.1:18080 GOVERN_UI_WRITE_TESTS=1 node tests/frontend-smoke.mjs
 BASE_URL=http://127.0.0.1:18080 node tests/query-builder-smoke.mjs
+BASE_URL=http://127.0.0.1:18080 node tests/ui-settings-smoke.mjs
 ```
 
 De extra schrijvende controle maakt een eigen opgeslagen onderzoek aan en

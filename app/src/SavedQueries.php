@@ -29,10 +29,10 @@ final class SavedQueries
         $sql = Http::text($input, 'sql');
         $notes = Http::text($input, 'notes', false);
         if (preg_match_all('/./us', $name) > 160) {
-            throw new ApiException('Geef het onderzoek een naam van maximaal 160 tekens.');
+            throw ApiException::fromCode('query_name_too_long');
         }
         if (strlen($sql) > 262144 || strlen($notes) > 65535) {
-            throw new ApiException('De query of toelichting is te groot.', 413);
+            throw ApiException::fromCode('research_too_large', 413);
         }
         $pdo = $this->database->writer();
         $this->ensureTable();
@@ -41,7 +41,7 @@ final class SavedQueries
             $existing = $pdo->prepare('SELECT id FROM `_govern_queries` WHERE id=:id');
             $existing->execute(['id' => $id]);
             if ($existing->fetchColumn() === false) {
-                throw new ApiException('Dit opgeslagen onderzoek bestaat niet meer.', 404);
+                throw ApiException::fromCode('saved_query_missing', 404);
             }
             $statement = $pdo->prepare('UPDATE `_govern_queries` SET name=:name, query_text=:sql, notes=:notes WHERE id=:id');
             $statement->execute(['name' => $name, 'sql' => $sql, 'notes' => $notes, 'id' => $id]);
@@ -61,7 +61,7 @@ final class SavedQueries
         $statement = $this->database->writer()->prepare('DELETE FROM `_govern_queries` WHERE id=:id');
         $statement->execute(['id' => $id]);
         if ($statement->rowCount() === 0) {
-            throw new ApiException('Dit opgeslagen onderzoek bestaat niet meer.', 404);
+            throw ApiException::fromCode('saved_query_missing', 404);
         }
         return ['deleted' => $id];
     }
@@ -77,11 +77,11 @@ final class SavedQueries
         }
         $file = $this->config['schema_file'];
         if (!is_file($file) || !is_readable($file)) {
-            throw new ApiException('De definitie voor opgeslagen onderzoeken ontbreekt in de installatie.', 503);
+            throw ApiException::fromCode('query_schema_missing', 503);
         }
         $sql = file_get_contents($file);
         if ($sql === false || $sql === '') {
-            throw new ApiException('De definitie voor opgeslagen onderzoeken kan niet worden gelezen.', 503);
+            throw ApiException::fromCode('query_schema_unreadable', 503);
         }
         $this->database->writer()->exec($sql);
     }
@@ -89,7 +89,7 @@ final class SavedQueries
     private static function id(mixed $value): string
     {
         if ((!is_string($value) && !is_int($value)) || preg_match('/^[1-9][0-9]{0,19}$/D', (string) $value) !== 1) {
-            throw new ApiException('Kies een geldig opgeslagen onderzoek.');
+            throw ApiException::fromCode('saved_query_invalid');
         }
         return (string) $value;
     }

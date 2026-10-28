@@ -26,16 +26,92 @@ De browser gebruikt herbruikbare onderdelen voor tabellen, meldingen, dialoog-
 vensters, SQL-blokken en API-verzoeken. Tabnamen uit de database zijn gegevens,
 geen uitvoerbare JavaScript of HTML.
 
+De onderdelen hebben een kleine, duidelijke taak:
+
+| Onderdeel | Verantwoordelijkheid |
+| --- | --- |
+| `app.js` | Routes, schermtoestand en de samenwerking tussen onderdelen |
+| `ui.js` | Knoppen, tabellen, meldingen, bevestigingen en SQL-uitleg |
+| `api.js` | Verzoeken, CSRF en consistente foutobjecten |
+| `i18n.js` en de `*-messages.js` bestanden | Stabiele vertaalsleutels, Nederlands en Engels |
+| `preferences.js` | Gevalideerde browservoorkeuren en gedeelde uiterlijktokens |
+| `dashboard-layout.js` | Blokvolgorde, breedtes, zichtbaarheid en een aparte bewerkingsversie |
+| `query-builder.js` | Het tijdelijke visuele queryontwerp en de toegepaste versie |
+| `database-modal.js` | Het venster rondom de echte phpMyAdmin |
+| `Messages.php` | Vertaalde applicatiefeedback met stabiele foutcodes |
+
 ## Vormgeving
 
-De lichte interface gebruikt systeemlettertypen, neutrale vlakken en één blauwe
-accentkleur. Kleuren, hoekafrondingen en schaduwen staan als gedeelde variabelen
-bovenaan `app/public/assets/styles.css`. Dezelfde knoppen, invoervelden en panelen
-worden op alle schermen hergebruikt. Er zijn geen externe lettertypen of extra
-UI-bibliotheken nodig. Focusranden blijven zichtbaar bij toetsenbordbediening;
-aanraakschermen krijgen ruimere klikvlakken en verminderde beweging wordt gevolgd.
-De vormgeving van het databasevenster hoort bij Govern; de inhoud blijft de
-officiële phpMyAdmin-interface.
+Govern gebruikt een open g als merk, systeemlettertypen en glasvlakken met brede,
+zachte schaduwen. Het standaardaccent is Lagoon; de gebruiker kan een ander
+accent en een achtergrondtint kiezen. Er zijn lichte en donkere thema's en een
+systeemstand. De materialen, kleuren, afrondingen en schaduwen staan als gedeelde
+`--g-*` tokens bovenaan `app/public/assets/styles.css`. Bestaande componentnamen
+gebruiken dezelfde tokens via aliassen, zodat een scherm geen eigen vormtaal
+hoeft te krijgen.
+
+Panelen, knoppen en instellingen gebruiken transparantie en achtergrondvervaging.
+Tabellen en SQL krijgen dichter glas om leesbaar te blijven. Ruimte, zachte
+vlakverschillen en diepte vervangen harde paneelranden en scheidingslijnen.
+Toetsenbordfocus blijft duidelijk zichtbaar. Minder transparantie en ontbrekende
+blur-ondersteuning vallen terug op effen leesvlakken. Verminderde beweging,
+systeemcontrast en ruimere aanraakdoelen horen bij de gedeelde componenten.
+
+Er zijn geen externe lettertypen of extra UI-bibliotheken nodig. Het omringende
+databasevenster volgt Govern; de inhoud blijft de officiële phpMyAdmin-interface.
+De volledige visuele regels, gebruikersstromen en uitbreidingsaanpak staan in
+[de UX/UI-ontwerpdocumentatie](DESIGN.md).
+
+## Taal en bewaarde schermtoestand
+
+Elke browserfunctie registreert zijn Nederlandse en Engelse teksten onder
+stabiele sleutels. `i18n.js` levert de actieve taal, vertaling en locale voor
+getal- en datumweergave. De taalkeuze wordt in browservoorkeuren bewaard. Zonder
+keuze wordt een ondersteunde browsertaal gebruikt, anders Nederlands.
+
+Een taalwisseling werkt de eigen interface bij zonder een volledige paginaherlading.
+De geselecteerde tabel, zoekopdracht, paginering, querytekst, builderkeuzes en
+een nog niet bewaarde dashboardindeling blijven schermtoestand. Opgeslagen
+onderzoeken blijven gegevens in de database; een tijdelijk concept wordt daarmee
+niet ongemerkt gelijkgesteld.
+
+De API kiest applicatiefeedback met `Accept-Language` en geeft bij gewone
+JSON-antwoorden `Content-Language` terug. De bestaande fouttekst blijft bestaan,
+met daarnaast een stabiele `error_code`, veilige `error_params` en vertaalkaarten.
+Ook waarschuwingen, resultaatmeldingen en queryuitleg kunnen beide talen bevatten.
+Daardoor kan bestaande feedback van taal veranderen zonder de SQL opnieuw uit te
+voeren. Zie het [API-contract](API.md) voor de velden.
+
+Identifiers, SQL, exacte waarden, notities, records en exportinhoud worden niet
+vertaald. Een taalgebeurtenis herlaadt ook geen geopend phpMyAdmin-frame met
+mogelijk onbewaarde invoer. De nieuwe taal wordt pas meegestuurd bij de volgende
+expliciete opening, tab- of tabelkeuze of herlaadactie.
+
+## Persoonlijke instellingen en dashboardblokken
+
+`govern.preferences.v1` bevat taal en uiterlijk in de lokale browseropslag.
+`govern.dashboard.v1` bewaart afzonderlijk de indeling. Hiervoor worden geen
+backend-endpoints of databasetabellen toegevoegd. Deze voorkeuren gelden voor
+dezelfde browser en oorsprong; account- of apparaatsynchronisatie is geen
+onderdeel van deze opslag.
+
+De opslag heeft een versie en valideert elk veld. Een ongeldig veld krijgt zijn
+eigen standaardwaarde. Ondersteunde oude gegevens kunnen bij een bewuste opslag
+migreren; onbekende toekomstige versies worden niet overschreven. Als opslag
+niet lukt, blijft de huidige sessie bruikbaar en krijgt de gebruiker daarover
+feedback. Uiterlijk herstellen wist geen dashboardindeling of databasegegevens.
+
+Een klein blokregister beschrijft vaste blok-ID's, vertaalsleutels en standaard-
+en toegestane breedtes. De betreffende schermfunctie bepaalt de inhoud en acties;
+`dashboard-layout.js` bewaart alleen de indelingsgegevens. Nieuwe blokken komen
+achter bestaande keuzes; verborgen of tijdelijk onbekende blokken behouden hun
+instellingen. Er is geen kopie van het relationele gegevensmodel nodig.
+
+Indeling aanpassen maakt een aparte conceptversie. Verplaatsen werkt met slepen
+en met knoppen; breedte en zichtbaarheid zijn in dezelfde modus beschikbaar.
+Bewaren past de indeling toe, annuleren verwerpt alleen dat concept. Onafhankelijke
+wijzigingen uit andere tabbladen worden waar mogelijk samengevoegd. Mobiel gebruikt
+dezelfde volgorde in één kolom, met behoud van de desktopbreedtes.
 
 ## Visueel een query samenstellen
 
@@ -84,9 +160,11 @@ niet in de zichtbare procesargumenten gezet.
 
 Terugzetten vervangt de geselecteerde werkdatabase en controleert het resultaat
 van de client. Er wordt vooraf een veiligheidskopie gemaakt. Een fout tijdens
-een DDL-import kan een gedeeltelijke toestand achterlaten: de veiligheidskopie
-blijft dan beschikbaar voor herstel. Een succesvolle procedure wordt niet als
-een universele SQL-undo gepresenteerd.
+een DDL-import start, als er een veiligheidskopie is, een poging om de vorige
+toestand te herstellen. Ook dat herstel kan mislukken en een gedeeltelijke
+toestand achterlaten; de veiligheidskopie blijft beschikbaar. De foutketen en
+de bijbehorende herstelpunt-ID blijven behouden. Een succesvolle procedure
+wordt niet als een universele SQL-undo gepresenteerd.
 
 ## Verder uitbreiden
 
@@ -100,6 +178,14 @@ een universele SQL-undo gepresenteerd.
 Voeg mogelijkheden toe aan het bestaande pad zolang dat duidelijk blijft. Een
 extra service, database of abstractie is een keuze met kosten, geen vereiste om
 uitbreidbaar te zijn.
+
+Een toevoeging begint bij de taak, ingang, uitkomst en route terug. Hergebruik
+de gedeelde componenten, vertaalsleutels, materialen en fouttoestanden voordat
+er nieuwe patronen worden toegevoegd. Verbind één volledige gebruikersstroom
+met de bestaande API en catalogus en behoud geldige concepten en voorkeuren.
+Nieuwe appgegevens gebruiken waar nodig de `_govern_` naamruimte en een
+afzonderlijke migratie; een visuele wijziging vervangt nooit de werkdatabase.
+Werk de ontwerpdocumentatie en het API-contract in dezelfde wijziging bij.
 
 ## Bronnen voor de infrastructuur
 

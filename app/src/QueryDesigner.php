@@ -20,26 +20,26 @@ final class QueryDesigner
     /** prepared_sql and params are internal; sql can be edited and saved normally. */
     public function compile(mixed $design): array
     {
-        $design = self::object($design, ['table', 'join', 'columns', 'filters', 'match', 'order', 'limit'], 'de query');
-        $table = self::text($design['table'], 'de tabelnaam');
+        $design = self::object($design, ['table', 'join', 'columns', 'filters', 'match', 'order', 'limit'], 'field.query');
+        $table = self::text($design['table'], 'field.table_name');
         $catalog = new Catalog($this->database);
         // Only inspect the metadata needed to compose the question. SHOW CREATE
         // VIEW can prepare/evaluate a view; compiling must not execute it.
         $sources = ['base' => self::sourceColumns($catalog, $table)];
         $joinSql = '';
         $joined = $design['join'] !== null;
-        $explanation = ['Je leest de tabel of het overzicht ' . $table . '.'];
+        $explanation = [['code' => 'explain_source', 'params' => ['table' => $table]]];
         if ($joined) {
-            $join = self::object($design['join'], ['foreign_key', 'type'], 'de koppeling');
-            $key = self::text($join['foreign_key'], 'de naam van de verwijzing');
-            $joinType = self::choice($join['type'], ['left', 'inner'], 'het soort koppeling');
+            $join = self::object($design['join'], ['foreign_key', 'type'], 'field.join');
+            $key = self::text($join['foreign_key'], 'field.relationship_name');
+            $joinType = self::choice($join['type'], ['left', 'inner'], 'field.join_type');
             $keys = array_column($catalog->foreignKeys($table), null, 'name');
             if (!isset($keys[$key])) {
-                throw new ApiException('Deze verwijzing bestaat niet meer. Vernieuw de structuur en kies opnieuw.', 422);
+                throw ApiException::fromCode('relationship_missing', 422);
             }
             $reference = $keys[$key];
             if ($reference['referenced_schema'] !== $this->database->name()) {
-                throw new ApiException('Deze verwijzing loopt naar een andere database. Gebruik daarvoor de SQL-editor.', 422);
+                throw ApiException::fromCode('relationship_other_database', 422);
             }
             $sources['related'] = self::sourceColumns($catalog, $reference['referenced_table']);
             $conditions = [];
@@ -50,38 +50,36 @@ final class QueryDesigner
             }
             $joinSql = "\n" . strtoupper($joinType) . ' JOIN ' . Database::identifier($reference['referenced_table'])
                 . ' AS `gekoppeld` ON ' . implode(' AND ', $conditions);
-            $explanation[] = 'De koppeling met ' . $reference['referenced_table'] . ' volgt de bestaande verwijzing ' . $key . '.';
-            $explanation[] = $joinType === 'left'
-                ? 'LEFT JOIN houdt rijen zonder gekoppelde match aanvankelijk zichtbaar. Filters op gekoppelde velden kunnen die rijen alsnog uitsluiten.'
-                : 'INNER JOIN laat alleen rijen zien waarvoor een gekoppelde match bestaat.';
+            $explanation[] = ['code' => 'explain_join', 'params' => ['table' => $reference['referenced_table'], 'key' => $key]];
+            $explanation[] = ['code' => $joinType === 'left' ? 'explain_left_join' : 'explain_inner_join'];
         }
 
-        $columns = self::items($design['columns'], 1024, 'de gekozen kolommen');
+        $columns = self::items($design['columns'], 1024, 'field.columns');
         if ($columns === []) {
-            throw new ApiException('Kies minstens één kolom om te tonen.', 422);
+            throw ApiException::fromCode('column_required', 422);
         }
         $selection = [];
         $seen = [];
         foreach ($columns as $column) {
-            $column = self::object($column, ['source', 'column'], 'een gekozen kolom');
+            $column = self::object($column, ['source', 'column'], 'field.column');
             $field = self::field($column, $sources);
-            self::unique($seen, $field['sql'], 'Deze kolom is meer dan één keer gekozen.');
+            self::unique($seen, $field['sql'], 'column_duplicate');
             $selection[] = $field['sql'] . ($joined ? ' AS ' . Database::identifier(self::ALIASES[$column['source']] . '.' . $column['column']) : '');
         }
         $prefix = 'SELECT ' . implode(', ', $selection) . "\nFROM " . Database::identifier($table) . ' AS `basis`' . $joinSql;
         $preparedConditions = [];
         $displayConditions = [];
         $parameters = [];
-        $match = self::choice($design['match'], ['all', 'any'], 'de filtercombinatie');
-        $filters = self::items($design['filters'], 64, 'de filters');
+        $match = self::choice($design['match'], ['all', 'any'], 'field.match');
+        $filters = self::items($design['filters'], 64, 'field.filters');
         $pdo = $this->database->reader();
         foreach ($filters as $index => $filter) {
-            $filter = self::object($filter, ['source', 'column', 'operator'], 'een filter', ['value']);
+            $filter = self::object($filter, ['source', 'column', 'operator'], 'field.filter', ['value']);
             $field = self::field($filter, $sources);
-            $operator = self::choice($filter['operator'], [...array_keys(self::COMPARISONS), 'contains', 'starts_with', 'ends_with', 'is_null', 'is_not_null'], 'de filterbewerking');
+            $operator = self::choice($filter['operator'], [...array_keys(self::COMPARISONS), 'contains', 'starts_with', 'ends_with', 'is_null', 'is_not_null'], 'field.operator');
             if (in_array($operator, ['is_null', 'is_not_null'], true)) {
                 if (array_key_exists('value', $filter)) {
-                    throw new ApiException('Een NULL-filter heeft geen invoerwaarde. Verwijder die waarde uit het filter.', 422);
+                    throw ApiException::fromCode('null_filter_has_value', 422);
                 }
                 $condition = $field['sql'] . ($operator === 'is_null' ? ' IS NULL' : ' IS NOT NULL');
                 $preparedConditions[] = $condition;
@@ -89,9 +87,9 @@ final class QueryDesigner
                 continue;
             }
             if (!array_key_exists('value', $filter)) {
-                throw new ApiException('Dit filter mist een waarde. Gebruik een NULL-filter wanneer je ontbrekende waarden zoekt.', 422);
+                throw ApiException::fromCode('filter_value_missing', 422);
             }
-            $value = self::text($filter['value'], 'de filterwaarde', true);
+            $value = self::text($filter['value'], 'field.value', true);
             $key = 'filter_' . $index;
             $type = $field['column']['data_type'];
             $preparedValue = ':' . $key;
@@ -103,14 +101,14 @@ final class QueryDesigner
                     $displayValue = 'CAST(' . $displayValue . ' AS ' . $cast . ')';
                 } elseif (in_array($type, self::REAL_TYPES, true)) {
                     if (!preg_match('/\A[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?\z/', $value)) {
-                        throw new ApiException('Vul een geldig getal in met een punt als decimaalteken.', 422);
+                        throw ApiException::fromCode('number_invalid', 422);
                     }
                     // Exponent zero makes the database use its floating-point
                     // type; PHP never converts an entered number to float.
                     $preparedValue = '(' . $preparedValue . ' + 0e0)';
                     $displayValue = '(' . $displayValue . ' + 0e0)';
                 } elseif (!in_array($type, [...self::TEXT_TYPES, ...self::TIME_TYPES], true)) {
-                    throw new ApiException('Dit veldtype kan in de querybouwer alleen op NULL worden gefilterd. Gebruik voor andere vergelijkingen de SQL-editor.', 422);
+                    throw ApiException::fromCode('filter_type_unsupported', 422);
                 }
                 $comparison = ' ' . self::COMPARISONS[$operator] . ' ';
                 $preparedConditions[] = $field['sql'] . $comparison . $preparedValue;
@@ -118,7 +116,7 @@ final class QueryDesigner
                 $parameters[$key] = $value;
             } else {
                 if (!in_array($type, self::TEXT_TYPES, true)) {
-                    throw new ApiException('Bevat, begint met en eindigt op zijn bedoeld voor tekstkolommen.', 422);
+                    throw ApiException::fromCode('text_filter_required', 422);
                 }
                 // The explicit '=' escape also keeps a user's %, _ and = literal.
                 $pattern = str_replace(['=', '%', '_'], ['==', '=%', '=_'], $value);
@@ -132,52 +130,53 @@ final class QueryDesigner
         $preparedWhere = $preparedConditions === [] ? '' : "\nWHERE (" . implode($separator, $preparedConditions) . ')';
         $displayWhere = $displayConditions === [] ? '' : "\nWHERE (" . implode($separator, $displayConditions) . ')';
         if ($filters !== []) {
-            $explanation[] = $match === 'all' ? 'Alle filters moeten tegelijk kloppen (AND).' : 'Minstens één filter moet kloppen (OR).';
-            $explanation[] = 'NULL betekent dat een waarde ontbreekt; dat is iets anders dan lege tekst. Tekstvergelijkingen volgen de ingestelde databasecollatie.';
+            $explanation[] = ['code' => $match === 'all' ? 'explain_all_filters' : 'explain_any_filter'];
+            $explanation[] = ['code' => 'explain_null'];
         }
 
         $ordering = [];
         $seen = [];
-        foreach (self::items($design['order'], 64, 'de sorteringen') as $order) {
-            $order = self::object($order, ['source', 'column', 'direction'], 'een sortering');
+        foreach (self::items($design['order'], 64, 'field.sorts') as $order) {
+            $order = self::object($order, ['source', 'column', 'direction'], 'field.sort');
             $field = self::field($order, $sources);
-            self::unique($seen, $field['sql'], 'Sorteer een kolom maar één keer.');
-            $direction = self::choice($order['direction'], ['asc', 'desc'], 'de sorteerrichting');
+            self::unique($seen, $field['sql'], 'sort_duplicate');
+            $direction = self::choice($order['direction'], ['asc', 'desc'], 'field.direction');
             $ordering[] = $field['sql'] . ' ' . strtoupper($direction);
         }
         $orderSql = $ordering === [] ? '' : "\nORDER BY " . implode(', ', $ordering);
         if ($ordering === []) {
-            $explanation[] = 'Zonder sortering is de volgorde van de rijen niet gegarandeerd.';
+            $explanation[] = ['code' => 'explain_no_sort'];
         }
         $limit = $design['limit'];
         if (!is_int($limit) || $limit < 1 || $limit > QueryRunner::ROW_LIMIT) {
-            throw new ApiException('Kies een geheel aantal rijen van 1 tot ' . QueryRunner::ROW_LIMIT . '.', 422);
+            throw ApiException::fromCode('row_limit_invalid', 422, ['max' => QueryRunner::ROW_LIMIT]);
         }
         $parameters['row_limit'] = $limit;
-        $explanation[] = 'Je toont maximaal ' . $limit . ' rijen. De SQL-editor blijft beschikbaar voor een verder uitgewerkte vraag.';
+        $explanation[] = ['code' => 'explain_limit', 'params' => ['limit' => $limit]];
         $sql = $prefix . $displayWhere . $orderSql . "\nLIMIT " . $limit . ';';
         if (strlen($sql) > 262144) {
-            throw new ApiException('Deze samengestelde vraag is te groot. Kies minder velden of kortere filters.', 413);
+            throw ApiException::fromCode('design_too_large', 413);
         }
         return ['sql' => $sql, 'prepared_sql' => $prefix . $preparedWhere . $orderSql . "\nLIMIT :row_limit",
-            'params' => $parameters, 'explanation' => $explanation];
+            'params' => $parameters, 'explanation' => Messages::explanations($explanation),
+            'explanation_i18n' => ['nl' => Messages::explanations($explanation, 'nl'), 'en' => Messages::explanations($explanation, 'en')]];
     }
 
     private static function sourceColumns(Catalog $catalog, string $table): array
     {
         $columns = $catalog->columns($table);
         if ($columns === []) {
-            throw new ApiException('Voor ' . $table . ' zijn geen leesbare kolommen beschikbaar. De querybouwer kan deze bron niet gebruiken.', 422);
+            throw ApiException::fromCode('source_columns_missing', 422, ['table' => $table]);
         }
         return array_column($columns, null, 'name');
     }
 
     private static function field(array $field, array $sources): array
     {
-        $source = self::choice($field['source'], ['base', 'related'], 'de herkomst van de kolom');
-        $name = self::text($field['column'], 'de kolomnaam');
+        $source = self::choice($field['source'], ['base', 'related'], 'field.source');
+        $name = self::text($field['column'], 'field.column_name');
         if (!isset($sources[$source][$name])) {
-            throw new ApiException('Deze kolom hoort niet bij de gekozen tabel of koppeling. Vernieuw de structuur en kies opnieuw.', 422);
+            throw ApiException::fromCode('column_missing', 422);
         }
         return ['sql' => Database::identifier(self::ALIASES[$source]) . '.' . Database::identifier($name), 'column' => $sources[$source][$name]];
     }
@@ -185,14 +184,14 @@ final class QueryDesigner
     private static function decimalCast(string $value, PDO $pdo): string
     {
         if (!preg_match('/\A[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)\z/', $value)) {
-            throw new ApiException('Vul een exact getal in met cijfers en eventueel een punt als decimaalteken.', 422);
+            throw ApiException::fromCode('exact_number_invalid', 422);
         }
         [$integer, $fraction] = array_pad(explode('.', ltrim($value, '+-'), 2), 2, '');
         $scale = strlen(rtrim($fraction, '0'));
         $precision = max(1, strlen(ltrim($integer, '0')) + $scale);
         $maxScale = stripos((string) $pdo->getAttribute(PDO::ATTR_SERVER_VERSION), 'MariaDB') !== false ? 38 : 30;
         if ($precision > 65 || $scale > $maxScale) {
-            throw new ApiException('Dit getal heeft meer cijfers of decimalen dan de database exact kan vergelijken.', 422);
+            throw ApiException::fromCode('exact_number_too_large', 422);
         }
         return 'DECIMAL(' . $precision . ',' . $scale . ')';
     }
@@ -201,7 +200,7 @@ final class QueryDesigner
     {
         if (!is_array($value) || array_is_list($value) || array_diff($required, array_keys($value)) !== []
             || array_diff(array_keys($value), [...$required, ...$optional]) !== []) {
-            throw new ApiException('Ongeldige velden voor ' . $label . '. Vernieuw de querybouwer en controleer je keuzes.', 422);
+            throw ApiException::fromCode('design_fields_invalid', 422, ['field' => $label]);
         }
         return $value;
     }
@@ -209,7 +208,7 @@ final class QueryDesigner
     private static function items(mixed $value, int $max, string $label): array
     {
         if (!is_array($value) || !array_is_list($value) || count($value) > $max) {
-            throw new ApiException('Gebruik een lijst van maximaal ' . $max . ' onderdelen voor ' . $label . '.', 422);
+            throw ApiException::fromCode('design_list_invalid', 422, ['field' => $label, 'max' => $max]);
         }
         return $value;
     }
@@ -218,7 +217,7 @@ final class QueryDesigner
     {
         if (!is_string($value) || (!$empty && $value === '') || strlen($value) > 8192
             || str_contains($value, "\0") || preg_match('//u', $value) !== 1) {
-            throw new ApiException('Vul geldige tekst in voor ' . $label . ' (maximaal 8192 bytes).', 422);
+            throw ApiException::fromCode('design_text_invalid', 422, ['field' => $label]);
         }
         return $value;
     }
@@ -226,15 +225,15 @@ final class QueryDesigner
     private static function choice(mixed $value, array $choices, string $label): string
     {
         if (!is_string($value) || !in_array($value, $choices, true)) {
-            throw new ApiException('Kies een geldige optie voor ' . $label . '.', 422);
+            throw ApiException::fromCode('design_choice_invalid', 422, ['field' => $label]);
         }
         return $value;
     }
 
-    private static function unique(array &$seen, string $key, string $message): void
+    private static function unique(array &$seen, string $key, string $messageCode): void
     {
         if (isset($seen[$key])) {
-            throw new ApiException($message, 422);
+            throw ApiException::fromCode($messageCode, 422);
         }
         $seen[$key] = true;
     }

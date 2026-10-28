@@ -25,6 +25,7 @@ jobs:
         run: |
           docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" app php /workspace/tests/backend_unit.php
           docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" app php /workspace/tests/backup_unit.php
+          docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" app php /workspace/tests/backend_localization.php
       - name: Real database integration
         run: docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" app php /workspace/tests/backend_integration.php --confirm-database=bestuursatlas
       - name: Backup and recovery integration
@@ -33,6 +34,10 @@ jobs:
         run: python3 tests/smoke.py --base-url http://127.0.0.1:8080
       - name: Browser and visual query builder
         run: |
+          node tests/i18n-unit.mjs
+          node tests/frontend-messages-unit.mjs
+          node tests/preferences-unit.mjs
+          node tests/dashboard-layout-unit.mjs
           npm install --no-save --ignore-scripts --prefix "$RUNNER_TEMP/govern-browser" playwright@1.62.1
           export PLAYWRIGHT_MODULE="$RUNNER_TEMP/govern-browser/node_modules/playwright"
           BROWSER_BIN="$(command -v google-chrome)"
@@ -41,6 +46,7 @@ jobs:
           export GOVERN_UI_WRITE_TESTS=1
           node tests/frontend-smoke.mjs
           node tests/query-builder-smoke.mjs
+          node tests/ui-settings-smoke.mjs
       - name: Logs on failure
         if: failure()
         run: docker compose logs --tail=100

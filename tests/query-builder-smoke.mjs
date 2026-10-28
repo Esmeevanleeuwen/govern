@@ -3,7 +3,7 @@
  * in an isolated local Govern stack. GOVERN_UI_WRITE_TESTS=1 additionally
  * checks saving the executed SQL, then removes its own saved investigation.
  *
- * Uses the same BASE_URL, PLAYWRIGHT_MODULE, BROWSER_BIN and SCREENSHOTS_DIR
+ * Uses the same BASE_URL, PLAYWRIGHT_MODULE, BROWSER_BIN, BROWSER_ARGS_JSON and SCREENSHOTS_DIR
  * options as frontend-smoke.mjs. No extra runtime package in Govern is needed.
  */
 import assert from 'node:assert/strict';
@@ -15,10 +15,12 @@ const require = createRequire(import.meta.url);
 const {chromium} = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const base = new URL(process.env.BASE_URL || 'http://127.0.0.1:8080');
 assert.ok(['127.0.0.1', 'localhost', '[::1]'].includes(base.hostname), 'Use a local test stack.');
+const browserArgs = process.env.BROWSER_ARGS_JSON ? JSON.parse(process.env.BROWSER_ARGS_JSON) : ['--no-sandbox'];
+assert.ok(Array.isArray(browserArgs) && browserArgs.every(value => typeof value === 'string'), 'BROWSER_ARGS_JSON must be an array of strings.');
 const screenshots = process.env.SCREENSHOTS_DIR;
 if (screenshots) await mkdir(screenshots, {recursive: true});
 const browser = await chromium.launch({headless: true,
-    ...(process.env.BROWSER_BIN ? {executablePath: process.env.BROWSER_BIN} : {}), args: ['--no-sandbox']});
+    ...(process.env.BROWSER_BIN ? {executablePath: process.env.BROWSER_BIN} : {}), args: browserArgs});
 const errors = [];
 const ref = (source, column) => JSON.stringify([source, column]);
 const responseFor = (page, action) => page.waitForResponse(response => {
@@ -48,7 +50,7 @@ const run = async page => {
 };
 
 try {
-    const page = await browser.newPage({viewport: {width: 1440, height: 1000}});
+    const page = await browser.newPage({locale: 'nl-NL', viewport: {width: 1440, height: 1000}});
     page.on('pageerror', error => errors.push(error.message));
     await page.goto(new URL('/#onderzoeken?table=digital_systems', base).href, {waitUntil: 'networkidle'});
     await page.getByRole('button', {name: 'Query maken', exact: true}).waitFor();
@@ -83,6 +85,7 @@ try {
         const payload = await response.json();
         payload.data.sql = refreshedSql;
         payload.data.explanation = refreshedExplanation;
+        if (payload.data.explanation_i18n) payload.data.explanation_i18n.nl = refreshedExplanation;
         await route.fulfill({response, json: payload});
     };
     await page.route('**/api.php?action=query', refreshedResponse);
@@ -140,6 +143,7 @@ try {
         const payload = await response.json();
         payload.data.sql = refreshedSql;
         payload.data.explanation = refreshedExplanation;
+        if (payload.data.explanation_i18n) payload.data.explanation_i18n.nl = refreshedExplanation;
         querySeen();
         await queryGate;
         await route.fulfill({response, json: payload});
@@ -231,7 +235,7 @@ try {
 
     // A focused metadata fixture models a removed selected column. The design
     // must keep it until the user explicitly removes that one choice.
-    const schemaPage = await browser.newPage({viewport: {width: 1440, height: 1000}});
+    const schemaPage = await browser.newPage({locale: 'nl-NL', viewport: {width: 1440, height: 1000}});
     schemaPage.on('pageerror', error => errors.push(error.message));
     let hideColumn = false;
     let attemptedDesign;
@@ -278,7 +282,7 @@ try {
     await schemaPage.getByRole('button', {name: 'Query maken', exact: true}).waitFor();
     assert.equal(await schemaPage.evaluate(() => document.activeElement.getAttribute('aria-label')), 'Basistabel');
 
-    const mobile = await browser.newPage({viewport: {width: 390, height: 844}});
+    const mobile = await browser.newPage({locale: 'nl-NL', viewport: {width: 390, height: 844}});
     mobile.on('pageerror', error => errors.push(error.message));
     await mobile.goto(new URL('/#onderzoeken?table=digital_systems', base).href, {waitUntil: 'networkidle'});
     await mobile.getByRole('button', {name: 'Query maken', exact: true}).waitFor();

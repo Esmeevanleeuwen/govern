@@ -1,12 +1,9 @@
+import {t} from './i18n.js';
+import './builder-messages.js';
 import {request} from './api.js';
 import {el, icon, button, loading, empty, errorPanel, notice} from './ui.js';
 
-const operators = {
-    eq: 'Is gelijk aan', neq: 'Is niet gelijk aan', contains: 'Bevat tekst',
-    starts_with: 'Begint met', ends_with: 'Eindigt op', gt: 'Is groter dan',
-    gte: 'Is groter of gelijk', lt: 'Is kleiner dan', lte: 'Is kleiner of gelijk',
-    is_null: 'Is NULL', is_not_null: 'Is niet NULL',
-};
+const operators = {"eq": "builder.operator.eq", "neq": "builder.operator.neq", "contains": "builder.operator.contains", "starts_with": "builder.operator.starts_with", "ends_with": "builder.operator.ends_with", "gt": "builder.operator.gt", "gte": "builder.operator.gte", "lt": "builder.operator.lt", "lte": "builder.operator.lte", "is_null": "builder.operator.is_null", "is_not_null": "builder.operator.is_not_null"};
 const textTypes = new Set(['char', 'varchar', 'tinytext', 'text', 'mediumtext', 'longtext', 'enum', 'set']);
 const numericTypes = new Set(['tinyint', 'smallint', 'mediumint', 'int', 'integer', 'bigint', 'decimal', 'numeric', 'float', 'double', 'real', 'year']);
 const dateTypes = new Set(['date', 'datetime', 'timestamp', 'time']);
@@ -18,11 +15,17 @@ function select(label, options, value, change, attributes = {}) {
     const control = el('select', {class: 'input select', 'aria-label': label, ...attributes},
         options.map(([key, text]) => el('option', {value: key}, text)));
     if (value && !options.some(([key]) => key === value)) {
-        control.append(el('option', {value}, value + ' (niet beschikbaar)'));
+        control.append(el('option', {value}, value + t('builder.unavailable')));
     }
     control.value = value;
     control.addEventListener('change', () => change(control.value));
     return control;
+}
+
+function clientError(key) {
+    const error = new Error(t(key));
+    error.translationKey = key;
+    return error;
 }
 
 function section(number, title, ...children) {
@@ -43,13 +46,19 @@ export class QueryBuilder {
         this.base = null;
         this.related = null;
         this.element = el('details', {class: 'card query-builder', open},
-            el('summary', {}, icon('layers'), el('span', {}, el('strong', {}, 'Query samenstellen'),
-                el('small', {}, 'Kies wat je wilt zien. Leer de SQL erbij.')), icon('down', 'builder-chevron')));
+            el('summary', {}, icon('layers'), el('span', {}, el('strong', {}, t('builder.title')),
+                el('small', {}, t('builder.subtitle'))), icon('down', 'builder-chevron')));
         this.body = el('div', {class: 'builder-body'});
         this.element.append(this.body);
         this.element.addEventListener('toggle', () => onToggle(this.element.open));
         scope.cleanup.push(() => this.destroy());
         this.loadTable(!draft);
+    }
+
+    refreshLanguage() {
+        this.element.querySelector('summary strong').textContent = t('builder.title');
+        this.element.querySelector('summary small').textContent = t('builder.subtitle');
+        this.render();
     }
 
     destroy() {
@@ -96,7 +105,7 @@ export class QueryBuilder {
         if (this.design.join) {
             const relation = this.base.foreign_keys.find(key => key.name === this.design.join.foreign_key);
             if (!relation || relation.referenced_schema !== this.database || !this.tables.some(table => table.name === relation.referenced_table)) {
-                throw new Error('Deze koppeling is niet beschikbaar in de werkdatabase. Kies opnieuw een koppeling.');
+                throw clientError('builder.relationUnavailable');
             }
             const data = await request('structure', {params: {table: relation.referenced_table}, signal: this.metadataController.signal});
             if (!this.scope.live() || revision !== this.metadataRevision) return;
@@ -113,7 +122,7 @@ export class QueryBuilder {
             this.design.filters.some(field => field.source === 'related') || this.design.order.some(field => field.source === 'related');
         this.design.join = name ? {foreign_key: name, type: this.design.join?.type || 'left'} : null;
         for (const key of ['columns', 'filters', 'order']) this.design[key] = this.design[key].filter(field => field.source === 'base');
-        this.changeNotice = removed ? 'De keuzes uit de vorige gekoppelde tabel zijn gewist. Kies opnieuw de bijbehorende kolommen en voorwaarden.' : '';
+        this.changeNotice = removed ? 'builder.joinChanged' : '';
         this.changed();
         try { await this.loadRelated(revision); }
         catch (error) {
@@ -127,7 +136,7 @@ export class QueryBuilder {
     fields() {
         return [['base', this.base], ['related', this.related]].flatMap(([source, table]) =>
             (table?.columns || []).map(column => ({source, column: column.name, meta: column,
-                label: (source === 'related' ? 'Gekoppeld: ' : '') + table.table + '.' + column.name})));
+                label: (source === 'related' ? t('builder.relatedPrefix') : '') + table.table + '.' + column.name})));
     }
 
     fieldSelect(label, reference, change) {
@@ -157,50 +166,50 @@ export class QueryBuilder {
         });
         this.body.replaceChildren();
         if (!this.tables.length) {
-            this.body.append(empty('Begin met een tabel.', 'Maak of importeer een tabel in het databasevenster en vernieuw de werkplek.', null, 'table'));
+            this.body.append(empty(t('builder.startTitle'), t('builder.startCopy'), null, 'table'));
             return;
         }
-        const table = select('Basistabel', this.tables.map(table => [table.name, table.name + (table.type === 'view' ? ' · view' : '')]), this.design.table, name => {
+        const table = select(t('builder.baseTable'), this.tables.map(table => [table.name, table.name + (table.type === 'view' ? ' · view' : '')]), this.design.table, name => {
             this.design = {...this.design, table: name, join: null, columns: [], filters: [], order: [], match: 'all'};
             this.metadataError = null;
-            this.changeNotice = 'Nieuwe basistabel gekozen. De kolommen en voorwaarden beginnen opnieuw.';
+            this.changeNotice = 'builder.baseChanged';
             this.changed();
             this.loadTable(true);
         });
-        this.body.append(el('p', {class: 'builder-intro'}, 'Stel je vraag samen. Met Query maken zet je de SQL in de editor; daarna kun je de query uitvoeren of zelf aanpassen.'),
-            el('label', {class: 'field-label'}, 'Basistabel', table));
+        this.body.append(el('p', {class: 'builder-intro'}, t('builder.intro')),
+            el('label', {class: 'field-label'}, t('builder.baseTable'), table));
         if (this.metadataError) {
             this.body.append(errorPanel(this.metadataError, () => { this.metadataError = null; this.loadTable(false); }));
             if (this.base && this.design.join) {
-                this.body.append(button('Koppeling verwijderen', () => this.changeJoin(''), {symbol: 'close', className: 'button-small'}));
+                this.body.append(button(t('builder.removeJoin'), () => this.changeJoin(''), {symbol: 'close', className: 'button-small'}));
             }
             return;
         }
         if (!this.base || (this.design.join && !this.related)) {
-            this.body.append(loading('Kolommen en verwijzingen ophalen…'));
+            this.body.append(loading(t('builder.loadMetadata')));
             return;
         }
         const form = el('form', {class: 'builder-form'});
         form.addEventListener('submit', event => { event.preventDefault(); this.build(form); });
         const relations = this.base.foreign_keys.filter(key => key.referenced_schema === this.database && this.tables.some(table => table.name === key.referenced_table));
-        const join = select('Koppeling', [['', 'Alleen de basistabel'], ...relations.map(key =>
+        const join = select(t('builder.join'), [['', t('builder.baseOnly')], ...relations.map(key =>
             [key.name, key.columns.join(', ') + ' → ' + key.referenced_table + ' (' + key.referenced_columns.join(', ') + ')'])],
         this.design.join?.foreign_key || '', name => this.changeJoin(name));
-        const joinFields = el('div', {class: 'builder-two-columns'}, el('label', {class: 'field-label'}, 'Koppeling', join));
+        const joinFields = el('div', {class: 'builder-two-columns'}, el('label', {class: 'field-label'}, t('builder.join'), join));
         if (this.design.join) {
-            joinFields.append(el('label', {class: 'field-label'}, 'Welke rijen meenemen?',
-                select('Soort koppeling', [['left', 'Alle basisrijen (LEFT JOIN)'], ['inner', 'Alleen passende rijen (INNER JOIN)']], this.design.join.type,
+            joinFields.append(el('label', {class: 'field-label'}, t('builder.includedRows'),
+                select(t('builder.joinType'), [['left', t('builder.leftJoin')], ['inner', t('builder.innerJoin')]], this.design.join.type,
                     type => { this.design.join.type = type; this.changed(); })));
         }
-        form.append(section('1', 'Verbind eventueel een tweede tabel', joinFields,
-            el('p', {class: 'field-hint'}, this.design.join ? 'LEFT JOIN bewaart ook basisrijen zonder passende rij. Een filter op de gekoppelde tabel kan die rijen alsnog uitsluiten. INNER JOIN toont alleen passende rijen.' :
-                relations.length ? 'De aangeboden koppelingen komen uit de verwijzingen in je database.' : 'Deze tabel heeft geen directe verwijzingen binnen de werkdatabase. Je kunt de basistabel zelfstandig onderzoeken.')));
-        if (this.changeNotice) form.append(notice(this.changeNotice));
+        form.append(section('1', t('builder.joinSection'), joinFields,
+            el('p', {class: 'field-hint'}, this.design.join ? t('builder.joinHelp') :
+                relations.length ? t('builder.availableJoins') : t('builder.noJoins'))));
+        if (this.changeNotice) form.append(notice(t(this.changeNotice)));
 
         const columnGroups = el('div', {class: 'builder-column-groups'});
         for (const [source, schema] of [['base', this.base], ['related', this.related]]) {
             if (!schema) continue;
-            const groupName = source === 'base' ? 'de basistabel' : 'de gekoppelde tabel';
+            const groupName = source === 'base' ? t('builder.baseGroup') : t('builder.relatedGroup');
             const selected = new Set(this.design.columns.map(refKey));
             const list = el('div', {class: 'builder-columns'});
             const updateGroup = checked => {
@@ -213,7 +222,7 @@ export class QueryBuilder {
             for (const column of schema.columns) {
                 const reference = {source, column: column.name};
                 const input = el('input', {type: 'checkbox', checked: selected.has(refKey(reference)),
-                    'aria-label': (source === 'related' ? 'Gekoppelde kolom ' : 'Basiskolom ') + column.name});
+                    'aria-label': (source === 'related' ? t('builder.relatedColumn') : t('builder.baseColumn')) + column.name});
                 input.addEventListener('change', () => {
                     this.design.columns = this.design.columns.filter(field => refKey(field) !== refKey(reference));
                     if (input.checked) this.design.columns.push(reference);
@@ -224,28 +233,28 @@ export class QueryBuilder {
                     el('span', {}, column.name), el('small', {}, column.type)));
             }
             columnGroups.append(el('section', {class: 'builder-column-group'},
-                el('div', {class: 'builder-group-heading'}, el('h3', {}, (source === 'related' ? 'Gekoppeld · ' : '') + schema.table),
-                    el('div', {}, button('Alles', () => updateGroup(true), {kind: 'ghost', className: 'button-small', 'aria-label': 'Alle kolommen kiezen uit ' + groupName}),
-                        button('Geen', () => updateGroup(false), {kind: 'ghost', className: 'button-small', 'aria-label': 'Kolomkeuze wissen voor ' + groupName}))), list));
+                el('div', {class: 'builder-group-heading'}, el('h3', {}, (source === 'related' ? t('builder.relatedGroupPrefix') : '') + schema.table),
+                    el('div', {}, button(t('builder.all'), () => updateGroup(true), {kind: 'ghost', className: 'button-small', 'aria-label': t('builder.allColumns', {group: groupName})}),
+                        button(t('builder.none'), () => updateGroup(false), {kind: 'ghost', className: 'button-small', 'aria-label': t('builder.clearColumns', {group: groupName})}))), list));
         }
         this.missingColumns = el('div', {class: 'builder-missing-columns'});
         this.renderMissingColumns();
-        form.append(section('2', 'Welke kolommen wil je zien?', columnGroups, this.missingColumns));
+        form.append(section('2', t('builder.columnsSection'), columnGroups, this.missingColumns));
         const filters = el('div', {class: 'builder-filter-list'});
-        const addFilter = button('Voorwaarde toevoegen', () => {
+        const addFilter = button(t('builder.addFilter'), () => {
             const field = this.fields()[0];
             this.design.filters.push({...fieldReference(field), operator: this.allowedOperators(field)[0], value: ''});
             this.changed(); this.renderFilters(filters, addFilter);
             filters.lastElementChild?.querySelector('select')?.focus();
         }, {symbol: 'plus', className: 'button-small'});
         this.renderFilters(filters, addFilter);
-        form.append(section('3', 'Welke rijen horen erbij?',
-            el('label', {class: 'field-label'}, 'Combineer voorwaarden',
-                select('Combineer voorwaarden', [['all', 'Alle voorwaarden gelden (AND)'], ['any', 'Minstens één voorwaarde geldt (OR)']], this.design.match,
+        form.append(section('3', t('builder.filtersSection'),
+            el('label', {class: 'field-label'}, t('builder.match'),
+                select(t('builder.match'), [['all', t('builder.matchAll')], ['any', t('builder.matchAny')]], this.design.match,
                     match => { this.design.match = match; this.changed(); })),
-            filters, addFilter, el('p', {class: 'field-hint'}, 'Een lege tekst is iets anders dan NULL. Bij “Bevat tekst” tellen % en _ als gewone tekens.')));
+            filters, addFilter, el('p', {class: 'field-hint'}, t('builder.filterHelp'))));
         const ordering = el('div', {class: 'builder-order-list'});
-        const addOrder = button('Sortering toevoegen', () => {
+        const addOrder = button(t('builder.addOrder'), () => {
             this.design.order.push({...fieldReference(this.fields()[0]), direction: 'asc'});
             this.changed(); this.renderOrder(ordering, addOrder);
             ordering.lastElementChild?.querySelector('select')?.focus();
@@ -253,13 +262,13 @@ export class QueryBuilder {
         this.renderOrder(ordering, addOrder);
         const limit = el('input', {class: 'input', type: 'number', min: '1', max: '200', step: '1', required: true, value: this.design.limit});
         limit.addEventListener('input', () => { this.design.limit = Number(limit.value); this.changed(); });
-        form.append(section('4', 'Kies volgorde en aantal', ordering, addOrder,
-            el('label', {class: 'field-label builder-limit'}, 'Aantal resultaatrijen', limit),
-            el('p', {class: 'field-hint'}, 'De bouwer maakt een voorbeeld met maximaal 200 rijen. In de SQL-editor kun je de query verder uitbreiden.')));
+        form.append(section('4', t('builder.orderSection'), ordering, addOrder,
+            el('label', {class: 'field-label builder-limit'}, t('builder.limit'), limit),
+            el('p', {class: 'field-hint'}, t('builder.limitHelp'))));
         this.status = el('div', {class: 'builder-status', 'aria-live': 'polite'});
-        this.submit = el('button', {type: 'submit', class: 'button button-primary', disabled: this.busy}, icon('code'), 'Query maken');
+        this.submit = el('button', {type: 'submit', class: 'button button-primary', disabled: this.busy}, icon('code'), t('builder.create'));
         form.append(el('div', {class: 'builder-actions'}, this.submit,
-            el('span', {class: 'small muted'}, 'De editor verandert pas als je deze knop gebruikt.')), this.status);
+            el('span', {class: 'small muted'}, t('builder.applyHint'))), this.status);
         this.body.append(form);
     }
 
@@ -268,68 +277,68 @@ export class QueryBuilder {
         const missing = this.design.columns.filter(reference => !available.has(refKey(reference)));
         this.missingColumns.replaceChildren();
         if (!missing.length) return;
-        this.missingColumns.append(notice('Een eerder gekozen kolom staat niet meer in de huidige structuur. Verwijder de ontbrekende keuze, of herstel de kolom in je database.', 'notice-warning'));
+        this.missingColumns.append(notice(t('builder.missingColumn'), 'notice-warning'));
         for (const reference of missing) {
-            const source = reference.source === 'related' ? this.related?.table || 'gekoppelde tabel' : this.design.table;
+            const source = reference.source === 'related' ? this.related?.table || t('builder.relatedTable') : this.design.table;
             const name = source + '.' + reference.column;
             this.missingColumns.append(el('div', {class: 'builder-missing-choice'}, el('code', {}, name),
-                button('Keuze verwijderen', () => {
+                button(t('builder.removeChoice'), () => {
                     this.design.columns = this.design.columns.filter(field => refKey(field) !== refKey(reference));
                     this.changed();
                     this.renderMissingColumns();
                     (this.missingColumns.querySelector('button') || this.body.querySelector('.builder-column input'))?.focus({preventScroll: true});
-                }, {symbol: 'close', className: 'button-small', 'aria-label': 'Ontbrekende kolom ' + name + ' verwijderen'})));
+                }, {symbol: 'close', className: 'button-small', 'aria-label': t('builder.removeMissing', {name})})));
         }
     }
 
     renderFilters(container, addButton) {
         container.replaceChildren();
         this.design.filters.forEach((filter, index) => {
-            const title = 'Voorwaarde ' + (index + 1);
-            const field = this.fieldSelect('Kolom voor ' + title.toLowerCase(), filter, reference => {
+            const title = t('builder.condition', {number: index + 1});
+            const field = this.fieldSelect(t('builder.conditionColumn', {number: index + 1}), filter, reference => {
                 Object.assign(filter, reference);
                 const allowed = this.allowedOperators(filter);
                 if (!allowed.includes(filter.operator)) filter.operator = allowed[0];
                 this.changed(); this.renderFilters(container, addButton);
                 container.children[index]?.querySelector('select')?.focus();
             });
-            const operation = select('Vergelijking voor ' + title.toLowerCase(), this.allowedOperators(filter).map(key => [key, operators[key]]), filter.operator, value => {
+            const operation = select(t('builder.conditionOperator', {number: index + 1}), this.allowedOperators(filter).map(key => [key, t(operators[key])]), filter.operator, value => {
                 filter.operator = value;
                 this.changed(); this.renderFilters(container, addButton);
                 container.children[index]?.querySelectorAll('select')[1]?.focus();
             });
             const type = this.fields().find(item => refKey(item) === refKey(filter))?.meta.data_type;
-            const input = el('input', {class: 'input', type: 'text', 'aria-label': 'Waarde voor ' + title.toLowerCase(),
-                value: filter.value ?? '', inputmode: numericTypes.has(type) ? 'decimal' : 'text', placeholder: 'Waarde, of lege tekst'});
+            const input = el('input', {class: 'input', type: 'text', 'aria-label': t('builder.conditionValue', {number: index + 1}),
+                value: filter.value ?? '', inputmode: numericTypes.has(type) ? 'decimal' : 'text', placeholder: t('builder.valuePlaceholder')});
             input.addEventListener('input', () => { filter.value = input.value; this.changed(); });
             container.append(el('div', {class: 'builder-filter-row'}, el('span', {class: 'builder-row-label'}, title), field, operation,
-                nullOperators.has(filter.operator) ? el('span', {class: 'builder-no-value'}, 'Geen invoer nodig') : input,
-                button('Verwijderen', () => {
+                nullOperators.has(filter.operator) ? el('span', {class: 'builder-no-value'}, t('builder.noValue')) : input,
+                button(t('builder.remove'), () => {
                     this.design.filters.splice(index, 1); this.changed(); this.renderFilters(container, addButton); addButton.focus();
-                }, {kind: 'ghost', symbol: 'trash', className: 'icon-button', 'aria-label': title + ' verwijderen'})));
+                }, {kind: 'ghost', symbol: 'trash', className: 'icon-button', 'aria-label': t('builder.removeItem', {name: title})})));
         });
-        if (!this.design.filters.length) container.append(el('p', {class: 'builder-empty'}, 'Alle rijen mogen meedoen. Voeg een voorwaarde toe om te filteren.'));
+        if (!this.design.filters.length) container.append(el('p', {class: 'builder-empty'}, t('builder.noFilters')));
     }
 
     renderOrder(container, addButton) {
         container.replaceChildren();
         this.design.order.forEach((order, index) => {
-            const title = 'Sortering ' + (index + 1);
+            const title = t('builder.order', {number: index + 1});
             container.append(el('div', {class: 'builder-order-row'}, el('span', {class: 'builder-row-label'}, title),
-                this.fieldSelect('Kolom voor ' + title.toLowerCase(), order, reference => { Object.assign(order, reference); this.changed(); }),
-                select('Richting voor ' + title.toLowerCase(), [['asc', 'Oplopend'], ['desc', 'Aflopend']], order.direction,
+                this.fieldSelect(t('builder.orderColumn', {number: index + 1}), order, reference => { Object.assign(order, reference); this.changed(); }),
+                select(t('builder.orderDirection', {number: index + 1}), [['asc', t('builder.ascending')], ['desc', t('builder.descending')]], order.direction,
                     direction => { order.direction = direction; this.changed(); }),
-                button('Verwijderen', () => {
+                button(t('builder.remove'), () => {
                     this.design.order.splice(index, 1); this.changed(); this.renderOrder(container, addButton); addButton.focus();
-                }, {kind: 'ghost', symbol: 'trash', className: 'icon-button', 'aria-label': title + ' verwijderen'})));
+                }, {kind: 'ghost', symbol: 'trash', className: 'icon-button', 'aria-label': t('builder.removeItem', {name: title})})));
         });
-        if (!this.design.order.length) container.append(el('p', {class: 'builder-empty'}, 'Zonder sortering heeft het resultaat geen vaste volgorde.'));
+        if (!this.design.order.length) container.append(el('p', {class: 'builder-empty'}, t('builder.noOrder')));
     }
 
     async build(form) {
         if (this.busy || !form.reportValidity()) return;
         if (!this.design.columns.length) {
-            this.status.replaceChildren(errorPanel(new Error('Kies minstens één kolom om te tonen.')));
+            this.status.replaceChildren(errorPanel(clientError('builder.chooseColumn')));
             form.querySelector('.builder-column input')?.focus();
             return;
         }
@@ -345,15 +354,15 @@ export class QueryBuilder {
         this.buildController = new AbortController();
         this.busy = true;
         this.submit.disabled = true;
-        this.status.replaceChildren(notice('De SQL wordt samengesteld…'));
+        this.status.replaceChildren(notice(t('builder.building')));
         try {
             const built = await request('build-query', {body: {design}, signal: this.buildController.signal});
             if (!this.scope.live() || revision !== this.revision || editorRevision !== this.getRevision()) {
-                if (this.scope.live()) this.status.replaceChildren(notice('Je keuzes of je SQL zijn intussen gewijzigd. Klik opnieuw op Query maken om je huidige keuzes te gebruiken.'));
+                if (this.scope.live()) this.status.replaceChildren(notice(t('builder.outdated')));
                 return;
             }
             this.onApply(built, design);
-            this.status.replaceChildren(notice('De SQL staat in de editor. Klik op Query uitvoeren om het resultaat te bekijken.'));
+            this.status.replaceChildren(notice(t('builder.applied')));
         } catch (error) {
             if (error.name !== 'AbortError' && this.scope.live()) this.status.replaceChildren(errorPanel(error));
         } finally {

@@ -4,7 +4,7 @@
  * Install Playwright in a separate developer environment, or set
  * PLAYWRIGHT_MODULE to its installed package directory.
  * BASE_URL defaults to http://127.0.0.1:8080.
- * Optional: BROWSER_BIN, SCREENSHOTS_DIR.
+ * Optional: BROWSER_BIN, BROWSER_ARGS_JSON, SCREENSHOTS_DIR.
  * GOVERN_UI_WRITE_TESTS=1 adds a saved-query create/delete check.
  * Run only on a test copy; phpMyAdmin can update its own UI preferences.
  *
@@ -19,13 +19,15 @@ const require = createRequire(import.meta.url);
 const {chromium} = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const base = new URL(process.env.BASE_URL || 'http://127.0.0.1:8080');
 assert.ok(['127.0.0.1', 'localhost', '[::1]'].includes(base.hostname), 'Use a local test stack.');
+const browserArgs = process.env.BROWSER_ARGS_JSON ? JSON.parse(process.env.BROWSER_ARGS_JSON) : ['--no-sandbox'];
+assert.ok(Array.isArray(browserArgs) && browserArgs.every(value => typeof value === 'string'), 'BROWSER_ARGS_JSON must be an array of strings.');
 const screenshots = process.env.SCREENSHOTS_DIR;
 if (screenshots) await mkdir(screenshots, {recursive: true});
 
 const browser = await chromium.launch({
     headless: true,
     ...(process.env.BROWSER_BIN ? {executablePath: process.env.BROWSER_BIN} : {}),
-    args: ['--no-sandbox'],
+    args: browserArgs,
 });
 const errors = [];
 const trackErrors = page => page.on('pageerror', error => errors.push(error.message));
@@ -55,7 +57,7 @@ const switchModalTab = async (page, label) => {
 };
 
 try {
-    const page = await browser.newPage({viewport: {width: 1440, height: 1000}});
+    const page = await browser.newPage({locale: 'nl-NL', viewport: {width: 1440, height: 1000}});
     trackErrors(page);
     await page.goto(base.href, {waitUntil: 'networkidle'});
     await page.locator('.stats-grid').waitFor();
@@ -115,7 +117,13 @@ try {
             await page.getByRole('button', {name: 'Onderzoek bewaren', exact: true}).click();
             id = (await (await saved).json()).data.id;
             await page.locator('.saved-item-open').filter({hasText: name}).waitFor();
-            await page.getByRole('button', {name: 'Verwijder onderzoek ' + name}).click();
+            const removeButton = page.getByRole('button', {name: 'Verwijder onderzoek ' + name});
+            await removeButton.click();
+            await page.getByRole('button', {name: 'Annuleren', exact: true}).click();
+            await page.locator('.confirm-dialog').waitFor({state: 'detached'});
+            assert.equal(await removeButton.evaluate(node => node === document.activeElement), true,
+                'Cancelling a confirmation returns focus to its opener.');
+            await removeButton.click();
             const removed = apiResponse(page, 'delete-query');
             await page.getByRole('button', {name: 'Onderzoek verwijderen', exact: true}).click();
             assert.equal((await removed).status(), 200);
@@ -154,7 +162,7 @@ try {
 
     // New browser page avoids carrying a pending catalog refresh into viewport
     // assertions. The navigation itself is exercised with real clicks.
-    const mobile = await browser.newPage({viewport: {width: 390, height: 844}});
+    const mobile = await browser.newPage({locale: 'nl-NL', viewport: {width: 390, height: 844}});
     trackErrors(mobile);
     await mobile.goto(new URL('/#overzicht', base).href, {waitUntil: 'networkidle'});
     await mobile.locator('.stats-grid').waitFor();

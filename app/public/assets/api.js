@@ -1,3 +1,6 @@
+import {t, getLanguage, hasMessage} from './i18n.js';
+import './ui-messages.js';
+
 let token = '';
 
 export function setCsrf(value) {
@@ -18,8 +21,8 @@ export async function request(action, {params, body, signal} = {}) {
     try {
         response = await fetch(endpoint(action, params), {
             method: body === undefined ? 'GET' : 'POST',
-            headers: body === undefined ? {'Accept': 'application/json'} : {
-                'Accept': 'application/json', 'Content-Type': 'application/json', 'X-CSRF-Token': token,
+            headers: body === undefined ? {'Accept': 'application/json', 'Accept-Language': getLanguage()} : {
+                'Accept': 'application/json', 'Accept-Language': getLanguage(), 'Content-Type': 'application/json', 'X-CSRF-Token': token,
             },
             credentials: 'same-origin',
             signal,
@@ -27,14 +30,28 @@ export async function request(action, {params, body, signal} = {}) {
         });
     } catch (error) {
         if (error.name === 'AbortError') throw error;
-        throw new Error('De werkplek is niet bereikbaar. Controleer of de omgeving nog draait en probeer het opnieuw.');
+        throw translatedError('api.unreachable');
     }
     let payload;
     try {
         payload = await response.json();
     } catch {
-        throw new Error('De server gaf geen leesbaar antwoord. Controleer of de werkplek volledig is gestart.');
+        throw translatedError('api.unreadable');
     }
-    if (!response.ok || !payload.ok) throw new Error(payload.error || 'Het verzoek kon niet worden uitgevoerd.');
+    if (!response.ok || !payload.ok) {
+        const key = payload.error_code ? 'error.' + payload.error_code : null;
+        const error = translatedError(key, payload.error_params, payload.error_i18n?.[getLanguage()] || payload.error);
+        error.error_code = payload.error_code;
+        error.error_params = payload.error_params || {};
+        error.error_i18n = payload.error_i18n || null;
+        throw error;
+    }
     return payload.data;
+}
+
+function translatedError(key, params = {}, fallback) {
+    const error = new Error(hasMessage(key) ? t(key, params) : (fallback || t('api.failed')));
+    error.translationKey = key;
+    error.error_params = params || {};
+    return error;
 }

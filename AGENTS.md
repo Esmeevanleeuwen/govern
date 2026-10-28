@@ -34,7 +34,14 @@ beperking van de werkplek.
 
 ## Uitleg en bediening
 
-- Schrijf korte Nederlandse labels en foutmeldingen.
+- Schrijf korte labels en foutmeldingen in Nederlands en Engels. Gebruik de
+  gedeelde vertaalsleutels; vertaal geen identifiers, records of opgeslagen SQL.
+- Volg `docs/DESIGN.md`: gedeelde glasmaterialen, zachte schaduwen en geen harde
+  decoratieve randen. Nieuwe schermen gebruiken dezelfde componenten en tokens.
+- Bewaar taal, uiterlijk en dashboardindeling onafhankelijk. Nieuwe blokken
+  hebben vaste IDs; een update mag een bestaande indeling niet overschrijven.
+- Een taal- of themawissel mag geen onderzoekconcept wissen of een actief
+  phpMyAdmin-formulier herladen.
 - Leg de gebruikte SQL naast de handeling uit, zonder te doen alsof er een
   AI-verbinding bestaat als die niet is gebouwd.
 - Zorg voor toetsenbordbediening, focusbeheer, bruikbare foutmeldingen en een

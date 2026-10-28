@@ -5,11 +5,14 @@ require_once dirname(__DIR__) . '/src/bootstrap.php';
 
 use Govern\ApiException;
 use Govern\BackupService;
+use Govern\BackupException;
+use Govern\BackupInputException;
 use Govern\Catalog;
 use Govern\Config;
 use Govern\Database;
 use Govern\Http;
 use Govern\MaintenanceLock;
+use Govern\Messages;
 use Govern\QueryDesigner;
 use Govern\QueryRunner;
 use Govern\SavedQueries;
@@ -38,7 +41,7 @@ try {
         $download = $backup->download(Http::text($_GET, 'id'));
         $stream = @fopen($download['path'], 'rb');
         if ($stream === false) {
-            throw new ApiException('Het herstelpunt kan niet worden geopend.', 503);
+            throw ApiException::fromCode('snapshot_open_failed', 503);
         }
         header('Content-Type: application/sql; charset=utf-8');
         header('Content-Disposition: attachment; filename="' . preg_replace('/[^A-Za-z0-9._-]/', '_', $download['filename']) . '"');
@@ -65,12 +68,13 @@ try {
             }
         } catch (PDOException $exception) {
             $missing = (int) ($exception->errorInfo[1] ?? 0) === 1049;
-            $data['warning'] = $missing
-                ? 'De database bestaat niet. Je kunt onder Experimenten een herstelpunt terugzetten.'
-                : 'De database is niet bereikbaar of nog niet gereed. Controleer of Docker draait. Herstelpunten blijven beschikbaar.';
+            $warning = $missing ? 'database_missing_warning' : 'database_unavailable_warning';
+            $data['warning'] = Messages::text($warning);
+            $data['warning_i18n'] = Messages::translations($warning);
             error_log('Govern bootstrap database error [' . $exception->getCode() . ']');
         } catch (ApiException $exception) {
             $data['warning'] = $exception->getMessage();
+            $data['warning_i18n'] = Messages::translations($exception->errorCode, $exception->errorParams);
         }
         Http::json($data);
     }
@@ -85,10 +89,10 @@ try {
             Http::json($catalog->structure(Http::text($_GET, 'table')));
         case 'build-query':
             if (array_keys($input) !== ['design']) {
-                throw new ApiException('Verstuur alleen het ontwerp van de query.', 422);
+                throw ApiException::fromCode('design_only', 422);
             }
             $built = (new QueryDesigner($database))->compile($input['design']);
-            Http::json(['sql' => $built['sql'], 'explanation' => $built['explanation']]);
+            Http::json(['sql' => $built['sql'], 'explanation' => $built['explanation'], 'explanation_i18n' => $built['explanation_i18n']]);
         case 'query':
             if (array_keys($input) === ['sql']) {
                 Http::json((new QueryRunner($database))->execute(Http::text($input, 'sql')));
@@ -98,9 +102,10 @@ try {
                 $result = (new QueryRunner($database))->execute($built['prepared_sql'], $built['params']);
                 $result['sql'] = $built['sql'];
                 $result['explanation'] = $built['explanation'];
+                $result['explanation_i18n'] = $built['explanation_i18n'];
                 Http::json($result);
             }
-            throw new ApiException('Verstuur precies één SQL-vraag of één ontwerp, zonder andere velden.', 422);
+            throw ApiException::fromCode('query_shape_invalid', 422);
         case 'queries':
             Http::json($queries->list());
         case 'save-query':
@@ -120,22 +125,26 @@ try {
             echo json_encode($context, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR);
             exit;
         default:
-            throw new ApiException('Deze handeling bestaat niet.', 404);
+            throw ApiException::fromCode('action_missing', 404);
     }
 } catch (ApiException $exception) {
-    Http::json($exception->getMessage(), $exception->status, false);
+    Http::json($exception->getMessage(), $exception->status, false, $exception->errorCode, $exception->errorParams);
+} catch (BackupInputException $exception) {
+    Http::json($exception->getMessage(), 422, false, $exception->errorCode, $exception->errorParams);
+} catch (BackupException $exception) {
+    Http::json($exception->getMessage(), 503, false, $exception->errorCode, $exception->errorParams);
 } catch (InvalidArgumentException $exception) {
-    Http::json($exception->getMessage(), 422, false);
+    Http::json(Messages::text('request_failed'), 422, false, 'request_failed');
 } catch (PDOException $exception) {
     if ((int) ($exception->errorInfo[1] ?? 0) === 1792) {
-        Http::json('Deze leesopdracht probeert gegevens te wijzigen. Gebruik het phpMyAdmin-venster voor wijzigingen.', 403, false);
+        Http::json(Messages::text('read_attempted_write'), 403, false, 'read_attempted_write');
     }
     error_log('Govern database error [' . $exception->getCode() . ']');
-    Http::json('De database kon deze handeling niet uitvoeren. Vernieuw de werkplek of controleer de databaseverbinding.', 503, false);
+    Http::json(Messages::text('database_action_failed'), 503, false, 'database_action_failed');
 } catch (RuntimeException $exception) {
-    // BackupService's operational messages are prepared for the local user.
-    Http::json($exception->getMessage(), 503, false);
+    error_log('Govern operational error [' . get_class($exception) . ']');
+    Http::json(Messages::text('internal_error'), 503, false, 'internal_error');
 } catch (Throwable $exception) {
     error_log('Govern internal error [' . get_class($exception) . ']');
-    Http::json('Er ging iets mis in de werkplek. Bekijk de lokale applicatielog voor meer informatie.', 500, false);
+    Http::json(Messages::text('internal_error'), 500, false, 'internal_error');
 }
