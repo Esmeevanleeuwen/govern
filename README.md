@@ -30,6 +30,8 @@ je lokale `.env`, die niet in Git wordt opgenomen.
   **Indeling aanpassen**. Je kunt slepen of de verplaatsknoppen gebruiken.
 - **Gegevens:** bekijk records, zoek, blader en bekijk de gebruikte SQL.
 - **Structuur:** lees velden, sleutels, relaties en de echte tabeldefinitie.
+- **Schema:** bekijk alle tabellen, kolommen en foreign keys in een interactief
+  diagram. Zoek, zoom, verplaats tabellen en volg hun verbindingen.
 - **Onderzoeken:** voer leesvragen uit, bekijk resultaten en bewaar queries met uitleg.
 - **Visueel samenstellen:** kies een tabel, kolommen, filters en een sorteervolgorde.
   Voeg eventueel een bestaande verwijzing naar een tweede tabel toe. Govern maakt

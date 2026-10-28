@@ -37,8 +37,29 @@ De onderdelen hebben een kleine, duidelijke taak:
 | `preferences.js` | Gevalideerde browservoorkeuren en gedeelde uiterlijktokens |
 | `dashboard-layout.js` | Blokvolgorde, breedtes, zichtbaarheid en een aparte bewerkingsversie |
 | `query-builder.js` | Het tijdelijke visuele queryontwerp en de toegepaste versie |
+| `schema-model.js` en `schema-visualizer.js` | Live relaties, diagramindeling en interactieve schemaverkenning |
 | `database-modal.js` | Het venster rondom de echte phpMyAdmin |
 | `Messages.php` | Vertaalde applicatiefeedback met stabiele foutcodes |
+
+## Schemavisualisatie
+
+De route `#schema` biedt een afzonderlijk werkvlak om de hele database te
+verkennen. Vanuit Structuur kan de huidige tabel direct in het diagram worden
+geselecteerd. Vanuit het diagram blijven Gegevens en Structuur bereikbaar voor
+de gekozen tabel. De visualizer gebruikt dezelfde glasmaterialen, vertaalsleutels
+en instellingen als de andere schermen.
+
+`GET schema` haalt de metadata in drie gebonden catalogusqueries op via de
+leesverbinding. Alleen gedeclareerde foreign keys leveren verbindingen op;
+samengestelde sleutels behouden alle kolomparen. Een verwijzing naar een ander
+schema wordt niet aan een gelijknamige lokale tabel gekoppeld. Views blijven
+zichtbaar zonder verzonnen afhankelijkheden. De API levert geen tabelrecords.
+
+De browser houdt de schemametadata bij tijdens taalwisselingen en haalt die na
+werkplekverversing opnieuw op. Filter, selectie en diagramtoestand staan los van
+onderzoekconcepten en dashboardindeling. Tabelposities worden per database in
+een eigen versie van browseropslag bewaard; verplaatsen wijzigt geen tabellen,
+kolommen of sleutels in MariaDB.
 
 ## Vormgeving
 

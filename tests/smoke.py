@@ -71,6 +71,30 @@ def main():
     check(len(csrf) >= 32 and data["stats"]["tables"] >= 23, "Real bootstrap and CSRF session")
     check(all(not t["name"].startswith("_govern_") for t in data["tables"]), "Content explorer keeps internal metadata separate in its display")
 
+    status, result, _ = request("schema")
+    check(status == 200 and result["ok"] is True, "Schema visualizer metadata is available over HTTP")
+    schema = result["data"]
+    check(set(schema) == {"database", "tables"} and schema["database"] == database,
+          "Schema response names only the configured database and its diagram metadata")
+    schema_tables = {table["name"]: table for table in schema["tables"]}
+    check(set(schema_tables) == {table["name"] for table in data["tables"]}
+          and len(schema_tables) == data["stats"]["tables"] + data["stats"]["views"],
+          "Schema diagram includes every bootstrap table and view")
+    check(all(set(table) == {"name", "type", "comment", "columns", "foreign_keys"}
+              and not table["name"].startswith("_govern_") for table in schema["tables"]),
+          "Schema metadata contains no rows, DDL, saved research or internal support tables")
+    check(all(isinstance(table["columns"], list) and isinstance(table["foreign_keys"], list)
+              and all(isinstance(column["primary"], bool) and isinstance(column["nullable"], bool)
+                      and isinstance(column["name"], str) and isinstance(column["type"], str)
+                      for column in table["columns"]) for table in schema["tables"]),
+          "Schema exposes exact column names, types and primary-key/nullability flags")
+    check(all(len(key["columns"]) == len(key["referenced_columns"]) > 0
+              and isinstance(key["referenced_schema"], str)
+              for table in schema["tables"] for key in table["foreign_keys"]),
+          "Schema relationships retain ordered key pairs and qualified targets")
+    status, result, _ = request("schema", {})
+    check(status == 405 and result["ok"] is False, "Schema endpoint accepts read-only GET requests only")
+
     status, result, _ = request("browse", parameters={"table": "digital_systems"})
     check(status == 200 and result["data"]["total"] >= 1 and result["data"]["rows"], "Browse real seeded rows")
     status, result, _ = request("browse", parameters={"table": "digital_systems", "q": "DigiD", "page_size": 1})
@@ -79,6 +103,9 @@ def main():
     check(status == 200 and result["data"]["foreign_keys"] and "CREATE TABLE" in result["data"]["create_sql"], "Structure describes actual foreign keys and DDL")
     check(any(c["generated"] for c in result["data"]["columns"]), "Generated columns remain identified")
     organization_link = next(fk for fk in result["data"]["foreign_keys"] if fk["referenced_table"] == "organizations")
+    check(schema_tables["system_responsibilities"]["columns"] == result["data"]["columns"]
+          and schema_tables["system_responsibilities"]["foreign_keys"] == result["data"]["foreign_keys"],
+          "Schema diagram metadata agrees with live single-table structure")
 
     design = {
         "table": "digital_systems", "join": None,

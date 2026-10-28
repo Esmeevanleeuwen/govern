@@ -1,6 +1,34 @@
 # Validatie
 
-Stand van de controles: **28 oktober 2026**.
+Stand van de controles: **29 oktober 2026**.
+
+## Schemavisualisatie
+
+De volledige native controle is opnieuw geslaagd met de schemavisualizer:
+**100** database-integratiecontroles, **37** HTTP-controles inclusief phpMyAdmin,
+**15** echte herstelcontroles en alle vier browsersuites. Ook de PHP-syntax,
+backendunits, lokalisatie, taalvoorkeuren en dashboardindeling zijn geslaagd.
+De afzonderlijke schemamodelsuite bevat **26** controles.
+
+Het schema is via scherm, API en de echte testdatabase gecontroleerd met **26**
+tabellen en views en **54** foreign keys. De proeven vergelijken elke getekende
+kolomkoppeling met de actuele metadata. Samengestelde sleutels, self references,
+meerdere sleutels tussen dezelfde tabellen, views en interne tabellen worden
+ook in database-integratietests gecontroleerd. Browserfixtures behandelen externe
+doelen en namen die op HTML lijken; die fixtures veranderen de database niet.
+
+De browsercontrole behandelt zoeken, in- en uitgaande verwijzingen, selectie,
+directe buren, slepen, herhaalde toetsenbordverplaatsing, zoomen en verschuiven.
+Taalwisseling behoudt focus, filter, selectie, posities en viewport. Posities
+blijven na herladen bewaard; geblokkeerde opslag houdt de sessie bruikbaar.
+Fouten, opnieuw proberen, lege schema's, minder transparantie, afwezigheid van
+decoratieve randen en mobiel op **375** en **320 px** zijn meegenomen.
+
+De lichte en donkere schermen zijn visueel bekeken. De omgeving gebruikt PHP
+**8.4.27**, MariaDB **10.11.14**, Nginx **1.24.0** en phpMyAdmin **5.2.3**.
+Alle gegevens en services waren tijdelijk en afzonderlijk van de werkdatabase.
+De GitHub-workflow voert dezelfde nieuwe controles uit met Docker; de uitslag
+van die uitvoering staat bij de betreffende commit.
 
 ## Glasontwerp talen en persoonlijke indeling
 
@@ -146,9 +174,11 @@ node tests/i18n-unit.mjs
 node tests/frontend-messages-unit.mjs
 node tests/preferences-unit.mjs
 node tests/dashboard-layout-unit.mjs
+node tests/schema-model-unit.mjs
 BASE_URL=http://127.0.0.1:18080 GOVERN_UI_WRITE_TESTS=1 node tests/frontend-smoke.mjs
 BASE_URL=http://127.0.0.1:18080 node tests/query-builder-smoke.mjs
 BASE_URL=http://127.0.0.1:18080 node tests/ui-settings-smoke.mjs
+BASE_URL=http://127.0.0.1:18080 node tests/schema-visualizer-smoke.mjs
 ```
 
 De extra schrijvende controle maakt een eigen opgeslagen onderzoek aan en

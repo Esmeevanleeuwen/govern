@@ -4,6 +4,7 @@ const entries = {
     'route.overview': ['Overzicht', 'Overview'],
     'route.data': ['Gegevens', 'Data'],
     'route.structure': ['Structuur', 'Structure'],
+    'route.schema': ['Schema', 'Schema'],
     'route.research': ['Onderzoeken', 'Research'],
     'route.experiments': ['Experimenten', 'Experiments'],
     'route.settings': ['Instellingen', 'Settings'],

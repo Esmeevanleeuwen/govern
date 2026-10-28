@@ -87,6 +87,8 @@ try {
             Http::json($catalog->browse(Http::text($_GET, 'table'), Http::integer($_GET, 'page', 1), Http::integer($_GET, 'page_size', 25), Http::text($_GET, 'q', false)));
         case 'structure':
             Http::json($catalog->structure(Http::text($_GET, 'table')));
+        case 'schema':
+            Http::json($catalog->schema());
         case 'build-query':
             if (array_keys($input) !== ['design']) {
                 throw ApiException::fromCode('design_only', 422);

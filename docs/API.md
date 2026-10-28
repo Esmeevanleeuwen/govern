@@ -62,6 +62,7 @@ interface and future feature rules.
 - GET `bootstrap`: `{csrf, database:{name,version,status,available}, stats:{tables,views,rows_estimate}, tables:[{name,type:"table"|"view",comment,rows_estimate,columns}]}`. An unavailable database can also return `warning` and `warning_i18n`; bootstrap still supplies the configured database name and CSRF token for recovery.
 - GET `browse&table=...&page=1&page_size=25&q=...`: `{table,columns:[{name,type,nullable,default,generated,primary,comment}],rows:[{column:value}],page,page_size,total,sql,params,truncated,notice,notice_i18n}`. Named identifiers verified against live catalog; values bound; max page_size100. App-owned `_govern_` tables excluded from normal list, remain accessible in phpMyAdmin.
 - GET `structure&table=...`: `{table,columns:[...],indexes:[{name,unique,columns:[name]}],foreign_keys:[{name,columns:[name],referenced_table,referenced_columns:[name]}],create_sql}`.
+- GET `schema`: `{database:string,tables:[{name,type:"table"|"view",comment,columns:[...],foreign_keys:[{name,columns:[name],referenced_schema,referenced_table,referenced_columns:[name]}]}]}`. Full live metadata for the schema visualizer, read through the restricted reader with three batched catalog queries. No table rows, DDL, credentials or saved queries; `_govern_` source tables are excluded.
 - POST `query` exactly one of `{sql}` or `{design}`: `{columns:[string],rows:[[value]],truncated,duration_ms,returned_rows,sql,notice,notice_i18n}`. A design also returns `explanation:[string]` and `explanation_i18n`. Separate SELECT/SHOW-only DB account and READ ONLY transactions enforce research reads (including invocations through definer views). Max200 returned rows; native single statement execution; bounded statement time. Design values are bound parameters; its metadata is revalidated before execution. For writing/DDL use full phpMyAdmin modal.
 - POST `build-query` exactly `{design}`: `{sql,explanation:[string],explanation_i18n:{nl:[string],en:[string]}}`. Validates against the live schema and generates editable, standalone SQL; does not execute the generated question.
 - GET `queries`: `[{id,name,sql,notes,updated_at}]`.
@@ -72,6 +73,30 @@ interface and future feature rules.
 - GET `download-snapshot&id=...`: attachment SQL. Strict server-generated snapshot ids only.
 - GET `context`: attachment JSON of schema and saved queries, no table rows or credentials.
 - GET `health`: `{status:"ok"}` when configured DB readable; no credentials/errors disclosed.
+
+## Schema visualizer metadata
+
+`schema` returns tables and views in catalog name order and columns in ordinal
+order. Each column has the same descriptor as `structure`: `name`, `type`,
+`data_type`, `nullable`, `default`, `generated`, `generation_expression`,
+`primary`, `auto_increment`, `extra` and `comment`. Metadata may be unavailable
+for a view; its `columns` list can then be empty rather than fabricated.
+
+Foreign keys are actual constraints, grouped by source table and constraint
+name. Preserve every position of `columns` and `referenced_columns` together:
+composite keys form one constraint, and separate constraints linking the same
+tables remain separate. Self references are retained. `referenced_schema` is
+the actual target schema; a same-named table in another schema must not be
+connected to a local table. A target absent from the returned list (including
+an internal table) is unavailable in the diagram, not proof of a broken key.
+Views have no inferred relationships from their SQL definitions, and ordinary
+similarly named fields have no inferred relationships either.
+
+The response is a current catalog read, not a transactionally frozen schema:
+DDL from another database window can occur between its three metadata reads.
+Refreshing the diagram reads the catalog again. Requests keep the normal GET,
+session, maintenance-lock and localized error handling; no mutation is
+performed by this endpoint or by changing a diagram's layout.
 
 ## Visual query design
 
