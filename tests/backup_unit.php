@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 
-require dirname(__DIR__) . '/app/src/BackupService.php';
+require dirname(__DIR__) . '/app/src/bootstrap.php';
 
 use Govern\BackupService;
 

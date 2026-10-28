@@ -11,16 +11,16 @@ final class MaintenanceLock
     public function __construct(string $directory)
     {
         if (!is_dir($directory) && !@mkdir($directory, 0700, true) && !is_dir($directory)) {
-            throw new ApiException('De map voor herstelpunten is niet schrijfbaar.', 503);
+            throw ApiException::fromCode('backup_directory_unwritable', 503);
         }
         $this->handle = @fopen($directory . '/.maintenance.lock', 'c');
         if ($this->handle === false) {
-            throw new ApiException('De werkplek kan de herstelvergrendeling niet openen.', 503);
+            throw ApiException::fromCode('maintenance_lock_unavailable', 503);
         }
         if (!flock($this->handle, LOCK_SH | LOCK_NB)) {
             fclose($this->handle);
             $this->handle = null;
-            throw new ApiException('Er wordt een herstelpunt gemaakt of teruggezet. Probeer het zo opnieuw.', 423);
+            throw ApiException::fromCode('maintenance_busy', 423);
         }
     }
 

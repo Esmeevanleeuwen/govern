@@ -19,13 +19,13 @@ final class BackupService
     {
         $this->directory = rtrim((string) $config['backup_dir'], DIRECTORY_SEPARATOR);
         if ($this->directory === '' || str_contains($this->directory, "\0")) {
-            throw new RuntimeException('De map voor herstelpunten is ongeldig.');
+            throw new BackupException('backup_directory_invalid');
         }
         if (!is_dir($this->directory) && !mkdir($this->directory, 0700, true) && !is_dir($this->directory)) {
-            throw new RuntimeException('De map voor herstelpunten kon niet worden aangemaakt.');
+            throw new BackupException('backup_directory_create_failed');
         }
         if (!is_writable($this->directory)) {
-            throw new RuntimeException('De map voor herstelpunten is niet beschrijfbaar.');
+            throw new BackupException('backup_directory_not_writable');
         }
     }
 
@@ -53,7 +53,7 @@ final class BackupService
     {
         $label = trim($label);
         if ($label === '' || strlen($label) > 600 || !preg_match('//u', $label)) {
-            throw new InvalidArgumentException('Geef het herstelpunt een korte, leesbare naam.');
+            throw new BackupInputException('snapshot_label_invalid');
         }
         return $this->locked(LOCK_EX, fn(): array => $this->createUnlocked($label));
     }
@@ -69,7 +69,7 @@ final class BackupService
     public function restore(string $id, string $confirmation): array
     {
         if (!hash_equals((string) $this->config['name'], $confirmation)) {
-            throw new InvalidArgumentException('Typ de exacte databasenaam om het terugzetten te bevestigen.');
+            throw new BackupInputException('restore_confirmation_invalid');
         }
         return $this->locked(LOCK_EX, function () use ($id): array {
             $manifest = $this->readManifest($id, true);
@@ -84,27 +84,17 @@ final class BackupService
                     try {
                         $this->applySnapshot($pdo, $this->readManifest($safety['id'], true));
                     } catch (Throwable $recoveryFailure) {
-                        throw new RuntimeException(
-                            'Het terugzetten en automatisch herstel zijn gestopt. De database kan gedeeltelijk zijn hersteld. '
-                            . 'Het herstelpunt ' . $safety['id'] . ' is bewaard.', 0, $recoveryFailure
-                        );
+                        throw new BackupException('restore_recovery_failed', ['id' => $safety['id']], $recoveryFailure);
                     }
-                    throw new RuntimeException(
-                        'Het gekozen herstelpunt kon niet worden teruggezet. De vorige toestand is hersteld vanuit '
-                        . $safety['id'] . '.', 0, $failure
-                    );
+                    throw new BackupException('restore_recovered', ['id' => $safety['id']], $failure);
                 }
-                throw new RuntimeException(
-                    'Het terugzetten is gestopt. Er bestond geen werkdatabase om vooraf te bewaren; '
-                    . 'het gekozen herstelpunt blijft beschikbaar.', 0, $failure
-                );
+                throw new BackupException('restore_no_safety', [], $failure);
             }
             return [
                 'restored' => $id,
                 'safety_snapshot' => $safety,
-                'message' => $safety === null
-                    ? 'De ontbrekende werkdatabase is opnieuw aangemaakt vanuit het herstelpunt.'
-                    : 'Het herstelpunt is teruggezet. De vorige toestand is apart bewaard.',
+                'message' => Messages::text($safety === null ? 'restore_created_database' : 'restore_succeeded'),
+                'message_i18n' => Messages::translations($safety === null ? 'restore_created_database' : 'restore_succeeded'),
             ];
         });
     }
@@ -115,7 +105,7 @@ final class BackupService
         $pdo = $this->serverConnection();
         $settings = $this->databaseSettings($pdo);
         if ($settings === null) {
-            throw new RuntimeException('De werkdatabase bestaat niet. Je kunt wel een eerder herstelpunt terugzetten.');
+            throw new BackupException('backup_database_missing');
         }
         $this->validateObjectOwners($pdo);
         $id = gmdate('Ymd\THis\Z') . '_' . bin2hex(random_bytes(8));
@@ -129,7 +119,7 @@ final class BackupService
                 . "-- Maak geen gelijktijdige structuurwijzigingen tijdens een export.\n\n";
             $header .= $this->routineDefinitions($pdo);
             if (file_put_contents($partial, $header) === false) {
-                throw new RuntimeException('Het SQL-bestand kon niet worden geschreven.');
+                throw new BackupException('snapshot_write_failed');
             }
             chmod($partial, 0600);
             $this->runProcess([
@@ -143,7 +133,7 @@ final class BackupService
             $size = filesize($partial);
             $hash = hash_file('sha256', $partial);
             if ($size === false || $size <= strlen($header) || $hash === false) {
-                throw new RuntimeException('De SQL-export is leeg of onvolledig. Er is geen herstelpunt opgeslagen.');
+                throw new BackupException('snapshot_empty');
             }
             $manifest = [
                 'format' => 1, 'id' => $id, 'label' => $label,
@@ -153,15 +143,15 @@ final class BackupService
                 'size_bytes' => $size, 'sha256' => $hash,
             ];
             if (!rename($partial, $sqlPath)) {
-                throw new RuntimeException('Het SQL-bestand kon niet worden afgerond.');
+                throw new BackupException('snapshot_finish_sql_failed');
             }
             $manifestTemp = $this->path($id, 'json.partial');
             if (file_put_contents($manifestTemp, json_encode($manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) . "\n") === false) {
-                throw new RuntimeException('De gegevens van het herstelpunt konden niet worden opgeslagen.');
+                throw new BackupException('snapshot_metadata_failed');
             }
             chmod($manifestTemp, 0600);
             if (!rename($manifestTemp, $manifestPath)) {
-                throw new RuntimeException('Het herstelpunt kon niet worden afgerond.');
+                throw new BackupException('snapshot_finish_failed');
             }
             return $this->descriptor($manifest);
         } catch (Throwable $exception) {
@@ -186,7 +176,7 @@ final class BackupService
         $output = tempnam($this->directory, '.restore-');
         if ($output === false) {
             unlink($credentials);
-            throw new RuntimeException('Er kon geen tijdelijk herstelbestand worden gemaakt.');
+            throw new BackupException('restore_temp_failed');
         }
         chmod($output, 0600);
         try {
@@ -233,7 +223,7 @@ final class BackupService
         $statement = $pdo->prepare('SELECT COUNT(*) FROM information_schema.COLLATIONS WHERE CHARACTER_SET_NAME = ? AND COLLATION_NAME = ?');
         $statement->execute([$manifest['charset'], $manifest['collation']]);
         if ((int) $statement->fetchColumn() !== 1) {
-            throw new RuntimeException('De tekenset van dit herstelpunt is niet beschikbaar op deze database-server.');
+            throw new BackupException('snapshot_charset_unavailable');
         }
     }
 
@@ -245,7 +235,7 @@ final class BackupService
             $statement->execute([(string) $this->config['name']]);
             foreach ($statement as $row) {
                 if ($row['DEFINER'] !== $owner) {
-                    throw new RuntimeException('Een databaseobject heeft een andere eigenaar dan de werkdatabasegebruiker. Maak hiervan eerst een passende export; er is geen onvolledig herstelpunt opgeslagen.');
+                    throw new BackupException('snapshot_owner_invalid');
                 }
             }
         }
@@ -264,12 +254,12 @@ final class BackupService
         foreach ($routines as $routine) {
             $type = $routine['ROUTINE_TYPE'];
             if (!in_array($type, ['FUNCTION', 'PROCEDURE'], true)) {
-                throw new RuntimeException('Onbekend routinetype; het herstelpunt is niet gemaakt.');
+                throw new BackupException('snapshot_routine_unknown');
             }
             $charset = $routine['CHARACTER_SET_CLIENT'];
             $collation = $routine['COLLATION_CONNECTION'];
             if (!preg_match('/\A[a-zA-Z0-9_]+\z/', $charset) || !preg_match('/\A[a-zA-Z0-9_]+\z/', $collation)) {
-                throw new RuntimeException('De tekenset van een routine kan niet veilig worden bewaard.');
+                throw new BackupException('snapshot_routine_charset_invalid');
             }
             // Retrieve the definition in its original client encoding. It is written
             // with a matching SET NAMES, rather than silently recoding SQL literals.
@@ -282,7 +272,7 @@ final class BackupService
             }
             $definition = $row[$type === 'FUNCTION' ? 'Create Function' : 'Create Procedure'] ?? null;
             if (!is_string($definition) || $definition === '') {
-                throw new RuntimeException('Een routine kan niet worden uitgelezen. Er is geen onvolledig herstelpunt opgeslagen.');
+                throw new BackupException('snapshot_routine_unreadable');
             }
             do {
                 $delimiter = 'GOV_' . bin2hex(random_bytes(5));
@@ -299,7 +289,7 @@ final class BackupService
         $path = $this->path($id, 'json');
         $sqlPath = $this->path($id, 'sql');
         if (is_link($path) || is_link($sqlPath) || !is_file($path) || !is_file($sqlPath)) {
-            throw new InvalidArgumentException('Dit herstelpunt bestaat niet.');
+            throw new BackupInputException('snapshot_missing');
         }
         $manifest = json_decode((string) file_get_contents($path), true, 32, JSON_THROW_ON_ERROR);
         if (!is_array($manifest) || ($manifest['format'] ?? null) !== 1 || ($manifest['id'] ?? null) !== $id
@@ -309,10 +299,10 @@ final class BackupService
             || !is_int($manifest['size_bytes'] ?? null)
             || !preg_match('/\A[a-f0-9]{64}\z/', (string) ($manifest['sha256'] ?? ''))
             || filesize($sqlPath) !== $manifest['size_bytes']) {
-            throw new RuntimeException('Het herstelpunt is onvolledig of hoort bij een andere database.');
+            throw new BackupException('snapshot_invalid');
         }
         if ($verify && !hash_equals($manifest['sha256'], (string) hash_file('sha256', $sqlPath))) {
-            throw new RuntimeException('Het SQL-bestand is gewijzigd sinds het herstelpunt is gemaakt. Terugzetten is gestopt.');
+            throw new BackupException('snapshot_changed');
         }
         return $manifest;
     }
@@ -325,7 +315,7 @@ final class BackupService
     private function path(string $id, string $extension): string
     {
         if (!preg_match(self::ID_PATTERN, $id)) {
-            throw new InvalidArgumentException('Ongeldig herstelpunt.');
+            throw new BackupInputException('snapshot_id_invalid');
         }
         return $this->directory . DIRECTORY_SEPARATOR . $id . '.' . $extension;
     }
@@ -333,7 +323,7 @@ final class BackupService
     private function identifier(string $value): string
     {
         if ($value === '' || str_contains($value, "\0")) {
-            throw new RuntimeException('Ongeldige databasenaam of objectnaam.');
+            throw new BackupException('backup_identifier_invalid');
         }
         return '`' . str_replace('`', '``', $value) . '`';
     }
@@ -342,7 +332,7 @@ final class BackupService
     {
         $path = tempnam($this->directory, '.client-');
         if ($path === false) {
-            throw new RuntimeException('Tijdelijke database-instellingen konden niet worden gemaakt.');
+            throw new BackupException('client_settings_create_failed');
         }
         chmod($path, 0600);
         $values = [
@@ -364,7 +354,7 @@ final class BackupService
         }
         if (file_put_contents($path, $text) === false) {
             unlink($path);
-            throw new RuntimeException('Tijdelijke database-instellingen konden niet worden geschreven.');
+            throw new BackupException('client_settings_write_failed');
         }
         return $path;
     }
@@ -379,7 +369,7 @@ final class BackupService
         ];
         $process = proc_open($command, $descriptors, $pipes);
         if (!is_resource($process)) {
-            throw new RuntimeException('De databaseclient kon niet worden gestart.');
+            throw new BackupException('database_client_start_failed');
         }
         if ($input === null) {
             fclose($pipes[0]);
@@ -423,11 +413,11 @@ final class BackupService
             }
         }
         if ($timedOut) {
-            throw new RuntimeException('De databasebewerking duurde te lang en is gestopt.');
+            throw new BackupException('database_client_timeout');
         }
         if ($exitCode !== 0) {
-            $detail = preg_match('/ERROR\s+([0-9]+)(?:\s+\([A-Z0-9]+\))?/', $error, $match) ? ' Databasefout ' . $match[1] . '.' : '';
-            throw new RuntimeException('De databaseclient is gestopt met foutcode ' . $exitCode . '.' . $detail . ' Er is geen succesvolle bewerking gemeld.');
+            $detail = preg_match('/ERROR\s+([0-9]+)(?:\s+\([A-Z0-9]+\))?/', $error, $match) ? (int) $match[1] : null;
+            throw new BackupException('database_client_failed', ['exit' => $exitCode, 'database_code' => $detail]);
         }
     }
 
@@ -435,11 +425,11 @@ final class BackupService
     {
         $handle = fopen($this->directory . '/.maintenance.lock', 'c');
         if ($handle === false) {
-            throw new RuntimeException('Het herstelpunten-slot kon niet worden geopend.');
+            throw new BackupException('snapshot_lock_failed');
         }
         try {
             if (!flock($handle, $mode | LOCK_NB)) {
-                throw new RuntimeException('Er wordt al een herstelpunt gemaakt of teruggezet. Probeer het zo opnieuw.');
+                throw new BackupException('snapshot_busy');
             }
             return $operation();
         } finally {

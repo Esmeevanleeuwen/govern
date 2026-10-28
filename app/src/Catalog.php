@@ -116,10 +116,10 @@ final class Catalog
         $page = max(1, $page);
         $pageSize = max(1, min(100, $pageSize));
         if ($page > 10000000) {
-            throw new ApiException('Dit paginanummer is te groot. Gebruik een filter om de gegevens te vinden.');
+            throw ApiException::fromCode('page_too_large');
         }
         if (strlen($search) > 2048) {
-            throw new ApiException('De zoektekst is te lang. Gebruik maximaal 2048 bytes.');
+            throw ApiException::fromCode('search_too_long');
         }
         $conditions = [];
         $params = [];
@@ -134,7 +134,7 @@ final class Catalog
                 $params[$key] = $pattern;
             }
             if ($conditions === []) {
-                throw new ApiException('Deze tabel heeft geen velden waarin tekst kan worden gezocht.');
+                throw ApiException::fromCode('search_not_supported');
             }
         }
         $where = $conditions === [] ? '' : ' WHERE (' . implode(' OR ', $conditions) . ')';
@@ -184,7 +184,8 @@ final class Catalog
         return ['table' => $table, 'columns' => $columns, 'rows' => $rows, 'page' => $page,
             'page_size' => $pageSize, 'total' => $total, 'sql' => $sql, 'params' => $parameters,
             'truncated' => $shortened,
-            'notice' => $shortened ? 'De weergave is ingekort. De volledige waarden staan in phpMyAdmin.' : null];
+            'notice' => $shortened ? Messages::text('browse_shortened') : null,
+            'notice_i18n' => $shortened ? Messages::translations('browse_shortened') : null];
     }
 
     private function requireTable(string $table): string
@@ -195,7 +196,7 @@ final class Catalog
         $statement->execute(['schema' => $this->database->name(), 'table' => $table]);
         $row = $statement->fetch();
         if ($row === false || $row['TABLE_NAME'] !== $table) {
-            throw new ApiException('Deze tabel of dit overzicht bestaat niet meer. Vernieuw de werkplek.', 404);
+            throw ApiException::fromCode('table_missing', 404);
         }
         return $row['TABLE_TYPE'];
     }

@@ -13,11 +13,11 @@ final class Config
         };
         $port = filter_var($env('DB_PORT', '3306'), FILTER_VALIDATE_INT);
         if ($port === false || $port < 1 || $port > 65535) {
-            throw new ApiException('DB_PORT moet een geldig poortnummer zijn.', 503);
+            throw ApiException::fromCode('port_invalid', 503);
         }
         $name = $env('DB_NAME', 'bestuursatlas');
         if ($name === '' || strlen($name) > 192 || preg_match('/[\x00-\x1f\x7f]/', $name)) {
-            throw new ApiException('DB_NAME is niet geldig ingesteld.', 503);
+            throw ApiException::fromCode('database_name_invalid', 503);
         }
         $schema = $env('WORKBENCH_SCHEMA_FILE');
         if ($schema === '') {

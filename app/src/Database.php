@@ -17,7 +17,7 @@ final class Database
     public static function identifier(string $name): string
     {
         if ($name === '' || str_contains($name, "\0")) {
-            throw new ApiException('Ongeldige naam voor een databaseobject.');
+            throw ApiException::fromCode('identifier_invalid');
         }
         return '`' . str_replace('`', '``', $name) . '`';
     }
@@ -31,7 +31,7 @@ final class Database
     {
         if ($this->read === null) {
             if ($this->config['read_user'] === $this->config['user'] || strtolower($this->config['read_user']) === 'root') {
-                throw new ApiException('Stel voor onderzoeken een afzonderlijke databasegebruiker met alleen leesrechten in.', 503);
+                throw ApiException::fromCode('reader_required', 503);
             }
             $connection = $this->connect($this->config['read_user'], $this->config['read_password']);
             // SELECT on a DEFINER view can invoke a writing stored function.
@@ -57,7 +57,7 @@ final class Database
     private function connect(string $user, #[\SensitiveParameter] string $password): PDO
     {
         if ($user === '' || $password === '') {
-            throw new ApiException('De databasegegevens zijn nog niet ingesteld. Start Govern met het meegeleverde startscript.', 503);
+            throw ApiException::fromCode('credentials_missing', 503);
         }
         $socket = $this->config['socket'];
         $address = $socket !== ''

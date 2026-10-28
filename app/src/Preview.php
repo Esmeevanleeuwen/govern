@@ -18,7 +18,7 @@ final class Preview
             if (preg_match('//u', $value) !== 1 || str_contains($value, "\0")) {
                 $value = '0x' . bin2hex(substr($value, 0, intdiv(self::CELL_BYTES, 2)));
                 if (strlen($row[$key]) > intdiv(self::CELL_BYTES, 2)) {
-                    $value .= ' … [binaire weergave ingekort]';
+                    $value .= Messages::text('preview_binary_shortened');
                     $shortened = true;
                 }
             } elseif (strlen($value) > self::CELL_BYTES) {
@@ -26,7 +26,7 @@ final class Preview
                 while ($value !== '' && preg_match('//u', $value) !== 1) {
                     $value = substr($value, 0, -1);
                 }
-                $value .= ' … [weergave ingekort]';
+                $value .= Messages::text('preview_shortened');
                 $shortened = true;
             }
             $row[$key] = $value;

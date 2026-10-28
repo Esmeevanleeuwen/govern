@@ -16,10 +16,10 @@ final class QueryRunner
     {
         $sql = trim($sql);
         if ($sql === '') {
-            throw new ApiException('Vul eerst een SQL-vraag in.');
+            throw ApiException::fromCode('sql_required');
         }
         if (strlen($sql) > 262144) {
-            throw new ApiException('Deze vraag is te groot voor het onderzoeksscherm. Gebruik phpMyAdmin voor grote scripts.', 413);
+            throw ApiException::fromCode('query_too_large', 413);
         }
         $pdo = $this->database->reader();
         // Database grants and a READ ONLY transaction enforce the read boundary;
@@ -61,17 +61,19 @@ final class QueryRunner
             return ['columns' => $columns, 'rows' => $rows, 'truncated' => $shortened,
                 'duration_ms' => round((hrtime(true) - $started) / 1e6, 2),
                 'returned_rows' => count($rows), 'sql' => $sql,
-                'notice' => $shortened ? 'Dit is een begrensd voorbeeld van het resultaat. Gebruik filters of phpMyAdmin om verder te onderzoeken.' : null];
+                'notice' => $shortened ? Messages::text('query_shortened') : null,
+                'notice_i18n' => $shortened ? Messages::translations('query_shortened') : null];
         } catch (PDOException $exception) {
             $driver = (int) ($exception->errorInfo[1] ?? 0);
             if (in_array($driver, [1044, 1142, 1143, 1227, 1370, 1792], true)) {
-                throw new ApiException('Deze onderzoeksverbinding heeft alleen leesrechten. Gebruik het phpMyAdmin-venster voor wijzigingen.', 403);
+                throw ApiException::fromCode('query_read_only', 403);
             }
             if (in_array($driver, [1205, 1317, 1969, 3024], true)) {
-                throw new ApiException('De query is gestopt omdat de tijdslimiet is bereikt. Maak de vraag kleiner of gebruik een filter.', 408);
+                throw ApiException::fromCode('query_timeout', 408);
             }
-            $message = (string) ($exception->errorInfo[2] ?? 'De database kon deze vraag niet uitvoeren.');
-            throw new ApiException('SQL-melding: ' . substr($message, 0, 2000), 422);
+            $message = (string) ($exception->errorInfo[2] ?? Messages::text('query_database_error'));
+            // Driver diagnostics are preserved exactly, apart from the existing display bound.
+            throw ApiException::fromCode('sql_error', 422, ['detail' => substr($message, 0, 2000)]);
         } finally {
             if ($statement !== null) {
                 try {
