@@ -1,0 +1,12 @@
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+Thumbs.db
+node_modules/
+vendor/
+backups/
+test-results/
+playwright-report/
+__pycache__/

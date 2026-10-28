@@ -1,0 +1,90 @@
+name: govern
+
+services:
+  database:
+    image: mariadb:10.11
+    environment:
+      MARIADB_DATABASE: ${DB_NAME:-bestuursatlas}
+      MARIADB_USER: govern
+      MARIADB_PASSWORD: ${DB_PASSWORD:?Start Govern with scripts/start.sh or scripts/start.cmd first}
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?Missing generated root password}
+      DB_READ_USER: govern_reader
+      DB_READ_PASSWORD: ${DB_READ_PASSWORD:?Missing generated read-only password}
+    volumes:
+      - database_data:/var/lib/mysql
+      - ./docker/database/50-govern-init.sh:/docker-entrypoint-initdb.d/50-govern-init.sh:ro
+      - ./docker/database/10-bestuursatlas.sql:/opt/govern/seed.sql:ro
+      - ./docker/database/20-govern.sql:/opt/govern/workbench.sql:ro
+      - ./docker/database/server.cnf:/etc/mysql/conf.d/govern.cnf:ro
+    healthcheck:
+      test: [CMD, healthcheck.sh, --connect, --innodb_initialized]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    restart: unless-stopped
+
+  app:
+    build:
+      context: .
+      dockerfile: docker/app.Dockerfile
+    environment:
+      DB_HOST: database
+      DB_PORT: 3306
+      DB_NAME: ${DB_NAME:-bestuursatlas}
+      DB_USER: govern
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_READ_USER: govern_reader
+      DB_READ_PASSWORD: ${DB_READ_PASSWORD}
+      BACKUP_DIR: /var/lib/govern/backups
+      WORKBENCH_SCHEMA_FILE: /var/www/workbench.sql
+      TZ: UTC
+    volumes:
+      - ./app/public:/var/www/public:ro
+      - ./app/src:/var/www/src:ro
+      - ./docker/database/20-govern.sql:/var/www/workbench.sql:ro
+      - backups:/var/lib/govern/backups
+    depends_on:
+      database:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, php, -r, "exit(@file_get_contents('http://127.0.0.1/api.php?action=health') === false ? 1 : 0);"]
+      interval: 15s
+      timeout: 5s
+      retries: 4
+    restart: unless-stopped
+
+  phpmyadmin:
+    build:
+      context: .
+      dockerfile: docker/phpmyadmin/Dockerfile
+    environment:
+      PMA_HOST: database
+      PMA_PORT: 3306
+      PMA_USER: govern
+      PMA_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME:-bestuursatlas}
+      UPLOAD_LIMIT: 128M
+      MAX_EXECUTION_TIME: 300
+      MEMORY_LIMIT: 256M
+    depends_on:
+      database:
+        condition: service_healthy
+    restart: unless-stopped
+
+  gateway:
+    image: nginx:1.30-alpine
+    ports:
+      - "127.0.0.1:${APP_PORT:-8080}:80"
+    volumes:
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      app:
+        condition: service_started
+      phpmyadmin:
+        condition: service_started
+    restart: unless-stopped
+
+volumes:
+  database_data:
+  backups:

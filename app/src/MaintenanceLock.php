@@ -1,0 +1,34 @@
+<?php
+declare(strict_types=1);
+
+namespace Govern;
+
+/** Cooperates with BackupService. The file is a lock, not a database backup. */
+final class MaintenanceLock
+{
+    private mixed $handle;
+
+    public function __construct(string $directory)
+    {
+        if (!is_dir($directory) && !@mkdir($directory, 0700, true) && !is_dir($directory)) {
+            throw new ApiException('De map voor herstelpunten is niet schrijfbaar.', 503);
+        }
+        $this->handle = @fopen($directory . '/.maintenance.lock', 'c');
+        if ($this->handle === false) {
+            throw new ApiException('De werkplek kan de herstelvergrendeling niet openen.', 503);
+        }
+        if (!flock($this->handle, LOCK_SH | LOCK_NB)) {
+            fclose($this->handle);
+            $this->handle = null;
+            throw new ApiException('Er wordt een herstelpunt gemaakt of teruggezet. Probeer het zo opnieuw.', 423);
+        }
+    }
+
+    public function __destruct()
+    {
+        if (is_resource($this->handle)) {
+            flock($this->handle, LOCK_UN);
+            fclose($this->handle);
+        }
+    }
+}

@@ -1,0 +1,125 @@
+#!/usr/bin/env python3
+"""HTTP user flows against an already running, isolated Govern test stack.
+
+Creates then removes one saved query and creates a downloadable checkpoint.
+Does not restore or delete a database; backup_integration.php owns that test.
+Uses only Python's standard library, not an application-side database shortcut.
+"""
+import argparse
+import http.cookiejar
+import json
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+import uuid
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--base-url", default="http://127.0.0.1:8080")
+    args = parser.parse_args()
+    base = args.base_url.rstrip("/")
+    client = urllib.request.build_opener(
+        urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar())
+    )
+    csrf = None
+    checks = []
+
+    def check(condition, title):
+        if not condition:
+            raise AssertionError(title)
+        checks.append(title)
+
+    def request(action, payload=None, parameters=None, token=True):
+        query = {"action": action, **(parameters or {})}
+        headers = {"Accept": "application/json"}
+        data = None
+        if payload is not None:
+            data = json.dumps(payload).encode()
+            headers["Content-Type"] = "application/json"
+            if token:
+                headers["X-CSRF-Token"] = csrf or ""
+        req = urllib.request.Request(
+            base + "/api.php?" + urllib.parse.urlencode(query),
+            data=data,
+            headers=headers,
+        )
+        try:
+            response = client.open(req, timeout=60)
+        except urllib.error.HTTPError as error:
+            response = error
+        body = response.read()
+        content_type = response.headers.get("Content-Type", "")
+        value = json.loads(body) if "application/json" in content_type else body
+        return response.status, value, response.headers
+
+    for attempt in range(40):
+        try:
+            status, result, _ = request("bootstrap")
+            if status == 200 and result.get("data", {}).get("database", {}).get("available"):
+                break
+        except (OSError, ValueError):
+            pass
+        time.sleep(1)
+    else:
+        raise RuntimeError("Govern did not become available within40seconds")
+
+    data = result["data"]
+    csrf = data["csrf"]
+    database = data["database"]["name"]
+    check(len(csrf) >= 32 and data["stats"]["tables"] >= 23, "Real bootstrap and CSRF session")
+    check(all(not t["name"].startswith("_govern_") for t in data["tables"]), "Content explorer keeps internal metadata separate in its display")
+
+    status, result, _ = request("browse", parameters={"table": "digital_systems"})
+    check(status == 200 and result["data"]["total"] >= 1 and result["data"]["rows"], "Browse real seeded rows")
+    status, result, _ = request("browse", parameters={"table": "digital_systems", "q": "DigiD", "page_size": 1})
+    check(status == 200 and result["data"]["total"] == 1 and len(result["data"]["rows"]) == 1, "Filter and pagination return the expected row")
+    status, result, _ = request("structure", parameters={"table": "system_responsibilities"})
+    check(status == 200 and result["data"]["foreign_keys"] and "CREATE TABLE" in result["data"]["create_sql"], "Structure describes actual foreign keys and DDL")
+    check(any(c["generated"] for c in result["data"]["columns"]), "Generated columns remain identified")
+
+    status, result, _ = request("query", {"sql": "SELECT 1 AS value, 2 AS value, NULL AS missing"})
+    check(status == 200 and result["data"]["columns"] == ["value", "value", "missing"] and result["data"]["rows"] == [["1", "2", None]], "Query preserves duplicate aliases and NULL")
+    status, result, _ = request("query", {"sql": "SELECT 1"}, token=False)
+    check(status == 403 and result["ok"] is False, "A write-style request requires the browser CSRF token")
+    status, result, _ = request("query", {"sql": "UPDATE digital_systems SET name='should not happen'"})
+    check(status == 403 and result["ok"] is False, "Reader grants reject a genuine UPDATE")
+    status, result, _ = request("query", {"sql": "SELECT 1; SELECT 2"})
+    check(status == 422, "Native driver rejects multiple statements")
+
+    saved_id = None
+    try:
+        name = "HTTP-check " + uuid.uuid4().hex[:8]
+        status, result, _ = request("save-query", {"name": name, "sql": "SELECT COUNT(*) FROM organizations", "notes": "Herhaalbare HTTP-controle"})
+        check(status in (200, 201) and result["ok"], "Save a real investigation")
+        saved_id = result["data"]["id"]
+        status, result, _ = request("queries")
+        check(any(str(q["id"]) == str(saved_id) for q in result["data"]), "Saved investigation is read back")
+        status, context, headers = request("context")
+        check(status == 200 and context["format"] == "govern-context" and "attachment" in headers.get("Content-Disposition", ""), "Schema and query context can be downloaded")
+        check("rows" not in context and "password" not in context and len(context["schema"]) >= 23, "Context is schema-based, without record export or credentials")
+    finally:
+        if saved_id is not None:
+            status, result, _ = request("delete-query", {"id": saved_id})
+            check(status == 200 and result["ok"], "Test investigation is removed")
+
+    status, result, _ = request("create-snapshot", {"label": "HTTP-integratiecontrole"})
+    check(status == 201 and result["data"]["size_bytes"] > 1000, "Create a real SQL checkpoint over HTTP")
+    snapshot_id = result["data"]["id"]
+    status, dump, headers = request("download-snapshot", parameters={"id": snapshot_id})
+    check(status == 200 and b"CREATE TABLE" in dump and "attachment" in headers.get("Content-Disposition", ""), "Download contains actual schema and data")
+    status, result, _ = request("restore-snapshot", {"id": snapshot_id, "confirmation": "incorrect"})
+    check(status == 422 and result["ok"] is False, "Incorrect restore confirmation makes no destructive change")
+
+    pma_url = base + "/phpmyadmin/index.php?" + urllib.parse.urlencode({"route": "/sql", "db": database, "table": "digital_systems"})
+    response = client.open(pma_url, timeout=30)
+    body = response.read().decode("utf-8", errors="replace")
+    check(response.status == 200 and "digital_systems" in body and "phpMyAdmin" in body and "mysqli_sql_exception" not in body, "Real phpMyAdmin renders the selected table behind the proxy")
+    check(response.headers.get("X-Frame-Options", "").upper() == "SAMEORIGIN", "Embedding is limited to the same origin")
+    check(all("/phpmyadmin/phpmyadmin/" not in cookie for cookie in response.headers.get_all("Set-Cookie", [])), "Proxy does not duplicate the phpMyAdmin cookie path")
+    print(json.dumps({"passed": len(checks), "failed": 0, "checks": checks}, indent=2))
+
+
+if __name__ == "__main__":
+    main()

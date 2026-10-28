@@ -122,7 +122,8 @@ De broncode blijft klein en rechtstreeks te volgen:
 - `docs/`: afspraken, uitleg en de API.
 
 Begin bij [de architectuur](docs/ARCHITECTURE.md) en
-[leren met Govern](docs/LEARNING.md). Het systeem is een gewone PHP-app met
+[leren met Govern](docs/LEARNING.md). De uitgevoerde controles en commando's om
+ze te herhalen staan bij [validatie](docs/VALIDATION.md). Het systeem is een gewone PHP-app met
 JavaScriptmodules en SQL. De gegevens zitten niet vast in een eigen bestandstype
 of een verzameling aparte services per onderwerp.
 

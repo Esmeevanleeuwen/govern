@@ -1,0 +1,7 @@
+[mariadb]
+character-set-server=utf8mb4
+collation-server=utf8mb4_unicode_ci
+default-time-zone=+00:00
+sql-mode=STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,ONLY_FULL_GROUP_BY
+local-infile=0
+skip-name-resolve
