@@ -6,6 +6,8 @@ import {t, getLanguage, setLanguage} from './i18n.js';
 import {getPreferences, updatePreferences, resetAppearance, subscribePreferences} from './preferences.js';
 import {createDashboardLayout} from './dashboard-layout.js';
 import {mountSchemaVisualizer} from './schema-visualizer.js';
+import {registerSelection} from './selection-registry.js';
+import {SelectionPointer} from './selection-pointer.js';
 import './app-messages.js';
 import './workspace-messages.js';
 import './navigation-messages.js';
@@ -72,6 +74,7 @@ const databaseViews = ['gegevens', 'structuur', 'schema'];
 let currentScope;
 let bootstrapController;
 let routeVersion = 0;
+let recordSnapshotId = 0;
 
 const databaseModal = new DatabaseModal(() => {
     if (!state.restoring) refreshBootstrap(false).then(() => {
@@ -205,6 +208,31 @@ panelToggle.append(icon('chevron'));
 panelToggle.addEventListener('click', toggleWorkspaceContext);
 syncSidebar();
 
+for (const [node, purpose] of [
+    [refreshButton, 'refreshWorkspace'], [openDatabase, 'openDatabase'],
+    [document.getElementById('context-export'), 'exportContext'],
+    [document.getElementById('language-select'), 'language'],
+    [menuToggle, 'openNavigation'], [panelToggle, 'toggleExplorer'],
+]) registerSelection(node, () => ({kind: 'control', key: 'shell:' + node.id,
+    label: node.getAttribute('aria-label') || node.textContent.trim(), purpose}));
+
+new SelectionPointer({
+    root: document.querySelector('.app-shell'), controls: document.querySelector('.topbar-actions'),
+    getContext: () => {
+        const database = state.bootstrap?.database?.name;
+        const schema = state.schemaData || {database, tables: tables().map(table => ({...table,
+            columns: state.structureData.get(table.name)?.columns || [],
+            foreign_keys: state.structureData.get(table.name)?.foreign_keys || []})), partial: true};
+        return {database, tables: tables(), schema, route: route().name};
+    },
+    onAction: action => {
+        if (action.type === 'query' && typeof action.sql === 'string') return openResearch(action.sql);
+        if (tables().some(table => table.name === action.table)) {
+            go(action.type === 'structure' ? 'structuur' : 'gegevens', {table: action.table});
+        }
+    },
+});
+
 function localizeShell() {
     document.querySelectorAll('[data-i18n]').forEach(node => { node.textContent = t(node.dataset.i18n); });
     document.querySelectorAll('[data-i18n-aria]').forEach(node => node.setAttribute('aria-label', t(node.dataset.i18nAria)));
@@ -280,6 +308,33 @@ function go(name, params = {}) {
 
 function tables() {
     return state.bootstrap?.tables || [];
+}
+
+function selectionValue(value) {
+    const text = value === null ? 'NULL' : typeof value === 'object' ? JSON.stringify(value) : String(value);
+    return text.length > 100 ? text.slice(0, 100) + '…' : text;
+}
+
+function tableSelection(table, data) {
+    const columns = Array.isArray(data?.columns) ? data.columns : Array.isArray(table.columns) ? table.columns : [];
+    return {kind: 'table', key: 'table:' + JSON.stringify(table.name), label: table.name,
+        table: table.name, description: table.comment || '', columns,
+        primaryKey: columns.filter(column => column.primary).map(column => column.name),
+        foreignKeys: data?.foreign_keys || table.foreign_keys || [], type: table.type};
+}
+
+function columnSelection(table, column, data) {
+    return {...tableSelection(table, data), kind: 'column', key: 'column:' + JSON.stringify([table.name, column.name]),
+        label: table.name + '.' + column.name, column: column.name, description: column.comment || ''};
+}
+
+function relationshipSelection(table, key) {
+    const relationship = {name: key.name, sourceTable: table.name, targetTable: key.referenced_table,
+        targetSchema: key.referenced_schema || state.bootstrap?.database?.name,
+        external: Boolean(key.referenced_schema && key.referenced_schema !== state.bootstrap?.database?.name),
+        pairs: key.columns.map((source, index) => ({source, target: key.referenced_columns[index]}))};
+    return {kind: 'relationship', key: 'relationship:' + JSON.stringify([table.name, key.name, relationship.targetSchema, key.referenced_table]),
+        label: key.name, table: table.name, relationship};
 }
 
 function activeTable(params) {
@@ -639,16 +694,18 @@ function catalog(routeName) {
     const draw = () => {
         const query = search.value.trim().toLocaleLowerCase();
         const matching = tables().filter(table => table.name.toLocaleLowerCase().includes(query));
-        list.replaceChildren(...matching.map(table => el('button', {
+        list.replaceChildren(...matching.map(table => registerSelection(el('button', {
             class: 'catalog-item' + (table.name === state.table ? ' active' : ''),
             type: 'button', title: table.name + (table.comment ? ' — ' + table.comment : ''),
             'aria-current': table.name === state.table ? 'true' : null,
             on: {click: () => selectWorkspaceTable(table.name, routeName)},
         }, icon(table.type === 'view' ? 'layers' : 'table'), el('span', {class: 'catalog-item-name'}, table.name),
-        el('span', {class: 'catalog-item-count'}, number(table.columns)))));
+        el('span', {class: 'catalog-item-count'}, number(table.columns))),
+        {kind: 'control', key: 'catalog:' + JSON.stringify(table.name), label: table.name, table: table.name, purpose: 'openTable'})));
         if (!matching.length) list.append(el('p', {class: 'catalog-empty'}, t('app.core.catalog.noMatches')));
     };
     search.addEventListener('input', () => { state.catalogSearch.database = search.value; draw(); });
+    registerSelection(search, {kind: 'control', key: 'catalog:search', label: t('app.core.catalog.searchLabel'), purpose: 'searchTables'});
     draw();
     return el('section', {class: 'catalog', 'aria-label': t('app.core.catalog.aria')},
         el('div', {class: 'catalog-head'},
@@ -665,11 +722,13 @@ function selectWorkspaceTable(name, view = state.databaseView) {
 
 function databaseHeading(view) {
     const modeLinks = el('nav', {class: 'database-views', 'aria-label': t('app.navigation.views')}, databaseViews.map(name =>
-        el('a', {class: 'database-view' + (name === view ? ' active' : ''), href: databaseHash(name), 'data-database-view': name,
-            'aria-current': name === view ? 'page' : null}, t(routes[name].labelKey))));
+        registerSelection(el('a', {class: 'database-view' + (name === view ? ' active' : ''), href: databaseHash(name), 'data-database-view': name,
+            'aria-current': name === view ? 'page' : null}, t(routes[name].labelKey)),
+        {kind: 'control', key: 'view:' + name, label: t(routes[name].labelKey), purpose: 'changeView', table: state.table})));
     const explorer = button(t('app.navigation.tables'), openWorkspaceContext, {id: 'workspace-explorer-open', symbol: 'table',
         'aria-label': t('app.navigation.open'), 'aria-controls': 'workspace-context', 'aria-expanded': String(isExplorerOpen())});
     explorer.hidden = isExplorerOpen();
+    registerSelection(explorer, {kind: 'control', key: 'database:explorer', label: t('app.navigation.tables'), purpose: 'openNavigation'});
     return el('header', {class: 'page-heading database-heading'},
         el('div', {class: 'database-heading-main'}, el('h1', {}, t('app.navigation.database')), explorer),
         el('div', {class: 'database-viewbar'}, modeLinks,
@@ -702,7 +761,7 @@ function drawTableInspector(inspector, table, data) {
     if (table.comment) inspector.append(el('p', {class: 'small muted'}, table.comment));
     if (!data) return;
     inspector.append(details('columns', t('app.navigation.columns'), el('div', {class: 'workspace-column-list'}, data.columns.map(column =>
-        el('div', {}, el('code', {}, column.name), el('small', {}, column.type))))));
+        registerSelection(el('div', {}, el('code', {}, column.name), el('small', {}, column.type)), columnSelection(table, column, data))))));
     const keys = data.foreign_keys || [];
     inspector.append(details('connections', t('app.navigation.connections'), keys.length ? el('div', {class: 'workspace-connection-list'}, keys.map(key => {
         const external = key.referenced_schema && key.referenced_schema !== state.bootstrap.database.name;
@@ -710,8 +769,8 @@ function drawTableInspector(inspector, table, data) {
         const content = [icon('link'), el('span', {}, el('code', {}, (external ? key.referenced_schema + '.' : '') + key.referenced_table),
             el('small', {}, key.columns.join(', ') + ' → ' + key.referenced_columns.join(', ')),
             available ? null : el('small', {}, t(external ? 'app.schema.outside' : 'app.schema.unavailable')))];
-        return available ? el('button', {class: 'workspace-related', type: 'button', on: {click: () => selectWorkspaceTable(key.referenced_table)}}, content)
-            : el('div', {class: 'workspace-related'}, content);
+        return registerSelection(available ? el('button', {class: 'workspace-related', type: 'button', on: {click: () => selectWorkspaceTable(key.referenced_table)}}, content)
+            : el('div', {class: 'workspace-related'}, content), relationshipSelection(table, key));
     }))
         : el('p', {class: 'small muted'}, t('app.navigation.noConnections'))));
 }
@@ -740,10 +799,13 @@ async function renderData(scope) {
     if (!state.dataViews.has(table.name)) state.dataViews.set(table.name, {search: '', page: 1, pageSize: 25});
     const viewState = state.dataViews.get(table.name);
     const workspace = el('section', {class: 'table-workspace'});
-    const card = el('div', {class: 'card'}, tableHeader(table, 'browse'));
+    const card = registerSelection(el('div', {class: 'card'}, tableHeader(table, 'browse')),
+        () => tableSelection(table, state.structureData.get(table.name)));
     const search = el('input', {id: 'data-search', type: 'search', class: 'input', value: viewState.search, placeholder: t('app.core.data.searchPlaceholder'), 'aria-label': t('app.core.data.searchLabel'), autocomplete: 'off'});
     const size = el('select', {id: 'data-page-size', class: 'input select', 'aria-label': t('app.core.data.pageSize')},
         [25, 50, 100].map(value => el('option', {value, selected: value === viewState.pageSize}, String(value))));
+    registerSelection(search, {kind: 'control', key: 'data:search', label: t('app.core.data.searchLabel'), table: table.name, purpose: 'searchRecords'});
+    registerSelection(size, {kind: 'control', key: 'data:page-size', label: t('app.core.data.pageSize'), table: table.name, purpose: 'pageSize'});
     const result = el('div');
     const pagination = el('div', {class: 'table-pagination'});
     const sql = el('div');
@@ -762,9 +824,35 @@ async function renderData(scope) {
         try {
             const data = await request('browse', {params: {table: table.name, page: currentPage, page_size: size.value, q: search.value.trim()}, signal: rowController.signal});
             if (!scope.live() || id !== requestId) return;
+            const metadata = tableSelection(table, {columns: data.columns, foreign_keys: state.structureData.get(table.name)?.foreign_keys});
+            const snapshot = ++recordSnapshotId;
+            const recordMetadata = (record, index) => {
+                const keyed = metadata.primaryKey.length > 0 && metadata.primaryKey.every(name => {
+                    const column = data.columns.find(item => item.name === name);
+                    return Object.hasOwn(record, name) && record[name] !== null
+                        && !['binary', 'varbinary', 'bit', 'blob', 'tinyblob', 'mediumblob', 'longblob'].includes(column?.data_type);
+                });
+                const key = keyed
+                    ? 'record:' + JSON.stringify([table.name, metadata.primaryKey.map(name => [name, record[name]])])
+                    : 'record-snapshot:' + snapshot + ':' + index;
+                return {...metadata, kind: 'row', key, label: table.name + (keyed
+                    ? ' · ' + metadata.primaryKey.map(name => name + ' = ' + selectionValue(record[name])).join(', ') : ''),
+                    record, snapshot: !keyed, truncated: Boolean(data.truncated)};
+            };
             result.replaceChildren(dataTable(data.columns.map(column => ({key: column.name, label: column.name})), data.rows, {
                 emptyMessage: search.value ? t('app.core.data.filteredEmpty') : t('app.core.data.empty'),
                 caption: t('app.core.data.caption', {table: table.name}),
+                inspect: {
+                    table: metadata,
+                    column: column => columnSelection(table, data.columns.find(item => item.name === column.key), {columns: data.columns}),
+                    row: recordMetadata,
+                    cell: (value, record, column, index) => {
+                        const row = recordMetadata(record, index);
+                        return {...row, kind: 'cell', key: row.key + ':cell:' + JSON.stringify(column.key),
+                            label: table.name + '.' + column.key + ' · ' + selectionValue(value), column: column.key, value,
+                            description: data.columns.find(item => item.name === column.key)?.comment || ''};
+                    },
+                },
             }));
             if (localized(data, 'notice')) result.append(notice(localized(data, 'notice')));
             const pages = Math.max(1, Math.ceil(Number(data.total) / Number(data.page_size)));
@@ -823,7 +911,15 @@ async function renderStructure(scope) {
         {key: 'generated', label: t('app.core.structure.input'), render: value => value ? badge(t('app.core.structure.generated'), 'badge-blue') : el('span', {class: 'muted'}, t('app.core.structure.ordinary'))},
         {key: 'comment', label: t('app.core.structure.meaning'), className: 'cell-wrap', render: value => el('span', {class: 'cell-value'}, value || '—')},
     ];
-    const card = el('div', {class: 'card'}, tableHeader(table, 'structure'), dataTable(columns, data.columns, {caption: t('app.core.structure.caption', {table: table.name})}));
+    const card = registerSelection(el('div', {class: 'card'}, tableHeader(table, 'structure'), dataTable(columns, data.columns, {
+        caption: t('app.core.structure.caption', {table: table.name}),
+        inspect: {
+            table: tableSelection(table, data),
+            row: column => columnSelection(table, column, data),
+            cell: (value, column, attribute) => ({...columnSelection(table, column, data),
+                key: 'column-definition:' + JSON.stringify([table.name, column.name, attribute.key]), attribute: attribute.key, value}),
+        },
+    })), tableSelection(table, data));
     workspace.replaceChildren(card, el('p', {class: 'table-caption'}, t('app.core.structure.keyHelp')));
     const relations = el('section', {class: 'structure-section'}, el('h3', {}, t('app.core.structure.relationships')));
     const keys = data.foreign_keys || [];
@@ -832,11 +928,11 @@ async function renderStructure(scope) {
         const target = foreignKey.referenced_table;
         const join = foreignKey.columns.map((column, index) => 'a.' + quoteIdentifier(column) + ' = b.' + quoteIdentifier(foreignKey.referenced_columns[index])).join('\n  AND ');
         const query = 'SELECT a.*, b.*\nFROM ' + quoteIdentifier(table.name) + ' AS a\nJOIN ' + quoteIdentifier(target) + ' AS b\n  ON ' + join + '\nLIMIT 20;';
-        relations.append(el('div', {class: 'relation-card'}, icon('link'),
+        relations.append(registerSelection(el('div', {class: 'relation-card'}, icon('link'),
             el('div', {class: 'relation-content'}, el('p', {}, foreignKey.columns.join(', ') + ' → ' + target + '.' + foreignKey.referenced_columns.join(', ')),
                 el('small', {}, foreignKey.name)),
             button(t('app.core.structure.view'), () => go('structuur', {table: target}), {kind: 'ghost', className: 'button-small'}),
-            button(t('app.core.structure.researchJoin'), () => openResearch(query), {className: 'button-small', symbol: 'code'})));
+            button(t('app.core.structure.researchJoin'), () => openResearch(query), {className: 'button-small', symbol: 'code'})), relationshipSelection(table, foreignKey)));
     });
     workspace.append(relations);
     const indexes = el('section', {class: 'structure-section'}, el('h3', {}, t('app.core.structure.indexes')));
@@ -1041,9 +1137,20 @@ async function renderResearch(scope) {
         }
         const metrics = el('div', {class: 'query-metrics'}, badge(t('app.core.research.rowCount', {count: number(data.returned_rows)}), 'badge-green'),
             el('span', {}, number(data.duration_ms) + ' ms'));
+        const snapshot = ++recordSnapshotId;
+        const resultRow = (record, index) => ({kind: 'row', key: 'query-result:' + snapshot + ':' + index,
+            label: t('app.core.research.resultTitle'), record, snapshot: true, primaryKey: [],
+            truncated: Boolean(data.truncated)});
         const card = el('section', {class: 'card'},
             el('div', {class: 'card-header'}, el('h2', {}, t('app.core.research.resultTitle')), metrics),
-            dataTable(data.columns, data.rows, {caption: t('app.core.research.resultCaption'), emptyMessage: t('app.core.research.noRows')}));
+            dataTable(data.columns, data.rows, {caption: t('app.core.research.resultCaption'), emptyMessage: t('app.core.research.noRows'),
+                inspect: {
+                    row: resultRow,
+                    cell: (value, record, column, index) => ({...resultRow(record, index), kind: 'cell',
+                        key: 'query-result:' + snapshot + ':' + index + ':cell:' + column.key,
+                        label: String(column.label) + ' · ' + selectionValue(value), column: String(column.label), value}),
+                },
+            }));
         result.append(card);
         if (data.truncated) result.append(notice(t('app.core.research.truncated')));
         if (localized(data, 'notice')) result.append(notice(localized(data, 'notice')));

@@ -40,8 +40,36 @@ De onderdelen hebben een kleine, duidelijke taak:
 | `schema-model.js` en `schema-visualizer.js` | Live relaties, diagramindeling en interactieve schemaverkenning |
 | `schema-navigation.js` | Alleen binnen het diagram genormaliseerde, muisgerichte scrollzoom |
 | `schema-help.js` | Een vertaalde schemagids in een native dialoog met focusbeheer en opruimen |
+| `selection-pointer.js` | Globale selectiepijl, Shift-selectie, vertraagde naamkaartjes en de uitlegdialoog |
+| `selection-registry.js` | Semantische metadata van zichtbare onderdelen, los van hun normale bediening |
+| `selection-content.js` | Feitelijke uitleg en mogelijke vervolgstappen uit geselecteerde metadata |
 | `database-modal.js` | Het venster rondom de echte phpMyAdmin |
 | `Messages.php` | Vertaalde applicatiefeedback met stabiele foutcodes |
+
+## Selectie en gerichte uitleg
+
+De selectiepijl staat in de gedeelde bovenbalk en werkt over de eigen Govern-
+interface. De interactielaag vangt activeren, typen en slepen af zolang de pijl
+aanstaat; normaal scrollen en schemazoom blijven beschikbaar. Klikken vervangt
+de selectie, Shift-klikken wisselt een onderdeel in of uit de selectie. Het
+naamkaartje verschijnt na meer dan drie seconden hover en bevat Meer en een
+pad naar bovenliggende onderdelen. De teller biedt toegang zonder hover.
+
+Schermen registreren tabellen, kolommen, rijen, cellen en relaties via
+`registerSelection`. Ze gebruiken de bestaande catalogus- en browsegegevens,
+geen tabelspecifieke controllers of kopie van het gegevensmodel. Niet
+geregistreerde interfaceonderdelen krijgen een algemene uitleg van hun rol,
+zichtbare tekst en HTML-tag. De inhoud van het officiële phpMyAdmin-frame valt
+buiten deze inspectielaag.
+
+De uitlegmodule gebruikt geselecteerde waarden, commentaren, sleutels en
+gedeclareerde relaties. Selecties die niet meer in het scherm staan blijven
+herkenbare momentopnamen. Een recordquery vereist alle werkelijke primaire-
+sleutelvelden; samengestelde sleutels blijven intact en rijen zonder sleutel
+worden niet als blijvend geïdentificeerde records behandeld. De vervolgstap kan
+een leesquery in Onderzoeken klaarzetten, maar voert die niet uit. De selectie
+verandert geen records, contextexports of opgeslagen voorkeuren. De vertalingen
+gebruiken dezelfde berichtregistratie als de rest van de interface.
 
 ## Schemavisualisatie
 

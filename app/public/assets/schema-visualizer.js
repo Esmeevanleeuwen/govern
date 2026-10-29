@@ -2,6 +2,7 @@ import {el, icon, button, badge, number, empty} from './ui.js';
 import {t} from './i18n.js';
 import {attachSchemaWheelZoom} from './schema-navigation.js';
 import {createSchemaHelp} from './schema-help.js';
+import {registerSelection} from './selection-registry.js';
 import {normalizeSchema, initialPositions, tableHeight, filterTables, relatedTables, TABLE_WIDTH, HEADER_HEIGHT, ROW_HEIGHT} from './schema-model.js';
 import './schema-messages.js';
 
@@ -22,6 +23,14 @@ export function mountSchemaVisualizer(root, {data, state = {}, contextRoot, onSe
     const storageKey = 'govern.schema-layout.v1.' + encodeURIComponent(model.database);
     const defaults = initialPositions(model.tables);
     const lookup = new Map(model.tables.map(table => [table.name, table]));
+    const tableMetadata = table => ({kind: 'table', key: 'table:' + JSON.stringify(table.name),
+        label: table.name, table: table.name, type: table.type, description: table.comment,
+        columns: table.columns, primaryKey: table.columns.filter(column => column.primary).map(column => column.name), foreignKeys: table.foreign_keys});
+    const columnMetadata = (table, column) => ({...tableMetadata(table), kind: 'column',
+        key: 'column:' + JSON.stringify([table.name, column.name]), label: table.name + '.' + column.name,
+        column: column.name, description: column.comment || ''});
+    const relationshipMetadata = relation => ({kind: 'relationship', key: 'relationship:' + relation.id,
+        label: relation.name, table: relation.sourceTable, relationship: relation});
     let destroyed = false;
     let pointer = null;
     let frame;
@@ -99,6 +108,14 @@ export function mountSchemaVisualizer(root, {data, state = {}, contextRoot, onSe
         group('app.schema.groupSupport', 'schema-support-controls', refreshButton, areaHelp.button));
     const help = el('p', {id: 'schema-interaction-help', class: 'small muted schema-help'}, t('app.schema.interactionHelp'));
     const canvas = el('div', {id: 'schema-viewport', class: 'schema-viewport', role: 'region', tabindex: '0', 'aria-label': t('app.schema.canvas'), 'aria-describedby': 'schema-interaction-help schema-canvas-help'});
+    for (const [control, purpose] of [[search, 'schemaSearch'], [zoomOut, 'schemaZoom'], [zoomIn, 'schemaZoom'],
+        [fitButton, 'schemaFit'], [columnsToggle, 'schemaColumns'], [neighborhood, 'schemaConnections'],
+        [refreshButton, 'schemaRefresh'], [toolbar.querySelector('#schema-reset'), 'schemaArrange'],
+        [toolbar.querySelector('#schema-actual'), 'schemaZoom']]) {
+        if (control) registerSelection(control, () => ({kind: 'control', key: 'schema-control:' + control.id,
+            label: control.getAttribute('aria-label') || control.textContent.trim(), purpose}));
+    }
+    registerSelection(canvas, {kind: 'control', key: 'schema:canvas', label: t('app.schema.canvas'), descriptionKey: 'app.schema.canvasHelp'});
     const world = el('div', {class: 'schema-world'});
     const lines = svg('svg', {class: 'schema-lines', 'aria-hidden': 'true'});
     world.append(lines);
@@ -219,10 +236,10 @@ export function mountSchemaVisualizer(root, {data, state = {}, contextRoot, onSe
         if (table.comment) selected.append(el('p', {class: 'small muted'}, table.comment));
         const columnDetails = el('details', {class: 'schema-column-details', id: 'schema-column-details'},
             el('summary', {id: 'schema-column-summary'}, t('app.schema.columnDetails')),
-            el('ul', {class: 'schema-detail-columns'}, table.columns.map(column => el('li', {},
+            el('ul', {class: 'schema-detail-columns'}, table.columns.map(column => registerSelection(el('li', {},
                 el('div', {}, el('code', {}, column.name), column.primary ? badge('PK') : null),
                 el('code', {class: 'muted'}, column.type),
-                el('span', {class: 'small muted'}, t(column.nullable ? 'app.schema.nullable' : 'app.schema.required'))))));
+                el('span', {class: 'small muted'}, t(column.nullable ? 'app.schema.nullable' : 'app.schema.required'))), columnMetadata(table, column)))));
         columnDetails.open = state.columnsExpanded === true;
         columnDetails.addEventListener('toggle', () => { if (columnDetails.isConnected) state.columnsExpanded = columnDetails.open; });
         const connectionDetails = el('details', {id: 'schema-relationship-details', class: 'schema-relationship-details'},
@@ -240,6 +257,7 @@ export function mountSchemaVisualizer(root, {data, state = {}, contextRoot, onSe
             const item = el('div', {class: 'schema-relation', 'data-schema-relation': relation.id},
                 el('span', {class: 'small muted'}, t(outgoing ? 'app.schema.outgoing' : 'app.schema.incoming')),
                 el('code', {class: 'schema-constraint-name'}, relation.name));
+            registerSelection(item, relationshipMetadata(relation));
             if (targetAvailable) item.append(button(targetLabel, () => selectTable(targetName, true), {id: 'schema-relation-' + encodeURIComponent(relation.id), 'data-schema-select': targetName, className: 'button-small', symbol: 'link'}));
             else item.append(el('code', {class: 'schema-selected-name'}, targetLabel), el('p', {class: 'small muted'}, t(relation.external ? 'app.schema.outside' : 'app.schema.unavailable')));
             item.append(el('ul', {class: 'schema-pairs'}, relation.pairs.map(pair => el('li', {}, el('code', {}, pair.source), ' → ', el('code', {}, pair.target)))));
@@ -288,6 +306,7 @@ export function mountSchemaVisualizer(root, {data, state = {}, contextRoot, onSe
                     : `M${sx},${sy} C${sx + (toRight ? bend : -bend)},${sy} ${tx + (toRight ? -bend : bend)},${ty} ${tx},${ty}`;
                 const path = svg('path', {class: 'schema-edge', d, fill: 'none', 'vector-effect': 'non-scaling-stroke', 'data-source-table': source.name, 'data-target-table': target.name,
                     'data-source-column': pair.source, 'data-target-column': pair.target});
+                registerSelection(path, relationshipMetadata(relation));
                 const title = svg('title'); title.textContent = `${relation.name}: ${source.name}.${pair.source} → ${target.name}.${pair.target}`; path.append(title);
                 lines.append(path, svg('circle', {class: 'schema-endpoint', cx: String(tx), cy: String(ty), r: '3'}));
             });
@@ -302,16 +321,18 @@ export function mountSchemaVisualizer(root, {data, state = {}, contextRoot, onSe
             el('span', {class: 'schema-node-title'}, icon(table.type === 'view' ? 'eye' : 'table'), el('strong', {title: table.name}, table.name)),
             el('span', {class: 'schema-node-subtitle'}, t(table.type === 'view' ? 'app.schema.view' : 'app.schema.table'), ' · ', t('app.schema.columns', {count: number(table.columns.length)})));
         const node = el('article', {class: 'schema-node', 'data-schema-node': table.name, style: `width:${TABLE_WIDTH}px;height:${renderedHeight(table)}px`}, header);
+        registerSelection(node, tableMetadata(table));
+        registerSelection(header, tableMetadata(table));
         node.append(el('ul', {class: 'schema-columns', hidden: !state.showColumns}, table.columns.map(column => {
             const foreign = foreignColumns.has(column.name);
             const kind = column.primary && foreign ? 'both' : column.primary ? 'primary' : 'foreign';
             const labels = [column.name, column.type, t(column.nullable ? 'app.schema.nullable' : 'app.schema.required')];
             if (column.primary || foreign) labels.push(t('app.schema.' + kind));
             if (column.generated) labels.push(t('app.schema.generated'));
-            return el('li', {class: 'schema-column', title: labels.join(' · '), 'data-schema-column': column.name},
+            return registerSelection(el('li', {class: 'schema-column', title: labels.join(' · '), 'data-schema-column': column.name},
                 el('span', {class: 'schema-key', title: column.primary || foreign ? t('app.schema.' + kind) : ''},
                     column.primary ? 'PK' : '', column.primary && foreign ? '·' : '', foreign ? 'FK' : ''),
-                el('code', {class: 'schema-column-name'}, column.name), el('code', {class: 'schema-column-type'}, column.type));
+                el('code', {class: 'schema-column-name'}, column.name), el('code', {class: 'schema-column-type'}, column.type)), columnMetadata(table, column));
         })));
         if (!table.columns.length && state.showColumns) node.append(el('p', {class: 'schema-no-columns small muted'}, t('app.schema.noColumns')));
         const position = state.positions[table.name];
@@ -347,9 +368,10 @@ export function mountSchemaVisualizer(root, {data, state = {}, contextRoot, onSe
     function drawIndex() {
         const matching = filterTables(model, state.search, '', false);
         count.textContent = t('app.schema.visible', {count: number(matching.length)});
-        index.replaceChildren(...matching.map(table => button(table.name, () => selectTable(table.name, true), {
+        index.replaceChildren(...matching.map(table => registerSelection(button(table.name, () => selectTable(table.name, true), {
             id: 'schema-index-' + encodeURIComponent(table.name), 'data-schema-select': table.name,
-            className: 'schema-index-item', symbol: table.type === 'view' ? 'eye' : 'table'})));
+            className: 'schema-index-item', symbol: table.type === 'view' ? 'eye' : 'table'}),
+        {kind: 'control', key: 'catalog:' + JSON.stringify(table.name), label: table.name, table: table.name, purpose: 'openTable'})));
         if (!matching.length) index.append(el('p', {class: 'small muted'}, t('app.schema.noMatches')),
             button(t('app.schema.clear'), () => { state.search = ''; search.value = ''; onSearch?.(''); drawIndex(); search.focus(); }));
         drawSelection();

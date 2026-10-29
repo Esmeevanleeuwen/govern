@@ -28,6 +28,12 @@ je lokale `.env`, die niet in Git wordt opgenomen.
   licht/donker/systeem, minder transparantie en de plaats van je navigatie.
 - **Dashboard indelen:** verplaats, verbreed of verberg blokken via
   **Indeling aanpassen**. Je kunt slepen of de verplaatsknoppen gebruiken.
+- **Selectieaanwijzer:** schakel bovenaan de selectiepijl in en klik op een
+  onderdeel van Govern. Met **Shift + klik** voeg je onderdelen toe of haal je
+  ze uit de selectie. Houd de aanwijzer langer dan drie seconden boven een
+  onderdeel om de naam en HTML-tag te zien. **Meer** opent uitleg over precies
+  dat onderdeel of de geselecteerde combinatie. Via het pad in het naamkaartje
+  kun je bijvoorbeeld de hele rij of tabel kiezen.
 - **Eén menu:** kies Overzicht, Database, Onderzoeken of Experimenten in de
   hoofdbalk. Instellingen staat onderaan. Het aansluitende paneel toont alleen
   de tabellen, opgeslagen onderzoeken of herstelpunten die bij dat gebied horen.
@@ -58,6 +64,15 @@ je lokale `.env`, die niet in Git wordt opgenomen.
 De eigen schermen lezen de actuele database. Een nieuwe tabel wordt na verversen
 zichtbaar; je hoeft daarvoor geen nieuw onderdeel te programmeren. phpMyAdmin
 blijft zijn volledige interface tonen, inclusief functies buiten de drie snelkeuzes.
+
+De selectieaanwijzer werkt op gegevens en interfaceonderdelen: ook een knop,
+tekst of invoerveld kun je bekijken zonder het te activeren. Het aantal naast
+de pijl opent de selectie zonder hover; wissen maakt de selectie leeg. Gebruik
+de pijltoetsen en Enter, of Shift + Enter, voor toetsenbordselectie. Escape sluit
+eerst de uitleg en verlaat daarna de selectiestand. Scrollen en schemazoom blijven
+werken. De aanwijzer inspecteert niet binnen het afzonderlijke phpMyAdmin-frame.
+De uitleg gebruikt beschikbare metadata; er wordt geen AI-model aangeroepen.
+Een eventuele recordquery wordt alleen klaargezet, niet automatisch uitgevoerd.
 
 De Database-knop onthoudt tijdens je sessie de laatste weergave en tabel. De
 bestaande links naar `#gegevens`, `#structuur` en `#schema` blijven werken.

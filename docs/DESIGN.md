@@ -1,6 +1,6 @@
 # Govern UX and UI design
 
-**Design baseline 1.2.** Govern is a personal, local workspace for exploring, understanding and changing a database. This guide defines its brand, visual system, behaviour and the process for adding features without disrupting existing work.
+**Design baseline 1.3.** Govern is a personal, local workspace for exploring, understanding and changing a database. This guide defines its brand, visual system, behaviour and the process for adding features without disrupting existing work.
 
 The agreed visual direction is layered glass, soft shadows, custom colour and no hard decorative borders. Dutch and English are equal interface languages. The detailed rules below are the target for implementation; the interactive preview is a visual reference. The production modules implement the core language, appearance and layout controls; the future chart example remains a proposal.
 
@@ -189,6 +189,44 @@ changes, and keep keyboard access and focus return working.
 
 ## Core user flows
 
+### Inspect any Govern element
+
+**Select pointer** belongs in the shared top bar because it inspects the whole
+Govern interface. It applies to text, buttons, fields and panels as well as data
+tables, records, cells, schema fields and declared connections. Keep the pointer,
+selection count and clear action together; use a soft highlight and numbered
+marker for selected objects. Do not add checkboxes or a separate selection basket.
+
+Clicking replaces the selection. **Shift + click** adds or removes an object.
+Hovering never changes the selection. After more than three seconds over the
+same object, show a small glass tag with its friendly name, semantic kind, actual
+HTML tag and **More**. Keep it open while moving the pointer onto its controls.
+A short ancestor path lets the user choose a containing row or table precisely.
+
+**More** on a selected object explains the selected set. On an unselected object
+it explains that hovered object without silently changing the existing selection.
+The modal describes each exact object, how the objects fit together and relevant
+next actions. Use actual values, comments, column types, complete primary keys
+and declared foreign keys. Similar names do not prove a relationship. Unknown
+interface elements get a factual role, text and HTML description. No AI service
+is implied, and an offered SQL action prepares a read query without running it.
+
+The pointer intercepts ordinary activation, input and dragging while enabled.
+Inspecting a button must not execute it, and selecting a schema card must not
+move it. Retain ordinary scrolling and diagram wheel zoom. The official
+phpMyAdmin iframe is a separate application; inspection stops at that boundary.
+
+Arrow keys browse inspectable objects, **Enter** selects and **Shift + Enter**
+adds or removes. The selection count provides access without the hover delay,
+including for touch users. **Escape** closes the modal first, then exits pointer
+mode. Preserve focus return and keep the tag and modal inside the available
+screen width. Both languages, shared glass tokens and reduced transparency apply.
+
+Selection is temporary session state. Keep selected data snapshots identifiable
+when their original elements leave the screen; do not present them as a newly
+read database result. Only complete real primary keys, including composite keys,
+can identify records for a prepared query. Keyless rows remain snapshots.
+
 ### Follow the schema
 
 Open **Database → Schema** using the shared view row; the current table stays
@@ -336,12 +374,19 @@ Preserve the existing PHP, JavaScript module and SQL structure. Add a dependency
 | Buttons, tables, notices and dialogs | Shared helpers in `ui.js` |
 | Requests and consistent failures | `api.js` and the documented API contract |
 | Routes and feature coordination | `app.js`; keep feature behaviour in focused modules |
+| Element inspection | `selection-pointer.js` for interaction, `selection-registry.js` for semantic targets and `selection-content.js` for factual explanations |
 | Query design | `query-builder.js` and the existing backend services |
 | Official database window | `database-modal.js` and the same origin phpMyAdmin integration |
 | Language and preferences | `i18n.js` and `preferences.js` |
 | Movable blocks | `dashboard-layout.js` with a small block registry |
 
 These modules own shared responsibilities. Extend these pieces instead of copying the entire prototype into one production file.
+
+New components can register their semantic selection metadata with
+`registerSelection` in `selection-registry.js`. Reuse live catalog metadata and
+stable object keys; do not add a custom inspector or copied explanation for each
+database table. Generic interface inspection remains available without a
+registration, while registered targets provide the more precise data context.
 
 Continue discovering tables, columns and relationships from the live catalog. Bind values, validate identifiers, keep research read only and preserve CSRF protection. Add an API endpoint only when the existing contract cannot serve the task. Update frontend, backend and API documentation together. If a real feature needs app owned database tables, use the existing `_govern_` namespace and a tested migration.
 
