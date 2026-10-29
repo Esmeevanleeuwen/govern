@@ -53,11 +53,13 @@
 .topbar-project .connection-card { font-size: 11px; margin: 1px 0 0; }
 .topbar-location { min-width: 0; }
 .topbar-actions { flex: 0 1 auto; flex-wrap: wrap; }
-.database-heading { align-items: flex-start; gap: 18px; }
-.database-heading .page-description { max-width: 660px; }
-.database-heading .heading-actions { align-items: center; flex-wrap: wrap; }
-.database-heading h1 { font-size: 28px; }
-.database-selected-table { font: 12px/1.6 var(--mono); color: var(--g-accent-text); margin-top: 9px; overflow-wrap: anywhere; }
+.page-heading.database-heading { display: flex; flex-direction: column; align-items: stretch; gap: 15px; margin-bottom: 18px; }
+.database-heading-main { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.database-heading h1 { font-size: 26px; line-height: 1.25; letter-spacing: -.7px; }
+.database-viewbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-width: 0; }
+.database-selection { display: flex; align-items: baseline; justify-content: flex-end; flex-wrap: wrap; gap: 3px 9px; min-width: 0; font-size: 12px; }
+.database-selection > span { color: var(--muted); }
+.database-selected-table { font: 12px/1.6 var(--mono); color: var(--g-accent-text); min-width: 0; overflow-wrap: anywhere; }
 .database-views { display: flex; flex-wrap: wrap; gap: 3px; padding: 4px; border-radius: 13px; background: var(--g-glass); box-shadow: var(--g-input-depth); }
 .database-view { padding: 8px 12px; text-decoration: none; border-radius: 10px; font-size: 12px; color: var(--muted); }
 .database-view.active { color: var(--g-accent-text); background: var(--g-dense-frost); box-shadow: var(--g-control-depth); }
@@ -84,8 +86,7 @@
 @media (max-width: 1200px) and (min-width: 821px) {
     .sidebar.unified-sidebar { --context-width: 244px; --rail-width: 84px; }
     .workspace main { padding-left: 22px; padding-right: 22px; }
-    .database-heading { flex-wrap: wrap; }
-    .database-heading .heading-actions { justify-content: flex-start; }
+    .database-viewbar { flex-wrap: wrap; gap: 10px; }
     .snapshot-layout { grid-template-columns: minmax(0, 1fr); }
     .topbar { flex-wrap: wrap; }
 }
@@ -96,9 +97,9 @@
     .workspace-context-heading h2 { font-size: 16px; }
     .workspace-context-heading .icon-button { width: 34px; min-width: 34px; }
     .topbar-project { display: none; }
-    .database-heading { flex-wrap: wrap; }
-    .database-heading .heading-actions { justify-content: flex-start; width: 100%; }
-    .database-heading .heading-actions > .database-views { flex: 1 1 auto; }
+    .database-viewbar { flex-wrap: wrap; gap: 10px; }
+    .database-viewbar > .database-views { flex: 1 1 100%; }
+    .database-selection { justify-content: flex-start; }
     .database-view { flex: 1; text-align: center; }
 }
 @media (max-width: 620px) {
@@ -106,7 +107,8 @@
     .topbar-location { flex: 1 1 auto; }
     .topbar-actions { gap: 3px; }
     .topbar-actions > .button { padding: 9px 10px; }
-    .database-heading .heading-actions { gap: 8px; }
+    .page-heading.database-heading { gap: 12px; margin-bottom: 15px; }
+    .database-heading h1 { font-size: 24px; }
     .database-views { width: 100%; }
     .database-view { padding: 10px; }
     .workspace-context .catalog-list { display: grid; max-height: 38dvh; padding: 2px; }

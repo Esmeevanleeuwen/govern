@@ -39,8 +39,9 @@ je lokale `.env`, die niet in Git wordt opgenomen.
   de achtergrond om te verschuiven. De tabellenlijst blijft zichtbaar wanneer
   je een tabel kiest; de details staan eronder. Wissel direct naar een andere
   tabel of naar Gegevens en Structuur. Zoeken filtert alleen deze lijst; gebruik
-  de aparte verbindingsfilter om het diagram te beperken. Schematools blijven
-  bij het werkvlak, ook als je het paneel inklapt. **Wat kan ik hier doen?**
+  de aparte verbindingsfilter om het diagram te beperken. Schematools staan
+  gegroepeerd boven het werkvlak: weergave, indeling, zoom en hulp. Ze blijven
+  bereikbaar als je het paneel inklapt. **Wat kan ik hier doen?**
   opent een korte uitleg van alle mogelijkheden in dit scherm.
 - **Onderzoeken:** voer leesvragen uit, bekijk resultaten en bewaar queries met uitleg.
 - **Visueel samenstellen:** kies een tabel, kolommen, filters en een sorteervolgorde.
@@ -60,6 +61,9 @@ blijft zijn volledige interface tonen, inclusief functies buiten de drie snelkeu
 
 De Database-knop onthoudt tijdens je sessie de laatste weergave en tabel. De
 bestaande links naar `#gegevens`, `#structuur` en `#schema` blijven werken.
+Iedere databaseweergave gebruikt dezelfde volgorde: een compacte titel, de
+weergaveknoppen met je tabelkeuze en daaronder de hulpmiddelen en inhoud.
+Met **Tabellen** in de kop open je de lijst opnieuw wanneer die is ingeklapt.
 Je tabelkeuze, zoekopdracht en schema-indeling blijven behouden wanneer je
 tussen de databaseweergaven wisselt. De hele navigatie kan links of rechts staan;
 op een klein scherm open je hetzelfde menu via de navigatieknop.
