@@ -121,6 +121,8 @@ try {
             await removeButton.click();
             await page.getByRole('button', {name: 'Annuleren', exact: true}).click();
             await page.locator('.confirm-dialog').waitFor({state: 'detached'});
+            await page.waitForFunction(label => document.activeElement?.getAttribute('aria-label') === label,
+                'Verwijder onderzoek ' + name, {timeout: 5000});
             assert.equal(await removeButton.evaluate(node => node === document.activeElement), true,
                 'Cancelling a confirmation returns focus to its opener.');
             await removeButton.click();
