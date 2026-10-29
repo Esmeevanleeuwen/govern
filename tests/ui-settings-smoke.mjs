@@ -44,7 +44,9 @@ const navigate = async route => {
     await page.waitForFunction(expected => location.hash.split('?')[0] === '#' + expected, route);
 };
 const settings = async () => {
-    if (await page.locator('#sidebar').getAttribute('aria-hidden') === 'true') await page.locator('#menu-toggle').click();
+    const needsMobileMenu = await page.evaluate(() => window.matchMedia('(max-width: 820px)').matches &&
+        !document.body.classList.contains('sidebar-open'));
+    if (needsMobileMenu) await page.locator('#menu-toggle').click();
     await page.locator('#settings-link').click();
     await page.locator('#preference-theme').waitFor();
 };
