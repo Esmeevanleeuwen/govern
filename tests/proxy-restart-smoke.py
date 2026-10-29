@@ -2,8 +2,8 @@
 """Force changed backend addresses in an explicitly disposable Docker stack.
 
 The database container and its volumes are never removed. This stops/recreates
-only the two web containers, reserves their old IPs temporarily, and verifies
-that the unchanged gateway resolves their service names again.
+only the two web containers, temporarily allocates extra network endpoints,
+and verifies that the unchanged gateway resolves their changed IP addresses.
 """
 import argparse
 import json
@@ -88,21 +88,32 @@ def main():
         command(*compose, "rm", "--stop", "--force", "app", "phpmyadmin")
         web_removed = True
         token = uuid.uuid4().hex[:10]
-        for target in targets:
-            name = "govern-proxy-test-" + token + "-" + target["service"]
-            reservations.append(name)
-            command("docker", "run", "--detach", "--name", name,
-                    "--network", target["network"], "--ip", target["ip"],
-                    "--entrypoint", "/bin/sh", target["image"], "-c", "sleep 300")
+        for attempt in range(3):
+            for target in targets:
+                name = "govern-proxy-test-" + token + "-" + str(attempt) + "-" + target["service"]
+                reservations.append(name)
+                # Default Compose networks do not allow user-specified --ip.
+                # Let IPAM allocate the holders: first-free allocators occupy
+                # old addresses, while sequential allocators advance naturally.
+                command("docker", "run", "--detach", "--name", name,
+                        "--network", target["network"],
+                        "--entrypoint", "/bin/sh", target["image"], "-c", "sleep 300")
 
-        command(*compose, "up", "--detach", "--no-deps", "--wait", "--wait-timeout", "90", "app", "phpmyadmin")
-        if service_id("gateway") != gateway:
-            raise AssertionError("The gateway must remain the same container during backend replacement")
-        for target in targets:
-            container = service_id(target["service"])
-            networks = json.loads(inspect(container, "{{json .NetworkSettings.Networks}}"))
-            if networks[target["network"]]["IPAddress"] == target["ip"]:
-                raise AssertionError("The test did not force a changed IP for " + target["service"])
+            command(*compose, "up", "--detach", "--no-deps", "--wait", "--wait-timeout", "90", "app", "phpmyadmin")
+            if service_id("gateway") != gateway:
+                raise AssertionError("The gateway must remain the same container during backend replacement")
+            changed = []
+            for target in targets:
+                container = service_id(target["service"])
+                networks = json.loads(inspect(container, "{{json .NetworkSettings.Networks}}"))
+                changed.append(networks[target["network"]]["IPAddress"] != target["ip"])
+            if all(changed):
+                break
+            # Keep the holders and retry only if an allocator reused an old IP.
+            # The test must demonstrate changed addresses, never assume them.
+            command(*compose, "rm", "--stop", "--force", "app", "phpmyadmin")
+        else:
+            raise AssertionError("Could not force changed app and phpMyAdmin IPs within three attempts")
 
         last_error = None
         for _ in range(30):
