@@ -80,6 +80,7 @@ export function mountSchemaVisualizer(root, {data, state = {}, contextRoot, onSe
     }, {id: 'schema-columns-toggle', 'aria-pressed': String(state.showColumns), symbol: 'layers'});
     const areaHelp = createSchemaHelp({state});
     areaHelp.button.querySelector('span').textContent = t('app.schema.toolsHelp');
+    areaHelp.button.setAttribute('aria-label', t('app.schema.helpLabel'));
     cleanup.push(() => areaHelp.destroy());
     const group = (key, className, ...controls) => el('div', {class: 'schema-tool-group ' + className, role: 'group', 'aria-label': t(key)}, controls);
     const zoomControls = group('app.schema.groupZoom', 'schema-zoom-controls', zoomOut, zoomValue, zoomIn,
@@ -93,7 +94,7 @@ export function mountSchemaVisualizer(root, {data, state = {}, contextRoot, onSe
     }) : null;
     const toolbar = el('div', {class: 'schema-toolbar', role: 'group', 'aria-label': t('app.schema.panelTitle')},
         group('app.schema.groupDisplay', 'schema-display-controls', el('label', {class: 'schema-filter'}, neighborhood, t('app.schema.neighborhood')), columnsToggle),
-        group('app.schema.groupLayout', 'schema-layout-controls', button(t('app.schema.arrangeShort'), reset, {id: 'schema-reset', symbol: 'layout', 'aria-label': t('app.schema.reset')})),
+        group('app.schema.groupLayout', 'schema-layout-controls', button(t('app.schema.arrangeShort'), reset, {id: 'schema-reset', symbol: 'layout', 'aria-label': t('app.schema.arrangeLabel')})),
         zoomControls,
         group('app.schema.groupSupport', 'schema-support-controls', refreshButton, areaHelp.button));
     const help = el('p', {id: 'schema-interaction-help', class: 'small muted schema-help'}, t('app.schema.interactionHelp'));

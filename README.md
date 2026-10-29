@@ -41,7 +41,7 @@ je lokale `.env`, die niet in Git wordt opgenomen.
   tabel of naar Gegevens en Structuur. Zoeken filtert alleen deze lijst; gebruik
   de aparte verbindingsfilter om het diagram te beperken. Schematools staan
   gegroepeerd boven het werkvlak: weergave, indeling, zoom en hulp. Ze blijven
-  bereikbaar als je het paneel inklapt. **Wat kan ik hier doen?**
+  bereikbaar als je het paneel inklapt. **Help**
   opent een korte uitleg van alle mogelijkheden in dit scherm.
 - **Onderzoeken:** voer leesvragen uit, bekijk resultaten en bewaar queries met uitleg.
 - **Visueel samenstellen:** kies een tabel, kolommen, filters en een sorteervolgorde.

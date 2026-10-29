@@ -215,7 +215,7 @@ selection. Keep Schema tools, zoom, fit, arrangement and guide controls together
 immediately above the canvas, including when the explorer is collapsed. Opening
 or closing the explorer keeps the selection, zoom and diagram center intact.
 
-**What can I do here?** stays available among the Schema workspace tools and opens a
+**Help** stays available among the Schema workspace tools and opens the **What can I do here?**
 guide modal. Explain actual capabilities: search, declared keys and connections,
 selection actions, wheel zoom, panning, table placement, layout controls and
 refreshing. Include keyboard instructions and make the difference between diagram
