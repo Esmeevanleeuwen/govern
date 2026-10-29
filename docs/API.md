@@ -18,7 +18,30 @@ Success envelope `{ "ok": true, "data": ... }`. A failure keeps the existing
 ```
 
 All POST requests use JSON and header `X-CSRF-Token` from bootstrap. PHP session cookie, same origin only.
-No remote services or AI calls. One configurable MySQL/MariaDB database, live schema discovery.
+No remote services or AI calls. One MySQL/MariaDB server, multiple selectable
+databases and live schema discovery.
+
+## Database scope
+
+Every scoped endpoint accepts the URL parameter `database=<exact name>`, on GET
+and POST alike. The request body does not change the target database. Omitting
+the parameter retains `DB_NAME` for older clients and links. There is no mutable
+server-session selection; two browser tabs can use different databases safely.
+
+`GET databases` returns `{databases:[{name,available}],default_database}` without
+requiring a selected database connection. Available names are the intersection
+of the writer's and reader's live `SHOW DATABASES` results, excluding
+`information_schema`, `mysql`, `performance_schema` and `sys`. `DB_NAME` and
+`DB_DATABASES` also remain listed when unavailable, so recovery stays reachable.
+Selecting a name outside this set returns 403 `database_not_available`. Selection
+does not grant privileges. Free SQL may use `USE` or qualified names to reach
+other schemas already allowed by the same database account.
+
+The browser includes the selected database in routes, requests, downloads and
+context exports. It remembers the choice per tab in `govern.database.v1`
+session storage, and keeps table/search state, SQL drafts, results and visual
+builder state separately per database in memory. Changing scope cancels old
+reads and ignores late replies. Async mutations capture their original scope.
 
 ## Language and compatible feedback
 
@@ -59,20 +82,75 @@ interface and future feature rules.
 
 ## Endpoints
 
-- GET `bootstrap`: `{csrf, database:{name,version,status,available}, stats:{tables,views,rows_estimate}, tables:[{name,type:"table"|"view",comment,rows_estimate,columns}]}`. An unavailable database can also return `warning` and `warning_i18n`; bootstrap still supplies the configured database name and CSRF token for recovery.
-- GET `browse&table=...&page=1&page_size=25&q=...`: `{table,columns:[{name,type,nullable,default,generated,primary,comment}],rows:[{column:value}],page,page_size,total,sql,params,truncated,notice,notice_i18n}`. Named identifiers verified against live catalog; values bound; max page_size100. App-owned `_govern_` tables excluded from normal list, remain accessible in phpMyAdmin.
+- GET `databases`: `{databases:[{name,available}],default_database}`; see database scope above.
+- GET `bootstrap`: `{csrf, databases:[{name,available}],default_database,database:{name,version,status,available}, stats:{tables,views,rows_estimate}, tables:[{name,type:"table"|"view",comment,rows_estimate,columns}]}`. An unavailable database can also return `warning` and `warning_i18n`; bootstrap still supplies the selected database name and CSRF token for recovery.
+- GET `browse&table=...&page=1&page_size=25&q=...`: `{table,columns:[{name,type,nullable,default,generated,primary,comment}],rows:[{column:value}],key_columns:[name],row_keys:[object|null],page,page_size,total,sql,params,truncated,notice,notice_i18n}`. `row_keys` aligns with `rows` and is extracted before preview truncation; key values are exact strings, binary keys hex encoded. Named identifiers verified against live catalog; values bound; max page_size100. App-owned `_govern_` tables excluded from normal list, remain accessible in phpMyAdmin.
 - GET `structure&table=...`: `{table,columns:[...],indexes:[{name,unique,columns:[name]}],foreign_keys:[{name,columns:[name],referenced_table,referenced_columns:[name]}],create_sql}`.
 - GET `schema`: `{database:string,tables:[{name,type:"table"|"view",comment,columns:[...],foreign_keys:[{name,columns:[name],referenced_schema,referenced_table,referenced_columns:[name]}]}]}`. Full live metadata for the schema visualizer, read through the restricted reader with three batched catalog queries. No table rows, DDL, credentials or saved queries; `_govern_` source tables are excluded.
+- GET `row-editor&table=...&key=<JSON object>`: `{database,table,type,editable,can_insert,key_columns,columns,row,key,version,reason,reason_code,reason_i18n}`. Omit `key` to describe insertion. See the row contract below.
+- POST `insert-row` `{table,values}`: 201 `{affected_rows,key,row,version}`. POST `update-row` `{table,key,version,values}` returns the same shape. POST `delete-row` `{table,key,version}` returns `{affected_rows,key,row:null}`. CSRF required; database scope stays in the URL.
 - POST `query` exactly one of `{sql,confirm?:boolean}` or `{design}`, with JSON property order immaterial. A design returns `{columns,rows,truncated,duration_ms,returned_rows,sql,notice,notice_i18n,explanation,explanation_i18n}` and runs on the read-only account (SELECT grants + READ ONLY transaction, definer views included). Free SQL runs on the scoped write account; see the script contract below. CSRF is required.
 - POST `build-query` exactly `{design}`: `{sql,explanation:[string],explanation_i18n:{nl:[string],en:[string]}}`. Validates against the live schema and generates editable, standalone SQL; does not execute the generated question.
-- GET `queries`: `[{id,name,sql,notes,updated_at}]`.
+- GET `queries`: `[{id,name,sql,notes,updated_at}]`, stored in the selected schema's `_govern_queries`.
 - POST `save-query` `{id?,name,sql,notes?}`: saved item. POST `delete-query` `{id}`.
 - GET `snapshots`: `[{id,label,created_at,size_bytes,sha256}]`.
 - POST `create-snapshot` `{label}`: created snapshot descriptor.
-- POST `restore-snapshot` `{id,confirmation}`: confirmation equals configured database name. `{restored:id,safety_snapshot:<descriptor>|null,message,message_i18n}`. Creates safety export before restore when the DB exists; null if already absent. Snapshot service independent of live schema; can restore if target DB was dropped. Bootstrap still returns CSRF and configured DB name with available=false if absent.
+- POST `restore-snapshot` `{id,confirmation}`: confirmation equals selected database name. `{restored:id,safety_snapshot:<descriptor>|null,message,message_i18n}`. Creates safety export before restore when the DB exists; null if already absent. Snapshot service independent of live schema; can restore a configured target DB that was dropped. Bootstrap still returns CSRF and selected DB name with available=false if absent.
 - GET `download-snapshot&id=...`: attachment SQL. Strict server-generated snapshot ids only.
 - GET `context`: attachment JSON of schema and saved queries, no table rows or credentials.
-- GET `health`: `{status:"ok"}` when configured DB readable; no credentials/errors disclosed.
+- GET `health`: `{status:"ok"}` when selected DB readable; no credentials/errors disclosed.
+
+## Direct row editing
+
+The editor discovers columns and indexes from the current catalog. It prefers
+the complete primary key, otherwise a complete unique index whose columns are
+all non-nullable, non-generated and supported. Prefix/expression indexes are
+not identities. `key` is an object containing exactly these column names and
+string values; never construct a write payload from shortened browse cells.
+The descriptor reads the actual row again and adds `editable`, `encoding`
+(`text` or `hex`) and `large` to each ordinary column descriptor.
+
+`values` maps exact column names to one of:
+
+```json
+{
+  "description": {"mode":"value","value":"Exact text, including whitespace"},
+  "optional_field": {"mode":"null"},
+  "created_at": {"mode":"default"}
+}
+```
+
+`value` is always a string, including BIGINT/DECIMAL values; no PHP or JavaScript
+floating-point conversion is applied. Empty text is distinct from NULL.
+Binary/blob values use pairs of hexadecimal digits and bound `UNHEX` expressions.
+BIT and spatial fields remain read-only. Generated fields are never submitted.
+Fields above 128 KiB, invalid UTF-8 text and fields outside the editor's 512 KiB
+display budget are read-only; unchanged values remain intact. Submitted values
+also have 128 KiB per-field and 512 KiB combined limits. Larger requests retain
+the ordinary 1 MiB HTTP body limit. Use the official phpMyAdmin for unsupported
+editing tasks.
+
+Insert may omit fields or use `default` to let MariaDB supply their defaults;
+update changes only submitted fields and uses `DEFAULT(column)` when requested.
+Constraints, strict SQL mode and database permissions remain authoritative.
+Insertion into a base table does not require a key. Updating/deleting does;
+views and tables without safe identity return an unsupported reason or 422.
+The UI offers phpMyAdmin for those cases rather than guessing a row.
+
+`version` is an opaque 64-character fingerprint of the database, table and full
+record, including byte digests of fields that are not editable. Update/delete
+re-read the row in a writer transaction with `FOR UPDATE`, check that version,
+and include the full original key plus NULL-safe byte-digest predicates in the
+mutation itself. A changed record returns 409 `row_stale`; a missing record
+returns 404. Reload before retrying; never silently overwrite a concurrent edit.
+The original key can be updated, and the response contains its new identity
+when it can be read back. `key`, `row` and `version` may be null after an insert
+or key-default change whose exact resulting identity cannot be determined.
+
+Permissions failures map to 403 `row_permission_denied`; database constraint
+failures retain bounded diagnostic detail in 422 `row_write_failed`. Other
+invalid inputs return their stable localized error codes. No successful write
+is inferred from a closed dialog: the API result drives refresh and feedback.
 
 ## Free SQL scripts
 
@@ -257,13 +335,46 @@ Root owns database seed, docs, integration tests, review and GitHub.
 
 ## Backend settings
 
-`DB_HOST=database`, `DB_PORT=3306`, `DB_NAME=bestuursatlas`, `DB_USER=govern`, `DB_PASSWORD`, `DB_READ_USER=govern_reader`, `DB_READ_PASSWORD`; optional `DB_SOCKET` for isolated native validation. `BACKUP_DIR=/var/lib/govern/backups`, `DB_DUMP_BIN=mariadb-dump`, `DB_CLIENT_BIN=mariadb`. Config keys: `host`, `port`, `name`, `user`, `password`, `read_user`, `read_password`, `socket`, `backup_dir`, `dump_bin`, `client_bin`.
+`DB_HOST=database`, `DB_PORT=3306`, `DB_NAME=bestuursatlas`, optional comma-separated
+`DB_DATABASES`, `DB_USER=govern`, `DB_PASSWORD`, `DB_READ_USER=govern_reader`,
+`DB_READ_PASSWORD`; optional `DB_SOCKET` for isolated native validation.
+`BACKUP_DIR=/var/lib/govern/backups`, `DB_DUMP_BIN=mariadb-dump`,
+`DB_CLIENT_BIN=mariadb`. Config keys: `host`, `port`, `name`, `databases`, `user`,
+`password`, `read_user`, `read_password`, `socket`, `backup_dir`, `dump_bin`,
+`client_bin`, `schema_file`, `allowed_hosts`; `DatabaseScope::select` adds
+`maintenance_dir` and scopes `backup_dir`.
+
+The default database retains the existing `BACKUP_DIR` path. Other databases use
+`BACKUP_DIR/databases/<sha256(database name)>`; manifest database names and
+checksums are verified before use. Ordinary app data/research requests share the
+root maintenance lock, while snapshot creation/restoration obtains it exclusively.
+This lock covers every app database because free SQL can change schemas with
+`USE`. Database discovery remains possible for recovery; independent phpMyAdmin
+SQL does not participate in this application lock.
+
+Docker's privileged `database-access` job runs after MariaDB is healthy and
+before app/phpMyAdmin. It creates missing explicitly configured schemas and
+grants writer ALL and reader SELECT/SHOW VIEW on each exact schema, without
+seeding additional databases, resetting existing passwords or granting `*.*`.
+Provisioned names use ASCII letters, digits and underscores, with system schemas
+rejected and underscores escaped as grant-pattern literals. The escaped grant
+pattern must fit 64 bytes. Known legacy unescaped default-schema grants are
+narrowed. Runtime app/phpMyAdmin containers never receive the root password.
+Removing an allowlist entry does not revoke existing grants or delete data.
 
 PHP8.4+, PDO MySQL, native PHP classes and ES modules, no build framework. Namespace `Govern`, small explicit bootstrap loading or autoloader. Config class `Config::fromEnvironment(): array`. BackupService `__construct(array $config)`, `list(): array`, `create(string $label): array`, `restore(string $id,string $confirmation): array`, `download(string $id): array` returning `{path,filename}`. Backup service verifies files/checksums, invokes clients using argv arrays, credentials only private temporary file. No shell command concatenation.
 
 ## phpMyAdmin integration
 
-Same origin at `/phpmyadmin/` via Nginx. Modal top tabs exactly Browse, Structure, SQL. Iframe uses actual phpMyAdmin, not a partial imitation. URL query route `/sql` (Browse), `/table/structure`, `/table/sql`, with encoded `db` and `table`. No-table fallback `/database/structure` or `/database/sql`. Allow only same-origin framing; config auth uses DB account limited to configured database. Display current DB/table and a separate-window link. Keep full phpMyAdmin capabilities available inside frame.
+Same origin at `/phpmyadmin/` via Nginx. Modal top tabs exactly Browse, Structure,
+SQL. Iframe uses actual phpMyAdmin, not a partial imitation. URL query route
+`/sql` (Browse), `/table/structure`, `/table/sql`, with encoded selected `db` and
+`table`. No-table fallback `/database/structure` or `/database/sql`. Allow only
+same-origin framing; config auth uses the scoped writer account and actual
+MariaDB grants determine available databases. The four system schemas are hidden;
+`only_db` does not restrict additional granted schemas. Display current DB/table,
+database choice and a separate-window link. Keep full phpMyAdmin capabilities
+available inside frame. Shared `_govern_pma__*` storage stays in original `DB_NAME`.
 
 Explicit database window navigation includes `lang=nl` or `lang=en`. Changing
 Govern's language updates the surrounding controls immediately, but must not

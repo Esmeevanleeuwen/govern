@@ -1,6 +1,6 @@
 # Govern UX and UI design
 
-**Design baseline 1.4.** Govern is a personal, local workspace for exploring, understanding and changing a database. This guide defines its brand, visual system, behaviour and the process for adding features without disrupting existing work.
+**Design baseline 1.5.** Govern is a personal, local workspace for exploring, understanding and changing databases. This guide defines its brand, visual system, behaviour and the process for adding features without disrupting existing work.
 
 The agreed visual direction is layered glass, soft shadows, custom colour and no hard decorative borders. Dutch and English are equal interface languages. The detailed rules below are the target for implementation; the interactive preview is a visual reference. The production modules implement the core language, appearance and layout controls; the future chart example remains a proposal.
 
@@ -114,7 +114,7 @@ Keep primary actions visible without hover. Check the layout at 320 px, tablet w
 
 - **Database / Database:** one workspace with **Data / Gegevens**, **Structure / Structuur** and **Schema / Schema** as its views. Keep these view controls beside the workspace rather than repeating them as main navigation areas.
 
-  - **Data:** table selection, record search, pagination, readable rows and optional SQL explanation. Editing opens the real phpMyAdmin at the selected database and table.
+  - **Data:** table selection, record search, pagination, readable rows and optional SQL explanation. Add rows or use row actions to edit/delete in a focused dialog. Keep the official phpMyAdmin available for unsupported editing and its full toolset.
 
   - **Structure:** columns, keys, relationships and table definitions from the live catalog. Related objects have a clear route back.
 
@@ -125,6 +125,13 @@ Keep primary actions visible without hover. Check the layout at 320 px, tablet w
 - **Experiments / Experimenten:** creating, downloading and restoring named restore points. Recovery remains reachable when the database is unavailable.
 
 - **Settings / Instellingen:** language, appearance and workspace preferences. Keep it in a consistent, easy to find position.
+
+The **database selector** belongs in the shared top bar: it changes the context
+of these areas rather than adding another navigation level. Show the exact
+database name and an unavailable label when needed. List schemas visible to
+both database roles, plus configured unavailable schemas needed for recovery;
+exclude system schemas. Selecting a database never grants access or connects
+an unrelated server.
 
 ### One menu, three responsibilities
 
@@ -188,6 +195,32 @@ steal focus. Preserve context and collapse choices through language and theme
 changes, and keep keyboard access and focus return working.
 
 ## Core user flows
+
+### Switch databases without losing context
+
+Choose a database in the shared selector. Keep the same main area and restore
+that database's own table, explorer search, Data search/page, research draft,
+results, builder choices and schema state. The selector and workspace name
+update together, with a short loading state before new data appears. Cancel old
+reads and ignore late replies. The current choice belongs to this browser tab;
+another tab may work on a different database.
+
+Keep drafts per database for the current page session. Saved research lives in
+the selected database and is distinct from those drafts. Appearance, language
+and dashboard arrangement remain shared browser preferences. A direct route
+carries the database name; old routes without it still use the configured
+default. Schema positions remain stored per database.
+
+Disable the outer selector during SQL execution, saving, snapshot work and an
+open row editor or phpMyAdmin window. Explain a blocked switch and let the user
+finish or close that task first. Do not move an open form onto another target.
+An unavailable configured database still offers recovery and an easy switch
+to another database. The context export and snapshot actions always follow the
+visible selected name.
+
+The phpMyAdmin window opens at the selected database and has its own deliberate
+database navigation. Its frame keeps unsaved work during incidental shell,
+theme and language updates; only explicit tool navigation loads another page.
 
 ### Inspect any Govern element
 
@@ -272,7 +305,35 @@ the visible catalog instead of drawing a connection to the wrong local table.
 
 ### Explore and change data
 
-Choose a table, read or search its rows, and optionally open the SQL explanation. **Edit in phpMyAdmin** opens the official tool in the existing database window with the right context. Closing that window refreshes the relevant catalog and data while retaining valid selections. If a table was removed, explain that and offer another table rather than leaving a blank screen.
+Choose a table, read or search its rows, and optionally open the SQL explanation.
+Place **Add row** in the table's action area and **Edit** / **Delete** beside each
+row with a usable identity. These actions remain visible without hover and
+preserve the table explorer, search and pagination. A dialog names both database
+and table; it keeps that target fixed from opening until completion.
+
+Read the full current record for editing rather than copying shortened table
+cells. Use persistent column labels, data types and nearby default/required
+help. Offer separate **Value**, **NULL** and **Default** choices when applicable;
+an empty string stays a value. Display exact large numeric strings without
+rounding and describe binary input as hexadecimal. Generated, unsupported and
+oversized fields remain read-only with a reason; editing another field preserves
+their original contents. Changing a primary-key value is a supported edit.
+
+The form distinguishes loading, validation, saving, saved, failed and conflict
+states. Keep typed input after an error. On a concurrent change, explain that
+the row has changed and offer **Reload row**, with discard confirmation if the
+form is dirty. Do not silently resubmit over newer data. Closing a dirty form
+asks before discarding; language changes translate labels without rebuilding
+its values. Return focus to the row action when possible after closing.
+
+Delete shows the exact database, table and complete key in its confirmation.
+Only confirmed writes refresh the visible data and show success. Adding is also
+possible in ordinary keyless tables, but update/delete requires a complete
+primary key or supported unique non-null key. Views and unsafe identities show
+a clear route to the official phpMyAdmin rather than a guessed row action.
+**Open in phpMyAdmin** uses the selected database/table, keeps its complete
+toolset available and refreshes relevant catalog/data on closing. If a table
+was removed, explain that and offer another table rather than a blank screen.
 
 ### Build and save research
 
@@ -310,9 +371,17 @@ Open Settings, change a preference and return to the previous task. The table se
 
 ### Create and restore a point
 
-Name a restore point, create it and show its time, size and download action. Restoring is a separate flow: identify the point, explain what will be replaced and require the configured database name.
+Name a restore point, create it and show its time, size and download action.
+Lists belong to the selected database. Restoring is a separate flow: identify
+the point and target database, explain what will be replaced and require that
+selected database name. Never move a restore point to another database implicitly.
 
-Use the existing safety export when the current database exists. During restoration, prevent competing app actions and show clear progress. A failure stays visible with a recovery path and any available safety point. Do not promise a universal undo: DDL is not transactional, and another phpMyAdmin window does not automatically follow the app’s lock.
+Use the existing safety export when the current database exists. During
+restoration, prevent competing app actions across all databases and show clear
+progress: free SQL can also target another allowed schema. A failure stays
+visible with a recovery path and any available safety point. Do not promise a
+universal undo: DDL is not transactional, and another phpMyAdmin window does not
+automatically follow the app's lock.
 
 ## Shared components and states
 
@@ -398,6 +467,7 @@ Preserve the existing PHP, JavaScript module and SQL structure. Add a dependency
 | Routes and feature coordination | `app.js`; keep feature behaviour in focused modules |
 | Element inspection | `selection-pointer.js` for interaction, `selection-registry.js` for semantic targets and `selection-content.js` for factual explanations |
 | Query design | `query-builder.js` and the existing backend services |
+| Direct row editing | `row-editor.js`, live catalog metadata and `RowEditor` / `RecordIdentity` |
 | Official database window | `database-modal.js` and the same origin phpMyAdmin integration |
 | Language and preferences | `i18n.js` and `preferences.js` |
 | Movable blocks | `dashboard-layout.js` with a small block registry |
@@ -411,6 +481,12 @@ database table. Generic interface inspection remains available without a
 registration, while registered targets provide the more precise data context.
 
 Continue discovering tables, columns and relationships from the live catalog. Bind values, validate identifiers, keep visual designs read only and preserve CSRF protection. Add an API endpoint only when the existing contract cannot serve the task. Update frontend, backend and API documentation together. If a real feature needs app owned database tables, use the existing `_govern_` namespace and a tested migration.
+
+Carry explicit database scope through new requests, routes, downloads and
+asynchronous callbacks. Keep per-database drafts separate and reject stale
+responses. Never let a confirmation opened for one database submit to another.
+Use the shared root maintenance lock for data operations that must cooperate
+with snapshots; phpMyAdmin remains an independently executing official tool.
 
 ### Make new blocks safe for saved layouts
 
@@ -457,6 +533,10 @@ Changing the language, theme or block position should require no chart specific 
 - [ ] New blocks preserve existing order, sizes and hidden choices after an upgrade.
 
 - [ ] Failed saves retain input; outdated responses cannot replace newer state.
+
+- [ ] Database switching preserves separate drafts and selections; every action targets the visible database.
+
+- [ ] Row edits retain exact values, preserve read-only fields and show a recovery path for concurrent changes or unsafe identity.
 
 - [ ] The actual screen to API to database path has been checked with isolated data.
 

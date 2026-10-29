@@ -2,6 +2,34 @@
 
 Stand van de controles: **29 oktober 2026**.
 
+## Meerdere databases en rechtstreeks rijen wijzigen
+
+De nieuwe integratieproef heeft **74** controles met twee afzonderlijke echte
+testdatabases. Die behandelen catalogus, opgeslagen onderzoeken en SQL per
+database, exacte primaire en unieke sleutels, toevoegen, wijzigen en verwijderen,
+NULL en DEFAULT, grote getallen, binaire waarden, berekende en grote velden.
+Een verouderde versie wordt geweigerd, ook als alleen het niet-getoonde einde van
+een groot veld verandert. Numerieke kolomnamen blijven JSON-objecten; aangrenzende
+DECIMAL-sleutels boven de JavaScript-getalgrens worden exact behandeld.
+
+Herstelpunten hebben afzonderlijke mappen en delen één applicatievergrendeling.
+De proef herstelt de daarvoor lege tweede testdatabase en leest opnieuw uit dat
+de eerste database ongewijzigd bleef. Ook de bestaande **107** databasecontroles,
+**176** lokalisatiecontroles, vrije SQL, herstel- en HTTP-controles slagen.
+
+De nieuwe browserproef controleert de databasekiezer, echte rijhandelingen,
+conflictherstel zonder conceptverlies, apart bewaarde SQL-concepten, tabellen,
+opgeslagen onderzoeken en schema-indelingen. Een vertraagd antwoord van database
+A mag database B niet vervangen. De proef voert ook een echte phpMyAdmin-wijziging
+in B uit en leest zowel B als de ongewijzigde rij in A terug. Nederlands, Engels,
+mobiele bediening en de nieuwe dialogs zijn meegenomen. Alle **633** berichten
+hebben Nederlandse en Engelse teksten.
+
+De opstartservice voor expliciet ingestelde databases is afzonderlijk met MariaDB
+gecontroleerd op herhaalbaarheid, bestaande gegevens en wachtwoorden, leesrechten
+en ontsnapte underscores in grants. Docker wordt door de GitHub-workflow getest;
+de uitslag staat bij de betreffende commit. Windows is niet lokaal uitgevoerd.
+
 ## Vrije SQL in de querywerkplaats
 
 De uitbreiding is met echte SQL in de afzonderlijke testdatabase gecontroleerd.
@@ -232,6 +260,8 @@ de test andere containers en volumes dan de gewone Govern-installatie:
 ```sh
 export COMPOSE_PROJECT_NAME=govern-verify
 export APP_PORT=18080
+export DB_DATABASES=bestuursatlas,govern_multi_test
+export GOVERN_TEST_SECOND_DATABASE=govern_multi_test
 sh start.sh
 ```
 
@@ -247,6 +277,7 @@ docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" app php /workspace/
 docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" app php /workspace/tests/backend_localization.php
 
 docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" app php /workspace/tests/backend_integration.php --confirm-database=bestuursatlas
+docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" -e GOVERN_TEST_SECOND_DATABASE app php /workspace/tests/multidatabase-row-integration.php --confirm-database=bestuursatlas --confirm-second-database=govern_multi_test
 docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" app php /workspace/tests/backup_integration.php --confirm-database=bestuursatlas
 
 python3 tests/smoke.py --base-url http://127.0.0.1:18080
@@ -268,6 +299,7 @@ BASE_URL=http://127.0.0.1:18080 GOVERN_UI_WRITE_TESTS=1 node tests/frontend-smok
 BASE_URL=http://127.0.0.1:18080 node tests/query-builder-smoke.mjs
 BASE_URL=http://127.0.0.1:18080 node tests/ui-settings-smoke.mjs
 BASE_URL=http://127.0.0.1:18080 node tests/schema-visualizer-smoke.mjs
+BASE_URL=http://127.0.0.1:18080 GOVERN_UI_WRITE_TESTS=1 GOVERN_TEST_SECOND_DATABASE=govern_multi_test node tests/multidatabase-row-smoke.mjs
 ```
 
 De extra schrijvende controle maakt een eigen opgeslagen onderzoek aan en

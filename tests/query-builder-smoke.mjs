@@ -23,6 +23,11 @@ const browser = await chromium.launch({headless: true,
     ...(process.env.BROWSER_BIN ? {executablePath: process.env.BROWSER_BIN} : {}), args: browserArgs});
 const errors = [];
 const ref = (source, column) => JSON.stringify([source, column]);
+const apiRoute = (action, table) => url => url.pathname === '/api.php'
+    && url.searchParams.get('action') === action
+    && (table === undefined || url.searchParams.get('table') === table);
+const queryRoute = apiRoute('query');
+const buildRoute = apiRoute('build-query');
 const responseFor = (page, action) => page.waitForResponse(response => {
     const url = new URL(response.url());
     return url.pathname === '/api.php' && url.searchParams.get('action') === action;
@@ -88,9 +93,9 @@ try {
         if (payload.data.explanation_i18n) payload.data.explanation_i18n.nl = refreshedExplanation;
         await route.fulfill({response, json: payload});
     };
-    await page.route('**/api.php?action=query', refreshedResponse);
+    await page.route(queryRoute, refreshedResponse);
     await run(page);
-    await page.unroute('**/api.php?action=query', refreshedResponse);
+    await page.unroute(queryRoute, refreshedResponse);
     assert.equal(await page.getByRole('textbox', {name: 'SQL-query', exact: true}).inputValue(), refreshedSql);
     assert.match(await page.locator('.query-explanation').innerText(), /opnieuw samengestelde query/);
     assert.match(await page.locator('.query-result').innerText(), /De editor toont de uitgevoerde query/);
@@ -148,7 +153,7 @@ try {
         await queryGate;
         await route.fulfill({response, json: payload});
     };
-    await page.route('**/api.php?action=query', delayedQuery);
+    await page.route(queryRoute, delayedQuery);
     const pendingQuery = responseFor(page, 'query');
     try {
         await page.getByRole('button', {name: 'Query uitvoeren', exact: true}).click();
@@ -156,7 +161,7 @@ try {
         await page.getByRole('textbox', {name: 'SQL-query', exact: true}).fill(manual);
     } finally { releaseQuery(); }
     await pendingQuery;
-    await page.unroute('**/api.php?action=query', delayedQuery);
+    await page.unroute(queryRoute, delayedQuery);
     await page.waitForFunction(() => !document.querySelector('[aria-label="Query uitvoeren"]').disabled);
     assert.equal(await page.getByRole('textbox', {name: 'SQL-query', exact: true}).inputValue(), manual);
     assert.equal(await page.locator('.query-result .data-table').count(), 0);
@@ -216,7 +221,7 @@ try {
     const gate = new Promise(resolve => { release = resolve; });
     const requestSeen = new Promise(resolve => { seen = resolve; });
     const delayedRoute = async route => { seen(); await gate; await route.continue(); };
-    await page.route('**/api.php?action=build-query', delayedRoute);
+    await page.route(buildRoute, delayedRoute);
     const lateResponse = responseFor(page, 'build-query');
     try {
         await page.getByRole('button', {name: 'Query maken', exact: true}).click();
@@ -225,7 +230,7 @@ try {
     } finally { release(); }
     await lateResponse;
     await page.locator('.builder-status').filter({hasText: 'intussen gewijzigd'}).waitFor();
-    await page.unroute('**/api.php?action=build-query', delayedRoute);
+    await page.unroute(buildRoute, delayedRoute);
     assert.equal(await page.getByRole('textbox', {name: 'SQL-query', exact: true}).inputValue(), 'SELECT 42 AS eigen_wijziging;');
     const manualAfterLateBuild = await run(page);
     assert.equal(manualAfterLateBuild.data.statements.length, 1);
@@ -244,14 +249,14 @@ try {
     schemaPage.on('pageerror', error => errors.push(error.message));
     let hideColumn = false;
     let attemptedDesign;
-    await schemaPage.route('**/api.php?action=structure&table=*', async route => {
-        if (!hideColumn || new URL(route.request().url()).searchParams.get('table') !== 'digital_systems') return route.continue();
+    await schemaPage.route(apiRoute('structure', 'digital_systems'), async route => {
+        if (!hideColumn) return route.continue();
         const response = await route.fetch();
         const payload = await response.json();
         payload.data.columns = payload.data.columns.filter(column => column.name !== 'name');
         await route.fulfill({response, json: payload});
     });
-    await schemaPage.route('**/api.php?action=build-query', async route => {
+    await schemaPage.route(buildRoute, async route => {
         attemptedDesign = route.request().postDataJSON().design;
         if (hideColumn && attemptedDesign.table === 'digital_systems' && attemptedDesign.columns.some(column => column.column === 'name')) {
             return route.fulfill({status: 422, contentType: 'application/json',

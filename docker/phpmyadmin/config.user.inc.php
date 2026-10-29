@@ -31,8 +31,10 @@ $cfg['Servers'][1]['auth_type'] = 'config';
 $cfg['Servers'][1]['user'] = getenv('PMA_USER') ?: 'govern';
 $cfg['Servers'][1]['password'] = getenv('PMA_PASSWORD') ?: '';
 $cfg['Servers'][1]['AllowNoPassword'] = false;
-$cfg['Servers'][1]['only_db'] = [$governDatabase];
-$cfg['Servers'][1]['verbose'] = 'Govern · werkdatabase';
+// Native MariaDB grants determine the available databases, including manually
+// enabled schemas. Keep shared phpMyAdmin settings in the original database.
+$cfg['Servers'][1]['hide_db'] = '^(information_schema|mysql|performance_schema|sys)$';
+$cfg['Servers'][1]['verbose'] = 'Govern · databases';
 $cfg['Servers'][1]['pmadb'] = $governDatabase;
 $cfg['Servers'][1]['controluser'] = $cfg['Servers'][1]['user'];
 $cfg['Servers'][1]['controlpass'] = $cfg['Servers'][1]['password'];

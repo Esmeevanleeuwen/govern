@@ -423,7 +423,7 @@ final class BackupService
 
     private function locked(int $mode, callable $operation): mixed
     {
-        $handle = fopen($this->directory . '/.maintenance.lock', 'c');
+        $handle = fopen(($this->config['maintenance_dir'] ?? $this->directory) . '/.maintenance.lock', 'c');
         if ($handle === false) {
             throw new BackupException('snapshot_lock_failed');
         }

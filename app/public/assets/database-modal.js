@@ -1,5 +1,6 @@
 import {t, getLanguage} from './i18n.js';
 import './modal-messages.js';
+import './database-messages.js';
 import {el, icon, button, badge} from './ui.js';
 
 const routes = {
@@ -19,12 +20,18 @@ export class DatabaseModal {
     constructor(onClose) {
         this.database = '';
         this.tables = [];
+        this.databases = [];
         this.table = '';
         this.tab = 'browse';
         this.currentUrl = '';
         this.onClose = onClose;
         this.dialog = el('dialog', {id: 'database-dialog', class: 'database-dialog', 'aria-labelledby': 'database-title'});
-        this.name = el('span', {class: 'database-name'});
+        this.name = el('span', {class: 'database-name sr-only'});
+        this.databaseSelect = el('select', {id: 'modal-database', class: 'input select modal-database-select',
+            'aria-label': t('app.databases.choose'), 'data-i18n-aria': 'app.databases.choose', on: {change: () => {
+                this.database = this.databaseSelect.value; this.tables = []; this.table = '';
+                this.configure(this.database, [], this.databases); this.navigate();
+            }}});
         this.tableSelect = el('select', {id: 'modal-table', class: 'input select modal-table', on: {
             change: () => { this.table = this.tableSelect.value; this.navigate(); },
         }});
@@ -54,7 +61,7 @@ export class DatabaseModal {
                     this.closeButton = button(t('modal.close'), () => this.dialog.close(), {symbol: 'close', className: 'button-small'}))),
             el('div', {class: 'database-toolbar'}, tablist,
                 el('div', {class: 'database-context'},
-                    el('div', {class: 'modal-database'}, icon('database'), this.name),
+                    el('div', {class: 'modal-database'}, icon('database'), this.name, this.databaseSelect),
                     el('label', {class: 'sr-only', for: 'modal-table', 'data-i18n': 'modal.table'}, t('modal.table')), this.tableSelect)),
             this.panel,
             el('div', {class: 'database-dialog-footer'}, el('span', {class: 'status-dot'}), this.status,
@@ -80,7 +87,7 @@ export class DatabaseModal {
         this.closeButton.setAttribute('aria-label', t('modal.close'));
         this.dialog.querySelector('[role="tablist"]').setAttribute('aria-label', t('modal.tools'));
         if (this.dialog.open) this.syncLocation();
-        this.configure(this.database, this.tables);
+        this.configure(this.database, this.tables, this.databases);
         this.frame.title = this.currentUrl
             ? this.tabButtons[this.tab].textContent + ' — ' + (this.table || this.database)
             : t('modal.frameTitle');
@@ -94,7 +101,10 @@ export class DatabaseModal {
         if (this.fallbackVisible) this.showFallback();
     }
 
-    configure(database, tables) {
+    configure(database, tables, databases = this.databases) {
+        this.databases = databases;
+        this.databaseSelect.replaceChildren(...databases.map(item => el('option', {value: item.name, selected: item.name === database}, item.name)));
+        this.databaseSelect.setAttribute('aria-label', t('app.databases.choose'));
         this.database = database;
         this.tables = tables;
         this.name.textContent = database;
@@ -197,6 +207,9 @@ export class DatabaseModal {
             this.external.href = next;
             const table = location.searchParams.get('table') || '';
             const database = location.searchParams.get('db') || this.database;
+            if (database !== this.database && this.databases.some(item => item.name === database)) {
+                this.configure(database, [], this.databases);
+            }
             if (database !== this.database) {
                 this.status.textContent = database + (table ? ' / ' + table : '') + ' · phpMyAdmin';
                 return;

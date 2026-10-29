@@ -213,9 +213,8 @@ try {
     // target. Keep those metadata boundaries visible without adding fake joins.
     const boundary = await context.newPage();
     track(boundary);
-    await boundary.route('**/api.php?action=structure*', async route => {
-        const url = new URL(route.request().url());
-        if (url.searchParams.get('table') !== 'organizations') return route.continue();
+    await boundary.route(url => url.pathname === '/api.php' && url.searchParams.get('action') === 'structure'
+        && url.searchParams.get('table') === 'organizations', async route => {
         const response = await route.fetch();
         const payload = await response.json();
         assert.equal(payload.ok, true);

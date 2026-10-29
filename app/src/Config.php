@@ -19,6 +19,13 @@ final class Config
         if ($name === '' || strlen($name) > 192 || preg_match('/[\x00-\x1f\x7f]/', $name)) {
             throw ApiException::fromCode('database_name_invalid', 503);
         }
+        $databaseNames = array_values(array_unique([$name, ...array_filter(array_map('trim', explode(',', $env('DB_DATABASES'))))]));
+        foreach ($databaseNames as $databaseName) {
+            if (strlen($databaseName) > 192 || preg_match('//u', $databaseName) !== 1
+                || preg_match('/[\x00-\x1f\x7f]/', $databaseName)) {
+                throw ApiException::fromCode('database_name_invalid', 503);
+            }
+        }
         $schema = $env('WORKBENCH_SCHEMA_FILE');
         if ($schema === '') {
             $local = dirname(__DIR__, 2) . '/docker/database/20-govern.sql';
@@ -28,6 +35,7 @@ final class Config
             'host' => $env('DB_HOST', 'database'),
             'port' => $port,
             'name' => $name,
+            'databases' => $databaseNames,
             'user' => $env('DB_USER', 'govern'),
             'password' => $env('DB_PASSWORD'),
             'read_user' => $env('DB_READ_USER', 'govern_reader'),

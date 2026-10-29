@@ -1,4 +1,4 @@
-import {request, setCsrf, endpoint} from './api.js';
+import {request, setCsrf, endpoint, setDatabase, getDatabase} from './api.js';
 import {el, icon, button, badge, heading, loading, empty, errorPanel, errorText, notice, dataTable, number, fileSize, dateTime, quoteIdentifier, toast, copyText, sqlDisclosure, confirmAction} from './ui.js';
 import {DatabaseModal} from './database-modal.js';
 import {QueryBuilder} from './query-builder.js';
@@ -8,9 +8,11 @@ import {createDashboardLayout} from './dashboard-layout.js';
 import {mountSchemaVisualizer} from './schema-visualizer.js';
 import {registerSelection} from './selection-registry.js';
 import {SelectionPointer} from './selection-pointer.js';
+import {createRowEditor} from './row-editor.js';
 import './app-messages.js';
 import './workspace-messages.js';
 import './navigation-messages.js';
+import './database-messages.js';
 
 setLanguage(getPreferences().language);
 
@@ -43,6 +45,10 @@ const state = {
     queryDirty: false,
     savingQuery: false,
     creatingSnapshot: false,
+    runningQuery: false,
+    deletingQuery: false,
+    rowEditorOpen: false,
+    switchingDatabase: false,
     connectionError: null,
     queryError: null,
     querySaveError: null,
@@ -71,14 +77,48 @@ const workspaceContext = document.getElementById('workspace-context');
 const contextContent = document.getElementById('workspace-context-content');
 const panelToggle = document.getElementById('workspace-panel-toggle');
 const databaseViews = ['gegevens', 'structuur', 'schema'];
+const databaseSelect = document.getElementById('database-select');
+const databaseCache = new Map();
+const databaseStateKeys = ['bootstrap', 'table', 'queryDraft', 'queryName', 'queryNotes', 'queryId', 'queryResult', 'queryRevision',
+    'queryDesign', 'builderDraft', 'builderOpen', 'dataViews', 'catalogSearch', 'snapshotLabel', 'savedQueries', 'queryDirty',
+    'connectionError', 'queryError', 'querySaveError', 'snapshotError', 'schemaData', 'schemaView', 'databaseView',
+    'contextOpen', 'structureData', 'inspectorExpanded', 'explorerScroll'];
+const emptyDatabaseState = () => ({bootstrap: null, table: '', queryDraft: '', queryName: '', queryNotes: '', queryId: null,
+    queryResult: null, queryRevision: 0, queryDesign: null, builderDraft: null, builderOpen: true, dataViews: new Map(),
+    catalogSearch: {}, snapshotLabel: '', savedQueries: null, queryDirty: false, connectionError: null, queryError: null,
+    querySaveError: null, snapshotError: null, schemaData: null, schemaView: {}, databaseView: 'gegevens',
+    contextOpen: {database: true, research: true, experiments: true}, structureData: new Map(), inspectorExpanded: {}, explorerScroll: {}});
+let knownDatabases = [];
+let databaseRevision = 0;
+let storedDatabase = '';
+try { storedDatabase = sessionStorage.getItem('govern.database.v1') || ''; } catch { /* Per-tab storage is optional. */ }
+setDatabase(route().params.get('database') || storedDatabase);
+
 let currentScope;
 let bootstrapController;
 let routeVersion = 0;
 let recordSnapshotId = 0;
 
+const rowEditor = createRowEditor({getDatabase,
+    onBusy: busy => { state.rowEditorOpen = busy; syncDatabasePicker(); },
+    onSaved: ({database, table, mode}) => {
+        toast(t('app.databases.' + (mode === 'delete' ? 'deleted' : mode === 'insert' ? 'inserted' : 'saved')));
+        if (database === getDatabase() && state.table === table) return refreshBootstrap(false, {preserveFocus: true});
+    },
+    onPhpMyAdmin: table => databaseModal.open(table, 'browse'),
+});
 const databaseModal = new DatabaseModal(() => {
-    if (!state.restoring) refreshBootstrap(false).then(() => {
-        if (!databaseModal.dialog.open && document.activeElement === document.body) openDatabase.focus();
+    if (state.restoring) return;
+    let work;
+    if (databaseModal.database !== getDatabase()) {
+        if (databaseBusy()) {
+            databaseModal.configure(getDatabase(), tables(), knownDatabases);
+            toast(t('app.databases.busy'), 'error');
+            work = Promise.resolve();
+        } else work = switchDatabase(databaseModal.database);
+    } else work = refreshBootstrap(false);
+    work.then(() => {
+        if (!databaseModal.dialog.open && document.activeElement === document.body && !openDatabase.disabled) openDatabase.focus();
     }).catch(error => toast(errorText(error), 'error'));
 });
 for (const [area, key, labelKey, symbol] of [
@@ -93,6 +133,8 @@ for (const [area, key, labelKey, symbol] of [
 document.getElementById('settings-link').prepend(icon('settings'));
 document.getElementById('settings-link').dataset.route = 'instellingen';
 document.getElementById('language-icon').append(icon('globe'));
+document.getElementById('database-picker-icon').append(icon('database'));
+databaseSelect.addEventListener('change', () => switchDatabase(databaseSelect.value));
 document.getElementById('language-select').addEventListener('change', event => changePreference({language: event.target.value}));
 openDatabase.prepend(icon('database'));
 openDatabase.addEventListener('click', () => databaseModal.open(state.table, 'browse'));
@@ -171,6 +213,10 @@ function syncWorkspaceNavigation() {
     const databaseLink = navigation.querySelector('[data-area="database"]');
     databaseLink.dataset.route = state.databaseView;
     databaseLink.href = databaseHash(state.databaseView);
+    for (const link of document.querySelectorAll('#navigation [data-route], #settings-link')) {
+        if (link !== databaseLink) link.href = routeHash(link.dataset.route);
+    }
+    document.querySelector('.rail-brand').href = routeHash('overzicht');
     for (const link of document.querySelectorAll('#navigation [data-area], #settings-link')) {
         const active = link.dataset.area === area;
         link.classList.toggle('active', active);
@@ -183,9 +229,65 @@ function syncWorkspaceNavigation() {
     document.dispatchEvent(new CustomEvent('govern:explorerchange', {detail: {open: isExplorerOpen()}}));
 }
 
-function databaseHash(name) {
-    return '#' + name + (state.table ? '?' + new URLSearchParams({table: state.table}) : '');
+function routeHash(name, params = {}) {
+    const query = new URLSearchParams({...params});
+    if (getDatabase()) query.set('database', getDatabase());
+    return '#' + name + (query.size ? '?' + query : '');
 }
+
+function databaseHash(name) { return routeHash(name, state.table ? {table: state.table} : {}); }
+
+function databaseBusy() {
+    return state.restoring || state.creatingSnapshot || state.savingQuery || state.deletingQuery || state.runningQuery || state.rowEditorOpen || databaseModal.dialog.open;
+}
+
+function syncDatabasePicker() {
+    const selected = getDatabase();
+    const options = [...knownDatabases];
+    if (selected && !options.some(item => item.name === selected)) options.unshift({name: selected, available: false});
+    databaseSelect.replaceChildren(...options.map(item => el('option', {value: item.name, selected: item.name === selected},
+        item.available === false ? t('app.databases.unavailable', {name: item.name}) : item.name)));
+    databaseSelect.disabled = !options.length || databaseBusy() || state.switchingDatabase;
+    document.getElementById('context-export').href = endpoint('context');
+}
+
+function rememberDatabase() {
+    try { sessionStorage.setItem('govern.database.v1', getDatabase()); } catch { /* API URLs still carry the selection. */ }
+}
+
+async function switchDatabase(database, {fromHash = false} = {}) {
+    if (!database || database === getDatabase()) { syncDatabasePicker(); return; }
+    if (databaseBusy()) {
+        history.replaceState(null, '', routeHash(route().name, state.table ? {table: state.table} : {}));
+        syncDatabasePicker(); toast(t('app.databases.busy'), 'error'); return;
+    }
+    if (currentScope) state.explorerScroll[currentScope.area] = {top: contextContent.scrollTop,
+        list: contextContent.querySelector('.catalog-list, .schema-index')?.scrollTop || 0};
+    currentScope?.controller.abort(); currentScope?.cleanup.forEach(callback => callback());
+    currentScope = null;
+    bootstrapController?.abort();
+    const previous = getDatabase();
+    if (previous) databaseCache.set(previous, Object.fromEntries(databaseStateKeys.map(key => [key, state[key]])));
+    const requestedTable = fromHash ? route().params.get('table') : null;
+    const currentRoute = route().name;
+    Object.assign(state, databaseCache.get(database) || emptyDatabaseState());
+    databaseRevision += 1;
+    setDatabase(database); rememberDatabase();
+    state.switchingDatabase = true; openDatabase.disabled = true;
+    if (selectionPointer.dialog.open) selectionPointer.dialog.close();
+    selectionPointer.modalItems = []; selectionPointer.selected.clear(); selectionPointer.setOn(false);
+    const params = requestedTable ? {table: requestedTable} : (state.table ? {table: state.table} : {});
+    const targetRoute = !fromHash && databaseViews.includes(currentRoute) ? state.databaseView : currentRoute;
+    history.replaceState(null, '', routeHash(targetRoute, params));
+    contextContent.replaceChildren(); globalNotice.replaceChildren();
+    page.replaceChildren(loading(t('app.databases.changing')));
+    document.getElementById('connection-state').replaceChildren(el('span', {class: 'status-dot waiting'}), el('span', {}, t('app.databases.changing')));
+    document.getElementById('footer-database').textContent = database;
+    document.getElementById('workspace-database').textContent = database;
+    syncDatabasePicker(); syncWorkspaceNavigation();
+    await refreshBootstrap(false);
+}
+
 
 function openWorkspaceContext() {
     const area = workspaceArea();
@@ -216,7 +318,7 @@ for (const [node, purpose] of [
 ]) registerSelection(node, () => ({kind: 'control', key: 'shell:' + node.id,
     label: node.getAttribute('aria-label') || node.textContent.trim(), purpose}));
 
-new SelectionPointer({
+const selectionPointer = new SelectionPointer({
     root: document.querySelector('.app-shell'), controls: document.querySelector('.topbar-actions'),
     getContext: () => {
         const database = state.bootstrap?.database?.name;
@@ -244,6 +346,7 @@ function localizeShell() {
     document.getElementById('breadcrumb-current').textContent = t(current.labelKey);
     document.title = t(current.labelKey) + ' — Govern';
     document.querySelector('meta[name="description"]').content = t('app.shell.description');
+    syncDatabasePicker();
     syncWorkspaceNavigation();
 }
 
@@ -300,8 +403,7 @@ function route() {
 }
 
 function go(name, params = {}) {
-    const search = new URLSearchParams(params).toString();
-    const hash = '#' + name + (search ? '?' + search : '');
+    const hash = routeHash(name, params);
     if (window.location.hash === hash) render();
     else window.location.hash = hash;
 }
@@ -351,7 +453,8 @@ function defaultSql(table = state.table || tables()[0]?.name) {
 }
 
 async function openResearch(sql) {
-    if (!await mayReplaceResearch()) return;
+    const revision = databaseRevision;
+    if (!await mayReplaceResearch() || revision !== databaseRevision) return;
     state.queryRevision += 1;
     state.queryDraft = sql;
     state.queryId = null;
@@ -376,7 +479,7 @@ function renderConnectionNotice() {
 }
 
 function syncRestoreControls() {
-    openDatabase.disabled = state.restoring || !state.bootstrap;
+    openDatabase.disabled = state.restoring || state.switchingDatabase || !state.bootstrap || databaseModal.database !== getDatabase();
     document.getElementById('language-select').disabled = state.restoring;
     menuToggle.disabled = state.restoring;
     refreshButton.disabled = state.restoring;
@@ -385,24 +488,33 @@ function syncRestoreControls() {
 }
 
 function syncSnapshotControls() {
+    syncDatabasePicker();
     const busy = state.restoring || state.creatingSnapshot;
     document.querySelectorAll('[data-snapshot-action]').forEach(control => { control.disabled = busy; });
 }
 
 async function refreshBootstrap(notify = false, {preserveFocus = false, focusFallback} = {}) {
     bootstrapController?.abort();
-    bootstrapController = new AbortController();
+    const controller = new AbortController();
+    bootstrapController = controller;
+    const database = getDatabase();
+    const revision = databaseRevision;
     refreshButton.disabled = true;
     try {
-        const data = await request('bootstrap', {signal: bootstrapController.signal});
+        const data = await request('bootstrap', {params: {database}, signal: controller.signal});
+        if (controller.signal.aborted || revision !== databaseRevision || bootstrapController !== controller) return;
+        setDatabase(data.database.name); rememberDatabase();
+        knownDatabases = data.databases || [{name: data.database.name, available: data.database.status !== 'unavailable'}];
+        history.replaceState(null, '', routeHash(route().name, Object.fromEntries(route().params)));
         state.bootstrap = data;
         state.connectionError = null;
         state.savedQueries = null;
         state.schemaData = null;
         state.structureData.clear();
         setCsrf(data.csrf);
-        databaseModal.configure(data.database.name, data.tables || []);
-        openDatabase.disabled = false;
+        if (!databaseModal.dialog.open) databaseModal.configure(data.database.name, data.tables || [], knownDatabases);
+        openDatabase.disabled = state.restoring;
+        syncDatabasePicker();
         const ready = data.database.status !== 'unavailable';
         document.getElementById('connection-state').replaceChildren(
             el('span', {class: 'status-dot ' + (ready ? '' : 'offline')}),
@@ -433,15 +545,21 @@ async function refreshBootstrap(notify = false, {preserveFocus = false, focusFal
         }
         if (notify) toast(t('app.core.connection.updated'));
     } catch (error) {
-        if (error.name === 'AbortError') return;
+        if (error.name === 'AbortError' || revision !== databaseRevision || bootstrapController !== controller) return;
         state.connectionError = error;
-        if (!state.bootstrap) {
+        if (!state.bootstrap || state.switchingDatabase) {
+            contextContent.replaceChildren();
             page.replaceChildren(heading(t('app.core.connection.eyebrow'), t('app.core.connection.title'), t('app.core.connection.help')),
                 errorPanel(error, () => refreshBootstrap()));
         } else globalNotice.replaceChildren(errorPanel(error, () => refreshBootstrap()));
         document.getElementById('connection-state').replaceChildren(el('span', {class: 'status-dot offline'}), el('span', {}, t('app.core.connection.offline')));
     } finally {
-        refreshButton.disabled = state.restoring;
+        if (revision === databaseRevision && bootstrapController === controller) {
+            bootstrapController = null; state.switchingDatabase = false;
+            refreshButton.disabled = state.restoring;
+            openDatabase.disabled = state.restoring || !state.bootstrap || databaseModal.database !== getDatabase();
+            syncDatabasePicker();
+        }
     }
 }
 
@@ -459,7 +577,9 @@ function render() {
     currentScope?.cleanup.forEach(callback => callback());
     const version = ++routeVersion;
     const controller = new AbortController();
-    const scope = {controller, signal: controller.signal, cleanup: [], area: workspaceArea(location.name), live: () => version === routeVersion && !controller.signal.aborted};
+    const revision = databaseRevision;
+    const scope = {controller, signal: controller.signal, database: getDatabase(), cleanup: [], area: workspaceArea(location.name),
+        live: () => version === routeVersion && revision === databaseRevision && !controller.signal.aborted};
     currentScope = scope;
     activeTable(location.params);
     if (databaseViews.includes(location.name)) state.databaseView = location.name;
@@ -626,14 +746,14 @@ function appendDashboardContent(block, id, scope) {
             content.replaceChildren();
             if (!queries.length) content.append(el('h3', {}, t('app.dashboard.noResearch')), el('p', {}, t('app.dashboard.noResearchHelp')));
             queries.slice(0, 4).forEach(query => content.append(el('button', {class: 'home-table-item', type: 'button', on: {click: async () => {
-                if (!await mayReplaceResearch()) return;
+                if (!await mayReplaceResearch() || !scope.live()) return;
                 state.queryRevision += 1; state.queryId = query.id; state.queryDraft = query.sql; state.queryName = query.name; state.queryNotes = query.notes || '';
                 state.queryResult = null; state.queryDesign = null; state.queryDirty = false; state.queryError = null; state.querySaveError = null; go('onderzoeken');
             }}}, icon('code'), el('span', {}, query.name))));
             content.append(button(t('app.dashboard.newResearch'), () => openResearch(defaultSql()), {kind: 'ghost', symbol: 'plus'}));
         };
         if (state.savedQueries) queueMicrotask(() => draw(state.savedQueries));
-        else request('queries', {signal: scope.signal}).then(queries => { state.savedQueries = queries; draw(queries); }).catch(error => {
+        else request('queries', {params: {database: scope.database}, signal: scope.signal}).then(queries => { if (scope.live()) { state.savedQueries = queries; draw(queries); } }).catch(error => {
             if (error.name !== 'AbortError' && scope.live() && content.isConnected) content.replaceChildren(errorPanel(error));
         });
     } else if (id === 'overview.learning') {
@@ -761,7 +881,7 @@ function databaseContext(view, scope) {
 
 async function tableStructure(name, scope) {
     if (state.structureData.has(name)) return state.structureData.get(name);
-    const data = await request('structure', {params: {table: name}, signal: scope.signal});
+    const data = await request('structure', {params: {database: scope.database, table: name}, signal: scope.signal});
     if (scope.live()) state.structureData.set(name, data);
     return data;
 }
@@ -818,6 +938,7 @@ async function renderData(scope) {
     const workspace = el('section', {class: 'table-workspace'});
     const card = registerSelection(el('div', {class: 'card'}, tableHeader(table, 'browse')),
         () => tableSelection(table, state.structureData.get(table.name)));
+    if (table.type !== 'view') card.querySelector('.table-heading-actions').prepend(button(t('app.databases.addRow'), () => rowEditor.open({table: table.name, mode: 'insert'}), {id: 'add-row', kind: 'primary', symbol: 'plus', className: 'button-small'}));
     const search = el('input', {id: 'data-search', type: 'search', class: 'input', value: viewState.search, placeholder: t('app.core.data.searchPlaceholder'), 'aria-label': t('app.core.data.searchLabel'), autocomplete: 'off'});
     const size = el('select', {id: 'data-page-size', class: 'input select', 'aria-label': t('app.core.data.pageSize')},
         [25, 50, 100].map(value => el('option', {value, selected: value === viewState.pageSize}, String(value))));
@@ -839,7 +960,7 @@ async function renderData(scope) {
         pagination.replaceChildren();
         sql.replaceChildren();
         try {
-            const data = await request('browse', {params: {table: table.name, page: currentPage, page_size: size.value, q: search.value.trim()}, signal: rowController.signal});
+            const data = await request('browse', {params: {database: scope.database, table: table.name, page: currentPage, page_size: size.value, q: search.value.trim()}, signal: rowController.signal});
             if (!scope.live() || id !== requestId) return;
             const metadata = tableSelection(table, {columns: data.columns, foreign_keys: state.structureData.get(table.name)?.foreign_keys});
             const snapshot = ++recordSnapshotId;
@@ -856,14 +977,28 @@ async function renderData(scope) {
                     ? ' · ' + metadata.primaryKey.map(name => name + ' = ' + selectionValue(record[name])).join(', ') : ''),
                     record, snapshot: !keyed, truncated: Boolean(data.truncated)};
             };
-            result.replaceChildren(dataTable(data.columns.map(column => ({key: column.name, label: column.name})), data.rows, {
+            const actionKey = Symbol('row-actions');
+            const exactKeys = new Map(data.rows.map((row, index) => [row, {key: data.row_keys?.[index], index}]));
+            const editableRows = table.type !== 'view' && (data.key_columns || []).length > 0;
+            const columns = data.columns.map(column => ({key: column.name, label: column.name}));
+            if (editableRows) columns.push({key: actionKey, label: t('app.databases.actions'), className: 'row-actions-cell', render: (_value, row) => {
+                const {key, index} = exactKeys.get(row);
+                if (!key) return el('span', {class: 'small muted'}, '—');
+                return el('div', {class: 'row-actions'},
+                    button(t('app.databases.edit'), () => rowEditor.open({table: table.name, key, mode: 'edit'}),
+                        {id: 'row-edit-' + index, className: 'button-small', 'data-row-action': 'edit', 'aria-label': t('app.databases.editLabel', {table: table.name})}),
+                    button(t('app.databases.remove'), () => rowEditor.open({table: table.name, key, mode: 'delete'}),
+                        {id: 'row-delete-' + index, className: 'button-small row-delete', 'data-row-action': 'delete', 'aria-label': t('app.databases.removeLabel', {table: table.name})}));
+            }});
+            result.replaceChildren(dataTable(columns, data.rows, {
                 emptyMessage: search.value ? t('app.core.data.filteredEmpty') : t('app.core.data.empty'),
                 caption: t('app.core.data.caption', {table: table.name}),
                 inspect: {
                     table: metadata,
-                    column: column => columnSelection(table, data.columns.find(item => item.name === column.key), {columns: data.columns}),
+                    column: column => column.key === actionKey ? null : columnSelection(table, data.columns.find(item => item.name === column.key), {columns: data.columns}),
                     row: recordMetadata,
                     cell: (value, record, column, index) => {
+                        if (column.key === actionKey) return null;
                         const row = recordMetadata(record, index);
                         return {...row, kind: 'cell', key: row.key + ':cell:' + JSON.stringify(column.key),
                             label: table.name + '.' + column.key + ' · ' + selectionValue(value), column: column.key, value,
@@ -871,6 +1006,8 @@ async function renderData(scope) {
                     },
                 },
             }));
+            if (!editableRows) result.append(notice(t(table.type === 'view' ? 'app.databases.viewFallback' : 'app.databases.fallback')),
+                button(t('app.databases.openEditor'), () => databaseModal.open(table.name, 'browse'), {className: 'button-small', symbol: 'database'}));
             if (localized(data, 'notice')) result.append(notice(localized(data, 'notice')));
             const pages = Math.max(1, Math.ceil(Number(data.total) / Number(data.page_size)));
             currentPage = Number(data.page);
@@ -898,7 +1035,7 @@ async function renderData(scope) {
         el('div', {class: 'search-field'}, icon('search'), search),
         el('div', {class: 'table-toolbar-right'}, el('span', {class: 'small muted'}, t('app.core.data.rows')), size)),
         result, pagination);
-    workspace.append(card, el('p', {class: 'table-caption'}, t('app.core.data.readOnlyHelp')), sql);
+    workspace.append(card, el('p', {class: 'table-caption'}, t('app.databases.help')), sql);
     page.append(workspace);
     await load();
 }
@@ -973,7 +1110,7 @@ async function renderSchema(scope) {
     page.append(workspace);
     try {
         if (!state.schemaData) {
-            const data = await request('schema', {signal: scope.signal});
+            const data = await request('schema', {params: {database: scope.database}, signal: scope.signal});
             if (!scope.live()) return;
             state.schemaData = data;
         }
@@ -1027,7 +1164,7 @@ async function renderResearch(scope) {
                 el('p', {}, t('app.core.research.explanationHelp')));
         }
     };
-    const runButton = button(t('app.core.research.run'), () => run(), {id: 'run-query', kind: 'primary', symbol: 'play'});
+    const runButton = button(t('app.core.research.run'), () => run(), {id: 'run-query', kind: 'primary', symbol: 'play', disabled: state.runningQuery});
     const name = el('input', {id: 'query-name', class: 'input', type: 'text', maxlength: '160', value: state.queryName, placeholder: t('app.core.research.namePlaceholder'), required: true});
     const notes = el('textarea', {id: 'query-notes', class: 'input', rows: '3', placeholder: t('app.core.research.notesPlaceholder'), maxlength: '10000'}, state.queryNotes);
     notes.value = state.queryNotes;
@@ -1051,7 +1188,7 @@ async function renderResearch(scope) {
         }, {kind: 'ghost', className: 'button-small'}), saveError);
     const updateSavedList = async () => {
         let queries;
-        try { queries = await request('queries', {signal: scope.signal}); }
+        try { queries = await request('queries', {params: {database: scope.database}, signal: scope.signal}); }
         catch (error) {
             if (error.name !== 'AbortError' && scope.live()) savedList.replaceChildren(errorPanel(error, updateSavedList));
             return;
@@ -1066,10 +1203,11 @@ async function renderResearch(scope) {
         queries.forEach(query => {
             const remove = button(t('app.core.research.remove'), async () => {
                 const confirmed = await confirmAction({title: t('app.core.research.removeTitle'), description: t('app.core.research.removeDescription'), confirmLabel: t('app.core.research.removeConfirm'), danger: true});
-                if (!confirmed) return;
+                if (!confirmed || !scope.live()) return;
+                state.deletingQuery = true; syncDatabasePicker();
                 remove.disabled = true;
                 try {
-                    await request('delete-query', {body: {id: query.id}});
+                    await request('delete-query', {params: {database: scope.database}, body: {id: query.id}});
                     state.savedQueries = null;
                     if (String(state.queryId) === String(query.id)) {
                         state.queryId = null;
@@ -1078,6 +1216,7 @@ async function renderResearch(scope) {
                     toast(t('app.core.research.removed'));
                     await updateSavedList();
                 } catch (error) { toast(errorText(error), 'error'); remove.disabled = false; }
+                finally { state.deletingQuery = false; syncDatabasePicker(); }
             }, {kind: 'ghost', symbol: 'trash', className: 'icon-button', 'aria-label': t('app.core.research.removeLabel', {name: query.name})});
             remove.querySelector('span').className = 'sr-only';
             savedList.append(el('div', {class: 'saved-item'},
@@ -1115,13 +1254,13 @@ async function renderResearch(scope) {
         }
         name.removeAttribute('aria-invalid');
         saveButton.disabled = true;
-        state.savingQuery = true;
+        state.savingQuery = true; syncDatabasePicker();
         saveError.replaceChildren();
         state.querySaveError = null;
         const revision = state.queryRevision;
         const submission = {id: state.queryId || undefined, name: name.value.trim(), sql: editor.value, notes: notes.value};
         try {
-            const saved = await request('save-query', {body: submission});
+            const saved = await request('save-query', {params: {database: scope.database}, body: submission});
             if (state.queryRevision === revision) state.queryId = saved.id;
             if (state.queryDraft === submission.sql && state.queryName.trim() === submission.name && state.queryNotes === submission.notes) state.queryDirty = false;
             state.savedQueries = null;
@@ -1135,7 +1274,7 @@ async function renderResearch(scope) {
             if (scope.live()) saveError.replaceChildren(errorPanel(error));
             else toast(errorText(error), 'error');
         } finally {
-            state.savingQuery = false;
+            state.savingQuery = false; syncDatabasePicker();
             saveButton.disabled = false;
             if (!scope.live() && route().name === 'onderzoeken') render();
         }
@@ -1214,7 +1353,7 @@ async function renderResearch(scope) {
         if (data.structureChanged) result.append(notice(t('app.core.research.schemaChanged')));
     };
     const run = async () => {
-        if (runButton.disabled || !editor.value.trim()) {
+        if (state.runningQuery || runButton.disabled || !editor.value.trim()) {
             if (!editor.value.trim()) toast(t('app.research.sqlRequired'), 'error');
             editor.focus(); return;
         }
@@ -1226,6 +1365,7 @@ async function renderResearch(scope) {
         const body = binding?.sql === sql ? {design: structuredClone(binding.design)} : {sql};
         const revision = state.queryRevision;
         const opener = document.activeElement;
+        let replacementOpenerId = null;
         let keepOpener = true;
         const focusTracking = new AbortController();
         const trackFocus = event => {
@@ -1239,10 +1379,11 @@ async function renderResearch(scope) {
             if (!event.target.closest?.('.confirm-dialog') && !opener?.contains(event.target)) keepOpener = false;
         }, {capture: true, signal: focusTracking.signal});
         const focusFallback = () => keepOpener && scope.live() && opener?.isConnected && document.hasFocus() ? opener : null;
+        state.runningQuery = true; syncDatabasePicker();
         runButton.disabled = true;
         result.replaceChildren(loading(t('app.core.research.running')));
         try {
-            let data = await request('query', {body, signal: scope.signal});
+            let data = await request('query', {params: {database: scope.database}, body, signal: scope.signal});
             if (!scope.live() || revision !== state.queryRevision || editor.value !== sql) return;
             if (data.confirm_required) {
                 const list = el('ul', {class: 'confirm-list'}, ...data.destructive.map(item =>
@@ -1252,7 +1393,7 @@ async function renderResearch(scope) {
                     confirmLabel: t('app.core.research.confirmRun'), danger: true});
                 if (!scope.live() || revision !== state.queryRevision || editor.value !== sql) return;
                 if (!confirmed) { result.replaceChildren(); drawResult(); return; }
-                data = await request('query', {body: {sql, confirm: true}, signal: scope.signal});
+                data = await request('query', {params: {database: scope.database}, body: {sql, confirm: true}, signal: scope.signal});
             }
             if (!scope.live() || revision !== state.queryRevision || editor.value !== sql) return;
             if (body.design) {
@@ -1268,15 +1409,28 @@ async function renderResearch(scope) {
             state.queryResult = data;
             drawResult();
             const refreshNeeded = data.schema_refresh_needed ?? data.statements?.some(item => item.affected_rows !== null);
-            if (refreshNeeded) await refreshBootstrap(false, {preserveFocus: true, focusFallback});
+            if (refreshNeeded) {
+                // The replacement Run button stays disabled until this request's
+                // finally block releases the mutation lock. Remember its logical
+                // opener so it can receive focus after it becomes enabled.
+                replacementOpenerId = focusFallback()?.id || null;
+                await refreshBootstrap(false, {preserveFocus: true, focusFallback});
+            }
         } catch (error) {
             if (error.name !== 'AbortError' && scope.live() && revision === state.queryRevision && editor.value === sql) {
                 state.queryError = error;
                 drawResult();
             }
         } finally {
+            state.runningQuery = false; syncDatabasePicker();
+            const currentRunButton = document.getElementById('run-query');
+            if (currentRunButton) currentRunButton.disabled = false;
             runButton.disabled = false;
-            if (document.activeElement === document.body) focusFallback()?.focus({preventScroll: true});
+            if (document.activeElement === document.body) {
+                const replacement = replacementOpenerId && keepOpener && getDatabase() === scope.database && route().name === 'onderzoeken'
+                    ? document.getElementById(replacementOpenerId) : focusFallback();
+                replacement?.focus({preventScroll: true});
+            }
             focusTracking.abort();
         }
     };
@@ -1388,7 +1542,7 @@ async function renderExperiments(scope) {
         list.replaceChildren(loading(t('app.core.experiments.loading')));
         snapshotIndex.replaceChildren(loading(t('app.core.experiments.loading')));
         try {
-            const snapshots = await request('snapshots', {signal: scope.signal});
+            const snapshots = await request('snapshots', {params: {database: scope.database}, signal: scope.signal});
             if (!scope.live()) return;
             counter.textContent = number(snapshots.length);
             list.replaceChildren();
@@ -1404,7 +1558,7 @@ async function renderExperiments(scope) {
                         el('div', {class: 'snapshot-info'}, el('h3', {}, snapshot.label || t('app.core.experiments.restorePoint')),
                             el('p', {}, dateTime(snapshot.created_at) + ' · ' + fileSize(snapshot.size_bytes))), badge(t('app.core.experiments.sqlExport'))),
                     el('div', {class: 'snapshot-actions'},
-                        el('a', {class: 'button button-secondary button-small', href: endpoint('download-snapshot', {id: snapshot.id})}, icon('download'), t('app.core.experiments.download')),
+                        el('a', {class: 'button button-secondary button-small', href: endpoint('download-snapshot', {database: scope.database, id: snapshot.id})}, icon('download'), t('app.core.experiments.download')),
                         restore, el('code', {title: snapshot.sha256}, (snapshot.sha256 || '').slice(0, 12))));
                 list.append(snapshotCard);
                 snapshotIndex.append(el('button', {type: 'button', class: 'snapshot-index-item', on: {click: () => {
@@ -1426,7 +1580,7 @@ async function renderExperiments(scope) {
         status.replaceChildren(notice(t('app.core.experiments.creating')));
         try {
             const submittedLabel = label.value;
-            await request('create-snapshot', {body: {label: submittedLabel.trim()}});
+            await request('create-snapshot', {params: {database: scope.database}, body: {label: submittedLabel.trim()}});
             if (state.snapshotLabel === submittedLabel) state.snapshotLabel = '';
             if (!scope.live()) return;
             label.value = '';
@@ -1451,7 +1605,7 @@ async function renderExperiments(scope) {
             description: t('app.core.experiments.restoreDescription', {database, label: snapshot.label || t('app.core.experiments.restorePoint')}),
             requiredText: database, confirmLabel: t('app.core.experiments.restoreConfirm'), danger: true,
         });
-        if (confirmation === null || state.restoring || state.creatingSnapshot) return;
+        if (confirmation === null || state.restoring || state.creatingSnapshot || !scope.live()) return;
         restoreButton.disabled = true;
         createButton.disabled = true;
         state.restoring = true;
@@ -1460,7 +1614,7 @@ async function renderExperiments(scope) {
         if (databaseModal.dialog.open) databaseModal.dialog.close();
         status.replaceChildren(notice(t('app.core.experiments.restoring')));
         try {
-            const result = await request('restore-snapshot', {body: {id: snapshot.id, confirmation}});
+            const result = await request('restore-snapshot', {params: {database}, body: {id: snapshot.id, confirmation}});
             toast(localized(result, 'message') || t('app.core.experiments.restored'));
             await refreshBootstrap(false);
         } catch (error) {
@@ -1484,7 +1638,13 @@ async function renderExperiments(scope) {
 
 window.addEventListener('hashchange', () => {
     closeSidebar();
+    const target = route().params.get('database');
+    if (target && target !== getDatabase()) { switchDatabase(target, {fromHash: true}); return; }
+    if (!target && getDatabase()) history.replaceState(null, '', routeHash(route().name, Object.fromEntries(route().params)));
     render();
     document.getElementById('main-content').focus({preventScroll: true});
 });
 refreshBootstrap();
+request('databases', {params: {database: ''}}).then(data => {
+    knownDatabases = data.databases || []; syncDatabasePicker();
+}).catch(() => { /* Bootstrap reports a connection failure and keeps retry available. */ });

@@ -64,7 +64,21 @@ final class Database
         $this->read = null;
     }
 
-    private function connect(string $user, #[\SensitiveParameter] string $password, array $options = []): PDO
+    /** List schemas both application roles can see without selecting a schema. */
+    public function databaseNames(): array
+    {
+        if ($this->config['read_user'] === $this->config['user'] || strtolower($this->config['read_user']) === 'root') {
+            throw ApiException::fromCode('reader_required', 503);
+        }
+        $writer = $this->connect($this->config['user'], $this->config['password'], [], false);
+        $reader = $this->connect($this->config['read_user'], $this->config['read_password'], [], false);
+        $reader->exec('SET SESSION TRANSACTION READ ONLY');
+        $visible = $writer->query('SHOW DATABASES')->fetchAll(PDO::FETCH_COLUMN);
+        $readable = $reader->query('SHOW DATABASES')->fetchAll(PDO::FETCH_COLUMN);
+        return array_values(array_intersect($visible, $readable));
+    }
+
+    private function connect(string $user, #[\SensitiveParameter] string $password, array $options = [], bool $selectDatabase = true): PDO
     {
         if ($user === '' || $password === '') {
             throw ApiException::fromCode('credentials_missing', 503);
@@ -83,7 +97,7 @@ final class Database
             PDO::MYSQL_ATTR_MULTI_STATEMENTS => false,
             PDO::MYSQL_ATTR_LOCAL_INFILE => false,
         ], $options));
-        $pdo->exec('USE ' . self::identifier($this->name()));
+        if ($selectDatabase) $pdo->exec('USE ' . self::identifier($this->name()));
         $pdo->exec("SET time_zone = '+00:00'");
         $pdo->exec("SET SESSION sql_mode = '" . self::SQL_MODE . "'");
         $pdo->exec('SET SESSION lock_wait_timeout = 5');

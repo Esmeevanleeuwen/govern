@@ -142,6 +142,17 @@ final class Catalog
         $type = $this->requireTable($table);
         $columns = $this->columns($table);
         $pdo = $this->database->reader();
+        $indexes = $this->indexes($table);
+        $references = $this->foreignKeys($table);
+        $create = $pdo->query('SHOW CREATE ' . ($type === 'VIEW' ? 'VIEW ' : 'TABLE ') . Database::identifier($table))->fetch(PDO::FETCH_NUM);
+        return ['table' => $table, 'type' => $type === 'VIEW' ? 'view' : 'table', 'columns' => $columns, 'indexes' => $indexes,
+            'foreign_keys' => $references, 'create_sql' => $create[1] ?? ''];
+    }
+
+    public function indexes(string $table): array
+    {
+        $this->requireTable($table);
+        $pdo = $this->database->reader();
         $statement = $pdo->prepare(
             'SELECT INDEX_NAME, NON_UNIQUE, COLUMN_NAME, SUB_PART, INDEX_TYPE
              FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=:schema AND TABLE_NAME=:table
@@ -151,18 +162,17 @@ final class Catalog
         $indexes = [];
         foreach ($statement as $row) {
             $name = $row['INDEX_NAME'];
-            $indexes[$name] ??= ['name' => $name, 'unique' => $row['NON_UNIQUE'] === '0', 'columns' => [], 'type' => $row['INDEX_TYPE']];
+            $indexes[$name] ??= ['name' => $name, 'unique' => $row['NON_UNIQUE'] === '0', 'columns' => [], 'sub_parts' => [], 'type' => $row['INDEX_TYPE']];
             $indexes[$name]['columns'][] = $row['COLUMN_NAME'] ?? '(expressie)';
+            $indexes[$name]['sub_parts'][] = $row['SUB_PART'] === null ? null : (int) $row['SUB_PART'];
         }
-        $references = $this->foreignKeys($table);
-        $create = $pdo->query('SHOW CREATE ' . ($type === 'VIEW' ? 'VIEW ' : 'TABLE ') . Database::identifier($table))->fetch(PDO::FETCH_NUM);
-        return ['table' => $table, 'columns' => $columns, 'indexes' => array_values($indexes),
-            'foreign_keys' => $references, 'create_sql' => $create[1] ?? ''];
+        return array_values($indexes);
     }
 
     public function browse(string $table, int $page, int $pageSize, string $search): array
     {
         $columns = $this->columns($table);
+        $keyColumns = $this->requireTable($table) === 'VIEW' ? [] : RecordIdentity::columns($columns, $this->indexes($table));
         $page = max(1, $page);
         $pageSize = max(1, min(100, $pageSize));
         if ($page > 10000000) {
@@ -201,6 +211,7 @@ final class Catalog
         $sql = 'SELECT * FROM ' . $quoted . $where . $orderSql . ' LIMIT :page_size OFFSET :offset';
         $parameters = $params + ['page_size' => $pageSize, 'offset' => ($page - 1) * $pageSize];
         $rows = [];
+        $rowKeys = [];
         $shortened = false;
         $bytes = 0;
         $statement = null;
@@ -212,6 +223,7 @@ final class Catalog
             }
             $statement->execute();
             while ($row = $statement->fetch(PDO::FETCH_ASSOC)) {
+                $rowKeys[] = RecordIdentity::key($row, $columns, $keyColumns);
                 $row = Preview::row($row, $shortened);
                 $bytes += Preview::bytes($row);
                 $rows[] = $row;
@@ -233,6 +245,7 @@ final class Catalog
         }
         return ['table' => $table, 'columns' => $columns, 'rows' => $rows, 'page' => $page,
             'page_size' => $pageSize, 'total' => $total, 'sql' => $sql, 'params' => $parameters,
+            'key_columns' => $keyColumns, 'row_keys' => $rowKeys,
             'truncated' => $shortened,
             'notice' => $shortened ? Messages::text('browse_shortened') : null,
             'notice_i18n' => $shortened ? Messages::translations('browse_shortened') : null];

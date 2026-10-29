@@ -1,9 +1,9 @@
 # Architectuur
 
-## Eén gegevensmodel, meerdere bruikbare schermen
+## Actuele databases, herbruikbare schermen
 
-De werkdatabase is de bron voor zowel Govern als phpMyAdmin. Govern vraagt de
-catalogus op en bouwt daar zijn verkenner uit. Een nieuwe tabel verschijnt na
+De geselecteerde werkdatabase is de bron voor zowel Govern als phpMyAdmin.
+Govern vraagt de catalogus op en bouwt daar zijn verkenner uit. Een nieuwe tabel verschijnt na
 verversen, zonder een nieuwe resourceklasse of een kopie van de database in
 applicatiecode. Commentaren in de database zijn ook beschikbaar in het scherm.
 
@@ -45,7 +45,65 @@ De onderdelen hebben een kleine, duidelijke taak:
 | `selection-registry.js` | Semantische metadata van zichtbare onderdelen, los van hun normale bediening |
 | `selection-content.js` | Feitelijke uitleg en mogelijke vervolgstappen uit geselecteerde metadata |
 | `database-modal.js` | Het venster rondom de echte phpMyAdmin |
+| `row-editor.js` | Rijformulier met vaste databasecontext, exacte waarden en conflictfeedback |
+| `DatabaseScope.php` | Toegestane databasekeuze, afzonderlijke herstelpuntpaden en gedeelde locklocatie |
+| `RecordIdentity.php` en `RowEditor.php` | Volledige rij-identiteit, catalogusgestuurde formulieren en gecontroleerde mutaties |
 | `Messages.php` | Vertaalde applicatiefeedback met stabiele foutcodes |
+
+## Databasekeuze en afzonderlijke toestand
+
+`Database::databaseNames` verbindt zonder een werkdatabase te kiezen en vergelijkt
+de zichtbare namen voor schrijver en lezer. `DatabaseScope` gebruikt hun doorsnede,
+laat de vier systeemdatabases weg en voegt geconfigureerde, niet-beschikbare namen
+toe voor herstel. Een onbekende naam krijgt 403. Dit is selectie binnen bestaande
+rechten; een HTTP-verzoek verleent geen databaserechten.
+
+Elke API-URL bevat de database expliciet, ook bij POST, downloads en contextexports.
+Zonder parameter blijft `DB_NAME` de standaard. Een verbinding kiest de naam met
+een gequote `USE`, zodat een catalogusnaam geen DSN-fragment kan worden. Er is
+geen gedeelde actieve database in de PHP-sessie. De browser bewaart zijn keuze
+per tabblad en neemt die op in routes; twee tabbladen veranderen elkaars doel niet.
+
+De browser houdt tabelkeuze, zoekvelden, onderzoeksconcept, resultaten, builder
+en tijdelijke explorer-/schematoestand per database apart. Een wissel breekt oude
+leesverzoeken af en verandert de revisie, zodat een laat antwoord het nieuwe
+scherm niet kan overschrijven. Een open rijeditor, databasevenster of lopende
+schrijfactie blokkeert wisselen. Een rijhandeling houdt zijn oorspronkelijke
+database, tabel, sleutel en versie vast, ook tijdens een bevestigingsdialoog.
+Opgeslagen onderzoeken blijven in `_govern_queries` van de gekozen database.
+Uiterlijk, taal en dashboardindeling blijven algemene browservoorkeuren.
+
+Het officiële databasevenster krijgt de geselecteerde `db` in zijn URL en biedt
+zelf een databasekeuze. Het volgt expliciete navigatie binnen phpMyAdmin zonder
+een formulier door gewone shellupdates of taal-/themawisselingen te herladen.
+De gedeelde phpMyAdmin-opslag blijft in de oorspronkelijke `DB_NAME`-database.
+
+## Gegevens rechtstreeks bewerken
+
+`Catalog::browse` levert naast de verkorte leesvoorbeelden afzonderlijke, exacte
+rijsleutels. `RecordIdentity` kiest de volledige primaire sleutel of een volledige
+unieke index zonder NULL-kolommen, gegenereerde velden of prefixdelen. Binaire
+sleutelwaarden worden hexadecimaal verzonden. Rijen zonder bruikbare identiteit
+worden niet met een verzonnen volgnummer of een gedeeltelijke sleutel gewijzigd.
+
+`RowEditor` leest voor het formulier opnieuw de echte rij en de actuele catalogus.
+Het formulier onderscheidt een exacte waarde, NULL en de databasestandaard.
+BIGINT en DECIMAL blijven strings; binary/blob gebruikt hex en gebonden `UNHEX`.
+Berekende velden, BIT/geometrie en te grote of niet-bewerkbare tekstvelden zijn
+alleen-lezen. Alleen gewijzigde velden worden verstuurd, zodat hun oorspronkelijke
+inhoud niet door een preview wordt vervangen. Invoegen kan ook zonder sleutel;
+voor wijzigen/verwijderen en views blijft de officiële phpMyAdmin de route wanneer
+de eigen editor geen veilige identiteit of invoer ondersteunt.
+
+Een database- en tabelgebonden fingerprint omvat de volledige rij, ook velden die
+het formulier niet kan bewerken. Wijzigen en verwijderen lezen met `FOR UPDATE`
+binnen een schrijftransactie, controleren de versie en nemen de oorspronkelijke
+sleutel plus NULL-veilige byte-digests op in de SQL-voorwaarde zelf. Daarmee kan
+een tussentijdse wijziging niet stilzwijgend worden overschreven, ook wanneer een
+opslagengine de rijlock niet ondersteunt. Een conflict geeft 409 en biedt opnieuw
+laden; invoer blijft staan tot de gebruiker daar bewust voor kiest. Een wijziging
+van de primaire sleutel is toegestaan en levert de nieuwe identiteit op wanneer
+die kan worden teruggelezen. MariaDB bewaakt constraints en rechten.
 
 ## Selectie en gerichte uitleg
 
@@ -240,8 +298,8 @@ bij dat verversen behouden. Zie [het API-contract](API.md#free-sql-scripts) voor
 de resultaatvelden en voorvertoningsgrenzen.
 
 Het ontwerp is tijdelijke schermtoestand. Opgeslagen onderzoeken blijven gewone
-SQL in `_govern_queries`; een nieuw opslagmodel of een kopie van de catalogus is
-daarvoor niet nodig. Uitbreidingen kunnen later extra SQL-onderdelen toevoegen
+SQL in `_govern_queries` van de geselecteerde database; een nieuw opslagmodel
+of een kopie van de catalogus is daarvoor niet nodig. Uitbreidingen kunnen later extra SQL-onderdelen toevoegen
 aan deze compiler zonder de tabellen of opgeslagen onderzoeken te migreren.
 
 De PHP-container gebruikt versie 8.4. De MySQL-parser van PDO in deze versie
@@ -252,13 +310,30 @@ dubbelepunt en een backtick. Zie de [PHP-documentatie](https://www.php.net/manua
 
 ## Rechten
 
-Govern gebruikt twee verbindingen naar dezelfde database. De eerste mag
+Govern gebruikt twee verbindingen naar de geselecteerde database. De eerste mag
 onderzoeken en metadata lezen. Leestransacties beschermen ook tegen schrijvende
 functies die via een zelfgemaakte view zouden worden aangeroepen. De tweede slaat
 eigen instellingen op, maakt herstelpunten en voert vrije SQL uit. Vrije SQL en
-phpMyAdmin gebruiken hetzelfde schrijfaccount met rechten op die ene
-werkdatabase. Er worden voor de SQL-editor geen extra of globale serverrechten
-toegevoegd; ontbrekende rechten blijven een gewone databasemelding.
+phpMyAdmin gebruiken hetzelfde schrijfaccount. Gewone catalogus- en rijacties
+blijven bij de geselecteerde database; vrije SQL kan via `USE` of gekwalificeerde
+namen ook andere reeds toegestane databases bereiken. Er worden voor de
+SQL-editor geen extra of globale serverrechten toegevoegd; ontbrekende rechten
+blijven een gewone databasemelding.
+
+De Compose-service `database-access` draait na een gezonde MariaDB en vóór de
+app en phpMyAdmin. Alleen deze opstartservice en de databasecontainer hebben het
+rootwachtwoord. De service gebruikt de expliciete `DB_DATABASES`-lijst plus
+`DB_NAME`, maakt ontbrekende schemas leeg aan en verleent schrijver ALL en lezer
+SELECT/SHOW VIEW per exacte naam. Bestaande volumes worden niet opnieuw gevuld
+en bestaande accountwachtwoorden blijven behouden. Opnieuw starten past dezelfde
+grants toe; verwijderen uit de lijst trekt oude grants niet automatisch in.
+
+De opstartlijst accepteert letters, cijfers en underscores, met een begrensde
+naam-/grantlengte en zonder systeemdatabases. Underscores worden in GRANT-patronen
+geëscapet. Bekende oude, ongeëscapete grants voor de standaarddatabase worden
+vervangen door de exacte variant, zodat een underscore geen andere databasenaam
+dekt. Er worden geen `*.*`-rechten verleend. Bestaande handmatig verleende
+databasenamen worden via de live catalogus ontdekt, ook buiten de opstartlijst.
 
 Dit is geen algemene beveiligde hostingdienst. De lokale ingang is bereikbaar
 voor de gebruiker van de computer. Een publieke installatie vraagt een andere
@@ -270,6 +345,20 @@ Herstelpunten zijn SQL-bestanden met metadata en SHA-256. Het id wordt door de
 server gemaakt; download- en herstelverzoeken kiezen geen willekeurig pad.
 De databaseclients worden met losse argumenten gestart. Een wachtwoord wordt
 niet in de zichtbare procesargumenten gezet.
+
+De standaarddatabase houdt zijn bestaande `BACKUP_DIR`, zodat oude herstelpunten
+zichtbaar blijven. Andere databases gebruiken een submap
+`databases/<sha256(databasenaam)>`. De manifestcontrole vereist dezelfde
+databasenaam en een geldig controlegetal; een snapshot-ID kiest nooit een
+willekeurig bestand of een andere database.
+
+`maintenance_dir` wijst voor alle databases naar de oorspronkelijke backup-root.
+Gewone appgegevens- en onderzoeksverzoeken nemen daar dezelfde gedeelde lock;
+export en herstel nemen een exclusieve lock. Eén lock per database zou onjuist
+zijn, omdat vrije SQL vanuit de ene database met `USE` de andere kan wijzigen.
+Databasediscovery blijft beschikbaar voor de herstelroute. Zelfstandige
+phpMyAdmin-opdrachten volgen deze applicatielock niet; stop dat werk tijdens
+een export of herstel.
 
 Terugzetten vervangt de geselecteerde werkdatabase en controleert het resultaat
 van de client. Er wordt vooraf een veiligheidskopie gemaakt. Een fout tijdens
