@@ -334,6 +334,14 @@ try {
     await scriptPage.locator('#selection-pointer-toggle').click();
     await secondResultCell.click();
     await scriptPage.locator('#selection-pointer-count').click();
+    const reviewedTag = scriptPage.locator('#selection-pointer-tag');
+    await reviewedTag.waitFor();
+    // Explicit review keeps More reachable while the pointer crosses the
+    // workspace and scrolls from a low result back towards the editor.
+    await scriptPage.locator('#sql-editor').hover();
+    await scriptPage.waitForTimeout(550);
+    assert.equal(await reviewedTag.isVisible(), true, 'A reviewed selection stays open during pointer travel.');
+    assert.match(await scriptPage.locator('#selection-pointer-name').innerText(), /second_value/);
     await scriptPage.locator('#selection-pointer-more').click();
     const scriptDialog = scriptPage.locator('#selection-pointer-dialog[open]');
     await scriptDialog.waitFor();
