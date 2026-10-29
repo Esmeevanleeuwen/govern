@@ -1,6 +1,6 @@
 # Govern UX and UI design
 
-**Design baseline 1.0.** Govern is a personal, local workspace for exploring, understanding and changing a database. This guide defines its brand, visual system, behaviour and the process for adding features without disrupting existing work.
+**Design baseline 1.1.** Govern is a personal, local workspace for exploring, understanding and changing a database. This guide defines its brand, visual system, behaviour and the process for adding features without disrupting existing work.
 
 The agreed visual direction is layered glass, soft shadows, custom colour and no hard decorative borders. Dutch and English are equal interface languages. The detailed rules below are the target for implementation; the interactive preview is a visual reference. The production modules implement the core language, appearance and layout controls; the future chart example remains a proposal.
 
@@ -110,13 +110,15 @@ Keep primary actions visible without hover. Check the layout at 320 px, tablet w
 
 ## Information architecture
 
-- **Overview / Overzicht:** a personal starting point with data access, research, guidance and restore points. Counts come from the live database; label row estimates as estimates.
+- **Overview / Overzicht:** a personal starting point with data access, research, guidance and restore points. Open it directly, without a second navigation menu repeating Research and Experiments. Counts come from the live database; label row estimates as estimates.
 
-- **Data / Gegevens:** table selection, search, pagination, readable rows and optional SQL explanation. Editing opens the real phpMyAdmin at the selected database and table.
+- **Database / Database:** one workspace with **Data / Gegevens**, **Structure / Structuur** and **Schema / Schema** as its views. Keep these view controls beside the workspace rather than repeating them as main navigation areas.
 
-- **Structure / Structuur:** columns, keys, relationships and table definitions from the live catalog. Related objects have a clear route back.
+  - **Data:** table selection, record search, pagination, readable rows and optional SQL explanation. Editing opens the real phpMyAdmin at the selected database and table.
 
-- **Schema / Schema:** a whole-database diagram for following declared foreign keys between tables. This recurring spatial exploration task has its own workspace, with a direct entry from the selected table in Structure.
+  - **Structure:** columns, keys, relationships and table definitions from the live catalog. Related objects have a clear route back.
+
+  - **Schema:** a whole-database diagram for following declared foreign keys. Keep its canvas, table cards and tools when adopting the shared Database explorer.
 
 - **Research / Onderzoeken:** visual query building, editable SQL, results and saved research. Explain the relationship between a visual design and hand edited SQL.
 
@@ -124,15 +126,54 @@ Keep primary actions visible without hover. Check the layout at 320 px, tablet w
 
 - **Settings / Instellingen:** language, appearance and workspace preferences. Keep it in a consistent, easy to find position.
 
+### One menu, three responsibilities
+
+| Layer | Responsibility | Content |
+| --- | --- | --- |
+| Main rail | Choose an area | Overview, Database, Research and Experiments; Settings at the bottom |
+| Context panel | Choose an object in that area | Tables, saved research or restore points |
+| Workspace | Read, inspect or act on the object | Database views, query builder and editor, restore controls and task tools |
+
+The rail and context panel form one connected glass surface with one shared
+elevation. Do not add another tool rail beside them. Clicking an active area
+with context toggles its panel; switching area replaces that panel's contents.
+Overview and Settings open their own screens without a contextual menu of
+links to other main areas. A dashboard action may still resume a specific task.
+
+Database always keeps a searchable table explorer. Selecting a table highlights
+it in the list and updates the workspace; details appear below the list rather
+than replacing it. The next table stays one click away. The same table selection
+and explorer search carry between Data, Structure and Schema. Record search and
+pagination belong to Data and remain separate from explorer search.
+
+The Database rail entry returns to the last Database view in the current
+session. Preserve direct links and existing hashes: `#gegevens`, `#structuur`
+and `#schema`, including supported table parameters. Changing navigation must
+not discard research drafts, builder choices, table state or schema placement.
+
+Research uses the shared panel for saved research and Experiments for restore
+points. Keep execution, saving and restoration controls in their workspace.
+Panel content must have its own loading, empty and error states. Recovery and
+Settings remain reachable when the database is unavailable.
+
+Move the complete connected menu together when the user chooses navigation on
+the right. At compact widths, use a labelled opener for the same navigation and
+explorer; keep the selected table and task tools visible in the workspace.
+Automatic selection updates must not reopen a deliberately collapsed panel or
+steal focus. Preserve context and collapse choices through language and theme
+changes, and keep keyboard access and focus return working.
+
 ## Core user flows
 
 ### Follow the schema
 
-Open **Schema**, or choose **View schema** from Structure to select the current
-table. The canvas shows live tables, views, columns, primary keys and declared
-foreign keys. Search by table or column, select an object to read its exact
-connections, and continue to its data or structure. Focus on a selected table's
-connections to reduce visual density, then return to the complete diagram.
+Open **Database → Schema**, or choose **View schema** from Structure to select
+the current table. The canvas shows live tables, views, columns, primary keys
+and declared foreign keys. Select an object to read its exact connections, and
+continue to its data or structure without losing the table explorer. Search
+filters the explorer only; it must not silently remove tables from the canvas.
+Use the explicit selected-table connections filter to reduce diagram density,
+then return to the complete diagram.
 
 Table headers can be dragged or moved with the keyboard. Zoom, fit and reset
 controls keep the diagram navigable. Scrolling over the canvas zooms at the
@@ -143,28 +184,14 @@ Mobile users also have the table index and textual relationship details.
 Relationship strokes communicate data rather than
 decorating panel boundaries. The cards keep the shared frost and soft shadows.
 
-The primary menu keeps the main product areas stable. Schema has a compact tool
-rail beside it. **Tables** and **Selection** expand the related context panel;
-clicking the active tool again collapses the content while keeping the rail
-visible. Another tool switches and expands its own content. Choosing a table
-updates its columns, exact connections and relevant actions. Keep the table index
-one action away. Automatic context updates must not steal keyboard focus or
-reopen a deliberately collapsed panel. Collapsing gives space back to the canvas
-and keeps the selection and viewport intact.
+The shared Database context panel keeps the table list visible above the selected
+table's details. Expand columns or connections there without replacing the list.
+Choosing another table updates its highlight, exact connections and workspace
+selection. Keep Schema tools, zoom, fit, arrangement and guide controls beside
+the canvas, including when the explorer is collapsed. Opening or closing the
+explorer keeps the selection, zoom and diagram center intact.
 
-Keep this panel next to the main navigation when navigation is moved to the
-right. On compact screens it starts collapsed, offers a clear opener and bounds
-its internal scrolling so long connection lists do not push the canvas down
-several screens. Preserve the selected context tab and collapse choice across
-language/theme changes and visits to other areas in the same session.
-
-Future context menus should follow the same distinction: main navigation chooses
-an area; the second menu offers that area's objects and the selected object's
-actions. Reuse the existing table catalog for Data and Structure, and use saved
-research or restore points as the objects when those screens adopt this pattern.
-Keep task controls such as query execution and canvas zoom beside the workspace.
-
-**What can I do here?** stays available in the Schema tools rail and opens a
+**What can I do here?** stays available among the Schema workspace tools and opens a
 guide modal. Explain actual capabilities: search, declared keys and connections,
 selection actions, wheel zoom, panning, table placement, layout controls and
 refreshing. Include keyboard instructions and make the difference between diagram
@@ -281,6 +308,7 @@ Preserve the existing PHP, JavaScript module and SQL structure. Add a dependency
 | Responsibility | Existing place or proposed extension |
 | --- | --- |
 | Shared materials and geometry | Tokens and component styles in `styles.css` |
+| Unified navigation and context | Shared shell and route coordination in `app.js`; one context host for the active area |
 | Buttons, tables, notices and dialogs | Shared helpers in `ui.js` |
 | Requests and consistent failures | `api.js` and the documented API contract |
 | Routes and feature coordination | `app.js`; keep feature behaviour in focused modules |

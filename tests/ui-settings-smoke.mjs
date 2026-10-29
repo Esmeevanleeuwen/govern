@@ -34,11 +34,18 @@ const responseFor = action => page.waitForResponse(response => {
     return url.pathname === '/api.php' && url.searchParams.get('action') === action;
 });
 const navigate = async route => {
-    await page.locator('#navigation [data-route="' + route + '"]').click();
+    if (['gegevens', 'structuur', 'schema'].includes(route)) {
+        const current = await page.evaluate(() => location.hash.slice(1).split('?')[0]);
+        if (!['gegevens', 'structuur', 'schema'].includes(current)) {
+            await page.locator('#navigation [data-area="database"]').click();
+        }
+        await page.locator('[data-database-view="' + route + '"]').click();
+    } else await page.locator('#navigation [data-route="' + route + '"]').click();
     await page.waitForFunction(expected => location.hash.split('?')[0] === '#' + expected, route);
 };
 const settings = async () => {
-    await page.locator('#settings-shortcut').click();
+    if (await page.locator('#sidebar').getAttribute('aria-hidden') === 'true') await page.locator('#menu-toggle').click();
+    await page.locator('#settings-link').click();
     await page.locator('#preference-theme').waitFor();
 };
 const language = async value => {

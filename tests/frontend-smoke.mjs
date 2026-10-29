@@ -69,7 +69,7 @@ try {
     await shot(page, 'overview');
 
     await page.goto(new URL('/#gegevens?table=' + encodeURIComponent(table.name), base).href);
-    await page.getByRole('heading', {name: table.name, exact: true}).waitFor();
+    await page.locator('.table-heading').getByRole('heading', {name: table.name, exact: true}).waitFor();
     await waitForPage(page);
     assert.equal(await page.locator('.table-heading h2').textContent(), table.name);
     if (table.name === 'digital_systems') {
@@ -170,7 +170,7 @@ try {
     assert.equal(await mobile.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
     await shot(mobile, 'mobile-overview');
     await mobile.getByRole('button', {name: 'Navigatie openen', exact: true}).click();
-    await mobile.getByRole('link', {name: 'Gegevens', exact: true}).click();
+    await mobile.locator('#navigation [data-area="database"]').click();
     await mobile.getByRole('heading', {name: 'Verken je database.', exact: true}).waitFor();
     await waitForPage(mobile);
     await mobile.waitForFunction(() => document.getElementById('sidebar').getBoundingClientRect().right <= 1);
