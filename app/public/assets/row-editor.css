@@ -1,0 +1,68 @@
+.row-editor-dialog {
+    width: min(820px, calc(100vw - 32px));
+    max-width: none;
+    max-height: calc(100dvh - 40px);
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius);
+    color: var(--ink);
+    background: linear-gradient(145deg, var(--g-shine), transparent 65%), var(--g-dense-frost);
+    box-shadow: var(--g-elevation), 0 24px 80px var(--g-shadow);
+    backdrop-filter: blur(32px);
+    -webkit-backdrop-filter: blur(32px);
+    overflow: hidden;
+}
+.row-editor-dialog[open] { display: flex; flex-direction: column; }
+.row-editor-dialog::backdrop { background: var(--backdrop); backdrop-filter: blur(5px); }
+.row-editor-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; padding: 24px 24px 16px; flex: 0 0 auto; }
+.row-editor-header h2 { margin: 0 0 6px; font-size: 23px; }
+.row-editor-context { margin: 0; color: var(--muted); font-family: var(--mono); font-size: 12px; overflow-wrap: anywhere; }
+.row-editor-header > div { min-width: 0; }
+.row-editor-close { flex: 0 0 auto; }
+.row-editor-close > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.row-editor-body { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0 24px 8px; scrollbar-width: thin; }
+.row-editor-body > .small { margin: 0 0 20px; }
+.row-editor-fields { display: grid; gap: 14px; }
+.row-editor-field { min-width: 0; padding: 16px; border-radius: var(--radius-small); background: var(--g-frost); box-shadow: var(--g-control-depth); }
+.row-editor-field-header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 6px 16px; margin-bottom: 10px; }
+.row-editor-label { font-weight: 650; min-width: 0; overflow-wrap: anywhere; }
+.row-editor-label code { font-size: 13px; }
+.row-editor-type { color: var(--muted); font-family: var(--mono); font-size: 11px; overflow-wrap: anywhere; }
+.row-editor-field-controls { display: grid; grid-template-columns: minmax(130px, 175px) minmax(0, 1fr); align-items: start; gap: 10px; }
+.row-editor-value, .row-editor-mode { width: 100%; min-width: 0; margin: 0; }
+.row-editor-value { font-family: var(--mono); font-size: 13px; }
+textarea.row-editor-value { resize: vertical; min-height: 84px; max-height: 320px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.row-editor-value[readonly] { color: var(--muted); background: var(--g-row); }
+.row-editor-value:disabled { opacity: .72; }
+.row-editor-hint { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 8px; overflow-wrap: anywhere; }
+.row-editor-hint:empty { display: none; }
+.row-editor-mode-help { margin: 0; }
+.row-editor-key { display: grid; gap: 6px; margin-bottom: 16px; padding: 12px 16px; border-radius: var(--radius-small); background: var(--g-frost); }
+.row-editor-key code { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; }
+.row-editor-error { margin: 0 0 16px; }
+.row-editor-error > p { margin: 0 0 12px; }
+.row-editor-recovery { display: flex; flex-wrap: wrap; gap: 8px; }
+.row-editor-content + .button { margin-top: 16px; }
+.row-editor-footer { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 10px; padding: 16px 24px 24px; flex: 0 0 auto; }
+.row-editor-dialog [hidden] { display: none !important; }
+@media (max-width: 620px) {
+    .row-editor-dialog { width: calc(100vw - 16px); max-height: calc(100dvh - 16px); }
+    .row-editor-header { padding: 20px 16px 16px; }
+    .row-editor-body { padding: 0 16px 8px; }
+    .row-editor-footer { padding: 16px; }
+    .row-editor-field { padding: 12px; }
+    .row-editor-field-controls { grid-template-columns: minmax(0, 1fr); }
+    .row-editor-dialog .input, .row-editor-dialog .button { min-height: 44px; }
+    .row-editor-footer .button { flex: 1 1 auto; }
+    .row-editor-recovery .button { width: 100%; }
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .row-editor-dialog { background: var(--g-panel); }
+}
+:root[data-reduce-transparency="true"] .row-editor-dialog,
+:root[data-reduce-transparency="true"] .row-editor-field,
+:root[data-reduce-transparency="true"] .row-editor-key { background: var(--g-panel); backdrop-filter: none; -webkit-backdrop-filter: none; }
+@media (forced-colors: active) {
+    .row-editor-dialog, .row-editor-field, .row-editor-key { background: Canvas; color: CanvasText; outline: 1px solid CanvasText; box-shadow: none; }
+    .row-editor-value[readonly] { color: CanvasText; }
+}

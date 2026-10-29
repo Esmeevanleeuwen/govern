@@ -19,6 +19,38 @@ moet de optie `--wait` ondersteunen; een actuele Docker Desktop bevat die. Je be
 database buiten Docker wordt niet aangeraakt. De wachtwoorden staan alleen in
 je lokale `.env`, die niet in Git wordt opgenomen.
 
+## Een andere database kiezen of toevoegen
+
+Kies bovenaan je database. De tabelverkenner, schemaweergave, onderzoeken,
+context-export en herstelpunten volgen die keuze. Je onderzoeksconcept en
+tabelkeuze blijven tijdens deze browsersessie per database behouden; de keuze
+geldt alleen voor dit browsertabblad.
+
+Om bijvoorbeeld een extra database `onderzoek` beschikbaar te maken:
+
+1. Open `.env` in de projectmap. Voeg deze regel toe, of voeg de naam toe aan
+   de bestaande lijst:
+
+   ```dotenv
+   DB_DATABASES=onderzoek,project_data
+   ```
+
+2. Bewaar de bestaande wachtwoorden en `DB_NAME`.
+3. Start opnieuw met `start.cmd` op Windows of `sh start.sh` op macOS / Linux.
+4. Kies de database bovenaan. Nieuwe extra databases zijn leeg; importeer je
+   bestaande SQL desgewenst via **Databasevenster** in de gekozen database.
+
+De namen zijn een expliciete lijst met letters, cijfers en underscores, gescheiden
+door komma's; `DB_NAME` blijft altijd beschikbaar. Opstarten maakt ontbrekende
+databases aan en verleent beide Govern-accounts passende rechten zonder bestaande
+gegevens opnieuw te vullen of wachtwoorden te vervangen. Dit werkt ook met je
+bestaande Docker-volume. Verwijder daarvoor geen volumes.
+
+Databases op dezelfde MariaDB-server die al voor zowel het schrijf- als het
+leesaccount zichtbaar zijn, verschijnen ook. Systeemdatabases worden weggelaten.
+Een geconfigureerde database die ontbreekt blijft in de kiezer staan voor herstel.
+Een database buiten deze Docker-installatie wordt niet automatisch gekoppeld.
+
 ## Wat kun je ermee?
 
 - **Overzicht:** zie welke tabellen en overzichten je database bevat.
@@ -39,6 +71,9 @@ je lokale `.env`, die niet in Git wordt opgenomen.
   de tabellen, opgeslagen onderzoeken of herstelpunten die bij dat gebied horen.
   Overzicht en Instellingen openen direct, zonder herhaalde navigatielijst.
 - **Database → Gegevens:** bekijk records, zoek, blader en bekijk de gebruikte SQL.
+  Gebruik **Rij toevoegen**, of **Bewerken** en **Verwijderen** bij een rij om
+  rechtstreeks gegevens te veranderen. Het formulier toont database en tabel;
+  verwijderen vraagt bevestiging.
 - **Database → Structuur:** lees velden, sleutels, relaties en de echte tabeldefinitie.
 - **Database → Schema:** bekijk alle tabellen, kolommen en foreign keys in een interactief
   diagram. Scroll boven de tekening om rond je muisaanwijzer te zoomen en sleep
@@ -68,6 +103,16 @@ je lokale `.env`, die niet in Git wordt opgenomen.
 De eigen schermen lezen de actuele database. Een nieuwe tabel wordt na verversen
 zichtbaar; je hoeft daarvoor geen nieuw onderdeel te programmeren. phpMyAdmin
 blijft zijn volledige interface tonen, inclusief functies buiten de drie snelkeuzes.
+
+De rijeditor houdt een lege waarde, `NULL` en de databasestandaard apart.
+Berekende velden worden door MariaDB gevuld. Grote of niet-ondersteunde velden
+blijven behouden wanneer je een ander veld verandert; binaire velden gebruiken
+hexadecimale tekst. Exacte grote getallen worden niet afgerond. Voor wijzigen en
+verwijderen is een volledige primaire sleutel of een geschikte unieke sleutel
+nodig. Bij views of ontbrekende veilige rij-identiteit open je de officiële
+phpMyAdmin via de aangeboden knop. Toevoegen kan ook bij een gewone tabel zonder
+sleutel. Als de rij intussen veranderd is, vraagt Govern de actuele rij opnieuw
+te laden voordat je verdergaat.
 
 De selectieaanwijzer werkt op gegevens en interfaceonderdelen: ook een knop,
 tekst of invoerveld kun je bekijken zonder het te activeren. Het aantal naast
@@ -103,8 +148,8 @@ paneelranden. Het ontwerp en de regels voor uitbreidingen staan in
 3. Open **Structuur** binnen Database en zoek de verwijzing `evidence_id`.
 4. Volg de onderbouwing in `evidence` en de bronkoppeling in `evidence_sources`.
 5. Maak bij **Experimenten** een herstelpunt voordat je iets verandert.
-6. Open **Databasevenster → Browse**, pas een beschrijving aan en ververs het
-   eigen gegevensscherm. Je ziet dezelfde opgeslagen wijziging.
+6. Ga naar **Gegevens**, kies **Bewerken** bij een rij en pas een beschrijving
+   aan. Na bewaren zie je dezelfde wijziging ook in **Databasevenster → Browse**.
 
 Zo leer je met echte gegevens wat een tabel, een verwijzing en een query doen.
 De korte uitleg in het scherm is vaste uitleg over deze handeling; er wordt geen
@@ -132,7 +177,9 @@ verder in de SQL-editor. De voorbeelden in de bouwer hebben dezelfde grens van
 
 De SQL-editor gebruikt hetzelfde databaseaccount als het phpMyAdmin-venster.
 Je kunt de SQL-opdrachten uitvoeren waarvoor dat account rechten heeft op deze
-werkdatabase; er is geen lijst die alleen leesopdrachten toestaat. Bestanden
+geselecteerde database; er is geen lijst die alleen leesopdrachten toestaat.
+Met `USE` of gekwalificeerde tabelnamen kan SQL ook een andere database raken
+waarvoor datzelfde account rechten heeft. Bestanden
 importeren en serverbeheer blijven aparte mogelijkheden van de officiële tool
 en de beschikbare databaserechten.
 
@@ -152,14 +199,17 @@ met behoud van je SQL, resultaten en invoerpositie.
 
 ## Gegevens en herstelpunten
 
-Er is één normale MariaDB-database. De applicatie gebruikt enkele tabellen met
-het voorvoegsel `_govern_` voor opgeslagen onderzoeken en phpMyAdmin-instellingen.
-Deze blijven via phpMyAdmin bereikbaar. De gewone gegevensschermen laten de
-inhoudelijke tabellen zien.
+Eén lokale MariaDB-server kan meerdere werkdatabases bevatten. Opgeslagen
+onderzoeken staan per database in `_govern_queries`; phpMyAdmin bewaart zijn
+gedeelde instellingen in de oorspronkelijke `DB_NAME`-database. Tabellen met
+het voorvoegsel `_govern_` blijven via phpMyAdmin bereikbaar. De gewone
+gegevensschermen laten de inhoudelijke tabellen zien.
 
 De database staat in een Docker-volume en blijft behouden bij stoppen of opnieuw
 opbouwen van de containers. Dat volume is geen terugdraaifunctie. Herstelpunten
 zijn afzonderlijke SQL-exports met een controlegetal en tijdstip.
+Iedere database heeft een eigen lijst; een herstelpunt uit de ene database
+kan niet via de herstelknop op een andere worden toegepast.
 
 Bij herstellen typ je de databasenaam. Govern maakt eerst een veiligheidskopie
 van de huidige toestand en zet daarna het gekozen herstelpunt terug. Ook tabellen
@@ -168,7 +218,8 @@ Als de database al verwijderd is, kan er geen veiligheidskopie meer van die
 toestand worden gemaakt. Het gekozen herstelpunt blijft wel beschikbaar.
 
 Voer tijdens een export of herstel geen opdrachten uit in een ander
-phpMyAdmin-venster. De eigen API-acties worden onderling vergrendeld; een al
+phpMyAdmin-venster. De eigen API-acties worden over alle databases onderling
+vergrendeld; een al
 lopende externe SQL-opdracht wordt daarmee niet automatisch stilgezet.
 Een tabelwijziging is niet altijd terug te draaien met een SQL-transactie.
 
@@ -242,12 +293,14 @@ of een verzameling aparte services per onderwerp.
 
 De ingang is alleen aan `127.0.0.1` gekoppeld. Dit is een persoonlijke lokale
 werkplek zonder bezoekersaccounts. Iedereen die jouw lokale ingang kan gebruiken,
-kan de gekoppelde werkdatabase beheren. De phpMyAdmin-verbinding heeft rechten
-voor deze database; serverbeheer en andere databases vallen daar niet onder.
+kan de toegestane werkdatabases beheren. De phpMyAdmin-verbinding heeft rechten
+voor de expliciet ingeschakelde databases en eventueel eerder verleende rechten;
+Govern voegt geen globale serverrechten toe. Verwijderen uit `DB_DATABASES`
+trekt bestaande rechten niet automatisch in.
 
 De **visuele querybouwer** gebruikt een apart databaseaccount met leesrechten.
 Vrije SQL in **Onderzoeken** en het databasevenster gebruiken het schrijfaccount
-voor deze werkdatabase. Vrije SQL vraagt bevestiging voor ingrijpende opdrachten;
+voor de toegestane databases. Vrije SQL vraagt bevestiging voor ingrijpende opdrachten;
 eerdere opdrachten in een script kunnen al zijn uitgevoerd als een latere faalt.
 
 De interface en configuratie zijn niet bedoeld om rechtstreeks openbaar op

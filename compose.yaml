@@ -24,6 +24,24 @@ services:
       start_period: 30s
     restart: unless-stopped
 
+  database-access:
+    image: mariadb:10.11
+    entrypoint: ["/bin/bash", "/opt/govern/enable-databases.sh"]
+    environment:
+      DB_HOST: database
+      DB_PORT: 3306
+      DB_NAME: ${DB_NAME:-bestuursatlas}
+      DB_DATABASES: "${DB_DATABASES:-}"
+      DB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?Missing generated root password}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_READ_PASSWORD: ${DB_READ_PASSWORD}
+    volumes:
+      - ./docker/database/enable-databases.sh:/opt/govern/enable-databases.sh:ro
+    depends_on:
+      database:
+        condition: service_healthy
+    restart: "no"
+
   app:
     build:
       context: .
@@ -32,6 +50,7 @@ services:
       DB_HOST: database
       DB_PORT: 3306
       DB_NAME: ${DB_NAME:-bestuursatlas}
+      DB_DATABASES: "${DB_DATABASES:-}"
       DB_USER: govern
       DB_PASSWORD: ${DB_PASSWORD}
       DB_READ_USER: govern_reader
@@ -47,6 +66,8 @@ services:
     depends_on:
       database:
         condition: service_healthy
+      database-access:
+        condition: service_completed_successfully
     healthcheck:
       test: [CMD, php, -r, "exit(@file_get_contents('http://127.0.0.1/api.php?action=health') === false ? 1 : 0);"]
       interval: 15s
@@ -64,12 +85,15 @@ services:
       PMA_USER: govern
       PMA_PASSWORD: ${DB_PASSWORD}
       DB_NAME: ${DB_NAME:-bestuursatlas}
+      DB_DATABASES: "${DB_DATABASES:-}"
       UPLOAD_LIMIT: 128M
       MAX_EXECUTION_TIME: 300
       MEMORY_LIMIT: 256M
     depends_on:
       database:
         condition: service_healthy
+      database-access:
+        condition: service_completed_successfully
     restart: unless-stopped
 
   gateway:

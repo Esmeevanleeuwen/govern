@@ -12,7 +12,8 @@ beperking van de werkplek.
 - Houd code in kleine, herbruikbare onderdelen met één duidelijke taak.
 - Gebruik gewone SQL en duidelijke PHP/JavaScript. Voeg pas een afhankelijkheid
   of abstractielaag toe wanneer die een concrete taak eenvoudiger maakt.
-- Er is één werkdatabase. Applicatietabellen hebben prefix `_govern_`.
+- Ondersteun meerdere werkdatabases met dezelfde catalogus en schermen.
+  Applicatietabellen hebben prefix `_govern_` en horen bij hun eigen database.
 - phpMyAdmin is de echte officiële toepassing achter dezelfde lokale oorsprong.
   Bouw geen gedeeltelijke imitatie die dezelfde naam of mogelijkheden claimt.
 - De modal heeft Browse, Structure en SQL als snelkeuzes, met de overige
@@ -24,13 +25,32 @@ beperking van de werkplek.
   en worden correct gequote. Geen willekeurige identifiers uit een verzoek.
 - De onderzoekverbinding heeft echte leesrechten in MariaDB. Een SQL-regex is
   geen vervanging voor databaserechten.
-- De schrijfverbinding heeft rechten op de geselecteerde database, niet globaal.
+- De schrijfverbinding heeft rechten op toegestane werkdatabases, niet globaal.
+- Stuur de database expliciet mee in iedere API-URL. Bewaar de keuze per
+  browsertab, niet als veranderlijke serversessie. Ontbreekt de parameter, dan
+  blijft `DB_NAME` de standaard voor bestaande links.
+- De kiezer gebruikt de doorsnede van echt zichtbare databases voor schrijver
+  en lezer, zonder systeemdatabases. Geconfigureerde ontbrekende databases
+  blijven bereikbaar voor herstel. Kiezen verleent geen rechten.
+- Alleen de eenmalige opstartservice gebruikt root voor de expliciete
+  `DB_DATABASES`-namen en `DB_NAME`. Geen globale grants; escape `_` in
+  databasepatronen. Bestaande gegevens en accountwachtwoorden blijven behouden.
+- Gebruik voor direct wijzigen de volledige primaire sleutel of een volledige
+  unieke sleutel zonder NULL-velden of prefixindex. Lees de echte rij opnieuw;
+  verkorte browsewaarden zijn nooit een schrijfbron. Behoud exacte getallen,
+  NULL, binaire waarden, berekende en niet-bewerkte grote velden.
+- Houd database, tabel, sleutel en versie vast tijdens een rijhandeling.
+  Controleer wijzigingen met een databasegebonden fingerprint en een atomische
+  SQL-voorwaarde; een conflict mag geen nieuwere gegevens overschrijven.
 - Houd berekende kolommen berekend; maak ze niet tot gewone invoervelden.
 - Voer alle gewone app-verbindingen in UTC en de afgesproken strikte SQL-modus uit.
 - Snapshotbestanden staan buiten de webroot. Credentials en dumps blijven uit Git.
 - Een Docker-volume is opslag, geen backup. Herstel wordt getest met echte data.
 - Beschrijf herstel eerlijk: DDL is niet transactioneel en SQL uit een ander
   phpMyAdmin-venster volgt niet automatisch onze applicatievergrendeling.
+- Gebruik de gedeelde vergrendeling in `maintenance_dir`, buiten de afzonderlijke
+  herstelpuntmappen. Vrije SQL kan met `USE` een andere toegestane database raken;
+  herstel moet daarom gewone appverzoeken over alle databases uitsluiten.
 
 ## Uitleg en bediening
 
@@ -42,6 +62,9 @@ beperking van de werkplek.
   hebben vaste IDs; een update mag een bestaande indeling niet overschrijven.
 - Een taal- of themawissel mag geen onderzoekconcept wissen of een actief
   phpMyAdmin-formulier herladen.
+- Houd tabelkeuze, zoekvelden, onderzoeksconcepten en tijdelijke schermtoestand
+  per database apart. Wisselen negeert oude antwoorden en behoudt de concepten
+  bij terugkeren; een open rijeditor of lopende schrijfactie blokkeert wisselen.
 - Leg de gebruikte SQL naast de handeling uit, zonder te doen alsof er een
   AI-verbinding bestaat als die niet is gebouwd.
 - Zorg voor toetsenbordbediening, focusbeheer, bruikbare foutmeldingen en een

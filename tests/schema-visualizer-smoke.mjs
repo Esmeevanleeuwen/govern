@@ -21,6 +21,7 @@ const context = await browser.newContext({locale: 'nl-NL', viewport: {width: 144
 const page = await context.newPage();
 const errors = [];
 const track = page => page.on('pageerror', error => errors.push(error.message));
+const apiRoute = action => url => url.pathname === '/api.php' && url.searchParams.get('action') === action;
 track(page);
 const shot = async (page, name) => {
     if (screenshots) {
@@ -553,7 +554,7 @@ try {
         {name: 'report_view', type: 'view', comment: '', columns: [column('a')], foreign_keys: []},
     ]};
     let fixtureMode = 'normal';
-    await fixturePage.route('**/api.php?action=schema', async route => {
+    await fixturePage.route(apiRoute('schema'), async route => {
         assert.equal(route.request().method(), 'GET');
         if (fixtureMode === 'error') return route.fulfill({status: 503, json: {ok: false, error: 'Catalog temporarily unavailable',
             error_code: 'database_action_failed', error_i18n: {en: 'Catalog temporarily unavailable', nl: 'Catalogus tijdelijk niet beschikbaar'}}});

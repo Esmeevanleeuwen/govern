@@ -12,6 +12,8 @@
     <link rel="stylesheet" href="/assets/workspace-navigation.css">
     <link rel="stylesheet" href="/assets/schema-workspace.css">
     <link rel="stylesheet" href="/assets/selection-pointer.css">
+    <link rel="stylesheet" href="/assets/database-workspace.css">
+    <link rel="stylesheet" href="/assets/row-editor.css">
     <script type="module" src="/assets/app.js"></script>
 </head>
 <body>
@@ -33,7 +35,7 @@
             <header class="topbar">
                 <div class="topbar-location">
                     <button id="menu-toggle" class="icon-button mobile-menu" type="button" aria-label="Navigatie openen" data-i18n-aria="app.shell.openNavigation" aria-expanded="false"></button>
-                    <span class="topbar-brand">govern</span><div class="topbar-project"><strong id="workspace-database" data-i18n="app.shell.personal">Persoonlijke werkplek</strong><div id="connection-state" class="connection-card"><span class="status-dot waiting"></span><span data-i18n="app.shell.connecting">Verbinding maken…</span></div></div><strong id="breadcrumb-current" class="sr-only">Overzicht</strong>
+                    <span class="topbar-brand">govern</span><div class="topbar-project"><strong id="workspace-database" class="sr-only" data-i18n="app.shell.personal">Persoonlijke werkplek</strong><label class="database-picker"><span id="database-picker-icon" aria-hidden="true"></span><select id="database-select" aria-label="Database kiezen" data-i18n-aria="app.databases.choose" disabled><option value="">Database…</option></select></label><div id="connection-state" class="connection-card"><span class="status-dot waiting"></span><span data-i18n="app.shell.connecting">Verbinding maken…</span></div></div><strong id="breadcrumb-current" class="sr-only">Overzicht</strong>
                 </div>
                 <div class="topbar-actions">
                     <label class="language-picker"><span id="language-icon" aria-hidden="true"></span><select id="language-select" aria-label="Taal" data-i18n-aria="app.settings.language"><option value="nl">NL</option><option value="en">EN</option></select></label>

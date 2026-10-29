@@ -25,6 +25,7 @@ const context = await browser.newContext({locale: 'nl-NL', viewport: {width: 144
 const page = await context.newPage();
 const errors = [];
 page.on('pageerror', error => errors.push(error.message));
+const apiRoute = action => url => url.pathname === '/api.php' && url.searchParams.get('action') === action;
 
 const shot = async name => {
     if (screenshots) await page.screenshot({path: path.join(screenshots, name + '.png'), fullPage: true});
@@ -86,16 +87,16 @@ const verifyRestoreGuard = async () => {
     const release = new Promise(resolve => { releaseRestore = resolve; });
     const seen = new Promise(resolve => { markSeen = resolve; });
     let restoreCalls = 0, createCalls = 0;
-    await restorePage.route('**/api.php?action=snapshots', async route => {
+    await restorePage.route(apiRoute('snapshots'), async route => {
         assert.equal(route.request().method(), 'GET');
         await route.fulfill({json: {ok: true, data: snapshots}});
     });
-    await restorePage.route('**/api.php?action=create-snapshot', async route => {
+    await restorePage.route(apiRoute('create-snapshot'), async route => {
         // A regression must not create a real export either.
         createCalls += 1;
         await route.fulfill({json: {ok: true, data: snapshots[0]}});
     });
-    await restorePage.route('**/api.php?action=restore-snapshot', async route => {
+    await restorePage.route(apiRoute('restore-snapshot'), async route => {
         // Deliberately never route.fetch(): this check cannot restore real data.
         assert.equal(route.request().method(), 'POST');
         restoreCalls += 1;
