@@ -76,7 +76,17 @@ beperking van de werkplek.
 - Bouw AI-context op uit de actuele catalogus van de expliciete database.
   Selectiemetadata uit de browser is een verzoek, geen vertrouwde bron. Voeg
   geen records, resultaten, opgeslagen onderzoeken of credentials automatisch toe.
-- Houd AI-geschiedenis en concepten tijdelijk per database apart; negeer late
+- Projectcode leest alleen de servergestuurde lokale `app/`- en `docs/`-bronnen.
+  Neem geen browserpaden over en verruim de brongrens niet stilzwijgend. Sla
+  symlinks, geheime bestanden en niet-ondersteunde inhoud over. Geheimfiltering
+  is best effort; claim geen volledige herkenning.
+- Bouw projectbronnen per zoekvraag opnieuw op en behoud relatieve paden, echte
+  regelnummers en snapshot-hashes. Lokale zoekacties blijven zonder model werken.
+- Projectantwoorden vereisen bestaande bron-IDs en letterlijk gecontroleerde
+  citaten. Zonder geldige bronnen geen gegenereerde uitleg of SQL-voorstel.
+  Citaten bewijzen herkomst, niet de juistheid van alle gegenereerde uitspraken.
+  De functie doorzoekt code; ze traint geen model of wist vooraf geleerde kennis.
+- Houd AI-geschiedenis en concepten tijdelijk per database en brongebied apart; negeer late
   antwoorden na een wissel. Stoppen in de browser garandeert geen onmiddellijke
   stop van de modelberekening. Render antwoorden als tekst.
 - AI mag SQL alleen als voorstel naar Onderzoeken sturen. Uitvoeren gebruikt

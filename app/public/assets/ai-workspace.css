@@ -26,6 +26,9 @@ dialog.ai-workspace {
 .ai-panel-heading h2 { margin: 0; font-size: 20px; line-height: 1.3; }
 .ai-panel-heading p { margin: 4px 0 0; font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
 .ai-panel-actions { display: flex; align-items: center; gap: 4px; flex: none; }
+.ai-scope-control { display: flex; gap: 4px; margin: 0 20px 12px; padding: 4px; border-radius: 14px; background: var(--g-row); flex: 0 0 auto; }
+.ai-scope-control .ai-scope-button { flex: 1; min-width: 0; min-height: 34px; padding: 7px 10px; font-size: 12px; background: transparent; box-shadow: none; }
+.ai-scope-control .ai-scope-button[aria-pressed="true"] { background: var(--g-frost); color: var(--g-accent-text); box-shadow: var(--g-control-depth); }
 .ai-icon-button { min-width: 34px; min-height: 34px; padding: 7px; }
 .ai-icon-button > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 .ai-panel-status { display: flex; align-items: center; gap: 8px; padding: 0 20px 12px; color: var(--muted); font-size: 12px; flex: 0 0 auto; overflow-wrap: anywhere; }
@@ -42,6 +45,12 @@ dialog.ai-workspace {
 .ai-context-sources ul { padding-left: 17px; margin: 6px 0; }
 .ai-context-sources li { margin: 5px 0; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
 .ai-context-sources code { color: var(--ink); font-size: 11px; overflow-wrap: anywhere; }
+.ai-context-sources:has(.ai-source-passage) { list-style: none; padding: 0; }
+.ai-source-passage { padding: 8px 0; min-width: 0; }
+.ai-source-passage summary { font-weight: 500; cursor: pointer; }
+.ai-source-passage pre { max-height: 250px; margin: 9px 0 0; padding: 10px; border-radius: 10px; background: var(--g-input); color: var(--ink); font-family: var(--mono); font-size: 11px; line-height: 1.65; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; tab-size: 4; }
+.ai-citations { margin: 12px 0 0; }
+.ai-citations > p { margin: 8px 0; font-size: 11px; }
 .ai-context-note { margin: 9px 0 0; color: var(--muted); font-size: 11px; line-height: 1.6; overflow-wrap: anywhere; }
 .ai-thread { display: grid; gap: 14px; min-width: 0; }
 .ai-message { min-width: 0; padding: 14px; border-radius: 16px; background: var(--g-frost); }
@@ -68,6 +77,8 @@ dialog.ai-workspace {
 .ai-composer { padding: 14px 20px 16px; flex: 0 0 auto; background: var(--g-row); }
 .ai-composer textarea.input { width: 100%; min-height: 86px; max-height: 180px; resize: vertical; font-size: 14px; line-height: 1.6; }
 .ai-composer-footer { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 10px; }
+.ai-composer-footer:has(#ai-search-project:not([hidden])) { flex-wrap: wrap; gap: 6px; }
+.ai-composer-footer:has(#ai-search-project:not([hidden])) .ai-message-actions { flex: 1 1 100%; justify-content: space-between; margin-top: 2px; }
 .ai-composer-footer .button { flex: none; }
 .ai-composer-hint { font-size: 11px; color: var(--muted); line-height: 1.5; min-width: 0; overflow-wrap: anywhere; }
 .ai-pending { display: flex; align-items: center; gap: 9px; margin: 14px 0 0; color: var(--muted); font-size: 12px; }
@@ -90,6 +101,7 @@ dialog.ai-workspace {
     dialog.ai-workspace { inset: 8px; width: calc(100vw - 16px); height: calc(100dvh - 16px); margin: 0; border-radius: var(--radius); }
     .ai-panel-header { padding: 18px 16px 12px; }
     .ai-panel-status { padding-left: 16px; padding-right: 16px; }
+    .ai-scope-control { margin-left: 16px; margin-right: 16px; }
     .ai-panel-scroll { padding: 0 16px 16px; }
     .ai-composer { padding: 12px 16px 14px; }
     .ai-composer textarea.input { font-size: 16px; min-height: 88px; }
@@ -104,7 +116,8 @@ dialog.ai-workspace {
 :root[data-reduce-transparency="true"] dialog.ai-workspace,
 :root[data-reduce-transparency="true"] .ai-context-block,
 :root[data-reduce-transparency="true"] .ai-message,
-:root[data-reduce-transparency="true"] .ai-composer { background: var(--g-panel); backdrop-filter: none; -webkit-backdrop-filter: none; }
+:root[data-reduce-transparency="true"] .ai-composer,
+:root[data-reduce-transparency="true"] .ai-scope-button[aria-pressed="true"] { background: var(--g-panel); backdrop-filter: none; -webkit-backdrop-filter: none; }
 @media (forced-colors: active) {
     dialog.ai-workspace, .ai-context-block, .ai-message, .ai-composer, .ai-panel-error { background: Canvas; color: CanvasText; box-shadow: none; outline: 1px solid CanvasText; }
     .ai-status-dot { background: CanvasText; }

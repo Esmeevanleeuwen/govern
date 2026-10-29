@@ -61,6 +61,12 @@ try {
     $catalog = new Catalog($database);
     $queries = new SavedQueries($database, $config);
     if ($action === 'ai-status') Http::json((new AiService($database))->status());
+    // Project search reads approved local files, never the database catalog.
+    // It does not need to hold the database maintenance lock during retrieval.
+    if (in_array($action, ['ai-context', 'ai-chat'], true) && ($input['scope'] ?? 'database') === 'project') {
+        $ai = new AiService($database);
+        Http::json($action === 'ai-context' ? $ai->previewContext($input) : $ai->chat($input));
+    }
     if ($action === 'bootstrap') {
         $data = ['csrf' => $csrf, 'databases' => $scope->databases(), 'default_database' => $baseConfig['name'],
             'database' => ['name' => $config['name'], 'version' => null, 'status' => 'unavailable', 'available' => false],

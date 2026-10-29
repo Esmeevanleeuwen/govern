@@ -2,6 +2,41 @@
 
 Stand van de controles: **29 oktober 2026**.
 
+## Lokale projectcode en bronverwijzingen
+
+De nieuwe PHP-bron- en projectserviceproeven slagen in de afzonderlijke native
+testomgeving. Ook `ai-project-smoke.mjs` slaagt met de echte lokale zoek-API en
+gerichte providerfixtures. Ook de PHP-syntaxis, tweetalige JavaScriptcontroles, bestaande
+backendproeven en vier database-integratiesuites slagen. De providercontrole
+gebruikt onder meer een echt lokaal HTTP-fixtureantwoord; er draait geen
+gedownload taalmodel.
+
+De 36 bronzoekcontroles slagen ook met PHP-URLstreams, socketfuncties en
+processtartfuncties uitgeschakeld. Dit controleert de lokale lezer zonder die
+netwerktransports; het is geen OS-firewalltest van Ollama.
+
+De nieuwe controles staan in `tests/local_code_search_unit.php`,
+`tests/ai_project_unit.php` en `tests/ai-project-smoke.mjs`. De eerste controleert
+lokale zoekresultaten, bronregels en snapshots, grenzen, gewijzigde bestanden,
+symlinks en uitgesloten of herkenbare geheime inhoud. De tweede controleert
+het projectchatcontract, opnieuw opgebouwde context, letterlijke citaten,
+verzonnen bronnen, onthouding en modelinvoer zonder uitvoerbare SQL of tools.
+De browserproef controleert de echte lokale zoek-API met AI uit, bronweergave,
+CSRF en de overgang tussen Database en Projectcode.
+Deze browserproef en de bestaande AI-, selectieaanwijzer- en
+instellingenproeven slagen in dezelfde geïsoleerde native omgeving.
+
+De proeven gebruiken lokale testbestanden en, voor de modelstroom,
+providerfixtures. Er wordt geen model op projectcode getraind. Een geldig citaat
+bewijst alleen dat de passage bestond in de meegestuurde momentopname; het
+bewijst niet dat alle uitleg klopt. Geheimfiltering blijft best effort.
+
+Controle op de gebruikercomputer blijft apart: download bewust het gekozen
+model, schakel de daadwerkelijke Ollama-cloudfuncties uit, controleer de
+firewall en probeer lokale zoekacties en chat met internet losgekoppeld. De
+applicatieproeven bewijzen geen volledige netwerkisolatie, hardwareversnelling,
+snelheid of antwoordkwaliteit van dat echte model.
+
 ## Lokale AI-interface en architectuuropzet
 
 De optionele koppeling is gecontroleerd met **44** context- en serviceproeven,
@@ -301,6 +336,8 @@ docker compose exec -T app sh -c 'find /var/www/src /var/www/public -name "*.php
 docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" app php /workspace/tests/backend_unit.php
 docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" app php /workspace/tests/backup_unit.php
 docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" app php /workspace/tests/backend_localization.php
+docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" app php /workspace/tests/local_code_search_unit.php
+docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" app php /workspace/tests/ai_project_unit.php
 
 docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" app php /workspace/tests/backend_integration.php --confirm-database=bestuursatlas
 docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" -e GOVERN_TEST_SECOND_DATABASE app php /workspace/tests/multidatabase-row-integration.php --confirm-database=bestuursatlas --confirm-second-database=govern_multi_test
@@ -324,6 +361,8 @@ node tests/schema-navigation-unit.mjs
 BASE_URL=http://127.0.0.1:18080 GOVERN_UI_WRITE_TESTS=1 node tests/frontend-smoke.mjs
 BASE_URL=http://127.0.0.1:18080 node tests/query-builder-smoke.mjs
 BASE_URL=http://127.0.0.1:18080 node tests/ui-settings-smoke.mjs
+BASE_URL=http://127.0.0.1:18080 node tests/ai-workspace-smoke.mjs
+BASE_URL=http://127.0.0.1:18080 node tests/ai-project-smoke.mjs
 BASE_URL=http://127.0.0.1:18080 node tests/schema-visualizer-smoke.mjs
 BASE_URL=http://127.0.0.1:18080 GOVERN_UI_WRITE_TESTS=1 GOVERN_TEST_SECOND_DATABASE=govern_multi_test node tests/multidatabase-row-smoke.mjs
 ```

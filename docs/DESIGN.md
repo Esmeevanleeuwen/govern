@@ -271,12 +271,14 @@ Opening and closing the assistant preserves the current table, SQL and schema
 view. Closing returns focus to the logical opener, including after a language
 change remounts that control.
 
-The assistant header always names its database and configured model. Show the
-selected objects and source preview before sending. The first version uses
-live schema and bounded interface descriptions; it explicitly says that records
+The assistant header always names its database and configured model. A labelled
+**Database / Project code** selector chooses the source area. Show selected
+objects and the source preview before sending. Database uses live schema and
+bounded interface descriptions; it explicitly says that records
 are not included. Never silently attach row values, a full query result or saved
 research merely because it is visible on the screen. The user's typed question
-and conversation are still sent to the chosen local provider.
+and, for Database, bounded conversation history are still sent to the chosen
+local provider.
 
 Give connection states distinct language and next steps: **Disabled**, **Not
 reachable**, **Model missing** and **Ready**. Ready requires a successful check;
@@ -286,6 +288,22 @@ Disabled setup has no generated sample answer. Settings shows the server's
 provider/model and connection test; it does not accept an arbitrary provider URL
 from the browser.
 
+In Project code, offer **Search local code** beside the question. This action
+works while the provider is disabled or unavailable. Explain that only local
+`app/` and `docs/` files are searched; the browser does not choose arbitrary
+folders. Use useful project questions, such as how database switching works.
+Distinguish **Retrieved local code** from **Code cited in this answer** in an answer. Each source
+opens a read-only passage inside the panel, with its relative file name and
+actual line range. Render code and quotations as text; opening a source must not
+visit a third-party site or fetch an arbitrary file path.
+
+Show searching, no results, unavailable files and shortened context explicitly.
+A project response with no matching sources or invalid citations says that an
+answer could not be found in the project. Do not display a fake explanation or
+SQL proposal in its place. Explain briefly that local search does not train the
+model or erase its prior knowledge, and that valid references do not establish
+the correctness of every generated claim.
+
 Use one labelled question field and one primary **Send** action. During a
 request, prevent duplicate sends and offer **Disconnect response**. State
 honestly that this ends waiting in the browser and may not immediately stop a
@@ -294,9 +312,10 @@ Render answers as text with an optional, separate SQL proposal. **Open in query
 workspace** prepares an editable draft and uses the existing replacement
 confirmation when necessary. It never executes SQL.
 
-Questions, history and context are temporary per-database session state. A
-database switch immediately shows that database's conversation and ignores any
-late response for the previous one. Reopening preserves the current draft;
+Questions, history and context are temporary per-database and source-area
+session state, capped at forty messages per database/source area. A database or
+source-area switch shows the corresponding
+conversation and ignores any late response for the previous context. Reopening preserves the current draft;
 clearing a conversation is a deliberate action. A page reload begins a new chat.
 Changing language updates controls and status without erasing text or asking
 the model to regenerate the current answer.
@@ -514,7 +533,7 @@ Preserve the existing PHP, JavaScript module and SQL structure. Add a dependency
 | Requests and consistent failures | `api.js` and the documented API contract |
 | Routes and feature coordination | `app.js`; keep feature behaviour in focused modules |
 | Element inspection | `selection-pointer.js` for interaction, `selection-registry.js` for semantic targets and `selection-content.js` for factual explanations |
-| Local assistant | `ai-workspace.js`, live `AiContext`, `AiService` and the optional configured `OllamaClient` |
+| Local assistant | `ai-workspace.js`, live `AiContext`, local `LocalCodeSearch`, `AiService` and the optional configured `OllamaClient` |
 | Query design | `query-builder.js` and the existing backend services |
 | Direct row editing | `row-editor.js`, live catalog metadata and `RowEditor` / `RecordIdentity` |
 | Official database window | `database-modal.js` and the same origin phpMyAdmin integration |

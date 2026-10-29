@@ -35,19 +35,8 @@ final class OllamaClient
 
     public function complete(array $messages): array
     {
-        $data = $this->request('POST', '/api/chat', [
-            'model' => $this->config['model'], 'messages' => $messages, 'stream' => false,
-            'format' => ['type' => 'object', 'properties' => ['answer' => ['type' => 'string'],
-                'sql' => ['type' => ['string', 'null']]], 'required' => ['answer', 'sql'], 'additionalProperties' => false],
-            'options' => ['num_ctx' => 4096, 'num_predict' => 768, 'temperature' => 0.2],
-            'keep_alive' => '1m',
-        ], $this->config['timeout_seconds']);
-        $message = $data['message'] ?? null;
-        if (($data['done'] ?? null) !== true || !is_array($message) || ($message['role'] ?? null) !== 'assistant'
-            || !empty($message['tool_calls']) || !is_string($message['content'] ?? null)
-            || ($data['done_reason'] ?? 'stop') !== 'stop') throw ApiException::fromCode('ai_response_invalid', 502);
-        try { $result = json_decode($message['content'], true, 8, JSON_THROW_ON_ERROR); }
-        catch (\JsonException) { throw ApiException::fromCode('ai_response_invalid', 502); }
+        $result = $this->structuredCompletion($messages, ['type' => 'object', 'properties' => ['answer' => ['type' => 'string'],
+            'sql' => ['type' => ['string', 'null']]], 'required' => ['answer', 'sql'], 'additionalProperties' => false]);
         if (!is_array($result) || array_diff(array_keys($result), ['answer', 'sql']) !== []
             || !is_string($result['answer'] ?? null) || trim($result['answer']) === ''
             || !array_key_exists('sql', $result) || $result['sql'] !== null && !is_string($result['sql']))
@@ -57,6 +46,43 @@ final class OllamaClient
                 throw ApiException::fromCode('ai_response_invalid', 502);
         }
         return ['answer' => $result['answer'], 'sql' => $result['sql'] === '' ? null : $result['sql']];
+    }
+
+    /** Project answers have no SQL channel, only references to supplied local excerpts. */
+    public function completeProject(array $messages): array
+    {
+        $result = $this->structuredCompletion($messages, ['type' => 'object', 'properties' => [
+            'answer' => ['type' => 'string'], 'citations' => ['type' => 'array', 'maxItems' => 6,
+                'items' => ['type' => 'object', 'properties' => ['source_id' => ['type' => 'string'], 'quote' => ['type' => 'string']],
+                    'required' => ['source_id', 'quote'], 'additionalProperties' => false]]],
+            'required' => ['answer', 'citations'], 'additionalProperties' => false]);
+        if (!is_array($result) || array_diff(array_keys($result), ['answer', 'citations']) !== []
+            || !is_string($result['answer'] ?? null) || trim($result['answer']) === '' || strlen($result['answer']) > 16000
+            || preg_match('//u', $result['answer']) !== 1 || str_contains($result['answer'], "\0")
+            || !isset($result['citations']) || !is_array($result['citations']) || !array_is_list($result['citations'])
+            || count($result['citations']) > 6) throw ApiException::fromCode('ai_response_invalid', 502);
+        foreach ($result['citations'] as $citation) {
+            if (!is_array($citation) || array_diff(array_keys($citation), ['source_id', 'quote']) !== []
+                || !is_string($citation['source_id'] ?? null) || preg_match('/\AS[1-9][0-9]*\z/D', $citation['source_id']) !== 1
+                || strlen($citation['source_id']) > 16 || !is_string($citation['quote'] ?? null)
+                || strlen($citation['quote']) > 2000 || preg_match('//u', $citation['quote']) !== 1 || str_contains($citation['quote'], "\0"))
+                throw ApiException::fromCode('ai_response_invalid', 502);
+        }
+        return ['answer' => $result['answer'], 'citations' => $result['citations']];
+    }
+
+    private function structuredCompletion(array $messages, array $format): mixed
+    {
+        $data = $this->request('POST', '/api/chat', [
+            'model' => $this->config['model'], 'messages' => $messages, 'stream' => false, 'format' => $format,
+            'options' => ['num_ctx' => 4096, 'num_predict' => 768, 'temperature' => 0.2], 'keep_alive' => '1m',
+        ], $this->config['timeout_seconds']);
+        $message = $data['message'] ?? null;
+        if (($data['done'] ?? null) !== true || !is_array($message) || ($message['role'] ?? null) !== 'assistant'
+            || !empty($message['tool_calls']) || !is_string($message['content'] ?? null)
+            || ($data['done_reason'] ?? 'stop') !== 'stop') throw ApiException::fromCode('ai_response_invalid', 502);
+        try { return json_decode($message['content'], true, 8, JSON_THROW_ON_ERROR); }
+        catch (\JsonException) { throw ApiException::fromCode('ai_response_invalid', 502); }
     }
 
     private function request(string $method, string $path, ?array $body, int $timeout): array

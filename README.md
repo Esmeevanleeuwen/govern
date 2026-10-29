@@ -69,7 +69,9 @@ Een database buiten deze Docker-installatie wordt niet automatisch gekoppeld.
 - **Lokale AI:** open het AI-paneel bovenaan of kies **Vraag AI** bij je selectie.
   Bekijk welke schema-informatie wordt gebruikt, stel een vraag en zet een
   SQL-voorstel desgewenst klaar in Onderzoeken. De koppeling staat standaard uit;
-  beschikbaarheid wordt gecontroleerd bij je eigen Ollama-server.
+  beschikbaarheid wordt gecontroleerd bij je eigen Ollama-server. Kies
+  **Projectcode** om de lokale implementatie met bronpassages en regelnummers
+  te doorzoeken; de zoekactie werkt ook zonder AI.
 - **Eén menu:** kies Overzicht, Database, Onderzoeken of Experimenten in de
   hoofdbalk. Instellingen staat onderaan. Het aansluitende paneel toont alleen
   de tabellen, opgeslagen onderzoeken of herstelpunten die bij dat gebied horen.
@@ -153,13 +155,21 @@ Govern installeert geen AI-model en toont geen verzonnen antwoord wanneer die
 verbinding ontbreekt. **Instellingen → Lokale AI** toont de provider, het
 ingestelde model, de status en een verbindingstest.
 
-De eerste versie gebruikt actuele tabel- en kolominformatie en beschreven
-interfaceonderdelen. Records, resultaten en opgeslagen onderzoeken worden niet
+Het brongebied **Database** gebruikt actuele tabel- en kolominformatie en
+beschreven interfaceonderdelen. Records, resultaten en opgeslagen onderzoeken worden niet
 automatisch meegestuurd. Zelf getypte vragen en gespreksgeschiedenis gaan naar
 de ingestelde lokale provider. Gesprekken en concepten blijven tijdelijk per
 database in het open tabblad; herladen begint opnieuw.
 
-Een SQL-voorstel opent alleen een concept in **Onderzoeken**. Bekijk, wijzig en
+**Projectcode → Zoek lokale code** zoekt alleen in de lokale mappen `app/` en
+`docs/`. Bestandsnamen, regelnummers en passages blijven zichtbaar; zoeken werkt
+ook met AI uit. Met een verbonden model kan dezelfde vraag een uitleg met
+gecontroleerde broncitaten krijgen. Zonder passende bronnen zegt Govern dat het
+antwoord niet in het project is gevonden. Dit traint het model niet en verwijdert
+zijn vooraf geleerde algemene kennis niet. Een geldig citaat bewijst ook niet
+automatisch dat alle uitleg juist is. Zie de brongrens in de AI-gids.
+
+Een SQL-voorstel uit Database opent alleen een concept in **Onderzoeken**. Bekijk, wijzig en
 voer het daar zelf uit. De AI krijgt geen uitvoerbare databasehandelingen.
 
 Voor het aansluiten van Ollama, `.env`-instellingen, de Windows/Docker-netwerkgrens

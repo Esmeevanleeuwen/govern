@@ -62,9 +62,12 @@ services:
       AI_BASE_URL: ${AI_BASE_URL:-http://host.docker.internal:11434}
       AI_MODEL: ${AI_MODEL:-qwen3:4b-instruct}
       AI_TIMEOUT_SECONDS: ${AI_TIMEOUT_SECONDS:-60}
+      AI_PROJECT_ROOT: /opt/govern/project
     volumes:
       - ./app/public:/var/www/public:ro
       - ./app/src:/var/www/src:ro
+      - ./app:/opt/govern/project/app:ro
+      - ./docs:/opt/govern/project/docs:ro
       - ./docker/database/20-govern.sql:/var/www/workbench.sql:ro
       - backups:/var/lib/govern/backups
     depends_on:

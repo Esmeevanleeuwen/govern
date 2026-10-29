@@ -8,6 +8,9 @@ RUN apt-get update \
     && printf '\nServerName localhost\n' >> /etc/apache2/apache2.conf
 
 COPY app/ /var/www/
+COPY app/ /opt/govern/project/app/
+COPY docs/ /opt/govern/project/docs/
+ENV AI_PROJECT_ROOT=/opt/govern/project
 COPY docker/database/20-govern.sql /var/www/workbench.sql
 COPY docker/php.ini /usr/local/etc/php/conf.d/govern.ini
 COPY docker/app-entrypoint.sh /usr/local/bin/govern-entrypoint

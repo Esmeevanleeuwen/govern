@@ -116,6 +116,7 @@ aiToggle.prepend(icon('sparkles'));
 aiToggle.addEventListener('click', () => {
     if (aiWorkspace.isOpen) { aiWorkspace.close(); return; }
     const options = aiContextOptions([...selectionPointer.selected.values()]);
+    if (selectionPointer.selected.size > 0) options.scope = 'database';
     selectionPointer.setOn(false);
     aiWorkspace.open(options);
 });
@@ -355,7 +356,7 @@ const selectionPointer = new SelectionPointer({
             go(action.type === 'structure' ? 'structuur' : 'gegevens', {table: action.table});
         }
     },
-    onAskAi: items => aiWorkspace.open(aiContextOptions(items)),
+    onAskAi: items => aiWorkspace.open({...aiContextOptions(items), scope: 'database'}),
 });
 
 function aiContextOptions(items = []) {
