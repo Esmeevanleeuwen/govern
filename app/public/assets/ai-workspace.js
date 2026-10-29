@@ -9,12 +9,13 @@ const MAX_MESSAGES = 40;
 const safeTargets = targets => (Array.isArray(targets) ? targets : []).slice(0, MAX_TARGETS).map(target =>
     Object.fromEntries(['kind', 'table', 'column', 'label', 'tag'].filter(key => typeof target?.[key] === 'string')
         .map(key => [key, Array.from(target[key]).slice(0, key === 'label' ? 240 : 192).join('')])));
-const contextKey = state => JSON.stringify([state.route, state.targets]);
+const contextKey = state => JSON.stringify([state.scope, state.route, state.scope === 'project' ? [] : state.targets]);
 const sourceName = source => typeof source === 'string' ? source : source?.label || source?.table || source?.name || source?.column || '';
 
 /** Local AI is a separate, optional capability. It never executes SQL. */
 export function createAiWorkspace({getDatabase, onOpenSql = async () => false, onSettings = () => {}, onOpenChange = () => {}}) {
     const databases = new Map();
+    const scopes = new Map();
     const settingViews = new Set();
     const narrow = matchMedia('(max-width: 700px)');
     let database = String(getDatabase() || '');
@@ -36,6 +37,9 @@ export function createAiWorkspace({getDatabase, onOpenSql = async () => false, o
     const statusText = el('span');
     const modelText = el('code');
     const status = el('div', {id: 'ai-status', class: 'ai-panel-status', role: 'status', 'aria-live': 'polite'}, statusDot, statusText, modelText);
+    const scopeDatabase = button('', () => setScope('database'), {id: 'ai-scope-database', className: 'ai-scope-button button-small'});
+    const scopeProject = button('', () => setScope('project'), {id: 'ai-scope-project', className: 'ai-scope-button button-small'});
+    const scopeControl = el('div', {class: 'ai-scope-control', role: 'group'}, scopeDatabase, scopeProject);
     const contextSummary = el('summary');
     const contextChips = el('div', {class: 'ai-context-chips'});
     const sources = el('ul', {class: 'ai-context-sources'});
@@ -50,7 +54,8 @@ export function createAiWorkspace({getDatabase, onOpenSql = async () => false, o
     const emptyTitle = el('h3');
     const emptyDescription = el('p');
     const suggestionButtons = ['suggestionExplain', 'suggestionRelations', 'suggestionSql'].map(key => {
-        const node = button('', () => { const state = active(); state.draft = text(key); prompt.value = state.draft; prompt.focus(); updateControls(); }, {className: 'button-small'});
+        const node = button('', () => { const state = active(); state.draft = text(state.scope === 'project' ? projectSuggestionKey(key) : key);
+            prompt.value = state.draft; prompt.focus(); updateControls(); }, {className: 'button-small'});
         return {key, node};
     });
     const empty = el('div', {class: 'ai-empty'}, el('div', {class: 'ai-empty-icon'}, icon('book')), emptyTitle, emptyDescription,
@@ -62,20 +67,23 @@ export function createAiWorkspace({getDatabase, onOpenSql = async () => false, o
     const prompt = el('textarea', {id: 'ai-prompt', class: 'input', rows: 3, maxlength: 4000, autocomplete: 'off',
         'aria-describedby': 'ai-prompt-hint ai-footer'});
     const sendButton = button('', () => send(), {id: 'ai-send', symbol: 'arrow', kind: 'primary', className: 'button-small'});
+    const searchButton = button('', () => { context.open = true; refreshContext(); }, {id: 'ai-search-project', symbol: 'search', className: 'button-small', hidden: true});
     const stopButton = button('', () => stop(), {id: 'ai-stop', symbol: 'close', className: 'button-small', hidden: true});
     const promptHint = el('span', {id: 'ai-prompt-hint', class: 'ai-composer-hint small muted'});
     const footer = el('p', {id: 'ai-footer', class: 'ai-panel-footer small muted'});
     panel.append(el('header', {class: 'ai-panel-header'}, el('div', {class: 'ai-panel-heading'}, title, subtitle),
-        el('div', {class: 'ai-panel-actions'}, clearButton, settingsButton, closeButton)), status, scroll,
+        el('div', {class: 'ai-panel-actions'}, clearButton, settingsButton, closeButton)), scopeControl, status, scroll,
     el('div', {class: 'ai-composer'}, promptLabel, prompt, el('div', {class: 'ai-composer-footer'}, promptHint,
-        el('div', {class: 'ai-message-actions'}, stopButton, sendButton))), footer);
+        el('div', {class: 'ai-message-actions'}, searchButton, stopButton, sendButton))), footer);
     document.body.append(panel);
 
     function active() {
-        if (!databases.has(database)) databases.set(database, {database, route: 'overzicht', targets: [], draft: '', messages: [],
+        const scope = scopes.get(database) || 'database';
+        const key = JSON.stringify([database, scope]);
+        if (!databases.has(key)) databases.set(key, {database, scope, route: 'overzicht', targets: [], draft: '', messages: [], contextMessage: '',
             context: null, contextError: null, status: null, statusError: null, checking: false, loadingContext: false,
             sending: false, pendingPrompt: '', error: null, stopped: false, contextRequest: null, statusRequest: null, chatRequest: null});
-        return databases.get(database);
+        return databases.get(key);
     }
 
     function live(state, capturedRevision) { return !destroyed && database === state.database && revision === capturedRevision; }
@@ -99,8 +107,15 @@ export function createAiWorkspace({getDatabase, onOpenSql = async () => false, o
 
     function updateControls() {
         const state = active();
+        const project = state.scope === 'project';
         panel.setAttribute('aria-busy', String(state.sending));
-        sendButton.disabled = !database || !state.status?.ready || !state.context || state.checking || state.loadingContext || state.sending || !state.draft.trim();
+        sendButton.disabled = !database || !state.status?.ready || (!project && !state.context) || state.checking || state.loadingContext || state.sending || !state.draft.trim();
+        scopeDatabase.setAttribute('aria-pressed', String(!project));
+        scopeProject.setAttribute('aria-pressed', String(project));
+        scopeDatabase.disabled = scopeProject.disabled = confirming;
+        searchButton.hidden = !project;
+        searchButton.disabled = !database || !state.draft.trim() || state.loadingContext || state.sending;
+        label(searchButton, state.loadingContext ? 'projectSearching' : 'projectSearch');
         stopButton.hidden = !state.sending;
         label(sendButton, state.sending ? 'sending' : 'send');
         label(stopButton, 'stop');
@@ -122,28 +137,48 @@ export function createAiWorkspace({getDatabase, onOpenSql = async () => false, o
 
     function drawContext() {
         const state = active();
+        const project = state.scope === 'project';
         context.setAttribute('aria-busy', String(state.loadingContext));
-        contextSummary.textContent = text('context');
+        contextSummary.textContent = text(project ? 'projectContext' : 'context');
         contextChips.replaceChildren(el('span', {class: 'ai-chip'}, database || text('noDatabase')));
-        for (const target of state.targets) {
+        for (const target of project ? [] : state.targets) {
             const name = target.column ? target.table + '.' + target.column : target.table || target.label || target.tag || target.kind;
             if (name) contextChips.append(el('span', {class: 'ai-chip'}, name));
         }
-        if (!state.targets.length) contextChips.append(el('span', {class: 'ai-chip'}, text('contextEmpty')));
-        contextNote.textContent = text('contextNoRecords');
-        contextExtra.hidden = !state.loadingContext && !state.contextError && !state.context?.truncated;
-        contextExtra.textContent = state.loadingContext ? text('contextLoading') : state.contextError
-            ? errorText(state.contextError) : state.context?.truncated ? text('contextTruncated') : '';
+        if (project) contextChips.append(el('span', {class: 'ai-chip'}, 'app/'), el('span', {class: 'ai-chip'}, 'docs/'));
+        else if (!state.targets.length) contextChips.append(el('span', {class: 'ai-chip'}, text('contextEmpty')));
+        contextNote.textContent = text(project ? 'projectContextNote' : 'contextNoRecords');
+        const projectNote = project && !state.loadingContext && !state.contextError ? state.context?.project?.status === 'unavailable'
+            ? text('projectUnavailable') : state.contextMessage ? text('projectResultsFor', {question: state.contextMessage}) : text('projectSearchHint') : '';
+        contextExtra.hidden = !state.loadingContext && !state.contextError && !state.context?.truncated && !projectNote;
+        contextExtra.textContent = state.loadingContext ? text(project ? 'projectSearching' : 'contextLoading') : state.contextError
+            ? errorText(state.contextError) : [projectNote, state.context?.truncated ? text(project ? 'projectTruncated' : 'contextTruncated') : ''].filter(Boolean).join(' ');
         contextRetry.hidden = !state.contextError;
         label(contextRetry, 'contextRetry');
         sources.replaceChildren();
         for (const source of Array.isArray(state.context?.sources) ? state.context.sources : []) {
+            if (project) {
+                sources.append(el('li', {}, sourcePassage(source)));
+                continue;
+            }
             const name = sourceName(source);
             const detail = [];
             if (Array.isArray(source?.columns)) detail.push(text('sourceColumns', {count: source.columns.length}));
             if (Array.isArray(source?.foreign_keys)) detail.push(text('sourceRelations', {count: source.foreign_keys.length}));
             sources.append(el('li', {}, el('code', {}, name || text('sourceUi')), detail.length ? el('small', {}, detail.join(' · ')) : null));
         }
+        if (project && state.contextMessage && !state.context?.sources?.length && !state.loadingContext && !state.contextError && state.context?.project?.status !== 'unavailable')
+            sources.append(el('li', {class: 'ai-project-empty'}, text('projectNoSources')));
+    }
+
+    function sourcePassage(source, citation = false) {
+        const path = typeof source?.path === 'string' ? source.path : text('projectSource');
+        const start = Number.isSafeInteger(source?.start_line) && source.start_line > 0 ? source.start_line : null;
+        const end = Number.isSafeInteger(source?.end_line) && source.end_line >= start ? source.end_line : start;
+        const location = path + (start ? ':' + start + (end !== start ? '–' + end : '') : '');
+        const content = citation ? source?.quote : source?.content;
+        return el('details', {class: 'ai-source-passage'}, el('summary', {}, el('code', {}, location)),
+            el('pre', {}, el('code', {}, typeof content === 'string' ? content : '')));
     }
 
     function drawThread() {
@@ -172,7 +207,11 @@ export function createAiWorkspace({getDatabase, onOpenSql = async () => false, o
                 article.append(el('div', {class: 'ai-sql'}, el('strong', {}, text('proposedSql')), el('pre', {}, el('code', {}, item.sql)),
                     el('p', {class: 'small muted'}, text('sqlHelp')), el('div', {class: 'ai-message-actions'}, copy, open)));
             }
-            if (Array.isArray(item.context?.sources) && item.context.sources.length) {
+            if (item.scope === 'project' && Array.isArray(item.citations) && item.citations.length) {
+                article.append(el('details', {class: 'ai-context-block ai-citations'}, el('summary', {}, text('projectCitations')),
+                    el('p', {class: 'small muted'}, text('projectCitationHelp')),
+                    el('ul', {class: 'ai-context-sources'}, item.citations.map(source => el('li', {}, sourcePassage(source, true))))));
+            } else if (item.scope !== 'project' && Array.isArray(item.context?.sources) && item.context.sources.length) {
                 article.append(el('details', {class: 'ai-context-block'}, el('summary', {}, text('sources')),
                     el('ul', {class: 'ai-context-sources'}, item.context.sources.map(source => el('li', {}, el('code', {}, sourceName(source) || text('sourceUi')))))));
             }
@@ -184,22 +223,26 @@ export function createAiWorkspace({getDatabase, onOpenSql = async () => false, o
 
     function draw() {
         const state = active();
+        const project = state.scope === 'project';
         title.textContent = text('title');
-        subtitle.textContent = (database ? database + ' · ' : '') + text('subtitle');
+        subtitle.textContent = (database ? database + ' · ' : '') + text(project ? 'projectSubtitle' : 'subtitle');
         label(closeButton, 'close'); label(clearButton, 'clear'); label(settingsButton, 'settings'); label(retryStatus, 'retryStatus');
+        label(scopeDatabase, 'scopeDatabase'); label(scopeProject, 'scopeProject');
+        scopeControl.setAttribute('aria-label', text('scopeLabel'));
         status.setAttribute('aria-label', text('statusLabel'));
         promptLabel.textContent = text('promptLabel');
-        prompt.placeholder = text('promptPlaceholder');
+        prompt.placeholder = text(project ? 'projectPromptPlaceholder' : 'promptPlaceholder');
         prompt.value = state.draft;
         promptHint.textContent = text('promptHint');
-        footer.textContent = text('footer');
-        emptyTitle.textContent = text('emptyTitle'); emptyDescription.textContent = text('emptyDescription');
-        for (const {key, node} of suggestionButtons) label(node, key);
+        footer.textContent = text(project ? 'projectFooter' : 'footer');
+        emptyTitle.textContent = text(project ? 'projectEmptyTitle' : 'emptyTitle'); emptyDescription.textContent = text(project ? 'projectEmptyDescription' : 'emptyDescription');
+        for (const {key, node} of suggestionButtons) label(node, project ? projectSuggestionKey(key) : key);
         drawContext(); drawThread(); updateControls(); updateSettings();
     }
 
     async function refreshContext() {
         const state = active();
+        const message = state.scope === 'project' ? state.draft.trim() : '';
         state.contextRequest?.abort();
         state.context = null; state.contextError = null;
         if (!database) { draw(); return; }
@@ -209,10 +252,12 @@ export function createAiWorkspace({getDatabase, onOpenSql = async () => false, o
         drawContext(); updateControls();
         try {
             const data = await request('ai-context', {params: {database: state.database},
-                body: {targets: state.targets, route: state.route}, signal: controller.signal});
+                body: state.scope === 'project' ? {scope: 'project', message, route: state.route}
+                    : {targets: state.targets, route: state.route}, signal: controller.signal});
             if (!live(state, capturedRevision) || state.contextRequest !== controller) return;
             if (data.database !== state.database) throw new Error(text('responseWrongDatabase'));
             state.context = data;
+            state.contextMessage = message;
         } catch (failure) {
             if (failure.name !== 'AbortError' && live(state, capturedRevision) && state.contextRequest === controller) state.contextError = failure;
         } finally {
@@ -220,6 +265,20 @@ export function createAiWorkspace({getDatabase, onOpenSql = async () => false, o
                 state.contextRequest = null; state.loadingContext = false; drawContext(); updateControls();
             }
         }
+    }
+
+    function projectSuggestionKey(key) {
+        return {suggestionExplain: 'projectSuggestionDatabase', suggestionRelations: 'projectSuggestionQuery', suggestionSql: 'projectSuggestionSelection'}[key];
+    }
+
+    function setScope(scope) {
+        const previous = active();
+        if (previous.scope === scope || confirming) return;
+        abort(previous); revision += 1; scopes.set(database, scope);
+        const next = active();
+        next.route = previous.route;
+        draw();
+        if (panel.open) { refreshContext(); refreshStatus(); }
     }
 
     async function refreshStatus() {
@@ -259,7 +318,7 @@ export function createAiWorkspace({getDatabase, onOpenSql = async () => false, o
         state.chatRequest = controller; state.sending = true; state.pendingPrompt = message; state.error = null; state.stopped = false;
         const history = [];
         const encoder = new TextEncoder();
-        for (const item of state.messages.filter(item => item.contextKey === key).slice(-8).reverse()) {
+        for (const item of (state.scope === 'project' ? [] : state.messages.filter(item => item.contextKey === key).slice(-8).reverse())) {
             const content = item.content + (item.sql ? '\n\nSQL:\n' + item.sql : '');
             const entry = {role: item.role, content};
             if (encoder.encode(JSON.stringify([entry])).length > 4000) continue;
@@ -269,18 +328,23 @@ export function createAiWorkspace({getDatabase, onOpenSql = async () => false, o
         updateControls();
         try {
             const data = await request('ai-chat', {params: {database: state.database}, body: {
-                message, targets: state.targets, route: state.route, language: getLanguage(), history,
+                message, targets: state.scope === 'project' ? [] : state.targets, route: state.route, language: getLanguage(), history,
+                ...(state.scope === 'project' ? {scope: 'project'} : {}),
             }, signal: controller.signal});
             if (!live(state, capturedRevision) || state.chatRequest !== controller) return;
             if (data.database !== state.database) throw new Error(text('responseWrongDatabase'));
             if (typeof data.answer !== 'string' || !data.answer.trim() || (data.sql !== null && data.sql !== undefined && typeof data.sql !== 'string'))
                 throw new Error(text('responseInvalid'));
-            state.messages.push({id: ++serial, role: 'user', content: message, database: state.database, contextKey: key},
-                {id: ++serial, role: 'assistant', content: data.answer, sql: data.sql || null, context: data.context,
-                    database: state.database, contextKey: key});
+            if (state.scope === 'project') {
+                if (data.sql || data.context?.scope !== 'project' || !Array.isArray(data.citations)) throw new Error(text('responseInvalid'));
+                state.context = data.context; state.contextMessage = message;
+            }
+            state.messages.push({id: ++serial, role: 'user', content: message, database: state.database, scope: state.scope, contextKey: key},
+                {id: ++serial, role: 'assistant', content: data.answer, sql: state.scope === 'project' ? null : data.sql || null, context: data.context,
+                    citations: data.citations, grounded: data.grounded, scope: state.scope, database: state.database, contextKey: key});
             state.messages = state.messages.slice(-MAX_MESSAGES);
             if (state.draft.trim() === message) { state.draft = ''; prompt.value = ''; }
-            drawThread(); scroll.scrollTop = scroll.scrollHeight;
+            drawContext(); drawThread(); scroll.scrollTop = scroll.scrollHeight;
         } catch (failure) {
             if (failure.name !== 'AbortError' && live(state, capturedRevision) && state.chatRequest === controller) state.error = failure;
         } finally {
@@ -310,6 +374,10 @@ export function createAiWorkspace({getDatabase, onOpenSql = async () => false, o
         }
         state.chatRequest?.abort(); state.chatRequest = null; state.sending = false; state.pendingPrompt = '';
         state.messages = []; state.draft = ''; state.error = null; state.stopped = false;
+        if (state.scope === 'project') {
+            state.contextRequest?.abort(); state.contextRequest = null; state.loadingContext = false;
+            state.context = null; state.contextMessage = ''; state.contextError = null;
+        }
         draw(); prompt.focus({preventScroll: true});
     }
 
@@ -320,6 +388,9 @@ export function createAiWorkspace({getDatabase, onOpenSql = async () => false, o
 
     function open(options = {}) {
         setDatabase(String(getDatabase() || ''));
+        if (['database', 'project'].includes(options.scope) && options.scope !== active().scope) {
+            abort(active()); revision += 1; scopes.set(database, options.scope);
+        }
         const state = active();
         if (!panel.open) { opener = document.activeElement; openerId = opener?.id || ''; }
         const changed = contextKey(state);
@@ -372,7 +443,8 @@ export function createAiWorkspace({getDatabase, onOpenSql = async () => false, o
         if (!state.status?.ready) details.open = true;
         section.append(values, state.statusError ? el('p', {class: 'notice notice-error'}, errorText(state.statusError))
             : el('p', {class: 'small muted'}, text(statusHelpKey(state))), controls, details,
-        el('p', {class: 'small muted'}, text('historyNote')), el('p', {class: 'small muted'}, text('recordsFuture')));
+        el('p', {class: 'small muted'}, text('historyNote')), el('p', {class: 'small muted'}, text('projectSettingsHelp')),
+        el('p', {class: 'small muted'}, text('recordsFuture')));
     }
 
     function updateSettings() {
@@ -393,7 +465,13 @@ export function createAiWorkspace({getDatabase, onOpenSql = async () => false, o
         return section;
     }
 
-    prompt.addEventListener('input', () => { active().draft = prompt.value; updateControls(); });
+    prompt.addEventListener('input', () => {
+        const state = active(); state.draft = prompt.value;
+        if (state.scope === 'project' && state.loadingContext) {
+            state.contextRequest?.abort(); state.contextRequest = null; state.loadingContext = false; drawContext();
+        }
+        updateControls();
+    });
     prompt.addEventListener('keydown', event => {
         if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') { event.preventDefault(); send(); }
     });
@@ -423,7 +501,7 @@ export function createAiWorkspace({getDatabase, onOpenSql = async () => false, o
             for (const state of databases.values()) abort(state);
             window.removeEventListener('govern:languagechange', languageChange);
             narrow.removeEventListener('change', sizeChange);
-            close(); panel.remove(); settingViews.clear(); databases.clear();
+            close(); panel.remove(); settingViews.clear(); databases.clear(); scopes.clear();
         },
     };
 }

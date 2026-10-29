@@ -5,17 +5,21 @@ geselecteerde onderdelen. De interface en backend vormen een eerste, beperkte
 koppeling met een lokale Ollama-installatie. AI staat standaard uit; de gewone
 werkplek blijft zonder Ollama werken.
 
-De eerste versie gebruikt actuele schema-informatie en zichtbare
-interfacebeschrijvingen. Ze kan uitleg en een SQL-voorstel teruggeven. Het model
-heeft geen databaseverbinding, shell, internetzoekfunctie of uitvoerbare tools.
-Een antwoord wordt nooit automatisch een databasehandeling.
+Kies in het paneel tussen **Database** en **Projectcode**. Database gebruikt
+actuele schema-informatie en zichtbare interfacebeschrijvingen en kan een
+SQL-voorstel teruggeven. Projectcode zoekt in de lokale mappen `app/` en `docs/`
+en toont bestandsnamen, regelnummers en bronpassages. Het model heeft geen
+databaseverbinding, shell, internetzoekfunctie of uitvoerbare tools. Een antwoord
+wordt nooit automatisch een databasehandeling.
 
 ## Gebruikersstroom
 
 1. Open het AI-paneel bovenaan, of kies **Vraag AI** vanuit de selectie-uitleg.
-2. Controleer de database, gekozen onderdelen en gebruikte bronnen.
-3. Stel een vraag in Nederlands of Engels. Het paneel toont de werkelijke
-   verbindingsstatus voordat versturen beschikbaar wordt.
+2. Kies **Database** voor geselecteerde schemaonderdelen of **Projectcode** voor
+   uitleg over de implementatie. Controleer de database en gebruikte bronnen.
+3. Stel een vraag in Nederlands of Engels. In Projectcode kun je eerst **Zoek
+   lokale code** gebruiken; dit werkt ook wanneer AI uit staat. Een gegenereerd
+   antwoord vraagt wel een ingeschakelde, bereikbare lokale provider.
 4. Lees de uitleg. Een SQL-voorstel heeft een aparte actie om het in
    **Onderzoeken** klaar te zetten. Een bestaand gewijzigd concept volgt de
    gewone bevestiging voor vervangen.
@@ -24,11 +28,11 @@ Een antwoord wordt nooit automatisch een databasehandeling.
 Het paneel deelt de glasmaterialen en vertalingen van Govern. Het is op desktop
 een tijdelijk paneel naast het werk en op een klein scherm een dialoog.
 Gesprekken en concepten blijven tijdens het open browsertabblad per database
-apart in geheugen. Ze worden niet als databasegegevens of in browseropslag
+en brongebied apart in geheugen. Ze worden niet als databasegegevens of in browseropslag
 bewaard. Herladen begint een nieuwe gespreksessie.
 
-Een databasewissel breekt het zichtbare AI-verzoek af en negeert een laat
-antwoord voor de vorige database. **Stop wachten** stopt het wachten in de browser;
+Een database- of brongebiedwissel breekt het zichtbare AI-verzoek af en negeert
+een laat antwoord voor de vorige context. **Stop wachten** stopt het wachten in de browser;
 dat garandeert niet dat een reeds begonnen berekening in Ollama direct stopt.
 Een verbindingsfout behoudt de vraag en biedt opnieuw proberen.
 
@@ -38,12 +42,15 @@ Een verbindingsfout behoudt de vraag en biedt opnieuw proberen.
 flowchart TD
     UI["AI-paneel en selectie"] --> API["Govern API"]
     API --> Scope["CSRF en DatabaseScope"]
-    Scope --> Context["AiContext: actuele metadata"]
+    Scope --> Context["Database: AiContext"]
+    Scope --> Code["Projectcode: LocalCodeSearch"]
     Context --> Reader["MariaDB leesverbinding"]
+    Code --> Files["Alleen lokale app en docs"]
     Context --> Service["AiService: begrensde vraag"]
+    Code --> Service
     Service --> Client["OllamaClient"]
     Client --> Model["Lokale Ollama"]
-    Model --> Result["Uitleg en SQL-voorstel"]
+    Model --> Result["Antwoordcontrole en bronverwijzingen"]
     Result --> UI
     UI --> Draft["Onderzoeken: SQL-concept"]
     Draft --> Run["Gebruiker kiest uitvoeren"]
@@ -57,15 +64,21 @@ De onderdelen blijven in de bestaande PHP- en JavaScriptstructuur:
   provideradres, modelpad of toegangsrechten veranderen.
 - `AiContext` bouwt begrensde context uit de actuele catalogus van de expliciet
   gekozen database. Het model krijgt geen databasewachtwoord.
-- `AiService` controleert vraag en geschiedenis, maakt de modelinvoer en
-  controleert het antwoord. Het verwerkt geen uitvoerbare modelacties.
+- `LocalCodeSearch` maakt per zoekvraag een begrensde index van toegestane lokale
+  tekstbestanden. De index blijft in geheugen en wordt niet als database of
+  vectoropslag bewaard.
+- `AiService` controleert vraag en geschiedenis, kiest de contextbron, maakt de
+  modelinvoer en controleert het antwoord en eventuele projectcitaten. Het
+  verwerkt geen uitvoerbare modelacties.
 - `OllamaClient` handelt de lokale HTTP-aanroepen af met tijd- en groottelimieten.
 
-Het opbouwen van context gebruikt de bestaande gedeelde onderhoudslock. De API
-laat die lock los voordat de modelaanroep begint. Een lang AI-antwoord houdt
-daardoor geen databaseherstel tegen. `completeChat` gebruikt de gemaakte
-momentopname en leest de database niet opnieuw. De bronnen horen bij die
-momentopname; ze bewijzen niet dat records sinds die tijd ongewijzigd zijn.
+Databasecontext gebruikt de bestaande gedeelde onderhoudslock. De API laat
+die lock los voordat de modelaanroep begint. Projectcode leest geen catalogus
+en heeft deze lock niet nodig; CSRF en de expliciete databasecontrole blijven
+wel gelden. Een lang AI-antwoord houdt daardoor geen databaseherstel tegen.
+`completeChat` gebruikt de gemaakte momentopname en leest bronnen niet opnieuw.
+De bronvermelding bewijst niet dat bestanden of metadata sindsdien ongewijzigd
+zijn gebleven.
 
 ## Welke context krijgt het model?
 
@@ -74,7 +87,7 @@ werkplaatsverzoeken. Tabel- en kolomnamen worden opnieuw gecontroleerd tegen
 de catalogus. Een selectie uit de browser is een verzoek om context, geen
 betrouwbare kopie van de database.
 
-De eerste versie neemt alleen de ondersteunde selectievelden, schema en
+Het brongebied Database neemt alleen de ondersteunde selectievelden, schema en
 begrensde beschrijvingen van interfaceonderdelen mee. Rijen, celwaarden,
 recordsleutels, queryresultaten, opgeslagen onderzoeken, appconfiguratie en
 credentials worden niet automatisch als context toegevoegd. Het contextantwoord
@@ -86,16 +99,77 @@ weggelaten kolommen en relaties bij. Een vraag is maximaal 4.000 bytes.
 Voor een vervolgvraag gaan alleen recente berichten voor dezelfde context mee,
 maximaal acht en samen 4.000 bytes; oudere of te grote berichten vallen buiten
 die modelinvoer. De zichtbare sessie bewaart maximaal veertig berichten per
-database. Dit zijn beperkte gesprekken, geen onbeperkt modelgeheugen.
+database en brongebied. Dit zijn beperkte gesprekken, geen onbeperkt modelgeheugen.
 
-Zelf getypte vragen en gespreksgeschiedenis worden uiteraard wel naar de
-gekozen lokale provider gestuurd. De bronvermelding beschrijft wat Govern
+Zelf getypte vragen en, in Database, de begrensde gespreksgeschiedenis worden
+wel naar de gekozen lokale provider gestuurd. De bronvermelding beschrijft wat Govern
 toevoegt; ze is geen filter dat door de gebruiker getypte informatie verwijdert.
 Schema-commentaren en andere broninhoud blijven onbetrouwbare gegevens en
 worden als zodanig aan het model gepresenteerd, niet als systeeminstructies.
 
 De bestaande **Context exporteren**-download blijft apart: die bevat schema en
 opgeslagen onderzoeken. De AI-koppeling verruimt die export niet ongemerkt.
+
+## Lokale projectcode als bron
+
+**Projectcode → Zoek lokale code** zoekt op woorden en identifiers in de vraag,
+met een kleine Nederlandse/Engelse woordkoppeling voor veelvoorkomende taken.
+Bijvoorbeeld: “Hoe werkt het wisselen tussen databases?” kan passages uit de
+implementatie van databasekeuze vinden. Dit is lokale zoektechniek, geen training
+van het taalmodel. De zoekactie vraagt geen Ollama-verbinding en doet geen
+internetverzoek.
+
+De server bepaalt de projectmap via `AI_PROJECT_ROOT`; de browser kan geen pad,
+map of bestand toevoegen. Zonder die instelling gebruikt de gewone broncheckout
+zijn projectmap. In Docker is het `/opt/govern/project`: alleen `app/` en `docs/`
+worden daar alleen-lezen beschikbaar gemaakt. De image bevat deze mappen ook;
+Compose gebruikt de actuele lokale bestanden. Bestanden blijven buiten de
+publieke webroot. Voor andere projecten is een nieuwe, expliciet ontworpen
+brongrens nodig; deze zoekfunctie leest niet willekeurig de computer uit.
+
+De lezer accepteert alleen ondersteunde tekstbestanden onder die twee mappen.
+Hij slaat symlinks, verborgen bestanden/mappen, afhankelijkheden, uploads,
+backups en herkenbare geheime bestandsnamen over. Een best-effort filter laat
+hele regels met herkenbare letterlijke geheimen of te lange inhoud weg. Het
+voegt geen vervangende tekst toe aan passages: getoonde regels blijven exacte
+bronregels met hun oorspronkelijke regelnummers. Dit filter is geen bewijs dat
+ieder mogelijk geheim wordt herkend; zet wachtwoorden en privésleutels niet in
+bronbestanden. Er zijn vaste grenzen voor aantal en grootte van gelezen
+bestanden, passages en de totale context. Verkorting blijft zichtbaar.
+
+De gevonden passages hebben een relatief pad, echte begin- en eindregel en een
+SHA-256-hash van de geschoonde bestandsmomentopname. Alleen voor die hash worden
+weggelaten regels intern met een marker weergegeven; passages bevatten die
+marker niet. De volgende zoekactie
+leest opnieuw; een gewijzigd bestand krijgt geen verouderd indexantwoord. Het
+paneel toont passages als tekst. Openen leest de meegeleverde momentopname en
+opent geen externe website of vrij bestandspad.
+
+Een chatvraag doorzoekt de toegestane bestanden opnieuw aan de serverkant.
+Browserbronnen en oudere antwoorden zijn geen bewijs voor de nieuwe vraag.
+Projectgeschiedenis gaat daarom niet mee als modelcontext. Het model krijgt
+alleen de vraag en de gevonden passages, zonder rijen of database-inhoud.
+Projectcode retourneert nooit een uitvoerbaar SQL-voorstel.
+
+Het model moet verwijzen naar een aangeboden bron-ID en een letterlijk citaat.
+De backend controleert dat de ID bestaat en dat het citaat in die passage staat;
+het pad en de regelnummers worden door de server bepaald. Zonder bronnen of bij
+een ongeldige verwijzing verschijnt een korte melding dat het antwoord niet in
+het project kon worden gevonden. Een ongeldig gegenereerd antwoord wordt dan
+niet getoond. **Gevonden lokale code** en **Code aangehaald in dit antwoord** blijven afzonderlijk
+herkenbaar: zoeken alleen betekent niet dat iedere passage het antwoord bewijst.
+
+Die controle bewijst de herkomst van een citaat, niet dat iedere uitspraak in
+het antwoord daar logisch uit volgt. Een vooraf getraind model behoudt algemene
+kennis uit zijn oorspronkelijke training. Lokale zoekcontext en bijtrainen
+wissen die kennis niet. Govern claimt daarom geen “uitsluitend op jouw code
+getraind” model en geen foutloze antwoorden.
+
+Voor volledige netwerkisolatie moet ook de daadwerkelijke Ollama-server zonder
+cloudfuncties draaien en moet uitgaand verkeer passend worden geblokkeerd.
+Controleer na de bewuste installatie/download met internet losgekoppeld dat
+lokale zoekacties en chat blijven werken. De applicatietests met een lokale
+providerfixture bewijzen geen firewallinstelling of modelgedrag op jouw laptop.
 
 ## Ollama aansluiten
 
@@ -130,7 +204,8 @@ garantie voor kwaliteit of snelheid op iedere laptop.
    zijn. Een uitgeschakelde koppeling doet geen providerverzoek.
 
 `AI_ENABLED=0` schakelt de koppeling weer uit na herstart. Vragen kunnen dan niet
-worden verstuurd; de databasewerkplek en gewone selectie-uitleg blijven bruikbaar.
+worden verstuurd; lokale code doorzoeken, de databasewerkplek en gewone
+selectie-uitleg blijven bruikbaar.
 
 ### Windows en Docker zijn verschillende netwerkcontexten
 
@@ -184,8 +259,9 @@ staat of mislukt.
    `QueryRunner` niet als automatische AI-tool: die kan inmiddels schrijven.
    Toon welke rijen als bron zijn gebruikt. Willekeurige door het model
    geschreven SQL is geen vervanging voor die leesgrens.
-2. **Lokale documenten:** voeg zoeken met bronpassages en afzonderlijke opslag
-   toe wanneer documenten nodig zijn. Dit vraagt geen hertraining van het model.
+2. **Meer lokale bronnen:** de huidige projectzoeker leest alleen `app/` en
+   `docs/`. Ontwerp toestemming, ondersteunde formaten en uitsluitingen apart
+   voordat andere documenten worden toegevoegd. Dit vraagt geen hertraining.
 3. **Een andere provider:** behoud het frontendcontract, de contextgrens,
    foutcodes en SQL-conceptstroom. Maak providerkeuze expliciet aan de serverkant;
    voeg geen onzichtbare fallback toe.

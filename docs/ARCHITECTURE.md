@@ -47,7 +47,8 @@ De onderdelen hebben een kleine, duidelijke taak:
 | `ai-workspace.js`, `ai-messages.js` en `ai-workspace.css` | Optioneel AI-paneel, status, bronnen, tijdelijke gesprekken en SQL-voorstellen |
 | `AiConfig.php` | Uitsluitend servergestuurde, standaard uitgeschakelde lokale providerconfiguratie |
 | `AiContext.php` | Begrensde context uit geselecteerde schema- en interfaceonderdelen |
-| `AiService.php` en `OllamaClient.php` | Gevalideerde vragen, lokaal providerverzoek en gecontroleerd antwoord zonder uitvoering |
+| `LocalCodeSearch.php` | Begrensde lokale zoekindex van alleen `app/` en `docs/`, met bronpassages en regelnummers |
+| `AiService.php` en `OllamaClient.php` | Gevalideerde vragen, lokaal providerverzoek, gecontroleerde projectcitaten en antwoord zonder uitvoering |
 | `database-modal.js` | Het venster rondom de echte phpMyAdmin |
 | `row-editor.js` | Rijformulier met vaste databasecontext, exacte waarden en conflictfeedback |
 | `DatabaseScope.php` | Toegestane databasekeuze, afzonderlijke herstelpuntpaden en gedeelde locklocatie |
@@ -157,8 +158,10 @@ browser naar de prompt. Vragen en tijdelijke gespreksgeschiedenis zijn wel
 gebruikersinvoer voor het model. Commentaren en interfacebeschrijvingen blijven
 onbetrouwbare brongegevens, geen systeeminstructies.
 
-`AiService::prepareChat` valideert invoer en bouwt context op terwijl de gedeelde
-onderhoudslock geldt. De HTTP-laag laat die lock daarna los.
+`AiService::prepareChat` valideert invoer en bouwt databasecontext op terwijl de
+gedeelde onderhoudslock geldt. De HTTP-laag laat die lock daarna los. Projectcode
+gebruikt geen catalogus en loopt zonder deze lock; dezelfde CSRF- en
+databasescopecontrole blijven gelden.
 `AiService::completeChat` doet alleen de provideraanroep en antwoordcontrole;
 een trage modelgeneratie houdt daardoor geen herstelactie tegen. Het model heeft
 geen SQL-tool of eigen databaseverbinding. SQL uit een antwoord wordt pas door
@@ -166,11 +169,38 @@ een expliciete gebruikersactie een concept in de bestaande querywerkplaats.
 Die route bewaart de bestaande bevestiging voor het vervangen van een concept
 en de gewone uitvoerings- en schrijfgrenzen.
 
-Het paneel bewaart vraag, geschiedenis en bronnen per database in het geheugen
-van het tabblad. Dat is geen blijvende gespreksopslag. Databasewissels breken het
+Het paneel bewaart vraag, geschiedenis en bronnen per database en brongebied
+in het geheugen van het tabblad. Dat is geen blijvende gespreksopslag. Databasewissels breken het
 zichtbare verzoek af en wijzigen de revisie; een antwoord voor A komt niet in B.
 Taal- en themawisselingen behouden de vraag. Stoppen annuleert het wachten in de
 browser en belooft geen onmiddellijke stop van een al draaiend lokaal model.
+
+Het brongebied **Projectcode** gebruikt `LocalCodeSearch` in plaats van
+schemametadata. `AI_PROJECT_ROOT` komt uitsluitend van de server; zonder die
+instelling gebruikt de broncheckout de projectmap. In Docker staan alleen de
+mappen `app/` en `docs/` onder `/opt/govern/project`, als alleen-lezen mounts en
+als kopie in de image. De browser kan geen mappen of bestandspaden kiezen.
+De begrensde woordenindex ontstaat opnieuw per vraag en blijft alleen in geheugen;
+er is geen blijvende index, modeltraining of nieuwe afhankelijkheid.
+
+De lezer negeert symlinks, verborgen en uitgesloten mappen, niet-ondersteunde
+tekst en herkenbare geheime bestanden. Regels met herkenbare letterlijke
+geheimen of te lange inhoud worden volledig weggelaten. Dit is best effort,
+geen universele geheimdetector. Resultaten bevatten exacte originele veilige
+regels, een relatief pad en echte regelnummers. De hash hoort bij de geschoonde
+bestandsmomentopname; interne markers voor weggelaten regels verschijnen alleen
+in de hashberekening, niet in passages. Lokale zoekacties werken ook als
+AI uit staat en hebben geen provider nodig.
+
+Een projectchat zoekt opnieuw aan de serverkant en gebruikt geen oudere
+chatberichten als projectbewijs. De provider moet een bestaande bron-ID en een
+letterlijk citaat geven. `AiService` valideert ID en citaat en berekent het pad en
+de bijbehorende regels zelf. Ontbrekende bronnen of ongeldige verwijzingen leiden
+tot een korte onthouding in plaats van ongecontroleerde gegenereerde uitleg.
+Projectantwoorden hebben altijd `sql:null`. De citatencontrole bewijst herkomst,
+geen semantische juistheid van iedere uitspraak. Het vooraf getrainde model
+behoudt zijn algemene kennis; de toepassing claimt geen exclusieve training op
+het project.
 
 De uitvoerige opzet, Windows/Docker-netwerkgrens, configuratie en regels voor
 verdere uitbreidingen staan in [lokale AI](AI.md). Er wordt geen nieuw agent-
@@ -422,8 +452,9 @@ wordt niet als een universele SQL-undo gepresenteerd.
 - De visuele querybouwer kan worden uitgebreid met groeperingen of meer koppelingen.
 - Een schema-ontwerper kan gewone SQL genereren en de wijziging eerst laten zien.
 - Een nieuw datasettype wordt als gewone tabel ingevoerd.
-- De optionele lokale AI kan later expliciete, begrensde leesfuncties of
-  documentzoeken krijgen via het contract en de fasering in `docs/AI.md`.
+- De optionele lokale AI kan later expliciete, begrensde gegevensleesfuncties of
+  extra documentbronnen krijgen. De huidige projectzoeker blijft beperkt tot
+  `app/` en `docs/`; verruiming volgt het contract en de fasering in `docs/AI.md`.
 
 Voeg mogelijkheden toe aan het bestaande pad zolang dat duidelijk blijft. Een
 extra service, database of abstractie is een keuze met kosten, geen vereiste om

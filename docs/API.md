@@ -101,8 +101,8 @@ interface and future feature rules.
 - GET `download-snapshot&id=...`: attachment SQL. Strict server-generated snapshot ids only.
 - GET `context`: attachment JSON of schema and saved queries, no table rows or credentials.
 - GET `ai-status`: actual optional local-provider configuration and readiness; see the AI contract below.
-- POST `ai-context` `{targets?,route?}`: bounded live schema/UI context for the explicit database, without table records.
-- POST `ai-chat` `{message,targets?,route?,language?,history?}`: explanation and optional SQL proposal only; never executes the proposal.
+- POST `ai-context` `{scope?,message?,targets?,route?}`: bounded schema/UI context, or local project passages when `scope:"project"`; without table records.
+- POST `ai-chat` `{scope?,message,targets?,route?,language?,history?}`: schema explanation and optional SQL proposal, or cited project explanation; never executes a proposal.
 - GET `health`: `{status:"ok"}` when selected DB readable; no credentials/errors disclosed.
 
 ## Optional local AI
@@ -111,7 +111,14 @@ AI calls use the ordinary same-origin session, POST CSRF checks, error envelope
 and explicit `database` URL parameter. A body cannot choose a different database,
 provider address, model or database account. AI is optional; `AI_ENABLED=0` keeps
 the workspace usable and produces a truthful disabled status without a provider
-request. The existing `context` download is separate and retains its contents.
+request. Local project search in `ai-context` remains available without a model.
+The existing `context` download is separate and retains its contents.
+
+`scope` is `"database"` (default, compatible with existing requests) or
+`"project"`; any other value returns 422 `ai_input_invalid`. Project scope
+chooses a local source area, not another database or a filesystem permission.
+It keeps the ordinary session, CSRF and selected-database validation but does
+not read the catalog or acquire the database maintenance lock.
 
 ### Status
 
@@ -127,6 +134,7 @@ request. The existing `context` download is separate and retains its contents.
   "models": [],
   "capabilities": {
     "schema": true,
+    "project": true,
     "records": false,
     "execution": false,
     "chat": false,
@@ -143,9 +151,15 @@ include `error_code`; readiness is a current connectivity/model-list check,
 not a guarantee that a later generation will succeed. Cloud model aliases are
 not offered as local models and no status check downloads a model.
 
-### Context preview
+The additive `project` field reports the local reader status independently of
+model readiness: `{status:"ready"|"unavailable",roots:["app","docs"],sources:[],
+truncated:false,files_scanned:0}`. Status does not index file contents.
+`capabilities.project:true` means that local preview/search is supported, not
+that inference is enabled or that an answer has been verified.
 
-`POST ai-context` accepts an optional `route` (one of Govern's existing route
+### Database context preview
+
+With omitted `scope` or `scope:"database"`, `POST ai-context` accepts an optional `route` (one of Govern's existing route
 names, default `overzicht`) and `targets`, a list of up to eight objects:
 
 ```json
@@ -184,6 +198,70 @@ the omission counts remain visible. If the source identities alone cannot fit,
 return 413 instead of silently discarding a selected table. Invalid selection
 input returns 422 `ai_context_invalid`; unavailable table/column names use the
 ordinary catalog errors.
+
+### Local project search
+
+`POST ai-context` with `scope:"project"` accepts `message` as a local search
+question (at most 4,000 UTF-8 bytes) and optional `route`. An empty message
+returns reader status without scanning sources. `targets`, browser paths,
+source passages and other extra client metadata never select files. Example:
+
+```json
+{
+  "scope": "project",
+  "message": "How does switching databases work?",
+  "route": "overzicht"
+}
+```
+
+The result retains the common context fields and uses a separate source shape:
+
+```json
+{
+  "database": "bestuursatlas",
+  "route": "overzicht",
+  "scope": "project",
+  "targets": [],
+  "records_included": false,
+  "truncated": false,
+  "context_id": "<sha256 of this context snapshot>",
+  "project": {
+    "status": "ready",
+    "roots": ["app", "docs"],
+    "files_scanned": 42
+  },
+  "sources": [
+    {
+      "id": "S1",
+      "path": "app/src/DatabaseScope.php",
+      "start_line": 1,
+      "end_line": 4,
+      "content": "<actual bounded source passage>",
+      "sha256": "<sha256 of the sanitized file snapshot>"
+    }
+  ]
+}
+```
+
+Paths are relative to a server-owned project root. `AI_PROJECT_ROOT` is server
+configuration only; the local source checkout defaults to its repository root,
+and Docker sets `/opt/govern/project`. Only `app/` and `docs/` are offered there,
+read-only and outside the public webroot. Supported text is restricted to PHP,
+JavaScript, CSS and Markdown. Symlinks, hidden paths, excluded dependency/data
+folders, binary/invalid UTF-8 content and recognizable secret file names are
+skipped. Entire lines containing recognizable literal secrets or overlong
+content are omitted. Returned passages contain exact original safe lines and
+actual line numbers, without replacement text. Detection is best effort, not a
+guarantee that all possible secrets are detected.
+No arbitrary file read endpoint or folder chooser is introduced.
+
+The words/identifier index is rebuilt in memory on each search. There is no
+persistent vector database, model training, shell command or external request.
+At most three source passages fit within a 5,000-byte JSON source budget;
+file count, file size and total bytes read are also bounded. `truncated` marks
+limits or omissions. `sha256` identifies the sanitized file snapshot, with internal omitted-line
+markers used only for hashing and never returned in source passages. It is not
+an authorization token or a claim that a later edit cannot occur.
 
 ### Chat and proposals
 
@@ -227,9 +305,61 @@ Known AI failure codes include `ai_disabled` (503), `ai_config_invalid` (503),
 and `ai_context_too_large` (413). Client abort discards the response and does not
 promise cancellation of an already running model calculation.
 
+### Cited project answers
+
+`POST ai-chat` with `scope:"project"` uses the same bounded nonblank `message`
+and `language` as database chat. History is validated by the common input
+contract but omitted from the project model request; `history_truncated:true`
+reports that omission when applicable. The server searches the current files
+again; a browser preview, supplied file path or previous answer is not evidence.
+The ordinary `AI_ENABLED` check still applies to chat.
+
+The provider receives the question and a bounded snapshot of retrieved passages,
+marked as untrusted source data. Its project-specific structured output is
+`{answer:string,citations:[{source_id:string,quote:string}]}` with no SQL field.
+The server accepts only existing source IDs and nonempty literal quotations
+present in the supplied passages. It derives paths and line ranges itself.
+
+The response retains common chat fields and adds:
+
+```json
+{
+  "scope": "project",
+  "sql": null,
+  "grounded": true,
+  "citations": [
+    {
+      "source_id": "S1",
+      "path": "app/src/DatabaseScope.php",
+      "start_line": 1,
+      "end_line": 2,
+      "quote": "<exact quotation from the supplied passage>",
+      "sha256": "<sanitized file snapshot hash>"
+    }
+  ]
+}
+```
+
+`context.sources` lists retrieved passages; `citations` lists the validated
+references used by the answer. No sources or unavailable source folders skip
+provider inference and return a localized abstention, `grounded:false`, empty
+citations and `sql:null`. Invalid citations withhold the generated prose in the
+same way. `refusal_reason` is `no_sources`, `sources_unavailable`,
+`context_budget` or `invalid_citations` when abstaining. Model/protocol failures
+still use the ordinary error envelope.
+
+The combined messages JSON remains at most 10,000 UTF-8 bytes. Lowest-ranked
+whole passages are dropped when needed; sources and context fingerprint reflect
+what was actually supplied. If no useful passage fits, the result abstains.
+Citations establish excerpt provenance, not semantic entailment of every claim.
+Local retrieval does not erase a model's pretraining or promise that generated
+text uses no prior general knowledge. The model has no SQL execution, file,
+network or other callable tools. See [the local source boundary](AI.md).
+
 Questions and history are client-provided and may contain text the user typed.
 The automatic context exclusion is not a promise to redact that text. The
 frontend keeps conversations and drafts temporarily in memory per database and
+source area (at most forty messages per database/source area) and
 ignores stale responses after scope changes. See [local AI](AI.md) for setup,
 network boundaries and the next implementation stages.
 
@@ -487,6 +617,12 @@ Explicit cloud model names are rejected and there is no cloud fallback.
 Model availability and host networking remain deployment responsibilities;
 see [the local setup guide](AI.md). No Ollama service or model download is added
 to the default Compose startup.
+
+`LocalCodeSearch` separately reads server-only `AI_PROJECT_ROOT`. Docker sets
+`/opt/govern/project` and supplies only `app/` and `docs/` read-only there. The
+source checkout defaults to its repository root. This setting never makes
+folders outside the fixed `app/` and `docs/` source areas readable through a
+browser request.
 
 The default database retains the existing `BACKUP_DIR` path. Other databases use
 `BACKUP_DIR/databases/<sha256(database name)>`; manifest database names and

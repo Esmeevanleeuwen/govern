@@ -7,6 +7,8 @@ namespace Govern;
 final class Messages
 {
     private const TEXT = [
+        'ai_project_no_evidence' => ['nl' => 'Ik kon dit niet onderbouwen met de gevonden lokale projectbestanden. Probeer een concrete functienaam of een onderdeel van Govern.', 'en' => 'I could not support this with the local project files found. Try a specific function name or a part of Govern.'],
+        'ai_project_unavailable' => ['nl' => 'De toegestane lokale projectmappen zijn niet beschikbaar. Controleer of app/ en docs/ alleen-lezen zijn gekoppeld.', 'en' => 'The approved local project folders are unavailable. Check that app/ and docs/ are mounted read-only.'],
         'ai_config_invalid' => ['nl' => 'De lokale AI-instellingen zijn ongeldig. Controleer AI_ENABLED, AI_BASE_URL, AI_MODEL en AI_TIMEOUT_SECONDS.', 'en' => 'The local AI configuration is invalid. Check AI_ENABLED, AI_BASE_URL, AI_MODEL and AI_TIMEOUT_SECONDS.'],
         'ai_disabled' => ['nl' => 'Lokale AI staat nog uit. Schakel de verbinding in via de lokale instellingen en start Govern opnieuw.', 'en' => 'Local AI is disabled. Enable the connection in the local configuration and restart Govern.'],
         'ai_unavailable' => ['nl' => 'Ollama is niet bereikbaar. Controleer of de lokale toepassing draait en het model is gedownload.', 'en' => 'Ollama is unavailable. Check that the local application is running and the model is downloaded.'],
