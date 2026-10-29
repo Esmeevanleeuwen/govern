@@ -76,7 +76,8 @@ export function createRowEditor({getDatabase, onBusy = () => {}, onSaved = () =>
         if (state.dialog.open) state.dialog.close();
         state.dialog.remove();
         onBusy(false);
-        if (state.opener?.isConnected && !state.opener.disabled) state.opener.focus({preventScroll: true});
+        const opener = state.opener?.isConnected ? state.opener : document.getElementById(state.openerId);
+        if (opener && !opener.disabled) opener.focus({preventScroll: true});
     }
 
     async function askDiscard(state) {
@@ -284,7 +285,7 @@ export function createRowEditor({getDatabase, onBusy = () => {}, onSaved = () =>
         if (current || !table || !['edit', 'insert', 'delete'].includes(mode)) return false;
         const state = {
             database: String(getDatabase() || ''), table: String(table), key, mode,
-            opener: document.activeElement, labels: [], fields: new Map(), data: null,
+            opener: document.activeElement, openerId: document.activeElement?.id, labels: [], fields: new Map(), data: null,
             loading: true, saving: false, confirming: false, supported: false,
             error: null, conflict: false,
         };

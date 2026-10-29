@@ -289,6 +289,8 @@ INSERT INTO ${table} (id,label,amount) VALUES (1,'${marker} seed',10.10);`);
     assert.equal(await dialog.evaluate(node => node.scrollWidth <= innerWidth), true);
     await shot('row-editor-mobile');
     await closeEditor();
+    assert.equal(await page.evaluate(() => document.activeElement?.id), 'row-edit-0',
+        'Closing after a language change restores the replacement row action.');
     await page.setViewportSize({width: 1440, height: 1100});
 
     await page.locator('[data-database-view="schema"]').click();
