@@ -8,6 +8,7 @@ registerMessages('app.navigation', {
         columns: 'Kolommen', connections: 'Verbindingen', inspector: 'Tabeldetails',
         noConnections: 'Geen gedeclareerde verwijzingen vanuit deze tabel.',
         ready: 'Verbonden',
+        emptySelection: 'Kies een tabel',
     },
     en: {
         database: 'Database', views: 'Database view', open: 'Open tables and workspace',
@@ -16,5 +17,6 @@ registerMessages('app.navigation', {
         columns: 'Columns', connections: 'Connections', inspector: 'Table details',
         noConnections: 'No declared references from this table.',
         ready: 'Connected',
+        emptySelection: 'Choose a table',
     },
 });

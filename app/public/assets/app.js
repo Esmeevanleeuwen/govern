@@ -119,7 +119,7 @@ mobileViewport.addEventListener('change', () => {
     syncSidebar();
 });
 document.addEventListener('click', event => {
-    const fromMenu = event.composedPath().some(node => ['sidebar', 'menu-toggle', 'workspace-explorer-open', 'schema-panel-toggle'].includes(node.id));
+    const fromMenu = event.composedPath().some(node => ['sidebar', 'menu-toggle', 'workspace-explorer-open'].includes(node.id));
     if (document.body.classList.contains('sidebar-open') && !fromMenu) closeSidebar();
 });
 document.addEventListener('keydown', event => {
@@ -161,7 +161,10 @@ function syncWorkspaceNavigation() {
     panelToggle.setAttribute('aria-expanded', String(expanded));
     panelToggle.setAttribute('aria-label', t('app.navigation.hide'));
     const workspaceOpener = document.getElementById('workspace-explorer-open');
-    if (workspaceOpener) workspaceOpener.hidden = isExplorerOpen();
+    if (workspaceOpener) {
+        workspaceOpener.hidden = isExplorerOpen();
+        workspaceOpener.setAttribute('aria-expanded', String(isExplorerOpen()));
+    }
     const databaseLink = navigation.querySelector('[data-area="database"]');
     databaseLink.dataset.route = state.databaseView;
     databaseLink.href = databaseHash(state.databaseView);
@@ -196,7 +199,7 @@ function toggleWorkspaceContext() {
     if (!isExplorerOpen()) { openWorkspaceContext(); return; }
     state.contextOpen[area] = false;
     if (mobileViewport.matches) closeSidebar(); else syncSidebar();
-    (document.getElementById('workspace-explorer-open') || document.getElementById('schema-panel-toggle') || navigation.querySelector('[aria-current="page"]'))?.focus({preventScroll: true});
+    (document.getElementById('workspace-explorer-open') || navigation.querySelector('[aria-current="page"]'))?.focus({preventScroll: true});
 }
 panelToggle.append(icon('chevron'));
 panelToggle.addEventListener('click', toggleWorkspaceContext);
@@ -389,6 +392,7 @@ function render() {
     activeTable(location.params);
     if (databaseViews.includes(location.name)) state.databaseView = location.name;
     syncWorkspaceNavigation();
+    refreshButton.hidden = location.name === 'schema';
     document.getElementById('breadcrumb-current').textContent = t(routes[location.name].labelKey);
     document.title = t(routes[location.name].labelKey) + ' — Govern';
     renderConnectionNotice();
@@ -664,13 +668,13 @@ function databaseHeading(view) {
         el('a', {class: 'database-view' + (name === view ? ' active' : ''), href: databaseHash(name), 'data-database-view': name,
             'aria-current': name === view ? 'page' : null}, t(routes[name].labelKey))));
     const explorer = button(t('app.navigation.tables'), openWorkspaceContext, {id: 'workspace-explorer-open', symbol: 'table',
-        'aria-label': t('app.navigation.open'), 'aria-controls': 'workspace-context'});
-    const titles = {gegevens: ['app.core.data.title', 'app.core.data.help'], structuur: ['app.core.structure.title', 'app.core.structure.help'], schema: ['app.schema.title', 'app.schema.help']};
+        'aria-label': t('app.navigation.open'), 'aria-controls': 'workspace-context', 'aria-expanded': String(isExplorerOpen())});
     explorer.hidden = isExplorerOpen();
-    const title = heading(t('app.navigation.database'), t(titles[view][0]), t(titles[view][1]), view === 'schema' ? [modeLinks] : [explorer, modeLinks]);
-    title.classList.add('database-heading');
-    title.querySelector('div').append(el('p', {class: 'database-selected-table', id: 'database-selected-table'}, state.table));
-    return title;
+    return el('header', {class: 'page-heading database-heading'},
+        el('div', {class: 'database-heading-main'}, el('h1', {}, t('app.navigation.database')), explorer),
+        el('div', {class: 'database-viewbar'}, modeLinks,
+            el('p', {class: 'database-selection'}, el('span', {}, t('app.navigation.selected')),
+                el('code', {class: 'database-selected-table', id: 'database-selected-table'}, state.table || t('app.navigation.emptySelection')))));
 }
 
 function databaseContext(view, scope) {
@@ -695,6 +699,7 @@ function drawTableInspector(inspector, table, data) {
     };
     inspector.replaceChildren(el('p', {class: 'eyebrow'}, t('app.navigation.selected')), el('h3', {}, table.name),
         el('p', {class: 'small muted'}, t('app.dashboard.tableDetail', {count: number(table.columns), type: t(table.type === 'view' ? 'app.dashboard.view' : 'app.dashboard.table')})));
+    if (table.comment) inspector.append(el('p', {class: 'small muted'}, table.comment));
     if (!data) return;
     inspector.append(details('columns', t('app.navigation.columns'), el('div', {class: 'workspace-column-list'}, data.columns.map(column =>
         el('div', {}, el('code', {}, column.name), el('small', {}, column.type))))));
@@ -713,8 +718,7 @@ function drawTableInspector(inspector, table, data) {
 
 function tableHeader(table, tab) {
     return el('div', {class: 'table-heading'},
-        el('div', {}, el('div', {class: 'table-heading-title'}, el('h2', {}, table.name), badge(table.type === 'view' ? t('app.core.table.viewBadge') : t('app.core.table.tableBadge'), table.type === 'view' ? 'badge-blue' : 'badge-green')),
-            table.comment ? el('p', {}, table.comment) : null),
+        el('div', {}, el('div', {class: 'table-heading-title'}, el('h2', {}, table.name), badge(table.type === 'view' ? t('app.core.table.viewBadge') : t('app.core.table.tableBadge'), table.type === 'view' ? 'badge-blue' : 'badge-green'))),
         el('div', {class: 'table-heading-actions'},
             button(tab === 'structure' ? t('app.core.table.openStructure') : t('app.core.table.openBrowse'), () => databaseModal.open(table.name, tab), {className: 'button-small', symbol: 'database'})));
 }
@@ -850,9 +854,7 @@ async function renderStructure(scope) {
 }
 
 async function renderSchema(scope) {
-    const title = databaseHeading('schema');
-    title.querySelector('.heading-actions').append(button(t('app.schema.refresh'), () => refreshBootstrap(true), {symbol: 'refresh', id: 'schema-refresh'}));
-    page.append(title);
+    page.append(databaseHeading('schema'));
     contextContent.append(loading(t('app.schema.loading')));
     const workspace = el('section', {id: 'schema-workspace'}, loading(t('app.schema.loading')));
     page.append(workspace);
@@ -866,8 +868,7 @@ async function renderSchema(scope) {
         const visualizer = mountSchemaVisualizer(workspace, {
             data: state.schemaData,
             state: state.schemaView,
-            onBrowse: table => go('gegevens', {table}),
-            onStructure: table => go('structuur', {table}),
+            onRefresh: () => refreshBootstrap(true),
             contextRoot: contextContent,
             initialSearch: state.catalogSearch.database || '',
             onSearch: value => { state.catalogSearch.database = value; },
@@ -878,8 +879,6 @@ async function renderSchema(scope) {
                 document.querySelectorAll('[data-database-view]').forEach(link => { link.href = databaseHash(link.dataset.databaseView); });
                 syncWorkspaceNavigation();
             },
-            onToggleExplorer: toggleWorkspaceContext,
-            isExplorerOpen,
         });
         scope.cleanup.push(() => visualizer.destroy());
         restoreExplorerScroll('database');

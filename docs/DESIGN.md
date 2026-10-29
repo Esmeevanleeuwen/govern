@@ -1,6 +1,6 @@
 # Govern UX and UI design
 
-**Design baseline 1.1.** Govern is a personal, local workspace for exploring, understanding and changing a database. This guide defines its brand, visual system, behaviour and the process for adding features without disrupting existing work.
+**Design baseline 1.2.** Govern is a personal, local workspace for exploring, understanding and changing a database. This guide defines its brand, visual system, behaviour and the process for adding features without disrupting existing work.
 
 The agreed visual direction is layered glass, soft shadows, custom colour and no hard decorative borders. Dutch and English are equal interface languages. The detailed rules below are the target for implementation; the interactive preview is a visual reference. The production modules implement the core language, appearance and layout controls; the future chart example remains a proposal.
 
@@ -146,6 +146,30 @@ than replacing it. The next table stays one click away. The same table selection
 and explorer search carry between Data, Structure and Schema. Record search and
 pagination belong to Data and remain separate from explorer search.
 
+### Predictable placement within Database
+
+Use the same order in Data, Structure and Schema:
+
+1. A compact **Database** heading. The **Tables** opener occupies the same header
+   position in every view when the explorer is collapsed or the mobile drawer is closed.
+2. One view row directly beneath it: **Data**, **Structure**, **Schema**, followed
+   by the selected table context. Let that context wrap below the views on narrow screens.
+3. One tool area immediately before the table, structure or canvas it controls.
+4. The main content, followed by a compact summary or optional explanation.
+
+The sidebar owns the searchable table list and expandable table details. Do not
+repeat Browse, Structure or Focus connections buttons there: the view row and
+Schema connection filter already provide those actions. Keep selecting another
+table independent from expanding its columns or connections.
+
+In Schema, group the tool area by purpose: connection filtering and column
+display; arrangement; zoom, actual size and fit; then refresh and Help. Keep
+those groups together above the canvas, with consistent alignment and wrapping.
+Zoom controls must not cover table fields or move below a large diagram.
+Put table/relationship counts and the PK/FK legend in a compact canvas footer.
+Long interaction, relationship and local-layout explanations belong in Help or
+a collapsed explanation below the canvas, keeping the initial workspace concise.
+
 The Database rail entry returns to the last Database view in the current
 session. Preserve direct links and existing hashes: `#gegevens`, `#structuur`
 and `#schema`, including supported table parameters. Changing navigation must
@@ -167,8 +191,8 @@ changes, and keep keyboard access and focus return working.
 
 ### Follow the schema
 
-Open **Database → Schema**, or choose **View schema** from Structure to select
-the current table. The canvas shows live tables, views, columns, primary keys
+Open **Database → Schema** using the shared view row; the current table stays
+selected. The canvas shows live tables, views, columns, primary keys
 and declared foreign keys. Select an object to read its exact connections, and
 continue to its data or structure without losing the table explorer. Search
 filters the explorer only; it must not silently remove tables from the canvas.
@@ -187,11 +211,11 @@ decorating panel boundaries. The cards keep the shared frost and soft shadows.
 The shared Database context panel keeps the table list visible above the selected
 table's details. Expand columns or connections there without replacing the list.
 Choosing another table updates its highlight, exact connections and workspace
-selection. Keep Schema tools, zoom, fit, arrangement and guide controls beside
-the canvas, including when the explorer is collapsed. Opening or closing the
-explorer keeps the selection, zoom and diagram center intact.
+selection. Keep Schema tools, zoom, fit, arrangement and guide controls together
+immediately above the canvas, including when the explorer is collapsed. Opening
+or closing the explorer keeps the selection, zoom and diagram center intact.
 
-**What can I do here?** stays available among the Schema workspace tools and opens a
+**Help** stays available among the Schema workspace tools and opens the **What can I do here?**
 guide modal. Explain actual capabilities: search, declared keys and connections,
 selection actions, wheel zoom, panning, table placement, layout controls and
 refreshing. Include keyboard instructions and make the difference between diagram

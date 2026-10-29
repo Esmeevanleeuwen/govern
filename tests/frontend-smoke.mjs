@@ -171,7 +171,7 @@ try {
     await shot(mobile, 'mobile-overview');
     await mobile.getByRole('button', {name: 'Navigatie openen', exact: true}).click();
     await mobile.locator('#navigation [data-area="database"]').click();
-    await mobile.getByRole('heading', {name: 'Verken je database.', exact: true}).waitFor();
+    await mobile.locator('.database-heading h1').filter({hasText: 'Database'}).waitFor();
     await waitForPage(mobile);
     await mobile.waitForFunction(() => document.getElementById('sidebar').getBoundingClientRect().right <= 1);
     assert.equal(await mobile.locator('#sidebar').getAttribute('aria-hidden'), 'true');

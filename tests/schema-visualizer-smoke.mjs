@@ -41,8 +41,8 @@ const ensureExplorer = async (current = page) => {
     // Read the responsive drawer state directly before trusting its old label.
     const mobileClosed = await current.evaluate(() => matchMedia('(max-width: 820px)').matches
         && !document.body.classList.contains('sidebar-open'));
-    if (mobileClosed || await current.locator('#schema-panel-toggle').getAttribute('aria-expanded') !== 'true') {
-        await current.locator('#schema-panel-toggle').click();
+    if (mobileClosed || await current.locator('#workspace-explorer-open').getAttribute('aria-expanded') !== 'true') {
+        await current.locator('#workspace-explorer-open').click();
     }
     await current.locator('#workspace-context').waitFor();
 };
@@ -101,6 +101,30 @@ try {
     assert.deepEqual(edgePairs.sort(), expectedPairs.sort(), 'Every declared FK column pair is drawn, without invented joins.');
     assert.ok(edgePairs.some(edge => edge.startsWith('public_functions\tparent_function_id\tpublic_functions\tid')),
         'Real self references are visible.');
+    const placement = await page.locator('#schema-workspace').evaluate(workspace => {
+        const toolbar = workspace.querySelector('.schema-toolbar');
+        const canvas = workspace.querySelector('#schema-viewport');
+        const controls = ['schema-neighborhood', 'schema-columns-toggle', 'schema-reset', 'schema-zoom-out',
+            'schema-zoom-value', 'schema-zoom-in', 'schema-actual', 'schema-fit', 'schema-refresh', 'schema-help-open'];
+        return {
+            toolbarCount: workspace.querySelectorAll('.schema-toolbar').length,
+            groupedControls: controls.every(id => {
+                const control = workspace.querySelector('#' + id);
+                const group = control?.closest('.schema-tool-group[role="group"][aria-label]');
+                return group && toolbar.contains(group) && group.getAttribute('aria-label').trim();
+            }),
+            toolsBeforeCanvas: Boolean(toolbar.compareDocumentPosition(canvas) & Node.DOCUMENT_POSITION_FOLLOWING),
+            toolsAboveCanvas: toolbar.getBoundingClientRect().bottom <= canvas.getBoundingClientRect().top + 1,
+            repeatedSidebarActions: document.querySelectorAll('#schema-browse, #schema-structure, #schema-focus-connections').length,
+            explanationClosed: !workspace.querySelector('#schema-explanation').open,
+        };
+    });
+    assert.equal(placement.toolbarCount, 1, 'Canvas actions have one predictable tool area.');
+    assert.equal(placement.groupedControls, true, 'Filter, display, arrangement, zoom, refresh and help stay in labelled groups.');
+    assert.equal(placement.toolsBeforeCanvas, true, 'All canvas controls precede the diagram rather than splitting above and below it.');
+    assert.equal(placement.toolsAboveCanvas, true, 'The grouped tools sit above the canvas without covering its table fields.');
+    assert.equal(placement.repeatedSidebarActions, 0, 'Sidebar details do not repeat Database modes and the connection filter.');
+    assert.equal(placement.explanationClosed, true, 'Long explanations stay collapsed until requested.');
     await page.locator('#schema-columns-toggle').click();
     assert.equal(await page.locator('#schema-columns-toggle').getAttribute('aria-pressed'), 'false');
     assert.equal(await page.locator('.schema-columns:visible').count(), 0, 'Header-only mode hides column rows.');
@@ -115,8 +139,8 @@ try {
     // leaving workspace tools and global navigation reachable.
     assert.equal(await page.locator('#schema-tool-rail').count(), 0, 'Schema has no second tool rail.');
     await ensureExplorer();
-    assert.equal(await page.locator('#schema-panel-toggle').getAttribute('aria-expanded'), 'true');
-    assert.equal(await page.locator('#schema-panel-toggle').isVisible(), false, 'The workspace only offers a table opener when the explorer is collapsed.');
+    assert.equal(await page.locator('#workspace-explorer-open').getAttribute('aria-expanded'), 'true');
+    assert.equal(await page.locator('#workspace-explorer-open').isVisible(), false, 'The workspace only offers a table opener when the explorer is collapsed.');
     const expandedViewport = await viewportState(page);
     await page.locator('#workspace-panel-toggle').click();
     assert.equal(await page.locator('#workspace-context').isVisible(), false, 'The shared context pane collapses.');
@@ -126,9 +150,9 @@ try {
         (compactViewport.width / 2 - compactViewport.x) / compactViewport.zoom, 'Tool collapse retains the diagram center X', .02);
     closeTo((expandedViewport.height / 2 - expandedViewport.y) / expandedViewport.zoom,
         (compactViewport.height / 2 - compactViewport.y) / compactViewport.zoom, 'Tool collapse retains the diagram center Y', .02);
-    await page.locator('#schema-panel-toggle').click();
+    await page.locator('#workspace-explorer-open').click();
     assert.equal(await page.locator('#workspace-context').isVisible(), true, 'The workspace opener expands the table explorer.');
-    assert.equal(await page.locator('#schema-panel-toggle').getAttribute('aria-expanded'), 'true');
+    assert.equal(await page.locator('#workspace-explorer-open').getAttribute('aria-expanded'), 'true');
 
     // Area help is an actual modal, explains only implemented functions, and
     // leaves catalog data and diagram state untouched.
@@ -271,18 +295,18 @@ try {
         'The table explorer identifies the selected table.');
     const panelViewport = await viewportState(page);
     await page.locator('#workspace-panel-toggle').click();
-    assert.equal(await page.locator('#schema-panel-toggle').getAttribute('aria-expanded'), 'false');
+    assert.equal(await page.locator('#workspace-explorer-open').getAttribute('aria-expanded'), 'false');
     assert.equal(await page.locator('#workspace-context').isVisible(), false, 'Context panel can be collapsed.');
     assert.equal(await page.locator('#schema-help-open').isVisible(), true, 'Area help remains discoverable above the canvas.');
     closeTo((await viewportState(page)).zoom, panelViewport.zoom, 'Collapsing keeps canvas zoom');
     await page.locator('[data-schema-header="' + table.name + '"]').focus();
     await page.keyboard.press('Enter');
-    assert.equal(await page.locator('#schema-panel-toggle').getAttribute('aria-expanded'), 'false',
+    assert.equal(await page.locator('#workspace-explorer-open').getAttribute('aria-expanded'), 'false',
         'A table selection respects a deliberately collapsed panel.');
     await page.locator('#language-select').selectOption('en');
-    assert.equal(await page.locator('#schema-panel-toggle').getAttribute('aria-expanded'), 'false', 'Language retains a collapsed panel.');
+    assert.equal(await page.locator('#workspace-explorer-open').getAttribute('aria-expanded'), 'false', 'Language retains a collapsed panel.');
     await page.locator('#language-select').selectOption('nl');
-    await page.locator('#schema-panel-toggle').click();
+    await page.locator('#workspace-explorer-open').click();
     assert.equal(await page.locator('#schema-table-panel').isVisible(), true, 'Reopening restores the explorer.');
     assert.match(await page.locator('#schema-selected').innerText(), new RegExp(table.name), 'Reopening retains the selected-table details.');
     await page.locator('#schema-column-summary').click();
@@ -317,8 +341,8 @@ try {
     assert.ok(parseInt(await page.locator('#schema-zoom-value').textContent(), 10) < 100, 'Zoom-out changes the viewport scale.');
     await page.locator('#schema-zoom-in').click();
     assert.equal(await page.locator('#schema-zoom-value').textContent(), '100%');
-    await page.locator('#schema-focus-connections').click();
-    assert.equal(await page.locator('#schema-neighborhood').isChecked(), true, 'Context action focuses the selected table connections.');
+    await page.locator('#schema-neighborhood').check();
+    assert.equal(await page.locator('#schema-neighborhood').isChecked(), true, 'The canvas filter focuses the selected table connections.');
     assert.equal(await page.locator('#schema-search').inputValue(), table.name, 'Direct connections leaves the independent explorer search intact.');
     const neighbors = new Set([table.name]);
     schema.tables.forEach(source => source.foreign_keys.forEach(key => {
@@ -384,13 +408,13 @@ try {
     assert.ok(await page.locator('[data-schema-node]').count() < allCount, 'Neighborhood filters to related tables.');
     await page.locator('#schema-neighborhood').uncheck();
     await selectTable(table.name);
-    await page.locator('#schema-browse').click();
+    await page.locator('[data-database-view="gegevens"]').click();
     await page.waitForFunction(name => location.hash.startsWith('#gegevens') &&
         new URLSearchParams(location.hash.split('?')[1]).get('table') === name, table.name);
     await page.locator('.table-heading').waitFor();
     await load(page);
     await selectTable(table.name);
-    await page.locator('#schema-structure').click();
+    await page.locator('[data-database-view="structuur"]').click();
     await page.waitForFunction(name => location.hash.startsWith('#structuur') &&
         new URLSearchParams(location.hash.split('?')[1]).get('table') === name, table.name);
     await page.locator('.structure-section').first().waitFor();
@@ -465,7 +489,7 @@ try {
     track(mobilePage);
     await mobilePage.setViewportSize({width: 375, height: 900});
     await load(mobilePage);
-    assert.equal(await mobilePage.locator('#schema-panel-toggle').getAttribute('aria-expanded'), 'false',
+    assert.equal(await mobilePage.locator('#workspace-explorer-open').getAttribute('aria-expanded'), 'false',
         'A fresh mobile workspace starts with the context menu compact.');
     assert.equal(await mobilePage.locator('#workspace-context').isVisible(), false);
     assert.equal(await mobilePage.locator('#schema-help-open').isVisible(), true, 'Mobile keeps workspace tools available.');
@@ -485,7 +509,7 @@ try {
     await shot(mobilePage, 'help-mobile');
     await mobilePage.locator('#schema-help-done').click();
     assert.equal(await mobilePage.locator('#schema-help-open').evaluate(button => button === document.activeElement), true);
-    await mobilePage.locator('#schema-panel-toggle').click();
+    await mobilePage.locator('#workspace-explorer-open').click();
     await mobilePage.locator('#workspace-context').waitFor();
     const mobilePanel = await mobilePage.locator('#workspace-context').boundingBox();
     assert.ok(mobilePanel.width <= 375 && mobilePanel.height <= 900,
@@ -562,7 +586,7 @@ try {
     await fixturePage.reload({waitUntil: 'networkidle'});
     await fixturePage.locator('#page .empty-state').waitFor();
     assert.equal(await fixturePage.locator('[data-schema-node]').count(), 0);
-    assert.equal(await fixturePage.locator('#schema-panel-toggle').count(), 1, 'An empty schema retains its table opener for a collapsed explorer.');
+    assert.equal(await fixturePage.locator('#workspace-explorer-open').count(), 1, 'An empty schema retains its table opener for a collapsed explorer.');
     assert.equal(await fixturePage.locator('#schema-help-open').isVisible(), true, 'Area help remains available before tables are imported.');
     await fixturePage.addInitScript(() => {
         const setItem = Storage.prototype.setItem;
@@ -581,6 +605,9 @@ try {
     await fixturePage.keyboard.press('ArrowRight');
     assert.notEqual(await fixturePage.locator('[data-schema-node="parent"]').evaluate(element => element.style.left), storageBefore,
         'A storage failure does not prevent movement in the current session.');
+    assert.equal(await fixturePage.locator('#schema-explanation').evaluate(details => details.open), true,
+        'A failed position save opens its explanation instead of hiding the failure.');
+    assert.equal(await fixturePage.locator('.schema-storage').isVisible(), true);
     assert.match(await fixturePage.locator('.schema-storage').innerText(), /could not be saved|konden niet/,
         'A failed position save is explained.');
     await fixturePage.close();

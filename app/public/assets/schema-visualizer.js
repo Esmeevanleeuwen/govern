@@ -17,7 +17,7 @@ const svg = (tag, attributes = {}) => {
 };
 
 /** A read-only view of the current catalog. Coordinates never change the database. */
-export function mountSchemaVisualizer(root, {data, state = {}, onBrowse, onStructure, contextRoot, onSelect, onSearch, initialSearch, onToggleExplorer, isExplorerOpen = () => true} = {}) {
+export function mountSchemaVisualizer(root, {data, state = {}, contextRoot, onSelect, onSearch, initialSearch, onRefresh} = {}) {
     const model = normalizeSchema(data);
     const storageKey = 'govern.schema-layout.v1.' + encodeURIComponent(model.database);
     const defaults = initialPositions(model.tables);
@@ -64,30 +64,39 @@ export function mountSchemaVisualizer(root, {data, state = {}, onBrowse, onStruc
     state.viewport.zoom = clamp(state.viewport.zoom, .12, 1.75);
 
     const status = el('p', {class: 'sr-only', role: 'status', 'aria-live': 'polite'});
-    const storageStatus = el('p', {class: 'small muted schema-storage'}, t(state.storageFailed ? 'app.schema.storageUnavailable' : 'app.schema.local'));
+    const storageStatus = el('p', {class: 'small muted schema-storage', role: 'status', 'aria-live': 'polite'}, t(state.storageFailed ? 'app.schema.storageUnavailable' : 'app.schema.local'));
     const summary = el('p', {class: 'small muted'}, t('app.schema.summary', {tables: number(model.tables.length), relationships: number(model.relationships.length)}));
     const search = el('input', {id: 'schema-search', type: 'search', class: 'input', value: state.search, placeholder: t('app.schema.search'), 'aria-label': t('app.schema.search'), autocomplete: 'off'});
     const zoomValue = el('output', {id: 'schema-zoom-value', class: 'schema-zoom-value'});
     const neighborhood = el('input', {type: 'checkbox', id: 'schema-neighborhood', checked: state.neighborhood});
-    const fitButton = button(t('app.schema.fit'), fit, {id: 'schema-fit', symbol: 'expand'});
+    const fitButton = button(t('app.schema.fitShort'), fit, {id: 'schema-fit', symbol: 'expand', 'aria-label': t('app.schema.fit')});
     const zoomOut = button(t('app.schema.zoomOut'), () => zoomBy(1 / 1.2), {id: 'schema-zoom-out', className: 'icon-button'});
     zoomOut.querySelector('span').textContent = '−';
     const zoomIn = button(t('app.schema.zoomIn'), () => zoomBy(1.2), {id: 'schema-zoom-in', symbol: 'plus', className: 'icon-button'});
     zoomIn.querySelector('span').className = 'sr-only';
-    const panelToggle = button(t('app.schema.panelShow'), () => onToggleExplorer?.(), {
-        id: 'schema-panel-toggle', symbol: 'table', 'aria-controls': 'workspace-context',
-    });
     const columnsToggle = button(t('app.schema.columnLabels'), () => {
         state.showColumns = !state.showColumns; draw();
         columnsToggle.setAttribute('aria-pressed', String(state.showColumns));
     }, {id: 'schema-columns-toggle', 'aria-pressed': String(state.showColumns), symbol: 'layers'});
     const areaHelp = createSchemaHelp({state});
+    areaHelp.button.querySelector('span').textContent = t('app.schema.toolsHelp');
+    areaHelp.button.setAttribute('aria-label', t('app.schema.helpLabel'));
     cleanup.push(() => areaHelp.destroy());
-    const toolbar = el('div', {class: 'schema-toolbar', role: 'group', 'aria-label': t('app.schema.panelTitle')},
-        el('span', {class: 'eyebrow schema-toolbar-title'}, t('app.schema.panelTitle')), panelToggle, columnsToggle,
-        button(t('app.schema.reset'), reset, {id: 'schema-reset', symbol: 'layout'}), areaHelp.button);
-    const zoomControls = el('div', {class: 'schema-zoom-controls'}, zoomOut, zoomValue, zoomIn,
+    const group = (key, className, ...controls) => el('div', {class: 'schema-tool-group ' + className, role: 'group', 'aria-label': t(key)}, controls);
+    const zoomControls = group('app.schema.groupZoom', 'schema-zoom-controls', zoomOut, zoomValue, zoomIn,
         button(t('app.schema.actual'), () => setZoom(1), {id: 'schema-actual'}), fitButton);
+    const refreshButton = onRefresh ? button(t('app.schema.refreshShort'), async () => {
+        if (refreshButton.disabled) return;
+        refreshButton.disabled = true;
+        try { await onRefresh(); } finally { if (refreshButton.isConnected) refreshButton.disabled = false; }
+    }, {
+        id: 'schema-refresh', symbol: 'refresh', 'aria-label': t('app.schema.refresh'),
+    }) : null;
+    const toolbar = el('div', {class: 'schema-toolbar', role: 'group', 'aria-label': t('app.schema.panelTitle')},
+        group('app.schema.groupDisplay', 'schema-display-controls', el('label', {class: 'schema-filter'}, neighborhood, t('app.schema.neighborhood')), columnsToggle),
+        group('app.schema.groupLayout', 'schema-layout-controls', button(t('app.schema.arrangeShort'), reset, {id: 'schema-reset', symbol: 'layout', 'aria-label': t('app.schema.arrangeLabel')})),
+        zoomControls,
+        group('app.schema.groupSupport', 'schema-support-controls', refreshButton, areaHelp.button));
     const help = el('p', {id: 'schema-interaction-help', class: 'small muted schema-help'}, t('app.schema.interactionHelp'));
     const canvas = el('div', {id: 'schema-viewport', class: 'schema-viewport', role: 'region', tabindex: '0', 'aria-label': t('app.schema.canvas'), 'aria-describedby': 'schema-interaction-help schema-canvas-help'});
     const world = el('div', {class: 'schema-world'});
@@ -101,27 +110,18 @@ export function mountSchemaVisualizer(root, {data, state = {}, onBrowse, onStruc
         el('label', {class: 'schema-explorer-search'}, el('span', {class: 'sr-only'}, t('app.schema.search')), search), count, index);
     if (contextRoot) contextRoot.replaceChildren(tablePanel, selected);
     const layout = el('div', {class: 'schema-layout schema-unified-layout'}, el('div', {class: 'schema-board'}, canvas,
-        el('p', {id: 'schema-canvas-help', class: 'sr-only'}, t('app.schema.canvasHelp')), zoomControls, help));
+        el('p', {id: 'schema-canvas-help', class: 'sr-only'}, t('app.schema.canvasHelp'))));
     const noMatches = el('div', {class: 'schema-no-matches', hidden: true}, el('p', {}, t('app.schema.noMatches')),
         button(t('app.schema.showAll'), () => { state.neighborhood = false; neighborhood.checked = false; draw(); fit(); }));
     canvas.append(noMatches);
-    root.replaceChildren(el('div', {class: 'schema-workspace'}, toolbar,
-        el('div', {class: 'schema-caption'}, summary,
-            el('label', {class: 'schema-filter'}, neighborhood, t('app.schema.neighborhood'))),
-        layout,
+    const explanation = el('details', {class: 'schema-explanation', id: 'schema-explanation', open: Boolean(state.storageFailed)},
+        el('summary', {}, t('app.schema.explanation')), help,
+        el('p', {class: 'small muted'}, t('app.schema.foreignKeyHelp')), storageStatus);
+    root.replaceChildren(el('div', {class: 'schema-workspace'}, toolbar, layout,
+        el('div', {class: 'schema-canvas-footer'}, summary,
         el('div', {class: 'schema-legend'}, badge('PK'), el('span', {}, t('app.schema.primary')),
-            badge('FK'), el('span', {}, t('app.schema.foreign'))),
-        el('p', {class: 'small muted'}, t('app.schema.foreignKeyHelp')), storageStatus, status));
+            badge('FK'), el('span', {}, t('app.schema.foreign')))), explanation, status));
 
-    function syncPanel() {
-        const open = isExplorerOpen();
-        panelToggle.hidden = open;
-        panelToggle.setAttribute('aria-expanded', String(open));
-        const toggleLabel = t(open ? 'app.schema.panelHide' : 'app.schema.panelShow');
-        panelToggle.setAttribute('aria-label', toggleLabel);
-        panelToggle.querySelector('span').textContent = toggleLabel;
-        syncCanvasSize();
-    }
     function syncCanvasSize() {
         if (destroyed || !canvas.isConnected) return;
         const next = {width: canvas.clientWidth, height: canvas.clientHeight};
@@ -132,8 +132,8 @@ export function mountSchemaVisualizer(root, {data, state = {}, onBrowse, onStruc
         previousCanvasSize = next;
         transform();
     }
-    document.addEventListener('govern:explorerchange', syncPanel);
-    cleanup.push(() => document.removeEventListener('govern:explorerchange', syncPanel));
+    document.addEventListener('govern:explorerchange', syncCanvasSize);
+    cleanup.push(() => document.removeEventListener('govern:explorerchange', syncCanvasSize));
 
     function persist() {
         try {
@@ -141,6 +141,7 @@ export function mountSchemaVisualizer(root, {data, state = {}, onBrowse, onStruc
             state.storageFailed = false;
         } catch { state.storageFailed = true; }
         storageStatus.textContent = t(state.storageFailed ? 'app.schema.storageUnavailable' : 'app.schema.local');
+        if (state.storageFailed) explanation.open = true;
     }
 
     function visibleTables() { return filterTables(model, '', state.selected, state.neighborhood); }
@@ -163,7 +164,7 @@ export function mountSchemaVisualizer(root, {data, state = {}, onBrowse, onStruc
         onSelect?.(name);
         if (rebuild && state.neighborhood) draw();
         else { drawSelection(); drawDetails(); }
-        syncPanel();
+        syncCanvasSize();
         // Selecting an object keeps both the table list and its keyboard position.
         if (focusedContext) (index.querySelector('[id="schema-index-' + encodeURIComponent(name) + '"]') || selected).focus({preventScroll: true});
         if (center) { pointToTable(name); state.centeredSelected = name; }
@@ -216,14 +217,6 @@ export function mountSchemaVisualizer(root, {data, state = {}, onBrowse, onStruc
         selected.append(el('p', {class: 'eyebrow'}, t(table.type === 'view' ? 'app.schema.view' : 'app.schema.selected')), el('h3', {class: 'schema-selected-name'}, table.name),
             el('p', {class: 'small muted'}, t('app.schema.columns', {count: number(table.columns.length)})));
         if (table.comment) selected.append(el('p', {class: 'small muted'}, table.comment));
-        const actions = el('div', {class: 'schema-detail-actions'});
-        if (onBrowse) actions.append(button(t('app.schema.browse'), () => onBrowse(table.name), {id: 'schema-browse', className: 'button-small', symbol: 'table'}));
-        if (onStructure) actions.append(button(t('app.schema.structure'), () => onStructure(table.name), {id: 'schema-structure', className: 'button-small', symbol: 'layers'}));
-        const focusConnections = button(t('app.schema.focusConnections'), () => {
-            state.neighborhood = true; neighborhood.checked = true; draw(); fit();
-            selected.querySelector('#schema-focus-connections')?.focus({preventScroll: true});
-        }, {id: 'schema-focus-connections', className: 'button-small', symbol: 'link'});
-        actions.append(focusConnections);
         const columnDetails = el('details', {class: 'schema-column-details', id: 'schema-column-details'},
             el('summary', {id: 'schema-column-summary'}, t('app.schema.columnDetails')),
             el('ul', {class: 'schema-detail-columns'}, table.columns.map(column => el('li', {},
@@ -236,7 +229,7 @@ export function mountSchemaVisualizer(root, {data, state = {}, onBrowse, onStruc
             el('summary', {}, t('app.schema.relationships')));
         connectionDetails.open = state.relationshipsExpanded === true;
         connectionDetails.addEventListener('toggle', () => { if (connectionDetails.isConnected) state.relationshipsExpanded = connectionDetails.open; });
-        selected.append(actions, columnDetails, connectionDetails);
+        selected.append(columnDetails, connectionDetails);
         const relationships = model.relationships.filter(relation => relation.sourceTable === table.name || (!relation.external && relation.targetTable === table.name));
         if (!relationships.length) connectionDetails.append(el('p', {class: 'small muted'}, t('app.schema.noRelationships')));
         for (const relation of relationships) {
@@ -367,7 +360,7 @@ export function mountSchemaVisualizer(root, {data, state = {}, onBrowse, onStruc
         nodes.clear(); world.querySelectorAll('.schema-node').forEach(node => node.remove());
         for (const table of visible) { const node = makeNode(table); nodes.set(table.name, node); world.append(node); }
         noMatches.hidden = visible.length > 0;
-        drawIndex(); drawDetails(); drawLines(); transform(); syncPanel();
+        drawIndex(); drawDetails(); drawLines(); transform(); syncCanvasSize();
     }
 
     search.addEventListener('input', () => { state.search = search.value; onSearch?.(state.search); drawIndex(); });
@@ -420,11 +413,11 @@ export function mountSchemaVisualizer(root, {data, state = {}, onBrowse, onStruc
     });
     if (!model.tables.length) {
         canvas.replaceChildren(empty(t('app.schema.empty'), t('app.schema.emptyHelp'), null, 'layers'));
-        drawIndex(); drawDetails(); syncPanel(); transform();
+        drawIndex(); drawDetails(); syncCanvasSize(); transform();
         [zoomOut, zoomIn, fitButton, columnsToggle, root.querySelector('#schema-actual'), root.querySelector('#schema-reset')].forEach(control => { control.disabled = true; });
     } else {
         draw();
-        if (!model.relationships.length) root.append(el('p', {class: 'small muted schema-help'}, t('app.schema.noConnections')));
+        if (!model.relationships.length) explanation.append(el('p', {class: 'small muted schema-help'}, t('app.schema.noConnections')));
         if (needsInitialFit && !state.selected) fit();
         if (state.selected && state.centeredSelected !== state.selected) { pointToTable(state.selected); state.centeredSelected = state.selected; }
         if (typeof ResizeObserver !== 'undefined') {

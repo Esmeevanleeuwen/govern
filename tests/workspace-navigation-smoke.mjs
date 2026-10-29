@@ -34,6 +34,35 @@ const mode = async (page, name) => {
     await page.waitForFunction(expected => location.hash.slice(1).split('?')[0] === expected, name);
 };
 const schemaSelection = (page, name) => page.locator('.schema-index [data-schema-select=' + JSON.stringify(name) + ']');
+const databasePlacement = async (page, schema = false) => {
+    const title = page.locator('.database-heading h1');
+    await title.waitFor();
+    assert.equal(await title.innerText(), 'Database');
+    const titleBounds = await title.boundingBox();
+    const viewbarBounds = await page.locator('.database-viewbar').boundingBox();
+    assert.ok(viewbarBounds.y >= titleBounds.y + titleBounds.height - 1,
+        'Database views have a consistent row below the compact workspace heading.');
+    assert.equal(await page.locator('#workspace-explorer-open').count(), 1,
+        'Every Database view uses the same table explorer opener.');
+    const contextFits = await page.locator('.database-views, #database-selected-table').evaluateAll(nodes =>
+        nodes.every(node => { const box = node.getBoundingClientRect(); return box.left >= -1 && box.right <= innerWidth + 1; }));
+    assert.equal(contextFits, true, 'View navigation and selected table fit the available workspace.');
+    if (!schema) return;
+    const toolbar = page.locator('#schema-workspace .schema-toolbar');
+    const toolbarBounds = await toolbar.boundingBox();
+    const canvasBounds = await page.locator('#schema-viewport').boundingBox();
+    assert.ok(toolbarBounds.y >= viewbarBounds.y + viewbarBounds.height - 1,
+        'Schema tools follow the Database view row.');
+    assert.ok(toolbarBounds.y + toolbarBounds.height <= canvasBounds.y + 1,
+        'The grouped tools sit above the canvas instead of covering table fields.');
+    const grouped = await toolbar.evaluate(element => [
+        'schema-neighborhood', 'schema-columns-toggle', 'schema-reset', 'schema-refresh',
+        'schema-zoom-out', 'schema-zoom-value', 'schema-zoom-in', 'schema-actual', 'schema-fit', 'schema-help-open',
+    ].every(id => element.contains(document.getElementById(id))));
+    assert.equal(grouped, true, 'Filters, layout, zoom, refresh and help share the canvas tool area.');
+    assert.equal(await page.locator('#schema-browse, #schema-structure, #schema-focus-connections').count(), 0,
+        'The selection details do not repeat Database view navigation and canvas filtering.');
+};
 
 try {
     const context = await browser.newContext({locale: 'nl-NL', viewport: {width: 1440, height: 1100}});
@@ -57,6 +86,7 @@ try {
     // Direct links remain valid and populate the same persistent explorer.
     await page.goto(new URL('/#gegevens?table=organizations', base).href, {waitUntil: 'networkidle'});
     await waitForTable(page, 'organizations');
+    await databasePlacement(page);
     assert.equal(await page.locator('#workspace-context .catalog-item').count(), tableCount);
     const tableButton = name => page.locator('#workspace-context .catalog-item').filter({
         has: page.locator('.catalog-item-name', {hasText: exactText(name)}),
@@ -98,6 +128,7 @@ try {
     assert.equal(await page.locator('#catalog-search').inputValue(), 'org');
     await mode(page, 'schema');
     await page.locator('#schema-viewport').waitFor();
+    await databasePlacement(page, true);
     assert.equal(await page.locator('#schema-search').inputValue(), 'org',
         'Database view changes use one explorer search.');
     assert.equal(await page.locator('[data-schema-node]').count(), tableCount,
@@ -217,7 +248,7 @@ try {
     await mobile.goto(new URL('/#schema', base).href, {waitUntil: 'networkidle'});
     await mobile.locator('#schema-viewport').waitFor();
     assert.equal(await mobile.locator('#sidebar').getAttribute('aria-hidden'), 'true');
-    await mobile.locator('#schema-panel-toggle').click();
+    await mobile.locator('#workspace-explorer-open').click();
     await schemaSelection(mobile, 'sources').click();
     assert.equal(await mobile.locator('#sidebar').getAttribute('aria-hidden'), 'false');
     assert.equal(await mobile.locator('.schema-index [data-schema-select]').count(), tableCount);
@@ -233,21 +264,21 @@ try {
     assert.equal(await mobile.locator('#sidebar').getAttribute('aria-hidden'), 'false');
     assert.equal(await mobile.locator('#workspace-context .catalog-item').count(), tableCount);
     await mobile.keyboard.press('Escape');
-    for (const width of [390, 320]) {
+    for (const width of [390, 375, 320]) {
         await mobile.setViewportSize({width, height: 900});
         await noOverflow(mobile, 'Mobile workspace ' + width);
-        const explorerOpener = await currentRoute(mobile) === 'schema' ? '#schema-panel-toggle' : '#workspace-explorer-open';
-        await mobile.locator(explorerOpener).click();
+        await mobile.locator('#workspace-explorer-open').click();
         await noOverflow(mobile, 'Mobile table explorer ' + width);
         await shot(mobile, 'mobile-explorer-' + width);
         await mobile.keyboard.press('Escape');
         await mode(mobile, 'schema');
         await mobile.locator('#schema-viewport').waitFor();
+        await databasePlacement(mobile, true);
         assert.equal(await mobile.locator('#schema-help-open').isVisible(), true);
         await noOverflow(mobile, 'Mobile schema ' + width);
     }
     assert.deepEqual(errors, []);
-    console.log('PASS: one area rail, persistent table explorer, shared Database views/search/selection, schema state and tools, research draft continuity, right-side and 320/390px mobile navigation.');
+    console.log('PASS: one area rail, persistent table explorer, shared Database views/search/selection, ordered workspace controls, schema state and tools, research draft continuity, right-side and 320/375/390px mobile navigation.');
 } finally {
     await browser.close();
 }
