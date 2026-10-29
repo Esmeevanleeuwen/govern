@@ -18,7 +18,8 @@ hebben dezelfde oorsprong, zodat het databasevenster zonder publieke iframe-
 toestemming kan werken. MariaDB is alleen bereikbaar binnen het Docker-netwerk.
 
 De PHP-app heeft een kleine API. Een catalogusservice beschrijft tabellen; een
-onderzoekservice voert leesvragen uit en bewaart ze; een backupservice maakt en
+onderzoekservice voert visuele leesvragen en vrije SQL-scripts uit en bewaart ze;
+een backupservice maakt en
 herstelt SQL-exports. Het HTTP-bestand behandelt sessie, CSRF, foutstatus en JSON.
 Deze verdeling volgt verantwoordelijkheden, niet afzonderlijke overheidsdomeinen.
 
@@ -200,17 +201,43 @@ vraag. Een handmatige wijziging in de editor schakelt over naar de bestaande
 vrije SQL-route. De ontwerproute gebruikt de leesverbinding met leesrechten,
 tijdslimiet en resultaatweergave.
 
-De vrije SQL-route is bewust ruimer: `QueryRunner::executeScript` splitst de tekst
-met `SqlScript` (die quotes en commentaar respecteert), voert de opdrachten in
-volgorde uit op een eigen schrijfsessie (`Database::scriptConnection`, UTC,
-strikte SQL-modus, tijdslimiet, `LOCAL INFILE` uit) en gooit die sessie na het
-verzoek weg. De uitvoering stopt bij de eerste fout; eerdere opdrachten zijn dan
-al doorgevoerd, want DDL is niet transactioneel. Opdrachten die ingrijpend zijn
-(`DROP`, `TRUNCATE`, `DELETE`/`UPDATE` zonder `WHERE`, `ALTER ... DROP`) worden
-niet uitgevoerd zolang het verzoek geen `confirm: true` bevat. Dit is een
-bevestigingsstap en geen beveiligingsgrens; de rechten van het schrijfaccount
-blijven de echte grens. Opdrachten met een eigen `;` (opgeslagen procedures,
-`DELIMITER`) worden niet ondersteund; gebruik daarvoor phpMyAdmin.
+De vrije SQL-route is bewust ruimer: `QueryRunner::executeScript` voert gewone
+SQL-opdrachten uit op een eigen schrijfsessie (`Database::scriptConnection`, UTC,
+strikte beginmodus, tijdslimiet, `LOCAL INFILE` uit). `SqlScript::next` verwerkt
+`DELIMITER`, quotes en commentaar, inclusief uitvoerbaar commentaar. Gewone
+letterlijke `SET sql_mode`-toewijzingen worden lokaal gevolgd; de native
+driverstatus levert de backslash-escape-instelling zonder extra SQL. Procedures,
+functies en triggers met een samengestelde body gebruiken dezelfde route. De
+grenzen bij dynamisch berekende modi staan in het API-contract.
+
+De voorcontrole voert geen SQL uit. Zij vraagt bevestiging voor herkende
+ingrijpende opdrachten (`DROP`, `TRUNCATE`, `DELETE`/`UPDATE` zonder `WHERE`,
+`ALTER ... DROP`). Na modewijzigingen of dynamische SQL kan het resterende
+aantal opdrachten onbekend zijn en kan potentieel ingrijpende tekst conservatief
+worden gemarkeerd. Dit blijft een bedieningsstap, geen beveiligingsgrens of
+volledige SQL-analyse; de rechten van het schrijfaccount blijven de echte grens.
+
+`PDOStatement::nextRowset` bewaart alle resultaten van een `CALL`. De eerste set
+blijft ook onder de bestaande resultaatvelden beschikbaar. Iedere set krijgt
+een begrensde voorvertoning. `PDO::connect()` levert de native `Pdo\Mysql`-driver:
+`getWarningCount()` bewaart de waarschuwingenteller zonder een extra SQL-opdracht.
+Gewone gebruikersopdrachten blijven naast elkaar staan, zodat `ROW_COUNT()`,
+`FOUND_ROWS()` en de waarschuwingen niet door verborgen diagnostiek worden
+overschreven. Alleen na de laatste gebruikersopdracht worden maximaal twintig
+beschikbare waarschuwingsteksten gelezen; voor een eerdere stap kan het script
+zelf `SHOW WARNINGS` opnemen. De uitvoering stopt bij de eerste fout en
+behoudt eerdere resultaten en al geproduceerde sets van een deels mislukte
+procedure. De selectieuitleg behandelt deze vrije resultaten als momentopnamen
+zonder veronderstelde tabel of primaire sleutel.
+
+De sessie bestaat één uitvoering. Transacties, variabelen en tijdelijke tabellen
+blijven binnen dat script bruikbaar. Een open transactie wordt aan het einde
+expliciet teruggedraaid en als zodanig gemeld; `COMMIT` moet in dezelfde uitvoering
+staan. Reeds gecommitte wijzigingen en impliciete DDL-commits zijn daarmee niet
+ongedaan gemaakt. Na vrije SQL wordt de catalogus ververst, ook als een procedure
+verborgen wijzigingen uitvoerde. SQL, resultaten, focus en invoerpositie blijven
+bij dat verversen behouden. Zie [het API-contract](API.md#free-sql-scripts) voor
+de resultaatvelden en voorvertoningsgrenzen.
 
 Het ontwerp is tijdelijke schermtoestand. Opgeslagen onderzoeken blijven gewone
 SQL in `_govern_queries`; een nieuw opslagmodel of een kopie van de catalogus is
@@ -227,9 +254,11 @@ dubbelepunt en een backtick. Zie de [PHP-documentatie](https://www.php.net/manua
 
 Govern gebruikt twee verbindingen naar dezelfde database. De eerste mag
 onderzoeken en metadata lezen. Leestransacties beschermen ook tegen schrijvende
-functies die via een zelfgemaakte view zouden worden aangeroepen. De tweede slaat eigen instellingen op en maakt
-herstelpunten. phpMyAdmin gebruikt een schrijfaccount met rechten op die ene
-werkdatabase. Globale serverrechten worden niet doorgegeven.
+functies die via een zelfgemaakte view zouden worden aangeroepen. De tweede slaat
+eigen instellingen op, maakt herstelpunten en voert vrije SQL uit. Vrije SQL en
+phpMyAdmin gebruiken hetzelfde schrijfaccount met rechten op die ene
+werkdatabase. Er worden voor de SQL-editor geen extra of globale serverrechten
+toegevoegd; ontbrekende rechten blijven een gewone databasemelding.
 
 Dit is geen algemene beveiligde hostingdienst. De lokale ingang is bereikbaar
 voor de gebruiker van de computer. Een publieke installatie vraagt een andere

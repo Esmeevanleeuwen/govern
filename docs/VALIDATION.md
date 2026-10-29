@@ -2,6 +2,30 @@
 
 Stand van de controles: **29 oktober 2026**.
 
+## Vrije SQL in de querywerkplaats
+
+De uitbreiding is met echte SQL in de afzonderlijke testdatabase gecontroleerd.
+De nieuwe backendproef bevat **38** controles van CRUD, DDL, views, procedures,
+functies, triggers, meerdere CALL-resultaten, waarschuwingen en transacties.
+Zowel COMMIT en ROLLBACK als een onafgemaakte transactie zijn met opnieuw
+uitlezen gecontroleerd. Gedeeltelijke fouten behouden de al uitgevoerde
+resultaten en stoppen latere opdrachten.
+
+De **58** parsercontroles behandelen onder meer DELIMITER, uitvoerbaar commentaar,
+quotes, regelafbrekingen, moduswisselingen en de adviesvoorvertoning. Aanvullende
+databaseproeven vergelijken ROW_COUNT(), FOUND_ROWS(), voorbereide opdrachten
+en SHOW WARNINGS met de echte sessie-uitkomsten. Native PHP 8.4-waarschuwingentellers
+voorkomen verborgen SHOW-opdrachten tussen gewone gebruikersopdrachten. De
+grens voor dynamische wijzigingen van quote-instellingen staat in de API-gids.
+
+De browserproef voert eigen testschrijfacties uit, leest de opgeslagen waarden
+terug en controleert dat tabelwijzigingen in de catalogus verschijnen. Ook
+DELIMITER/CALL, selectie van een tweede resultaatset, waarschuwingen, taalwisseling,
+de bestaande bevestigingsdialoog en behoud van SQL, resultaten en focus zijn
+gecontroleerd. De schermen zijn visueel nagekeken. Alle **576** interfaceberichten
+zijn volledig in Nederlands en Engels. De nieuwe proeven draaien ook in de
+Docker-workflow; de containeruitslag staat bij de bijbehorende commit.
+
 ## Selectieaanwijzer en contextuitleg
 
 De aanwijzer is met echte Bestuursatlas-records in de afzonderlijke native

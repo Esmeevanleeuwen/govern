@@ -141,6 +141,10 @@ def main():
 
     status, result, _ = request("query", {"sql": "SELECT 1 AS value, 2 AS value, NULL AS missing"})
     check(status == 200 and result["data"]["statements"][0]["columns"] == ["value", "value", "missing"] and result["data"]["statements"][0]["rows"] == [["1", "2", None]], "Query preserves duplicate aliases and NULL")
+    status, result, _ = request("query", {"confirm": True, "sql": "SELECT 9 AS reordered"})
+    check(status == 200 and result["data"]["statements"][0]["rows"] == [["9"]], "SQL confirmation accepts either JSON property order")
+    status, result, _ = request("query", {"sql": "SELECT 9", "confirm": "true"})
+    check(status == 422 and result.get("error_code") == "query_confirmation_invalid", "SQL confirmation requires an actual boolean")
     status, result, _ = request("query", {"sql": "SELECT 1"}, token=False)
     check(status == 403 and result["ok"] is False, "A write-style request requires the browser CSRF token")
     status, result, _ = request("query", {"sql": "UPDATE digital_systems SET name='should not happen'"})

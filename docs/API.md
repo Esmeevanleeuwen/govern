@@ -63,7 +63,7 @@ interface and future feature rules.
 - GET `browse&table=...&page=1&page_size=25&q=...`: `{table,columns:[{name,type,nullable,default,generated,primary,comment}],rows:[{column:value}],page,page_size,total,sql,params,truncated,notice,notice_i18n}`. Named identifiers verified against live catalog; values bound; max page_size100. App-owned `_govern_` tables excluded from normal list, remain accessible in phpMyAdmin.
 - GET `structure&table=...`: `{table,columns:[...],indexes:[{name,unique,columns:[name]}],foreign_keys:[{name,columns:[name],referenced_table,referenced_columns:[name]}],create_sql}`.
 - GET `schema`: `{database:string,tables:[{name,type:"table"|"view",comment,columns:[...],foreign_keys:[{name,columns:[name],referenced_schema,referenced_table,referenced_columns:[name]}]}]}`. Full live metadata for the schema visualizer, read through the restricted reader with three batched catalog queries. No table rows, DDL, credentials or saved queries; `_govern_` source tables are excluded.
-- POST `query` exactly one of `{sql[,confirm]}` or `{design}`. A design returns `{columns,rows,truncated,duration_ms,returned_rows,sql,notice,notice_i18n,explanation,explanation_i18n}` and runs on the read-only account (SELECT grants + READ ONLY transaction, definer views included). Free `sql` may contain several `;`-separated statements and runs on a throwaway session of the write account (any privilege that account has, including DML/DDL). It returns `{confirm_required:false,statements:[{sql,columns,rows,truncated,returned_rows,affected_rows,duration_ms}],failed:null|{index,sql,detail},statement_count,executed,duration_ms,sql}`; `affected_rows` is null for statements that return rows. Execution stops at the first failing statement (earlier ones stay applied; DDL is not transactional). If any statement is destructive (DROP, TRUNCATE, DELETE/UPDATE without WHERE, ALTER ... DROP) and `confirm` is not `true`, nothing runs and the response is `{confirm_required:true,destructive:[{index,sql,reason}],statement_count}`; resend with `confirm:true` to execute. Max 200 returned rows per statement, bounded statement time, no LOCAL INFILE. CSRF is required.
+- POST `query` exactly one of `{sql,confirm?:boolean}` or `{design}`, with JSON property order immaterial. A design returns `{columns,rows,truncated,duration_ms,returned_rows,sql,notice,notice_i18n,explanation,explanation_i18n}` and runs on the read-only account (SELECT grants + READ ONLY transaction, definer views included). Free SQL runs on the scoped write account; see the script contract below. CSRF is required.
 - POST `build-query` exactly `{design}`: `{sql,explanation:[string],explanation_i18n:{nl:[string],en:[string]}}`. Validates against the live schema and generates editable, standalone SQL; does not execute the generated question.
 - GET `queries`: `[{id,name,sql,notes,updated_at}]`.
 - POST `save-query` `{id?,name,sql,notes?}`: saved item. POST `delete-query` `{id}`.
@@ -73,6 +73,85 @@ interface and future feature rules.
 - GET `download-snapshot&id=...`: attachment SQL. Strict server-generated snapshot ids only.
 - GET `context`: attachment JSON of schema and saved queries, no table rows or credentials.
 - GET `health`: `{status:"ok"}` when configured DB readable; no credentials/errors disclosed.
+
+## Free SQL scripts
+
+`QueryRunner::executeScript` accepts DML, DDL, diagnostic statements, transactions,
+stored routines and triggers under the same database grants used by phpMyAdmin.
+There is no read-only keyword allowlist. `DELIMITER` lines are client directives,
+not server statements; their token may contain up to 32 non-whitespace bytes,
+excluding quotes and backslashes. Quoted delimiters and ordinary comments stay intact;
+standalone MySQL `/*!...*/` and MariaDB `/*M!...*/` executable comments reach the
+server. Parsing starts from the configured connection SQL mode and tracks
+ordinary literal `SET sql_mode` assignments. See the advanced mode note below
+for dynamically computed mode changes.
+
+A completed or partially completed run returns:
+
+| Field | Meaning |
+| --- | --- |
+| `confirm_required:false` | Execution was attempted |
+| `statements` | Results in submitted order; a partially failed `CALL` can retain its produced result sets |
+| `failed` | `null` or `{index,sql,detail}`; `index` is the actual one-based failed statement, excluding delimiter directives |
+| `statement_count` | Exact total once parsing reaches the end; otherwise a known preview count or `null` |
+| `executed` | Number of fully completed statements, excluding a partially failed statement |
+| `transaction_rolled_back` | An unfinished transaction was explicitly rolled back before discarding the session |
+| `schema_refresh_needed` | A manual statement was attempted; refresh metadata even when a `CALL` hides writes |
+| `duration_ms`, `sql` | Whole-run duration and original script |
+
+Each statement result retains the compatible first-set fields
+`{sql,columns,rows,truncated,returned_rows,affected_rows,duration_ms}` and adds:
+
+- `result_sets:[{columns,rows,truncated,returned_rows,affected_rows}]`, including
+  every rowset returned by `CALL`; row-bearing sets can have different columns.
+- `completed:boolean`, false when later processing of that statement failed.
+- `warning_count`, read from the native driver status without a SQL query.
+- `warnings:[{level,code,message}]`, normally empty for earlier statements. Only
+  the final actual statement can include up to 20 available diagnostic messages,
+  each bounded to 2,000 bytes. Text stays as returned by the database. Insert
+  `SHOW WARNINGS` immediately after a step when its diagnostic rows are needed
+  before subsequent statements run.
+
+`affected_rows` is null for a row-bearing result. The preview limits are 200 rows
+and 2 MiB per rowset, with 8 MiB of row data across a script. They bound displayed
+data, not affected database rows. SQL text remains limited to 256 KiB; initial
+statement timeouts and disabled `LOCAL INFILE` remain connection settings.
+
+Before execution, an advisory scan uses the existing confirmation flow for
+`DROP`, `TRUNCATE`, `DELETE`/`UPDATE` without `WHERE` and `ALTER ... DROP`.
+An unconfirmed run returns
+`{confirm_required:true,destructive:[{index,line,sql,reason}],statement_count}`
+without executing the script. SQL-mode expressions and dynamic prepared SQL can
+make future parsing unknown: the count and preview index may be `null`, and the
+scan can conservatively flag potentially destructive text. It does not evaluate
+expressions or run preview statements. This confirmation is not a permission or
+SQL-security boundary; the database grants remain authoritative.
+
+One run owns one fresh writer session. Session variables, temporary tables and
+transactions work across statements within that run, not across HTTP requests.
+Include `COMMIT` or `ROLLBACK` in the same submission. On failure, committed work
+can remain while an unfinished transaction is rolled back; DDL may commit
+implicitly. Stop at the first failure and preserve completed results. The UI
+shows rollback and warning feedback, refreshes the catalog, and retains the SQL
+draft, result snapshots, focus and caret. Arbitrary SQL result sets do not imply
+a source table or primary key for the selection explainer.
+
+### Diagnostic state and advanced SQL modes
+
+PHP 8.4 `PDO::connect()` supplies the native `Pdo\Mysql` driver, whose
+`getWarningCount()` needs no SQL statement. The runner leaves ordinary DML,
+`SELECT`, `CALL` and `PREPARE`/`EXECUTE` statements adjacent, so internal
+diagnostic queries do not overwrite `ROW_COUNT()`, `FOUND_ROWS()` or the warning
+list between them. It fetches final diagnostic text only after user SQL ends.
+
+Literal SQL-mode assignments are tracked locally. Native quoting/server status
+tracks `NO_BACKSLASH_ESCAPES` without a SQL query, including after dynamic
+execution. A computed `SET sql_mode` or an anonymous compound statement that can
+change parsing may require an internal `SELECT @@SESSION.sql_mode`, which can
+affect diagnostic counters. Pure dynamic `EXECUTE` changes to `ANSI_QUOTES` are
+not fully tracked; use an ordinary literal mode assignment when subsequent
+client parsing depends on that flag. This is a client parsing limitation, not
+an expansion or restriction of database grants.
 
 ## Schema visualizer metadata
 

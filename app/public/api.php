@@ -96,10 +96,15 @@ try {
             $built = (new QueryDesigner($database))->compile($input['design']);
             Http::json(['sql' => $built['sql'], 'explanation' => $built['explanation'], 'explanation_i18n' => $built['explanation_i18n']]);
         case 'query':
-            if (array_keys($input) === ['sql'] || array_keys($input) === ['sql', 'confirm']) {
+            $keys = array_keys($input);
+            sort($keys);
+            if ($keys === ['sql'] || $keys === ['confirm', 'sql']) {
+                if (array_key_exists('confirm', $input) && !is_bool($input['confirm'])) {
+                    throw ApiException::fromCode('query_confirmation_invalid', 422);
+                }
                 Http::json((new QueryRunner($database))->executeScript(Http::text($input, 'sql'), ($input['confirm'] ?? false) === true));
             }
-            if (array_keys($input) === ['design']) {
+            if ($keys === ['design']) {
                 $built = (new QueryDesigner($database))->compile($input['design']);
                 $result = (new QueryRunner($database))->execute($built['prepared_sql'], $built['params']);
                 $result['sql'] = $built['sql'];

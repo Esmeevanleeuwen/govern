@@ -373,6 +373,12 @@ textarea.input { resize: vertical; line-height: 1.6; }
 .query-result .card-header { padding: 17px 20px; }
 .query-result .card-header h2 { font-size: 14px; }
 .query-metrics { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--muted); }
+.query-result-set > h3 { padding: 10px 20px; font-size: 13px; color: var(--muted); }
+.query-result-set + .query-result-set { margin-top: 12px; }
+.query-result-set > .notice { margin: 12px 20px; }
+.query-warnings { margin: 14px 20px 18px; font-size: 12px; color: var(--warning); }
+.query-warnings ul { display: grid; gap: 6px; padding-left: 18px; overflow-wrap: anywhere; }
+.query-capabilities { padding-bottom: 12px; }
 .query-placeholder { min-height: 180px; display: grid; place-items: center; }
 .saved-panel .card-header { padding: 20px; }
 .saved-panel .card-header h2 { font-size: 14px; }

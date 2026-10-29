@@ -389,7 +389,7 @@ function syncSnapshotControls() {
     document.querySelectorAll('[data-snapshot-action]').forEach(control => { control.disabled = busy; });
 }
 
-async function refreshBootstrap(notify = false) {
+async function refreshBootstrap(notify = false, {preserveFocus = false, focusFallback} = {}) {
     bootstrapController?.abort();
     bootstrapController = new AbortController();
     refreshButton.disabled = true;
@@ -413,7 +413,24 @@ async function refreshBootstrap(notify = false) {
         workspaceName.textContent = data.database.name;
         workspaceName.title = data.database.name;
         renderConnectionNotice();
+        const active = preserveFocus ? (document.activeElement === document.body
+            ? focusFallback?.() || document.activeElement : document.activeElement) : null;
+        const focused = active?.id;
+        const caret = active && typeof active.selectionStart === 'number' ? {
+            start: active.selectionStart, end: active.selectionEnd, direction: active.selectionDirection,
+            top: active.scrollTop, left: active.scrollLeft,
+        } : null;
+        const scroll = preserveFocus ? {left: window.scrollX, top: window.scrollY} : null;
         render();
+        if (preserveFocus) {
+            const restored = focused ? document.getElementById(focused) : null;
+            restored?.focus({preventScroll: true});
+            if (restored && caret && typeof restored.setSelectionRange === 'function') {
+                restored.setSelectionRange(caret.start, caret.end, caret.direction);
+                restored.scrollTop = caret.top; restored.scrollLeft = caret.left;
+            }
+            window.scrollTo(scroll);
+        }
         if (notify) toast(t('app.core.connection.updated'));
     } catch (error) {
         if (error.name === 'AbortError') return;
@@ -1010,7 +1027,7 @@ async function renderResearch(scope) {
                 el('p', {}, t('app.core.research.explanationHelp')));
         }
     };
-    const runButton = button(t('app.core.research.run'), () => run(), {kind: 'primary', symbol: 'play'});
+    const runButton = button(t('app.core.research.run'), () => run(), {id: 'run-query', kind: 'primary', symbol: 'play'});
     const name = el('input', {id: 'query-name', class: 'input', type: 'text', maxlength: '160', value: state.queryName, placeholder: t('app.core.research.namePlaceholder'), required: true});
     const notes = el('textarea', {id: 'query-notes', class: 'input', rows: '3', placeholder: t('app.core.research.notesPlaceholder'), maxlength: '10000'}, state.queryNotes);
     notes.value = state.queryNotes;
@@ -1151,20 +1168,39 @@ async function renderResearch(scope) {
         }
         if (data.statements) {
             data.statements.forEach((item, index) => {
-                const rowsResult = item.columns.length > 0;
+                const resultSets = Array.isArray(item.result_sets) && item.result_sets.length ? item.result_sets : [item];
+                const rowSets = resultSets.filter(set => set.columns.length > 0);
+                const returned = rowSets.reduce((count, set) => count + Number(set.returned_rows), 0);
                 const metrics = el('div', {class: 'query-metrics'},
-                    badge(rowsResult ? t('app.core.research.rowCount', {count: number(item.returned_rows)}) : t('app.core.research.affectedCount', {count: number(item.affected_rows)}), 'badge-green'),
+                    badge(rowSets.length ? t('app.core.research.rowCount', {count: number(returned)}) : t('app.core.research.affectedCount', {count: number(item.affected_rows)}), 'badge-green'),
                     el('span', {}, number(item.duration_ms) + ' ms'));
                 const card = el('section', {class: 'card'},
                     el('div', {class: 'card-header'}, el('h2', {}, t('app.core.research.statementTitle', {number: index + 1})), metrics),
                     el('pre', {class: 'sql-preview'}, item.sql));
-                if (rowsResult) card.append(resultTable(item, t('app.core.research.statementTitle', {number: index + 1})));
+                rowSets.forEach((set, resultIndex) => {
+                    const label = rowSets.length > 1
+                        ? t('app.core.research.statementResultTitle', {statement: index + 1, result: resultIndex + 1})
+                        : t('app.core.research.statementTitle', {number: index + 1});
+                    card.append(el('section', {class: 'query-result-set'},
+                        rowSets.length > 1 ? el('h3', {}, t('app.core.research.resultSetTitle', {number: resultIndex + 1})) : null,
+                        resultTable(set, label), set.truncated ? notice(t('app.core.research.truncated')) : null));
+                });
+                const warnings = Array.isArray(item.warnings) ? item.warnings : [];
+                const warningCount = Number(item.warning_count) || warnings.length;
+                if (warningCount) card.append(warnings.length
+                    ? el('details', {class: 'query-warnings'},
+                        el('summary', {}, t('app.core.research.warningCount', {count: number(warningCount)})),
+                        el('ul', {}, warnings.map(warning => el('li', {},
+                            el('code', {}, warning.level, ' ', warning.code), ' · ', warning.message))))
+                    : el('div', {class: 'query-warnings'},
+                        el('p', {}, t('app.core.research.warningCount', {count: number(warningCount)})),
+                        el('p', {class: 'muted'}, t('app.core.research.earlierWarnings'))));
                 result.append(card);
-                if (item.truncated) result.append(notice(t('app.core.research.truncated')));
             });
             if (data.failed) {
                 result.append(errorPanel(Object.assign(new Error(t('app.core.research.statementFailed', {number: data.failed.index}) + ' ' + data.failed.detail), {})));
             }
+            if (data.transaction_rolled_back) result.append(notice(t('app.core.research.transactionRolledBack'), 'notice-warning'));
             return;
         }
         const metrics = el('div', {class: 'query-metrics'}, badge(t('app.core.research.rowCount', {count: number(data.returned_rows)}), 'badge-green'),
@@ -1189,6 +1225,20 @@ async function renderResearch(scope) {
         const binding = state.queryDesign;
         const body = binding?.sql === sql ? {design: structuredClone(binding.design)} : {sql};
         const revision = state.queryRevision;
+        const opener = document.activeElement;
+        let keepOpener = true;
+        const focusTracking = new AbortController();
+        const trackFocus = event => {
+            if (event.target === document.body || event.target.closest?.('.confirm-dialog')) return;
+            if (!opener?.contains(event.target)) keepOpener = false;
+        };
+        // Disabling a focused Run button may send focus to body. Only restore
+        // that opener when the user has not since chosen somewhere else.
+        document.addEventListener('focusin', trackFocus, {signal: focusTracking.signal});
+        document.addEventListener('pointerdown', event => {
+            if (!event.target.closest?.('.confirm-dialog') && !opener?.contains(event.target)) keepOpener = false;
+        }, {capture: true, signal: focusTracking.signal});
+        const focusFallback = () => keepOpener && scope.live() && opener?.isConnected && document.hasFocus() ? opener : null;
         runButton.disabled = true;
         result.replaceChildren(loading(t('app.core.research.running')));
         try {
@@ -1217,13 +1267,18 @@ async function renderResearch(scope) {
             }
             state.queryResult = data;
             drawResult();
-            if (data.statements?.some(item => item.affected_rows !== null)) refreshBootstrap();
+            const refreshNeeded = data.schema_refresh_needed ?? data.statements?.some(item => item.affected_rows !== null);
+            if (refreshNeeded) await refreshBootstrap(false, {preserveFocus: true, focusFallback});
         } catch (error) {
             if (error.name !== 'AbortError' && scope.live() && revision === state.queryRevision && editor.value === sql) {
                 state.queryError = error;
                 drawResult();
             }
-        } finally { runButton.disabled = false; }
+        } finally {
+            runButton.disabled = false;
+            if (document.activeElement === document.body) focusFallback()?.focus({preventScroll: true});
+            focusTracking.abort();
+        }
     };
     editor.addEventListener('keydown', event => {
         if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') { event.preventDefault(); run(); }
@@ -1256,6 +1311,7 @@ async function renderResearch(scope) {
     };
     const editorCard = el('section', {class: 'card'},
         el('div', {class: 'editor-topbar'}, el('h2', {}, t('app.core.research.editorTitle'))),
+        el('p', {class: 'query-hint query-capabilities'}, t('app.core.research.capabilities')),
         el('div', {class: 'editor-wrap'}, editor),
         el('div', {class: 'editor-actions'}, el('div', {class: 'editor-action-buttons'}, runButton,
             button(t('app.core.research.new'), newQuery, {kind: 'ghost', symbol: 'plus'}),

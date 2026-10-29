@@ -9,7 +9,7 @@ final class Database
 {
     private ?PDO $read = null;
     private ?PDO $write = null;
-    private const SQL_MODE = 'STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,ONLY_FULL_GROUP_BY';
+    public const SQL_MODE = 'STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,ONLY_FULL_GROUP_BY';
 
     public function __construct(private readonly array $config) {}
 
@@ -73,7 +73,7 @@ final class Database
         $address = $socket !== ''
             ? 'unix_socket=' . $socket
             : 'host=' . $this->config['host'] . ';port=' . $this->config['port'];
-        $pdo = new PDO('mysql:' . $address . ';charset=utf8mb4', $user, $password, array_replace([
+        $pdo = PDO::connect('mysql:' . $address . ';charset=utf8mb4', $user, $password, array_replace([
             PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
             PDO::ATTR_EMULATE_PREPARES => false,
