@@ -23,7 +23,14 @@ const errors = [];
 const track = page => page.on('pageerror', error => errors.push(error.message));
 track(page);
 const shot = async (page, name) => {
-    if (screenshots) await page.screenshot({path: path.join(screenshots, 'schema-' + name + '.png'), fullPage: true});
+    if (screenshots) {
+        // Chrome full-page capture can paint fixed offscreen elements at the
+        // current document offset. Capture from zero, then restore the viewport.
+        const scroll = await page.evaluate(() => ({x: scrollX, y: scrollY}));
+        await page.evaluate(() => scrollTo(0, 0));
+        await page.screenshot({path: path.join(screenshots, 'schema-' + name + '.png'), fullPage: true});
+        await page.evaluate(({x, y}) => scrollTo(x, y), scroll);
+    }
 };
 const load = async (page, hash = '#schema') => {
     await page.goto(new URL('/' + hash, base).href, {waitUntil: 'networkidle'});
@@ -31,12 +38,26 @@ const load = async (page, hash = '#schema') => {
 };
 const selectTable = async (name, current = page) => {
     // This is the accessible index, also useful when a table is outside the canvas.
+    if (await current.locator('#schema-panel-toggle').getAttribute('aria-expanded') !== 'true') {
+        await current.locator('#schema-panel-toggle').click();
+    }
+    await current.locator('#schema-tab-tables').click();
     await current.locator('[data-schema-select=' + JSON.stringify(name) + ']').first().click();
+    assert.equal(await current.locator('#schema-context-panel').evaluate(panel => panel.scrollTop), 0,
+        'Selecting a table reveals its context from the top, even after a long table list.');
 };
 const node = name => page.locator('[data-schema-node]').filter({has: page.locator('[data-schema-header="' + name + '"]')});
 const position = name => node(name).evaluate(element => ({x: parseFloat(element.style.left), y: parseFloat(element.style.top)}));
 const noOverflow = async (page, label) => assert.equal(await page.evaluate(() =>
     document.documentElement.scrollWidth <= innerWidth), true, label + ' must not make the document scroll sideways.');
+const viewportState = current => current.locator('#schema-viewport').evaluate(canvas => {
+    const matrix = new DOMMatrixReadOnly(getComputedStyle(canvas.querySelector('.schema-world')).transform);
+    const rect = canvas.getBoundingClientRect();
+    return {x: matrix.m41, y: matrix.m42, zoom: matrix.a, left: rect.left, top: rect.top,
+        width: rect.width, height: rect.height, scrollY};
+});
+const closeTo = (actual, expected, label, tolerance = .002) => assert.ok(Math.abs(actual - expected) < tolerance,
+    label + ': ' + actual + ' versus ' + expected);
 
 try {
     await load(page);
@@ -72,12 +93,93 @@ try {
     await noOverflow(page, 'Desktop schema');
     await shot(page, 'all-tables-nl');
 
+    // Real unmodified wheel events zoom around the cursor instead of scrolling
+    // the document or moving the point beneath the pointer.
+    await page.locator('#schema-actual').click();
+    await page.locator('#schema-viewport').scrollIntoViewIfNeeded();
+    const wheelBefore = await viewportState(page);
+    // Native input coordinates are integer client pixels in Chrome.
+    const cursor = {x: Math.round(wheelBefore.left + wheelBefore.width * .7), y: Math.round(wheelBefore.top + wheelBefore.height * .35)};
+    await page.mouse.move(cursor.x, cursor.y);
+    await page.mouse.wheel(0, -120);
+    await page.waitForFunction(() => parseInt(document.querySelector('#schema-zoom-value').textContent, 10) > 100);
+    const wheelAfter = await viewportState(page);
+    assert.ok(wheelAfter.zoom > wheelBefore.zoom, 'Ordinary wheel-up zooms in without Ctrl.');
+    closeTo((cursor.x - wheelBefore.left - wheelBefore.x) / wheelBefore.zoom,
+        (cursor.x - wheelAfter.left - wheelAfter.x) / wheelAfter.zoom, 'Wheel zoom keeps cursor world X', .02);
+    closeTo((cursor.y - wheelBefore.top - wheelBefore.y) / wheelBefore.zoom,
+        (cursor.y - wheelAfter.top - wheelAfter.y) / wheelAfter.zoom, 'Wheel zoom keeps cursor world Y', .02);
+    assert.equal(wheelAfter.scrollY, wheelBefore.scrollY, 'Wheel on the diagram does not scroll the page.');
+    await page.mouse.wheel(0, 120);
+    await page.waitForFunction(() => parseInt(document.querySelector('#schema-zoom-value').textContent, 10) <= 100);
+    closeTo((await viewportState(page)).zoom, wheelBefore.zoom, 'Wheel-down reverses the same wheel distance');
+    const pinch = await page.locator('#schema-viewport').evaluate(canvas => {
+        const event = new WheelEvent('wheel', {bubbles: true, cancelable: true, ctrlKey: true, deltaY: -30,
+            clientX: canvas.getBoundingClientRect().left + 70, clientY: canvas.getBoundingClientRect().top + 80});
+        const dispatched = canvas.dispatchEvent(event);
+        return {prevented: event.defaultPrevented, dispatched};
+    });
+    assert.equal(pinch.prevented, true, 'Trackpad-style Ctrl wheel is handled inside the canvas.');
+    assert.equal(pinch.dispatched, false);
+    assert.ok((await viewportState(page)).zoom > 1, 'Trackpad-style pinch also zooms in.');
+    const beforeLineWheel = (await viewportState(page)).zoom;
+    await page.locator('#schema-viewport').dispatchEvent('wheel', {deltaY: -3, deltaMode: 1,
+        clientX: cursor.x, clientY: cursor.y, bubbles: true, cancelable: true});
+    assert.ok((await viewportState(page)).zoom > beforeLineWheel, 'Line-unit wheel devices also zoom in.');
+    await page.locator('#schema-viewport').evaluate(canvas => {
+        for (let index = 0; index < 6; index++) canvas.dispatchEvent(new WheelEvent('wheel', {
+            deltaY: 100000, deltaMode: 2, cancelable: true, bubbles: true, clientX: 300, clientY: 400}));
+    });
+    closeTo((await viewportState(page)).zoom, .12, 'Repeated page-unit wheel-out stops at the minimum zoom');
+    await page.locator('#schema-viewport').evaluate(canvas => {
+        for (let index = 0; index < 6; index++) canvas.dispatchEvent(new WheelEvent('wheel', {
+            deltaY: -100000, deltaMode: 0, cancelable: true, bubbles: true, clientX: 300, clientY: 400}));
+    });
+    closeTo((await viewportState(page)).zoom, 1.75, 'Repeated wheel-in stops at the maximum zoom');
+    await page.locator('#schema-actual').click();
+    await page.evaluate(() => scrollTo(0, 0));
+    const outsideZoom = (await viewportState(page)).zoom;
+    const outside = await page.locator('#breadcrumb-current').boundingBox();
+    await page.mouse.move(outside.x + outside.width / 2, outside.y + outside.height / 2);
+    await page.mouse.wheel(0, 120);
+    await page.waitForFunction(() => scrollY > 0);
+    closeTo((await viewportState(page)).zoom, outsideZoom, 'Wheel outside the canvas remains ordinary page scrolling');
+    await page.evaluate(() => scrollTo(0, 0));
+
     const table = schema.tables.find(table => table.name === 'sources') || schema.tables[0];
     await page.locator('#schema-search').fill(table.name);
     await selectTable(table.name);
     await page.locator('#schema-actual').click();
     await page.locator('#schema-selected').waitFor();
     assert.match(await page.locator('#schema-selected').innerText(), new RegExp(table.name));
+    assert.equal(await page.locator('#schema-tab-selection').getAttribute('aria-selected'), 'true',
+        'Choosing a table automatically opens its context tab.');
+    await page.locator('#schema-tab-tables').click();
+    await page.locator('#schema-tab-tables').press('ArrowRight');
+    assert.equal(await page.locator('#schema-tab-selection').getAttribute('aria-selected'), 'true', 'Context tabs support the keyboard.');
+    const panelViewport = await viewportState(page);
+    await page.locator('#schema-panel-toggle').click();
+    assert.equal(await page.locator('#schema-panel-toggle').getAttribute('aria-expanded'), 'false');
+    assert.equal(await page.locator('#schema-context-panel').isVisible(), false, 'Context panel can be collapsed.');
+    closeTo((await viewportState(page)).zoom, panelViewport.zoom, 'Collapsing keeps canvas zoom');
+    await page.locator('[data-schema-header="' + table.name + '"]').focus();
+    await page.keyboard.press('Enter');
+    assert.equal(await page.locator('#schema-panel-toggle').getAttribute('aria-expanded'), 'false',
+        'A table selection respects a deliberately collapsed panel.');
+    await page.locator('#language-select').selectOption('en');
+    assert.equal(await page.locator('#schema-panel-toggle').getAttribute('aria-expanded'), 'false', 'Language retains a collapsed panel.');
+    await page.locator('#language-select').selectOption('nl');
+    await page.locator('#schema-panel-toggle').click();
+    assert.equal(await page.locator('#schema-tab-selection').getAttribute('aria-selected'), 'true', 'Reopening returns to the selected-table context.');
+    await page.locator('#schema-column-summary').click();
+    assert.deepEqual(await page.locator('.schema-detail-columns li > div > code').allTextContents(),
+        table.columns.map(column => column.name), 'The context menu shows every exact column for the selected table.');
+    await page.locator('#schema-column-summary').click();
+    const panelZoom = (await viewportState(page)).zoom;
+    const contextBox = await page.locator('#schema-context-panel').boundingBox();
+    await page.mouse.move(contextBox.x + contextBox.width / 2, contextBox.y + Math.min(contextBox.height / 2, 200));
+    await page.mouse.wheel(0, 120);
+    closeTo((await viewportState(page)).zoom, panelZoom, 'Scrolling the context menu never zooms the diagram');
     const before = await position(table.name);
     const header = page.locator('[data-schema-header="' + table.name + '"]');
     await header.focus();
@@ -101,7 +203,8 @@ try {
     assert.ok(parseInt(await page.locator('#schema-zoom-value').textContent(), 10) < 100, 'Zoom-out changes the viewport scale.');
     await page.locator('#schema-zoom-in').click();
     assert.equal(await page.locator('#schema-zoom-value').textContent(), '100%');
-    await page.locator('#schema-neighborhood').check();
+    await page.locator('#schema-focus-connections').click();
+    assert.equal(await page.locator('#schema-neighborhood').isChecked(), true, 'Context action focuses the selected table connections.');
     assert.equal(await page.locator('#schema-search').inputValue(), '', 'Direct connections clears a narrowed search.');
     const neighbors = new Set([table.name]);
     schema.tables.forEach(source => source.foreign_keys.forEach(key => {
@@ -190,6 +293,16 @@ try {
     await page.locator('#schema-search').fill('organizations');
     await selectTable('organizations');
     await page.locator('#schema-fit').click();
+    await page.locator('#schema-context-panel').evaluate(panel => { panel.scrollTop = panel.scrollHeight; });
+    const stickyBounds = await page.locator('#schema-context-panel').evaluate(panel => {
+        const bounds = panel.getBoundingClientRect();
+        const chrome = panel.querySelector('.schema-panel-chrome').getBoundingClientRect();
+        return {panelTop: bounds.top, panelBottom: bounds.bottom, chromeTop: chrome.top, chromeBottom: chrome.bottom, scrollTop: panel.scrollTop};
+    });
+    assert.ok(stickyBounds.scrollTop > 0, 'The selected context is long enough to exercise its own scroll owner.');
+    assert.ok(stickyBounds.chromeTop >= stickyBounds.panelTop - 1 && stickyBounds.chromeBottom <= stickyBounds.panelBottom + 1,
+        'Context tabs and close action remain visible while long relationships scroll.');
+    await page.locator('#schema-context-panel').evaluate(panel => { panel.scrollTop = 0; });
     await shot(page, 'selection-dark-en');
     await page.locator('#settings-shortcut').click();
     await page.locator('#preference-reduceTransparency').check();
@@ -209,6 +322,20 @@ try {
     await page.locator('#sql-editor').waitFor();
     assert.equal(await page.locator('#sql-editor').inputValue(), draft, 'Schema/settings navigation retains research.');
 
+    await page.locator('#settings-shortcut').click();
+    await page.locator('[data-sidebar-choice="right"]').click();
+    await load(page);
+    const rightCanvas = await page.locator('#schema-viewport').boundingBox();
+    const rightPanel = await page.locator('#schema-context-panel').boundingBox();
+    assert.ok(rightPanel.x > rightCanvas.x, 'Right navigation places the context panel on the right side of the diagram.');
+    assert.equal(await page.locator('#schema-tab-selection').getAttribute('aria-selected'), 'true');
+    assert.match(await page.locator('#schema-selected').innerText(), /organizations/, 'Changing navigation side retains the selected table.');
+    await noOverflow(page, 'Right-side context menu');
+    await shot(page, 'context-right');
+    await page.locator('#settings-shortcut').click();
+    await page.locator('[data-sidebar-choice="left"]').click();
+    await load(page);
+
     await page.setViewportSize({width: 375, height: 900});
     await load(page);
     await page.locator('#schema-search').fill('sources');
@@ -218,6 +345,36 @@ try {
     await shot(page, 'mobile');
     await page.setViewportSize({width: 320, height: 800});
     await noOverflow(page, '320px schema');
+
+    const mobilePage = await context.newPage();
+    track(mobilePage);
+    await mobilePage.setViewportSize({width: 375, height: 900});
+    await load(mobilePage);
+    assert.equal(await mobilePage.locator('#schema-panel-toggle').getAttribute('aria-expanded'), 'false',
+        'A fresh mobile workspace starts with the context menu compact.');
+    assert.equal(await mobilePage.locator('#schema-context-panel').isVisible(), false);
+    await mobilePage.locator('#schema-panel-toggle').click();
+    const mobileBoard = await mobilePage.locator('.schema-board').boundingBox();
+    const mobilePanel = await mobilePage.locator('#schema-context-panel').boundingBox();
+    assert.ok(mobilePanel.y >= mobileBoard.y + mobileBoard.height, 'Mobile keeps the diagram before the secondary menu.');
+    assert.ok(mobilePanel.height <= 450, 'Mobile menu height is bounded instead of pushing the canvas down.');
+    await selectTable('sources', mobilePage);
+    assert.equal(await mobilePage.locator('#schema-tab-selection').getAttribute('aria-selected'), 'true');
+    assert.match(await mobilePage.locator('#schema-selected').innerText(), /sources/);
+    await noOverflow(mobilePage, 'Fresh mobile context menu');
+    const mobileFocus = await mobilePage.evaluate(() => ({activeId: document.activeElement?.id,
+        activeClass: document.activeElement?.className, skipTop: document.querySelector('.skip-link').getBoundingClientRect().top,
+        skipStyleTop: getComputedStyle(document.querySelector('.skip-link')).top, scrollY}));
+    assert.notEqual(mobileFocus.activeClass, 'skip-link', 'Mobile context selection does not move focus to the global skip link.');
+    assert.ok(mobileFocus.skipTop < 0, 'The unfocused skip link remains outside the actual mobile viewport.');
+    console.log('Mobile context focus:', JSON.stringify(mobileFocus));
+    if (screenshots) await mobilePage.screenshot({path: path.join(screenshots, 'schema-context-mobile-viewport.png')});
+    await shot(mobilePage, 'context-mobile');
+    await mobilePage.locator('#schema-panel-close').click();
+    assert.equal(await mobilePage.locator('#schema-context-panel').isVisible(), false);
+    await mobilePage.locator('#schema-viewport').scrollIntoViewIfNeeded();
+    await shot(mobilePage, 'canvas-mobile');
+    await mobilePage.close();
 
     // The catalog below exists only in this browser response. It covers exact
     // composite pairs, parallel constraints, unavailable targets and identifiers

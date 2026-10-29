@@ -38,6 +38,7 @@ De onderdelen hebben een kleine, duidelijke taak:
 | `dashboard-layout.js` | Blokvolgorde, breedtes, zichtbaarheid en een aparte bewerkingsversie |
 | `query-builder.js` | Het tijdelijke visuele queryontwerp en de toegepaste versie |
 | `schema-model.js` en `schema-visualizer.js` | Live relaties, diagramindeling en interactieve schemaverkenning |
+| `schema-navigation.js` | Alleen binnen het diagram genormaliseerde, muisgerichte scrollzoom |
 | `database-modal.js` | Het venster rondom de echte phpMyAdmin |
 | `Messages.php` | Vertaalde applicatiefeedback met stabiele foutcodes |
 
@@ -60,6 +61,19 @@ werkplekverversing opnieuw op. Filter, selectie en diagramtoestand staan los van
 onderzoekconcepten en dashboardindeling. Tabelposities worden per database in
 een eigen versie van browseropslag bewaard; verplaatsen wijzigt geen tabellen,
 kolommen of sleutels in MariaDB.
+
+De schemaverkenner gebruikt een contextmenu naast de hoofdnavigatie. De tabs
+Tabellen en Geselecteerd scheiden het objectoverzicht van de huidige selectie.
+Selecteren in de tekening werkt de context automatisch bij terwijl de
+toetsenbordfocus in de tekening blijft. Een bewust ingeklapt menu blijft dicht. De tab en open/dicht-
+toestand blijven in de schermtoestand tijdens taalwisselingen en terugkeren naar
+Schema; alleen tabelposities worden naar browseropslag geschreven.
+
+Scrollen boven de tekening zoomt rond de muispositie. De handler normaliseert
+pixel-, regel- en paginascroll en werkt ook bij Ctrl-/trackpadgebaren. Buiten de
+tekening blijft gewone pagina- en menuscroll werken. Opruimen van de visualizer
+verwijdert ook de scrollhandler. De bestaande zoomknoppen en toetsen blijven
+beschikbaar.
 
 ## Vormgeving
 
