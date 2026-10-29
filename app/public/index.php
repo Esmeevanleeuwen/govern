@@ -11,6 +11,7 @@
     <link rel="stylesheet" href="/assets/schema-help.css">
     <link rel="stylesheet" href="/assets/workspace-navigation.css">
     <link rel="stylesheet" href="/assets/schema-workspace.css">
+    <link rel="stylesheet" href="/assets/selection-pointer.css">
     <script type="module" src="/assets/app.js"></script>
 </head>
 <body>

@@ -28,6 +28,12 @@ je lokale `.env`, die niet in Git wordt opgenomen.
   licht/donker/systeem, minder transparantie en de plaats van je navigatie.
 - **Dashboard indelen:** verplaats, verbreed of verberg blokken via
   **Indeling aanpassen**. Je kunt slepen of de verplaatsknoppen gebruiken.
+- **Selectieaanwijzer:** schakel bovenaan de selectiepijl in en klik op een
+  onderdeel van Govern. Met **Shift + klik** voeg je onderdelen toe of haal je
+  ze uit de selectie. Houd de aanwijzer langer dan drie seconden boven een
+  onderdeel om de naam en HTML-tag te zien. **Meer** opent uitleg over precies
+  dat onderdeel of de geselecteerde combinatie. Via het pad in het naamkaartje
+  kun je bijvoorbeeld de hele rij of tabel kiezen.
 - **Eén menu:** kies Overzicht, Database, Onderzoeken of Experimenten in de
   hoofdbalk. Instellingen staat onderaan. Het aansluitende paneel toont alleen
   de tabellen, opgeslagen onderzoeken of herstelpunten die bij dat gebied horen.
@@ -43,7 +49,9 @@ je lokale `.env`, die niet in Git wordt opgenomen.
   gegroepeerd boven het werkvlak: weergave, indeling, zoom en hulp. Ze blijven
   bereikbaar als je het paneel inklapt. **Help**
   opent een korte uitleg van alle mogelijkheden in dit scherm.
-- **Onderzoeken:** voer leesvragen uit, bekijk resultaten en bewaar queries met uitleg.
+- **Onderzoeken:** voer SQL uit, bekijk resultaten en bewaar queries met uitleg.
+  Vrije SQL kan meerdere opdrachten bevatten; ingrijpende opdrachten vragen om
+  bevestiging. De visuele querybouwer gebruikt de leesverbinding.
 - **Visueel samenstellen:** kies een tabel, kolommen, filters en een sorteervolgorde.
   Voeg eventueel een bestaande verwijzing naar een tweede tabel toe. Govern maakt
   de SQL zichtbaar; je kunt die daarna zelf aanpassen.
@@ -58,6 +66,15 @@ je lokale `.env`, die niet in Git wordt opgenomen.
 De eigen schermen lezen de actuele database. Een nieuwe tabel wordt na verversen
 zichtbaar; je hoeft daarvoor geen nieuw onderdeel te programmeren. phpMyAdmin
 blijft zijn volledige interface tonen, inclusief functies buiten de drie snelkeuzes.
+
+De selectieaanwijzer werkt op gegevens en interfaceonderdelen: ook een knop,
+tekst of invoerveld kun je bekijken zonder het te activeren. Het aantal naast
+de pijl opent de selectie zonder hover; wissen maakt de selectie leeg. Gebruik
+de pijltoetsen en Enter, of Shift + Enter, voor toetsenbordselectie. Escape sluit
+eerst de uitleg en verlaat daarna de selectiestand. Scrollen en schemazoom blijven
+werken. De aanwijzer inspecteert niet binnen het afzonderlijke phpMyAdmin-frame.
+De uitleg gebruikt beschikbare metadata; er wordt geen AI-model aangeroepen.
+Een eventuele recordquery wordt alleen klaargezet, niet automatisch uitgevoerd.
 
 De Database-knop onthoudt tijdens je sessie de laatste weergave en tabel. De
 bestaande links naar `#gegevens`, `#structuur` en `#schema` blijven werken.
@@ -204,10 +221,10 @@ werkplek zonder bezoekersaccounts. Iedereen die jouw lokale ingang kan gebruiken
 kan de gekoppelde werkdatabase beheren. De phpMyAdmin-verbinding heeft rechten
 voor deze database; serverbeheer en andere databases vallen daar niet onder.
 
-**Onderzoeken** gebruikt een apart databaseaccount met leesrechten. Voor
-schrijvende SQL en structuurwijzigingen gebruik je het databasevenster. Die
-scheiding beperkt de gewone onderzoeksknop, niet de mogelijkheden in je
-persoonlijke phpMyAdmin-venster.
+De **visuele querybouwer** gebruikt een apart databaseaccount met leesrechten.
+Vrije SQL in **Onderzoeken** en het databasevenster gebruiken het schrijfaccount
+voor deze werkdatabase. Vrije SQL vraagt bevestiging voor ingrijpende opdrachten;
+eerdere opdrachten in een script kunnen al zijn uitgevoerd als een latere faalt.
 
 De interface en configuratie zijn niet bedoeld om rechtstreeks openbaar op
 internet te zetten. Voor delen of publiceren hoort eerst authenticatie en een

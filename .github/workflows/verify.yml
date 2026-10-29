@@ -40,6 +40,7 @@ jobs:
           node tests/dashboard-layout-unit.mjs
           node tests/schema-model-unit.mjs
           node tests/schema-navigation-unit.mjs
+          node tests/selection-content-unit.mjs
           npm install --no-save --ignore-scripts --prefix "$RUNNER_TEMP/govern-browser" playwright@1.62.1
           export PLAYWRIGHT_MODULE="$RUNNER_TEMP/govern-browser/node_modules/playwright"
           BROWSER_BIN="$(command -v google-chrome)"
@@ -51,6 +52,7 @@ jobs:
           node tests/ui-settings-smoke.mjs
           node tests/schema-visualizer-smoke.mjs
           node tests/workspace-navigation-smoke.mjs
+          node tests/selection-pointer-smoke.mjs
       - name: Logs on failure
         if: failure()
         run: docker compose logs --tail=100

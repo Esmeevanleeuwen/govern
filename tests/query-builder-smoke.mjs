@@ -163,7 +163,9 @@ try {
     const edited = await run(page);
     assert.equal(edited.body.sql, manual);
     assert.equal(edited.body.design, undefined);
-    assert.deepEqual(edited.data.rows, [['handmatig']]);
+    assert.equal(edited.data.statements.length, 1);
+    assert.equal(edited.data.failed, null);
+    assert.deepEqual(edited.data.statements[0].rows, [['handmatig']]);
     assert.equal(await page.locator('.query-explanation').innerText(), '');
 
     // Both the applied SQL and the independent, unfinished design survive a
@@ -225,7 +227,10 @@ try {
     await page.locator('.builder-status').filter({hasText: 'intussen gewijzigd'}).waitFor();
     await page.unroute('**/api.php?action=build-query', delayedRoute);
     assert.equal(await page.getByRole('textbox', {name: 'SQL-query', exact: true}).inputValue(), 'SELECT 42 AS eigen_wijziging;');
-    assert.deepEqual((await run(page)).data.rows, [['42']]);
+    const manualAfterLateBuild = await run(page);
+    assert.equal(manualAfterLateBuild.data.statements.length, 1);
+    assert.equal(manualAfterLateBuild.data.failed, null);
+    assert.deepEqual(manualAfterLateBuild.data.statements[0].rows, [['42']]);
 
     await page.locator('.query-builder > summary').focus();
     await page.keyboard.press('Enter');

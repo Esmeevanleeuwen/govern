@@ -2,6 +2,33 @@
 
 Stand van de controles: **29 oktober 2026**.
 
+## Selectieaanwijzer en contextuitleg
+
+De aanwijzer is met echte Bestuursatlas-records in de afzonderlijke native
+testdatabase gecontroleerd. Gewoon klikken vervangt de selectie; Shift-klikken
+voegt toe of verwijdert. De browserproef controleert de wachttijd van meer dan
+drie seconden, opeenvolgende zweefdoelen, de naam en HTML-tag, bovenliggende
+rijselectie en uitleg van één onderdeel of een gecombineerde selectie.
+
+Ook knoppen, navigatie, invoervelden, willekeurige tekst en uitgeschakelde
+knoppen zijn gecontroleerd. Inspecteren activeert geen gewone handeling en
+verstuurt geen schrijvende API-verzoeken. Schema slepen en pijlverplaatsing
+worden in selectiemodus onderschept; wielzoom blijft werken. Focus, Tab,
+Escape, een taalwisseling met geopende dialoog, veilige tekstweergave en een
+donkere, ondoorzichtige weergave op 320 px zijn meegenomen. De schermen zijn
+visueel nagekeken.
+
+De afzonderlijke modelproef controleert exacte waarden, samengestelde primaire
+sleutels, dubbele selectie van hetzelfde record, SQL-stringescaping, werkelijk
+vastgelegde foreign keys en momentopnamen zonder betrouwbare recordidentiteit.
+Verkorte/binaire voorbeeldwaarden leveren geen veronderstelde selectiesleutel
+op. De queryactie zet alleen een leesvraag klaar; uitvoeren blijft een aparte
+handeling. Alle **569** berichten zijn volledig in Nederlands en Engels.
+
+Deze controles gebruikten PHP **8.4.27**, MariaDB **10.11.14**, Nginx **1.24.0**
+en de officiële phpMyAdmin **5.2.3**. De nieuwe model- en browserproef zijn ook
+toegevoegd aan de Docker-workflow; de containeruitslag staat bij de commit.
+
 ## Schemagids en uitklapbare tools
 
 De schemagids en de blijvend zichtbare gereedschapsbalk zijn in de browser

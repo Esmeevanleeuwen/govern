@@ -1,0 +1,47 @@
+/* Selection is its own glass layer; no geometry or data objects are modified. */
+.selection-pointer-controls { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.selection-pointer-controls .button-small { min-height: 36px; }
+.selection-pointer-controls .button-primary { background: var(--g-accent); color: var(--g-on-accent); }
+.selection-pointer-controls .icon-button { width: 32px; min-height: 36px; }
+.selection-pointer-hint { margin: 4px 28px 0; padding: 9px 14px; border-radius: var(--radius-small); background: var(--g-frost); color: var(--muted); font-size: 12px; box-shadow: var(--g-control-depth); }
+.selection-pointer-active, .selection-pointer-active * { cursor: default !important; }
+.selection-pointer-active [data-selection-ui], .selection-pointer-active [data-selection-ui] * { cursor: auto !important; }
+.selection-pointer-active .schema-edge { pointer-events: stroke; }
+.selection-pointer-overlay { position: fixed; inset: 0; z-index: 850; pointer-events: none; overflow: hidden; }
+.selection-pointer-box { position: absolute; border-radius: 8px; background: var(--g-soft); box-shadow: inset 0 0 15px var(--g-glow), 0 0 12px var(--g-glow); }
+.selection-pointer-box.is-selected { background: color-mix(in srgb, var(--g-accent) 15%, transparent); }
+.selection-pointer-box > span { position: absolute; top: 3px; right: 3px; min-width: 18px; padding: 0 4px; border-radius: 5px; background: var(--g-accent); color: var(--g-on-accent); text-align: center; font: 11px/18px var(--mono); box-shadow: var(--g-control-depth); }
+.selection-pointer-tag { position: fixed; z-index: 900; width: 350px; padding: 12px; border: 0; border-radius: 15px; background: linear-gradient(145deg, var(--g-shine), transparent 65%), var(--g-dense-frost); box-shadow: var(--g-elevation), 0 12px 38px var(--g-shadow); backdrop-filter: blur(28px); -webkit-backdrop-filter: blur(28px); }
+.selection-pointer-tag-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.selection-pointer-tag-name { min-width: 0; display: grid; gap: 3px; overflow-wrap: anywhere; }
+.selection-pointer-tag-name strong { font-size: 13px; font-weight: 600; }
+.selection-pointer-tag-name code { color: var(--muted); font-size: 12px; }
+.selection-pointer-tag .button { flex: 0 0 auto; }
+.selection-pointer-path { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 8px; }
+.selection-pointer-path:empty { display: none; }
+.selection-pointer-path .button { padding: 3px 7px; min-height: 29px; font-size: 12px; }
+.selection-pointer-path [aria-pressed="true"] { background: var(--g-soft); color: var(--g-accent-text); }
+.selection-pointer-dialog { width: min(700px, calc(100vw - 32px)); max-width: none; max-height: calc(100dvh - 40px); padding: 0; border: 0; border-radius: var(--radius); color: var(--ink); background: linear-gradient(145deg, var(--g-shine), transparent 65%), var(--g-dense-frost); box-shadow: var(--g-elevation), 0 24px 80px var(--g-shadow); backdrop-filter: blur(32px); -webkit-backdrop-filter: blur(32px); overflow: hidden; }
+.selection-pointer-dialog[open] { display: flex; flex-direction: column; }
+.selection-pointer-dialog::backdrop { background: var(--backdrop); backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px); }
+.selection-pointer-dialog-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 24px 24px 18px; flex: 0 0 auto; }
+.selection-pointer-dialog-head h2 { font-size: 23px; overflow-wrap: anywhere; }
+.selection-pointer-dialog-head > div { min-width: 0; }
+.selection-pointer-dialog-head .icon-button { flex: 0 0 auto; }
+.selection-pointer-dialog-body { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0 24px 12px; scrollbar-width: thin; overflow-wrap: anywhere; }
+.selection-pointer-dialog-body > section { display: grid; gap: 12px; margin-bottom: 24px; }
+.selection-pointer-dialog-body h3 { color: var(--muted); font-size: 12px; letter-spacing: .05em; text-transform: uppercase; }
+.selection-pointer-entry { display: grid; gap: 5px; padding: 14px; background: var(--g-frost); border-radius: var(--radius-small); }
+.selection-pointer-entry > code { color: var(--muted); font-size: 12px; }
+.selection-pointer-entry dl { display: grid; grid-template-columns: minmax(70px, .4fr) minmax(0, 1fr); gap: 6px 12px; margin: 7px 0 0; font-size: 12px; }
+.selection-pointer-entry dt { color: var(--muted); }
+.selection-pointer-entry dd { margin: 0; white-space: pre-wrap; font-family: var(--mono); }
+.selection-pointer-dialog-body ul { display: grid; gap: 6px; margin: 0; padding-left: 19px; }
+.selection-pointer-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.selection-pointer-dialog-foot { padding: 12px 24px 24px; display: flex; justify-content: flex-end; flex: 0 0 auto; }
+@media(max-width: 820px) { .selection-pointer-hint { margin-left: 16px; margin-right: 16px; } .selection-pointer-controls { max-width: 100%; } }
+@media(max-width: 620px) { .selection-pointer-dialog-head { padding: 20px 16px 16px; } .selection-pointer-dialog-body { padding: 0 16px 8px; } .selection-pointer-dialog-foot { padding: 12px 16px 16px; } .selection-pointer-dialog-foot .button { min-height: 44px; } .selection-pointer-tag { padding: 11px; } }
+@media(pointer: coarse) { .selection-pointer-controls .button, .selection-pointer-controls .icon-button, .selection-pointer-tag .button { min-height: 44px; } .selection-pointer-controls .icon-button { width: 44px; } }
+@supports not (backdrop-filter: blur(1px)) { .selection-pointer-tag, .selection-pointer-dialog, .selection-pointer-entry { background: var(--g-panel); } }
+:root[data-reduce-transparency="true"] .selection-pointer-tag, :root[data-reduce-transparency="true"] .selection-pointer-dialog, :root[data-reduce-transparency="true"] .selection-pointer-entry, :root[data-reduce-transparency="true"] .selection-pointer-hint { background: var(--g-panel); backdrop-filter: none; -webkit-backdrop-filter: none; }
+@media(forced-colors: active) { .selection-pointer-box { outline: 2px solid Highlight; background: transparent; } .selection-pointer-box > span { background: Highlight; color: HighlightText; } .selection-pointer-tag, .selection-pointer-dialog, .selection-pointer-entry { color: CanvasText; background: Canvas; backdrop-filter: none; outline: 1px solid CanvasText; } }

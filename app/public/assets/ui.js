@@ -1,4 +1,5 @@
 import {t, getLocale, getLanguage, hasMessage} from './i18n.js';
+import {registerSelection} from './selection-registry.js';
 import './ui-messages.js';
 
 export function el(tag, attributes = {}, ...children) {
@@ -61,6 +62,8 @@ const iconPaths = {
     moon: ['M21 13a9 9 0 0 1-10-10 9 9 0 1 0 10 10Z'],
     sun: ['M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0', 'M12 2v2', 'M12 20v2', 'M2 12h2', 'M20 12h2', 'm5 5 1 1', 'm18 18 1 1', 'm5 19 1-1', 'm18 6 1-1'],
     book: ['M12 5v16', 'M12 5C8 2 4 2 2 3v16c4-1 7 0 10 2 3-2 6-3 10-2V3c-2-1-6-1-10 2Z'],
+    pointer: ['m4 3 7 18 2-8 8-2L4 3Z'],
+    more: ['M5 12h.01', 'M12 12h.01', 'M19 12h.01'],
 };
 
 export function icon(name, className = '') {
@@ -117,14 +120,23 @@ export function notice(text, variant = '') {
     return el('div', {class: 'notice ' + variant}, icon('info'), el('p', {}, text));
 }
 
-export function dataTable(columns, rows, {emptyMessage = t('ui.noData'), caption} = {}) {
+export function dataTable(columns, rows, {emptyMessage = t('ui.noData'), caption, inspect} = {}) {
     if (!rows.length) return empty(t('ui.noRows'), emptyMessage);
     const normalized = columns.map((column, i) => typeof column === 'string' ? {label: column, key: i} : column);
     const table = el('table', {class: 'data-table'});
+    if (inspect?.table) registerSelection(table, inspect.table);
     if (caption) table.append(el('caption', {class: 'sr-only'}, caption));
-    table.append(el('thead', {}, el('tr', {}, normalized.map(column => el('th', {scope: 'col'}, column.label)))));
+    table.append(el('thead', {}, el('tr', {}, normalized.map((column, index) => {
+        const cell = el('th', {scope: 'col'}, column.label);
+        const metadata = inspect?.column?.(column, index);
+        return metadata ? registerSelection(cell, metadata) : cell;
+    }))));
     const body = el('tbody');
-    rows.forEach(row => body.append(el('tr', {}, normalized.map(column => {
+    rows.forEach((row, rowIndex) => {
+        const tr = el('tr');
+        const rowMetadata = inspect?.row?.(row, rowIndex);
+        if (rowMetadata) registerSelection(tr, rowMetadata);
+        tr.append(...normalized.map((column, columnIndex) => {
         const value = row[column.key];
         const cell = el('td', {class: column.className || ''});
         if (column.render) cell.append(column.render(value, row));
@@ -133,8 +145,11 @@ export function dataTable(columns, rows, {emptyMessage = t('ui.noData'), caption
             const text = typeof value === 'object' ? JSON.stringify(value) : String(value);
             cell.append(el('span', {class: 'cell-value', title: text.length > 60 ? text : null}, text));
         }
-        return cell;
-    }))));
+        const metadata = inspect?.cell?.(value, row, column, rowIndex, columnIndex);
+        return metadata ? registerSelection(cell, metadata) : cell;
+        }));
+        body.append(tr);
+    });
     table.append(body);
     return el('div', {class: 'table-scroll', tabindex: '0', 'aria-label': caption || t('ui.scrollResults')}, table);
 }
