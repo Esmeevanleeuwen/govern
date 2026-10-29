@@ -2,7 +2,6 @@
 .env
 .env.*
 tests
-docs
 test-results
 playwright-report
 node_modules
