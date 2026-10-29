@@ -39,6 +39,7 @@ jobs:
           node tests/preferences-unit.mjs
           node tests/dashboard-layout-unit.mjs
           node tests/schema-model-unit.mjs
+          node tests/schema-navigation-unit.mjs
           npm install --no-save --ignore-scripts --prefix "$RUNNER_TEMP/govern-browser" playwright@1.62.1
           export PLAYWRIGHT_MODULE="$RUNNER_TEMP/govern-browser/node_modules/playwright"
           BROWSER_BIN="$(command -v google-chrome)"

@@ -135,9 +135,32 @@ connections, and continue to its data or structure. Focus on a selected table's
 connections to reduce visual density, then return to the complete diagram.
 
 Table headers can be dragged or moved with the keyboard. Zoom, fit and reset
-controls keep the diagram navigable; mobile users also have the table index and
-textual relationship details. Relationship strokes communicate data rather than
+controls keep the diagram navigable. Scrolling over the canvas zooms at the
+cursor without moving the surrounding page; dragging the background pans it.
+Scrolling over menus or the surrounding page keeps its ordinary behaviour.
+Mouse wheels, trackpads and Ctrl/pinch wheel events use the same cursor anchor.
+Mobile users also have the table index and textual relationship details.
+Relationship strokes communicate data rather than
 decorating panel boundaries. The cards keep the shared frost and soft shadows.
+
+The primary menu keeps the main product areas stable. The Schema workspace has
+a second, contextual panel with **Tables** and **Selected table** views. Choosing
+a table opens its context with columns, exact connections and relevant actions.
+Keep the table index one action away. Automatic context updates must not steal
+keyboard focus or reopen a deliberately collapsed panel. Collapsing gives space
+back to the canvas and keeps the selection and viewport intact.
+
+Keep this panel next to the main navigation when navigation is moved to the
+right. On compact screens it starts collapsed, offers a clear opener and bounds
+its internal scrolling so long connection lists do not push the canvas down
+several screens. Preserve the selected context tab and collapse choice across
+language/theme changes and visits to other areas in the same session.
+
+Future context menus should follow the same distinction: main navigation chooses
+an area; the second menu offers that area's objects and the selected object's
+actions. Reuse the existing table catalog for Data and Structure, and use saved
+research or restore points as the objects when those screens adopt this pattern.
+Keep task controls such as query execution and canvas zoom beside the workspace.
 
 Keep table positions per database and separate from dashboard layout. A language
 or theme switch preserves search, selection, positions and the viewport.

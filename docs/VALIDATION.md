@@ -2,6 +2,26 @@
 
 Stand van de controles: **29 oktober 2026**.
 
+## Scrollzoom en contextmenu
+
+De navigatie-uitbreiding is gecontroleerd met **21** afzonderlijke controles van
+scrollnormalisatie, cursoranker, afbakening en opruimen van de eventhandler.
+De bestaande taal-, voorkeur-, dashboard- en schemamodelcontroles slagen ook;
+alle **422** interfaceberichten zijn compleet in Nederlands en Engels.
+
+De schemabrowserproef gebruikt echte muiswielinvoer zonder Ctrl en controleert
+beide zoomrichtingen, het punt onder de muis, grenzen en behoud van paginascroll.
+Ook Ctrl-/trackpadgebaren, regel- en pagina-eenheden en gewone scroll buiten het
+diagram zijn gecontroleerd. De tweede menulaag is getest op automatisch
+bijwerken, tabtoetsen, verbergen/heropenen, kolomdetails, gerichte verbindingen
+en behoud van selectie, taal en viewport.
+
+De afzonderlijke native browserruns controleren ook de bestaande frontend en
+instellingen, mobiele weergave op **375** en **320 px**, rechter hoofdnavigatie
+en de scrollpositie bij een nieuwe tabelselectie. Het menu houdt lange lijsten
+binnen zijn eigen scrollgebied. De schermen zijn visueel nagekeken. Dezelfde
+nieuwe tests zijn toegevoegd aan de volledige Docker-workflow.
+
 ## Schemavisualisatie
 
 De volledige native controle is opnieuw geslaagd met de schemavisualizer:
@@ -175,6 +195,7 @@ node tests/frontend-messages-unit.mjs
 node tests/preferences-unit.mjs
 node tests/dashboard-layout-unit.mjs
 node tests/schema-model-unit.mjs
+node tests/schema-navigation-unit.mjs
 BASE_URL=http://127.0.0.1:18080 GOVERN_UI_WRITE_TESTS=1 node tests/frontend-smoke.mjs
 BASE_URL=http://127.0.0.1:18080 node tests/query-builder-smoke.mjs
 BASE_URL=http://127.0.0.1:18080 node tests/ui-settings-smoke.mjs

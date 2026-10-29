@@ -1,5 +1,6 @@
 import {el, icon, button, badge, number, empty} from './ui.js';
 import {t} from './i18n.js';
+import {attachSchemaWheelZoom} from './schema-navigation.js';
 import {normalizeSchema, initialPositions, tableHeight, filterTables, relatedTables, TABLE_WIDTH, HEADER_HEIGHT, ROW_HEIGHT} from './schema-model.js';
 import './schema-messages.js';
 
@@ -52,6 +53,13 @@ export function mountSchemaVisualizer(root, {data, state = {}, onBrowse, onStruc
     state.search = typeof state.search === 'string' ? state.search : '';
     if (!lookup.has(state.selected)) state.selected = '';
     if (!state.selected) state.neighborhood = false;
+    if (typeof state.panelCollapsed !== 'boolean') state.panelCollapsed = window.matchMedia('(max-width: 700px)').matches;
+    if (!['tables', 'selection'].includes(state.panelTab)) state.panelTab = state.selected ? 'selection' : 'tables';
+    if (!state.selected) state.panelTab = 'tables';
+    if (state.panelSelection !== state.selected) {
+        if (state.selected) state.panelTab = 'selection';
+        state.panelSelection = state.selected;
+    }
     const needsInitialFit = !state.viewport;
     if (!state.viewport || !Number.isFinite(state.viewport.x) || !Number.isFinite(state.viewport.y) || !Number.isFinite(state.viewport.zoom)) {
         state.viewport = {x: 32, y: 32, zoom: .75};
@@ -73,6 +81,10 @@ export function mountSchemaVisualizer(root, {data, state = {}, onBrowse, onStruc
         el('div', {class: 'schema-zoom-controls'}, zoomOut, zoomValue, zoomIn,
             button(t('app.schema.actual'), () => setZoom(1), {id: 'schema-actual'}), fitButton),
         button(t('app.schema.reset'), reset, {id: 'schema-reset', symbol: 'layout'}));
+    const panelToggle = button(t('app.schema.panelShow'), () => setPanelCollapsed(!state.panelCollapsed, true), {
+        id: 'schema-panel-toggle', symbol: 'layout', 'aria-controls': 'schema-context-panel', 'aria-expanded': String(!state.panelCollapsed),
+    });
+    toolbar.prepend(panelToggle);
     const help = el('p', {id: 'schema-interaction-help', class: 'small muted schema-help'}, t('app.schema.interactionHelp'));
     const canvas = el('div', {id: 'schema-viewport', class: 'schema-viewport', role: 'region', tabindex: '0', 'aria-label': t('app.schema.canvas'), 'aria-describedby': 'schema-interaction-help schema-canvas-help'});
     const world = el('div', {class: 'schema-world'});
@@ -82,20 +94,82 @@ export function mountSchemaVisualizer(root, {data, state = {}, onBrowse, onStruc
     const count = el('p', {class: 'small muted', id: 'schema-visible-count'});
     const index = el('nav', {class: 'schema-index', 'aria-label': t('app.schema.tables')});
     const selected = el('section', {id: 'schema-selected', class: 'schema-selected'});
-    const sidebar = el('aside', {class: 'card schema-aside'},
-        el('div', {class: 'schema-aside-heading'}, el('h2', {}, t('app.schema.tables')), count),
-        index, selected);
+    const tablesTab = button(t('app.schema.tables'), () => setPanelTab('tables'), {id: 'schema-tab-tables', role: 'tab', 'aria-controls': 'schema-table-panel'});
+    const selectionTab = button(t('app.schema.selectionTab'), () => setPanelTab('selection'), {id: 'schema-tab-selection', role: 'tab', 'aria-controls': 'schema-selection-panel'});
+    const tabs = el('div', {class: 'schema-panel-tabs', id: 'schema-panel-tabs', role: 'tablist', 'aria-label': t('app.schema.panelTitle')}, tablesTab, selectionTab);
+    tabs.addEventListener('keydown', event => {
+        if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+        event.preventDefault();
+        const next = event.key === 'Home' ? 'tables' : event.key === 'End' ? 'selection' : state.panelTab === 'tables' ? 'selection' : 'tables';
+        if (next === 'selection' && !state.selected) return;
+        setPanelTab(next); (next === 'tables' ? tablesTab : selectionTab).focus();
+    });
+    const tablePanel = el('section', {id: 'schema-table-panel', role: 'tabpanel', 'aria-labelledby': 'schema-tab-tables', tabindex: '0'}, count, index);
+    const selectionPanel = el('section', {id: 'schema-selection-panel', role: 'tabpanel', 'aria-labelledby': 'schema-tab-selection', tabindex: '0'}, selected);
+    const panelClose = button(t('app.schema.panelHide'), () => setPanelCollapsed(true, true), {id: 'schema-panel-close', symbol: 'close', className: 'icon-button'});
+    panelClose.querySelector('span').className = 'sr-only';
+    const panelChrome = el('div', {class: 'schema-panel-chrome'},
+        el('div', {class: 'schema-panel-heading'}, el('div', {}, el('p', {class: 'eyebrow'}, t('app.schema.panelEyebrow')), el('h2', {}, t('app.schema.panelTitle'))), panelClose), tabs);
+    const sidebar = el('aside', {id: 'schema-context-panel', class: 'card schema-aside', 'aria-label': t('app.schema.panelTitle')},
+        panelChrome, tablePanel, selectionPanel);
+    sidebar.addEventListener('keydown', event => { if (event.key === 'Escape') { event.preventDefault(); setPanelCollapsed(true, true); } });
+    const layout = el('div', {class: 'schema-layout'}, sidebar, el('div', {class: 'schema-board'}, canvas,
+        el('p', {id: 'schema-canvas-help', class: 'sr-only'}, t('app.schema.canvasHelp')), help));
     const noMatches = el('div', {class: 'schema-no-matches', hidden: true}, el('p', {}, t('app.schema.noMatches')),
         button(t('app.schema.clear'), () => { search.value = ''; state.search = ''; state.neighborhood = false; neighborhood.checked = false; draw(); fit(); }));
     canvas.append(noMatches);
     root.replaceChildren(el('div', {class: 'schema-workspace'}, toolbar,
         el('div', {class: 'schema-caption'}, summary,
             el('label', {class: 'schema-filter'}, neighborhood, t('app.schema.neighborhood'))),
-        el('div', {class: 'schema-layout'}, sidebar, el('div', {class: 'schema-board'}, canvas,
-            el('p', {id: 'schema-canvas-help', class: 'sr-only'}, t('app.schema.canvasHelp')), help)),
+        layout,
         el('div', {class: 'schema-legend'}, badge('PK'), el('span', {}, t('app.schema.primary')),
             badge('FK'), el('span', {}, t('app.schema.foreign'))),
         el('p', {class: 'small muted'}, t('app.schema.foreignKeyHelp')), storageStatus, status));
+
+    function syncPanel() {
+        const collapsed = state.panelCollapsed;
+        sidebar.hidden = collapsed;
+        sidebar.inert = collapsed;
+        layout.classList.toggle('is-panel-collapsed', collapsed);
+        panelToggle.setAttribute('aria-expanded', String(!collapsed));
+        const toggleLabel = t(collapsed ? 'app.schema.panelShow' : 'app.schema.panelHide');
+        panelToggle.setAttribute('aria-label', toggleLabel);
+        panelToggle.querySelector('span').textContent = toggleLabel;
+        selectionTab.disabled = !state.selected;
+        for (const [tab, name, panel] of [[tablesTab, 'tables', tablePanel], [selectionTab, 'selection', selectionPanel]]) {
+            const active = state.panelTab === name;
+            tab.setAttribute('aria-selected', String(active));
+            tab.tabIndex = active ? 0 : -1;
+            panel.hidden = !active;
+            panel.inert = !active;
+        }
+    }
+
+    function setPanelTab(name) {
+        if (name === 'selection' && !state.selected) return;
+        state.panelTab = name;
+        syncPanel();
+        sidebar.scrollTop = 0;
+    }
+
+    function setPanelCollapsed(collapsed, returnFocus = false) {
+        const rect = canvas.getBoundingClientRect();
+        const center = {x: (rect.width / 2 - state.viewport.x) / state.viewport.zoom, y: (rect.height / 2 - state.viewport.y) / state.viewport.zoom};
+        state.panelCollapsed = collapsed;
+        syncPanel();
+        // Keep the same diagram point at the center when the second menu changes width.
+        const next = canvas.getBoundingClientRect();
+        state.viewport.x = next.width / 2 - center.x * state.viewport.zoom;
+        state.viewport.y = next.height / 2 - center.y * state.viewport.zoom;
+        transform();
+        if (returnFocus) {
+            if (collapsed) panelToggle.focus();
+            else {
+                (state.panelTab === 'tables' ? tablesTab : selectionTab).focus({preventScroll: true});
+                if (window.matchMedia('(max-width: 700px)').matches) sidebar.scrollIntoView({block: 'nearest', behavior: 'auto'});
+            }
+        }
+    }
 
     function persist() {
         try {
@@ -119,10 +193,18 @@ export function mountSchemaVisualizer(root, {data, state = {}, onBrowse, onStruc
     }
 
     function selectTable(name, center = false, rebuild = true) {
+        const fromPanel = sidebar.contains(document.activeElement);
+        const resetPanelScroll = state.selected !== name || state.panelTab !== 'selection';
+        if (state.selected !== name) state.columnsExpanded = false;
         state.selected = name;
+        state.panelSelection = name;
+        state.panelTab = 'selection';
         if (center && !visibleTables().some(table => table.name === name)) { state.search = ''; search.value = ''; }
         if (rebuild && (state.neighborhood || center)) draw();
         else { drawSelection(); drawDetails(); }
+        syncPanel();
+        if (resetPanelScroll) sidebar.scrollTop = 0;
+        if (fromPanel && !state.panelCollapsed) selectionTab.focus({preventScroll: true});
         if (center) { pointToTable(name); state.centeredSelected = name; }
     }
 
@@ -167,15 +249,29 @@ export function mountSchemaVisualizer(root, {data, state = {}, onBrowse, onStruc
 
     function drawDetails() {
         neighborhood.disabled = !state.selected;
-        selected.replaceChildren(el('h3', {}, t('app.schema.selected')));
+        selected.replaceChildren();
         const table = lookup.get(state.selected);
         if (!table) { selected.append(el('p', {class: 'small muted'}, t('app.schema.selectHelp'))); return; }
-        selected.append(el('code', {class: 'schema-selected-name'}, table.name));
+        selected.append(el('p', {class: 'eyebrow'}, t(table.type === 'view' ? 'app.schema.view' : 'app.schema.selected')), el('h3', {class: 'schema-selected-name'}, table.name),
+            el('p', {class: 'small muted'}, t('app.schema.columns', {count: number(table.columns.length)})));
         if (table.comment) selected.append(el('p', {class: 'small muted'}, table.comment));
         const actions = el('div', {class: 'schema-detail-actions'});
         if (onBrowse) actions.append(button(t('app.schema.browse'), () => onBrowse(table.name), {id: 'schema-browse', className: 'button-small', symbol: 'table'}));
         if (onStructure) actions.append(button(t('app.schema.structure'), () => onStructure(table.name), {id: 'schema-structure', className: 'button-small', symbol: 'layers'}));
-        selected.append(actions, el('h3', {}, t('app.schema.relationships')));
+        const focusConnections = button(t('app.schema.focusConnections'), () => {
+            state.neighborhood = true; neighborhood.checked = true; state.search = ''; search.value = ''; draw(); fit();
+            selected.querySelector('#schema-focus-connections')?.focus({preventScroll: true});
+        }, {id: 'schema-focus-connections', className: 'button-small', symbol: 'link'});
+        actions.append(focusConnections);
+        const columnDetails = el('details', {class: 'schema-column-details', id: 'schema-column-details'},
+            el('summary', {id: 'schema-column-summary'}, t('app.schema.columnDetails')),
+            el('ul', {class: 'schema-detail-columns'}, table.columns.map(column => el('li', {},
+                el('div', {}, el('code', {}, column.name), column.primary ? badge('PK') : null),
+                el('code', {class: 'muted'}, column.type),
+                el('span', {class: 'small muted'}, t(column.nullable ? 'app.schema.nullable' : 'app.schema.required'))))));
+        columnDetails.open = state.columnsExpanded === true;
+        columnDetails.addEventListener('toggle', () => { if (columnDetails.isConnected) state.columnsExpanded = columnDetails.open; });
+        selected.append(actions, columnDetails, el('h3', {}, t('app.schema.relationships')));
         const relationships = model.relationships.filter(relation => relation.sourceTable === table.name || (!relation.external && relation.targetTable === table.name));
         if (!relationships.length) selected.append(el('p', {class: 'small muted'}, t('app.schema.noRelationships')));
         for (const relation of relationships) {
@@ -297,10 +393,10 @@ export function mountSchemaVisualizer(root, {data, state = {}, onBrowse, onStruc
         noMatches.hidden = visible.length > 0;
         count.textContent = t('app.schema.visible', {count: number(visible.length)});
         index.replaceChildren(...visible.map(table => button(table.name, () => selectTable(table.name, true), {id: 'schema-index-' + encodeURIComponent(table.name), 'data-schema-select': table.name, className: 'schema-index-item', symbol: table.type === 'view' ? 'eye' : 'table'})));
-        drawDetails(); drawLines(); transform();
+        drawDetails(); drawLines(); transform(); syncPanel();
     }
 
-    search.addEventListener('input', () => { state.search = search.value; draw(); fit(); });
+    search.addEventListener('input', () => { state.search = search.value; state.panelTab = 'tables'; draw(); fit(); sidebar.scrollTop = 0; });
     neighborhood.addEventListener('change', () => {
         state.neighborhood = neighborhood.checked;
         state.search = ''; search.value = '';
@@ -341,11 +437,7 @@ export function mountSchemaVisualizer(root, {data, state = {}, onBrowse, onStruc
     canvas.addEventListener('pointerup', pointerEnd);
     canvas.addEventListener('pointercancel', pointerEnd);
     canvas.addEventListener('lostpointercapture', pointerEnd);
-    canvas.addEventListener('wheel', event => {
-        if (!event.ctrlKey && !event.metaKey) return;
-        event.preventDefault(); const rect = canvas.getBoundingClientRect();
-        setZoom(state.viewport.zoom * Math.exp(-event.deltaY * .002), {x: event.clientX - rect.left, y: event.clientY - rect.top});
-    }, {passive: false});
+    cleanup.push(attachSchemaWheelZoom(canvas, {getZoom: () => state.viewport.zoom, setZoom: (value, anchor) => setZoom(value, anchor)}));
     canvas.addEventListener('keydown', event => {
         if (event.target !== canvas) return;
         if (event.key === '+' || event.key === '=') { event.preventDefault(); zoomBy(1.2); }
