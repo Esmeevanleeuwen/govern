@@ -884,7 +884,10 @@ async function renderSchema(scope) {
         scope.cleanup.push(() => visualizer.destroy());
         restoreExplorerScroll('database');
     } catch (error) {
-        if (error.name !== 'AbortError' && scope.live()) workspace.replaceChildren(errorPanel(error, () => render()));
+        if (error.name !== 'AbortError' && scope.live()) {
+            workspace.replaceChildren(errorPanel(error, () => render()));
+            contextContent.replaceChildren(errorPanel(error, () => render()));
+        }
     }
 }
 

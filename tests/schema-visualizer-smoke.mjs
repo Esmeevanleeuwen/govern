@@ -552,6 +552,9 @@ try {
     fixtureMode = 'error';
     await fixturePage.reload({waitUntil: 'networkidle'});
     await fixturePage.locator('#page .notice-error').waitFor();
+    assert.equal(await fixturePage.locator('#workspace-context-content .loading-state').count(), 0,
+        'A failed catalog request cannot leave its table explorer loading forever.');
+    await fixturePage.locator('#workspace-context-content .notice-error button').waitFor();
     fixtureMode = 'normal';
     await fixturePage.locator('#page .notice-error button').click();
     await fixturePage.locator('#schema-search').waitFor();
