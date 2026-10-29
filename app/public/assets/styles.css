@@ -838,17 +838,22 @@ input[type="color"]::-moz-color-swatch { border: 0; border-radius: 6px; }
 @media (max-width: 700px) { .schema-layout { grid-template-columns: minmax(0, 1fr); } .schema-aside { max-height: none; } .schema-index { max-height: 150px; grid-template-columns: repeat(2, minmax(0, 1fr)); } .schema-selected { margin-top: 16px; } .schema-viewport { height: 58vh; min-height: 380px; } .schema-zoom-controls { flex-wrap: wrap; } .schema-toolbar > .button { font-size: 12px; } .schema-zoom-controls .button { min-height: 44px; } }
 @media (forced-colors: active) { .schema-node, .schema-viewport { background: Canvas; box-shadow: none; backdrop-filter: none; outline: 1px solid CanvasText; } .schema-node.is-selected { outline: 3px solid Highlight; } .schema-node-header { background: Canvas; color: CanvasText; } .schema-edge, .schema-edge.is-highlighted { stroke: CanvasText; opacity: 1; } .schema-edge.is-muted { opacity: .6; } .schema-endpoint { fill: CanvasText; } }
 
-/* Context changes inside one second menu; the diagram keeps its space. */
-.schema-layout { grid-template-columns: 280px minmax(0, 1fr); }
-.schema-layout.is-panel-collapsed { grid-template-columns: minmax(0, 1fr); }
+/* Persistent schema tools open one adjacent context panel. */
+.schema-layout { grid-template-columns: 80px 260px minmax(0, 1fr); gap: 12px; }
+.schema-layout.is-panel-collapsed { grid-template-columns: 80px minmax(0, 1fr); }
+.schema-tool-rail { padding: 8px; height: min(70vh, 760px); min-height: 300px; display: flex; flex-direction: column; gap: 12px; min-width: 0; overflow-y: auto; scrollbar-width: thin; }
+.schema-rail-label { color: var(--muted); font-size: 12px; line-height: 1.4; text-align: center; overflow-wrap: anywhere; padding: 5px 1px; }
+.schema-tool-buttons { display: grid; gap: 6px; }
+.schema-tool-rail .button { width: 100%; min-width: 0; min-height: 72px; padding: 10px 4px; display: flex; flex-direction: column; gap: 7px; font-size: 12px; line-height: 1.35; color: var(--muted); background: transparent; box-shadow: none; text-align: center; }
+.schema-tool-rail .button span { overflow-wrap: anywhere; }
+.schema-tool-rail .button .icon { width: 21px; height: 21px; }
+.schema-tool-rail .button:hover:not(:disabled), .schema-tool-rail .button[aria-expanded="true"] { background: var(--g-frost); color: var(--g-accent-text); box-shadow: var(--g-control-depth); }
+.schema-tool-rail #schema-help-open { margin-top: 6px; }
 .schema-aside { max-height: min(70vh, 760px); padding: 16px; overscroll-behavior: contain; }
-.schema-panel-heading { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 16px; }
+.schema-panel-heading { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .schema-panel-heading .eyebrow { margin-bottom: 4px; font-size: 12px; letter-spacing: .6px; }
 .schema-panel-heading h2 { font-size: 17px; }
 .schema-panel-heading .icon-button { min-width: 36px; }
-.schema-panel-tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; padding: 4px; border-radius: 13px; background: var(--g-row); margin-bottom: 16px; }
-.schema-panel-tabs .button { min-height: 40px; background: transparent; box-shadow: none; border-radius: 10px; padding: 8px; color: var(--muted); }
-.schema-panel-tabs .button[aria-selected="true"] { background: var(--g-frost); color: var(--g-accent-text); box-shadow: var(--g-control-depth); }
 .schema-aside .schema-index { max-height: none; margin-top: 12px; }
 .schema-aside .schema-selected { margin-top: 0; }
 .schema-aside .schema-selected-name { font-family: var(--mono); font-size: 14px; line-height: 1.5; }
@@ -859,30 +864,33 @@ input[type="color"]::-moz-color-swatch { border: 0; border-radius: 6px; }
 .schema-detail-columns li > div { display: flex; justify-content: space-between; gap: 6px; align-items: start; }
 .schema-detail-columns code { font-size: 12px; }
 .schema-detail-columns .badge { font-size: 12px; padding: 2px 5px; }
-:root[data-sidebar="right"] .schema-layout { grid-template-columns: minmax(0, 1fr) 280px; }
+.schema-panel-chrome { position: sticky; top: -16px; z-index: 4; margin: -16px -16px 16px; padding: 16px; border-radius: 20px 20px 12px 12px; background: linear-gradient(145deg, var(--g-shine), transparent 72%), var(--g-dense-frost); box-shadow: var(--g-control-depth); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); }
+:root[data-sidebar="right"] .schema-layout { grid-template-columns: minmax(0, 1fr) 260px 80px; }
+:root[data-sidebar="right"] .schema-tool-rail { order: 3; }
 :root[data-sidebar="right"] .schema-aside { order: 2; }
 :root[data-sidebar="right"] .schema-board { order: 1; }
-:root[data-sidebar="right"] .schema-layout.is-panel-collapsed { grid-template-columns: minmax(0, 1fr); }
-@media (max-width: 1100px) {
-    .schema-layout { grid-template-columns: 240px minmax(0, 1fr); }
-    :root[data-sidebar="right"] .schema-layout { grid-template-columns: minmax(0, 1fr) 240px; }
-    .schema-layout.is-panel-collapsed, :root[data-sidebar="right"] .schema-layout.is-panel-collapsed { grid-template-columns: minmax(0, 1fr); }
+:root[data-sidebar="right"] .schema-layout.is-panel-collapsed { grid-template-columns: minmax(0, 1fr) 80px; }
+@media (max-width: 1100px) and (min-width: 701px) {
+    .schema-layout { grid-template-columns: 72px 220px minmax(0, 1fr); }
+    .schema-layout.is-panel-collapsed { grid-template-columns: 72px minmax(0, 1fr); }
+    :root[data-sidebar="right"] .schema-layout { grid-template-columns: minmax(0, 1fr) 220px 72px; }
+    :root[data-sidebar="right"] .schema-layout.is-panel-collapsed { grid-template-columns: minmax(0, 1fr) 72px; }
 }
 @media (max-width: 700px) {
-    .schema-layout, :root[data-sidebar="right"] .schema-layout { grid-template-columns: minmax(0, 1fr); }
+    .schema-layout, .schema-layout.is-panel-collapsed, :root[data-sidebar="right"] .schema-layout, :root[data-sidebar="right"] .schema-layout.is-panel-collapsed { grid-template-columns: minmax(0, 1fr); }
+    .schema-tool-rail, :root[data-sidebar="right"] .schema-tool-rail { order: 0; height: auto; min-height: 0; display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 6px; }
+    .schema-rail-label { grid-column: 1 / -1; text-align: left; padding: 3px 7px; }
+    .schema-tool-buttons { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+    .schema-tool-rail .button { min-height: 68px; height: 100%; padding: 8px 4px; }
+    .schema-tool-rail #schema-help-open { margin-top: 0; }
     .schema-board, :root[data-sidebar="right"] .schema-board { order: 1; }
     .schema-aside, :root[data-sidebar="right"] .schema-aside { order: 2; max-height: min(50vh, 420px); padding: 16px; }
     .schema-aside .schema-index { grid-template-columns: minmax(0, 1fr); }
-    .schema-panel-tabs .button, .schema-panel-heading .icon-button { min-height: 44px; }
+    .schema-panel-heading .icon-button { min-height: 44px; }
 }
-@media (forced-colors: active) {
-    .schema-panel-tabs .button[aria-selected="true"] { outline: 2px solid Highlight; }
-}
-
-/* Panel navigation stays available while its current selection scrolls. */
-.schema-panel-chrome { position: sticky; top: -16px; z-index: 4; margin: -16px -16px 16px; padding: 16px 16px 12px; border-radius: 20px 20px 12px 12px; background: linear-gradient(145deg, var(--g-shine), transparent 72%), var(--g-dense-frost); box-shadow: var(--g-control-depth); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); }
-.schema-panel-chrome .schema-panel-heading { margin-bottom: 12px; }
-.schema-panel-chrome .schema-panel-tabs { margin-bottom: 0; }
 @supports not (backdrop-filter: blur(1px)) { .schema-panel-chrome { background: var(--g-panel); } }
 :root[data-reduce-transparency="true"] .schema-panel-chrome { background: var(--g-panel); backdrop-filter: none; -webkit-backdrop-filter: none; }
-@media (forced-colors: active) { .schema-panel-chrome { background: Canvas; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; } }
+@media (forced-colors: active) {
+    .schema-tool-rail .button[aria-expanded="true"] { outline: 2px solid Highlight; }
+    .schema-panel-chrome { background: Canvas; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
+}

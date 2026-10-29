@@ -8,6 +8,7 @@
     <title>Govern — persoonlijke datawerkplek</title>
     <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
     <link rel="stylesheet" href="/assets/styles.css">
+    <link rel="stylesheet" href="/assets/schema-help.css">
     <script type="module" src="/assets/app.js"></script>
 </head>
 <body>

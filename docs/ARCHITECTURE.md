@@ -39,6 +39,7 @@ De onderdelen hebben een kleine, duidelijke taak:
 | `query-builder.js` | Het tijdelijke visuele queryontwerp en de toegepaste versie |
 | `schema-model.js` en `schema-visualizer.js` | Live relaties, diagramindeling en interactieve schemaverkenning |
 | `schema-navigation.js` | Alleen binnen het diagram genormaliseerde, muisgerichte scrollzoom |
+| `schema-help.js` | Een vertaalde schemagids in een native dialoog met focusbeheer en opruimen |
 | `database-modal.js` | Het venster rondom de echte phpMyAdmin |
 | `Messages.php` | Vertaalde applicatiefeedback met stabiele foutcodes |
 
@@ -62,12 +63,20 @@ onderzoekconcepten en dashboardindeling. Tabelposities worden per database in
 een eigen versie van browseropslag bewaard; verplaatsen wijzigt geen tabellen,
 kolommen of sleutels in MariaDB.
 
-De schemaverkenner gebruikt een contextmenu naast de hoofdnavigatie. De tabs
-Tabellen en Geselecteerd scheiden het objectoverzicht van de huidige selectie.
+De schemaverkenner gebruikt een compacte gereedschapsbalk naast de
+hoofdnavigatie. Tabellen en Geselecteerd klappen hun bijbehorende paneel uit.
+Klikken op de actieve tool klapt alleen de inhoud in; de balk blijft zichtbaar.
 Selecteren in de tekening werkt de context automatisch bij terwijl de
 toetsenbordfocus in de tekening blijft. Een bewust ingeklapt menu blijft dicht. De tab en open/dicht-
 toestand blijven in de schermtoestand tijdens taalwisselingen en terugkeren naar
 Schema; alleen tabelposities worden naar browseropslag geschreven.
+
+De knop Wat kan ik hier doen? blijft beschikbaar in de gereedschapsbalk, ook
+zonder tabellen. De schemagids beschrijft bestaande handelingen en opent als
+native `dialog`. Tab en Shift+Tab blijven binnen de gids; sluiten, Escape en
+klikken op de achtergrond geven de focus terug. Een taalwisseling herbouwt de
+geopende gids in de gekozen taal. Het verlaten van Schema verwijdert de dialoog
+en bijbehorende toestand. Er worden geen API-mutaties uitgevoerd door de gids.
 
 Scrollen boven de tekening zoomt rond de muispositie. De handler normaliseert
 pixel-, regel- en paginascroll en werkt ook bij Ctrl-/trackpadgebaren. Buiten de
