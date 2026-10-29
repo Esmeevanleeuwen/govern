@@ -118,7 +118,19 @@ try {
             id = (await (await saved).json()).data.id;
             await page.locator('.saved-item-open').filter({hasText: name}).waitFor();
             const removeButton = page.getByRole('button', {name: 'Verwijder onderzoek ' + name});
+            const originalRemove = await removeButton.elementHandle();
             await removeButton.click();
+            // A genuine translated route remount can finish a saved-list refresh
+            // while its confirmation remains open. Restore the logical control,
+            // even though the original DOM button no longer exists.
+            await page.evaluate(async () => {
+                const {setLanguage} = await import('/assets/i18n.js');
+                setLanguage('en');
+                setLanguage('nl');
+            });
+            await removeButton.waitFor();
+            assert.equal(await originalRemove.evaluate(node => node.isConnected), false,
+                'The regression replaces the opener while its confirmation is open.');
             await page.getByRole('button', {name: 'Annuleren', exact: true}).click();
             await page.locator('.confirm-dialog').waitFor({state: 'detached'});
             await page.waitForFunction(label => document.activeElement?.getAttribute('aria-label') === label,

@@ -208,6 +208,7 @@ export function sqlDisclosure(sql, params) {
 export function confirmAction({title, description, requiredText, confirmLabel = t('ui.confirm'), danger = false}) {
     return new Promise(resolve => {
         const opener = document.activeElement;
+        const openerId = opener?.id;
         const dialog = el('dialog', {class: 'confirm-dialog', 'aria-labelledby': 'confirmation-title'});
         const form = el('form', {method: 'dialog'});
         const submit = el('button', {class: 'button button-' + (danger ? 'danger' : 'primary'), type: 'submit'}, confirmLabel);
@@ -232,7 +233,8 @@ export function confirmAction({title, description, requiredText, confirmLabel = 
         });
         dialog.addEventListener('close', () => {
             dialog.remove();
-            if (opener?.isConnected && !opener.disabled) opener.focus({preventScroll: true});
+            const target = opener?.isConnected ? opener : openerId ? document.getElementById(openerId) : null;
+            if (target && !target.disabled) target.focus({preventScroll: true});
             resolve(confirmed ? (field ? field.value : true) : null);
         }, {once: true});
         dialog.append(form);

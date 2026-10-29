@@ -1240,6 +1240,7 @@ async function renderResearch(scope) {
         }
         if (!scope.live()) return;
         state.savedQueries = queries;
+        const focusedControl = savedList.contains(document.activeElement) ? document.activeElement.id : null;
         savedList.replaceChildren();
         if (!queries.length) {
             savedList.append(el('p', {class: 'catalog-empty'}, t('app.core.research.noSaved')));
@@ -1262,7 +1263,8 @@ async function renderResearch(scope) {
                     await updateSavedList();
                 } catch (error) { toast(errorText(error), 'error'); remove.disabled = false; }
                 finally { state.deletingQuery = false; syncDatabasePicker(); }
-            }, {kind: 'ghost', symbol: 'trash', className: 'icon-button', 'aria-label': t('app.core.research.removeLabel', {name: query.name})});
+            }, {id: 'saved-query-remove-' + encodeURIComponent(scope.database) + '-' + query.id,
+                kind: 'ghost', symbol: 'trash', className: 'icon-button', 'aria-label': t('app.core.research.removeLabel', {name: query.name})});
             remove.querySelector('span').className = 'sr-only';
             savedList.append(el('div', {class: 'saved-item'},
                 el('button', {class: 'saved-item-open', type: 'button', on: {click: async () => {
@@ -1287,6 +1289,9 @@ async function renderResearch(scope) {
                     editor.focus();
                 }}}, el('strong', {}, query.name), el('small', {}, dateTime(query.updated_at))), remove));
         });
+        if (focusedControl && document.activeElement === document.body) {
+            document.getElementById(focusedControl)?.focus({preventScroll: true});
+        }
     };
     form.addEventListener('submit', async event => {
         event.preventDefault();
