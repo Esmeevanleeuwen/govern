@@ -2,6 +2,40 @@
 
 Stand van de controles: **29 oktober 2026**.
 
+## Databases toevoegen en echte SQL-import
+
+De gerichte controles voor deze uitbreiding staan in
+`tests/database_provisioner_unit.php`,
+`tests/database-provisioning-integration.php` en
+`tests/database-import-smoke.mjs`. Ze richten zich op de grens tussen het
+naamformulier, de CSRF-beveiligde API, de privéservice en de echte database.
+De uiteindelijke uitvoeruitslag hoort bij de betreffende commit en workflow.
+
+De backendproeven behandelen begrensde verzoeken en helperantwoorden,
+ongeldige en gereserveerde namen, alleen rechten per exacte naam, ontsnapte
+underscores, opnieuw uitvoeren en het behouden van bestaande gegevens. De
+gewone webapp en phpMyAdmin mogen het rootwachtwoord niet ontvangen. Een
+aanmaakfout mag geen database verwijderen of accountwachtwoord vervangen.
+
+De browserproef moet via de nieuwe dialoog een database voorbereiden en daarna
+een echt SQL-bestand uploaden in de officiële phpMyAdmin-import. Alleen een
+iframe of importknop aantreffen is onvoldoende: lees de geïmporteerde tabel en
+rij terug in Govern en controleer de schemavernieuwing. Controleer ook teruggaan
+naar de oorspronkelijke database met behoud van het SQL-concept, herhalen bij
+een bestaande naam, foutbehoud, Nederlands/Engels, toetsenbord en 320 px.
+
+Een importcontrole gebruikt uitsluitend een afzonderlijke testdatabase. Ze
+bewijst niet dat ieder extern SQL-bestand past binnen de ingestelde 128 MB en
+300 seconden, of dat DDL atomair kan worden teruggedraaid. Deze uitbreiding
+verbindt geen andere databaseserver en verandert de AI-brongrens niet.
+
+`tests/proxy-restart-smoke.py` controleert de afzonderlijke Docker-proxygrens.
+De expliciet ingeschakelde proef geeft de app- en phpMyAdmin-container nieuwe
+IP-adressen terwijl de gateway blijft staan en controleert daarna Govern,
+API-health en phpMyAdmin opnieuw. Hij verwijdert geen databasevolume. Dit test
+de dynamische Docker-DNS-resolutie in Nginx na opnieuw maken van webcontainers;
+het is geen inspectie van de netwerktoestand op de gebruikercomputer.
+
 ## Lokale projectcode en bronverwijzingen
 
 De nieuwe PHP-bron- en projectserviceproeven slagen in de afzonderlijke native
@@ -336,14 +370,17 @@ docker compose exec -T app sh -c 'find /var/www/src /var/www/public -name "*.php
 docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" app php /workspace/tests/backend_unit.php
 docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" app php /workspace/tests/backup_unit.php
 docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" app php /workspace/tests/backend_localization.php
+docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" app php /workspace/tests/database_provisioner_unit.php
 docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" app php /workspace/tests/local_code_search_unit.php
 docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" app php /workspace/tests/ai_project_unit.php
 
 docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" app php /workspace/tests/backend_integration.php --confirm-database=bestuursatlas
+docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" app php /workspace/tests/database-provisioning-integration.php --confirm-database=bestuursatlas
 docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" -e GOVERN_TEST_SECOND_DATABASE app php /workspace/tests/multidatabase-row-integration.php --confirm-database=bestuursatlas --confirm-second-database=govern_multi_test
 docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" app php /workspace/tests/backup_integration.php --confirm-database=bestuursatlas
 
 python3 tests/smoke.py --base-url http://127.0.0.1:18080
+GOVERN_DOCKER_NETWORK_TEST=1 python3 tests/proxy-restart-smoke.py --base-url http://127.0.0.1:18080 --confirm-project=govern-verify
 ```
 
 Voor de aanvullende browsercontrole is een ontwikkelomgeving met Node 22 of nieuwer en
@@ -359,6 +396,7 @@ node tests/dashboard-layout-unit.mjs
 node tests/schema-model-unit.mjs
 node tests/schema-navigation-unit.mjs
 BASE_URL=http://127.0.0.1:18080 GOVERN_UI_WRITE_TESTS=1 node tests/frontend-smoke.mjs
+BASE_URL=http://127.0.0.1:18080 GOVERN_UI_WRITE_TESTS=1 node tests/database-import-smoke.mjs
 BASE_URL=http://127.0.0.1:18080 node tests/query-builder-smoke.mjs
 BASE_URL=http://127.0.0.1:18080 node tests/ui-settings-smoke.mjs
 BASE_URL=http://127.0.0.1:18080 node tests/ai-workspace-smoke.mjs

@@ -1,6 +1,7 @@
 import {request, setCsrf, endpoint, setDatabase, getDatabase} from './api.js';
 import {el, icon, button, badge, heading, loading, empty, errorPanel, errorText, notice, dataTable, number, fileSize, dateTime, quoteIdentifier, toast, copyText, sqlDisclosure, confirmAction} from './ui.js';
 import {DatabaseModal} from './database-modal.js';
+import {createDatabaseManager} from './database-manager.js';
 import {QueryBuilder} from './query-builder.js';
 import {t, getLanguage, setLanguage} from './i18n.js';
 import {getPreferences, updatePreferences, resetAppearance, subscribePreferences} from './preferences.js';
@@ -50,6 +51,7 @@ const state = {
     deletingQuery: false,
     rowEditorOpen: false,
     switchingDatabase: false,
+    databaseManagerOpen: false,
     connectionError: null,
     queryError: null,
     querySaveError: null,
@@ -79,6 +81,7 @@ const contextContent = document.getElementById('workspace-context-content');
 const panelToggle = document.getElementById('workspace-panel-toggle');
 const databaseViews = ['gegevens', 'structuur', 'schema'];
 const databaseSelect = document.getElementById('database-select');
+const manageDatabases = document.getElementById('manage-databases');
 const aiToggle = document.getElementById('ai-toggle');
 const databaseCache = new Map();
 const databaseStateKeys = ['bootstrap', 'table', 'queryDraft', 'queryName', 'queryNotes', 'queryId', 'queryResult', 'queryRevision',
@@ -143,6 +146,30 @@ const databaseModal = new DatabaseModal(() => {
         if (!databaseModal.dialog.open && document.activeElement === document.body && !openDatabase.disabled) openDatabase.focus();
     }).catch(error => toast(errorText(error), 'error'));
 });
+const databaseManager = createDatabaseManager({getDatabase, getDatabases: () => knownDatabases,
+    canCreate: () => state.bootstrap?.can_create_database === true,
+    isBusy: () => databaseOperationsBusy() || state.switchingDatabase,
+    onBusy: busy => { state.databaseManagerOpen = busy; syncDatabasePicker(); },
+    onSelect: async database => {
+        if (database !== getDatabase()) await switchDatabase(database);
+        else await refreshBootstrap(false);
+    },
+    onImport: async database => {
+        if (database !== getDatabase()) await switchDatabase(database);
+        else await refreshBootstrap(false);
+        if (getDatabase() === database && !state.connectionError) databaseModal.open('', 'import');
+    },
+    onPrepared: async (data, {importSql}) => {
+        knownDatabases = data.databases;
+        if (data.database !== getDatabase()) await switchDatabase(data.database);
+        else await refreshBootstrap(false);
+        toast(t('app.databases.' + (data.created ? 'createdDatabase' : 'enabledDatabase'), {name: data.database}));
+        if (importSql && getDatabase() === data.database && !state.connectionError) databaseModal.open('', 'import');
+    },
+});
+manageDatabases.append(icon('plus'));
+manageDatabases.addEventListener('click', () => databaseManager.open());
+
 for (const [area, key, labelKey, symbol] of [
     ['overview', 'overzicht', 'app.route.overview', 'grid'],
     ['database', 'gegevens', 'app.navigation.database', 'database'],
@@ -259,9 +286,11 @@ function routeHash(name, params = {}) {
 
 function databaseHash(name) { return routeHash(name, state.table ? {table: state.table} : {}); }
 
-function databaseBusy() {
+function databaseOperationsBusy() {
     return state.restoring || state.creatingSnapshot || state.savingQuery || state.deletingQuery || state.runningQuery || state.rowEditorOpen || databaseModal.dialog.open;
 }
+
+function databaseBusy() { return state.databaseManagerOpen || databaseOperationsBusy(); }
 
 function syncDatabasePicker() {
     const selected = getDatabase();
@@ -270,6 +299,7 @@ function syncDatabasePicker() {
     databaseSelect.replaceChildren(...options.map(item => el('option', {value: item.name, selected: item.name === selected},
         item.available === false ? t('app.databases.unavailable', {name: item.name}) : item.name)));
     databaseSelect.disabled = !options.length || databaseBusy() || state.switchingDatabase;
+    manageDatabases.disabled = !state.bootstrap || databaseBusy() || state.switchingDatabase;
     document.getElementById('context-export').href = endpoint('context');
 }
 
@@ -553,6 +583,7 @@ async function refreshBootstrap(notify = false, {preserveFocus = false, focusFal
         knownDatabases = data.databases || [{name: data.database.name, available: data.database.status !== 'unavailable'}];
         history.replaceState(null, '', routeHash(route().name, Object.fromEntries(route().params)));
         state.bootstrap = data;
+        databaseManager.refresh();
         state.connectionError = null;
         state.savedQueries = null;
         state.schemaData = null;

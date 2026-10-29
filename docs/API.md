@@ -30,13 +30,14 @@ and POST alike. The request body does not change the target database. Omitting
 the parameter retains `DB_NAME` for older clients and links. There is no mutable
 server-session selection; two browser tabs can use different databases safely.
 
-`GET databases` returns `{databases:[{name,available}],default_database}` without
+`GET databases` returns `{databases:[{name,available}],default_database,can_create}` without
 requiring a selected database connection. Available names are the intersection
 of the writer's and reader's live `SHOW DATABASES` results, excluding
 `information_schema`, `mysql`, `performance_schema` and `sys`. `DB_NAME` and
 `DB_DATABASES` also remain listed when unavailable, so recovery stays reachable.
 Selecting a name outside this set returns 403 `database_not_available`. Selection
-does not grant privileges. Free SQL may use `USE` or qualified names to reach
+does not grant privileges. The separate explicit preparation action below can
+add a named database through the private provisioner. Free SQL may use `USE` or qualified names to reach
 other schemas already allowed by the same database account.
 
 The browser includes the selected database in routes, requests, downloads and
@@ -44,6 +45,50 @@ context exports. It remembers the choice per tab in `govern.database.v1`
 session storage, and keeps table/search state, SQL drafts, results and visual
 builder state separately per database in memory. Changing scope cancels old
 reads and ignores late replies. Async mutations capture their original scope.
+
+### Create or prepare a database for import
+
+`POST prepare-database` accepts exactly `{name:string}` with the ordinary CSRF
+header and explicit current `database` URL parameter. The current selection is
+still validated; `name` names the database to prepare rather than silently
+changing that request's scope. The response is
+`{database:string,created:boolean,databases:[{name,available}],default_database}`.
+The refreshed list is read from the actual writer/reader visibility after the
+operation. The browser deliberately selects the returned database after success.
+The status is 201 when a database was created and 200 when an existing database
+was prepared without replacing its data.
+
+Names contain 1–64 ASCII letters, digits or underscores. The escaped GRANT
+pattern must also fit the supported database-name length. System names
+`mysql`, `information_schema`, `performance_schema` and `sys` are rejected
+case-insensitively. Extra input fields, invalid names and system names return
+422 `database_create_invalid`. The browser cannot provide SQL, account names,
+collation, root credentials, a socket path or an import file to this endpoint.
+
+The private `database-manager` service supports only a bounded
+`prepare_database` request over `/run/govern-databases/provision.sock`. It creates
+the named database if missing and grants the existing writer and reader their
+per-database rights. An existing name is explicitly made available without
+replacing its data. Repeating the operation can finish access setup after a
+partial failure; it does not drop data or reset account passwords. Grants persist
+in the MariaDB volume, so newly prepared databases remain discoverable after
+restart without an edit to `DB_DATABASES`.
+
+`can_create` and bootstrap's additive `can_create_database` report availability
+of this local preparation path, independently of ordinary database browsing.
+They do not guarantee that a later create request succeeds. An unavailable
+socket returns 503 `database_manager_unavailable`; a failed database operation
+returns 503 `database_prepare_failed`; an invalid helper reply returns 502
+`database_manager_invalid`. Errors use the ordinary bilingual envelope and do
+not expose SQL or credentials.
+
+SQL upload is handled by official phpMyAdmin, not by a new Govern import parser.
+The database modal's Import shortcut opens `/database/import` or `/table/import`
+with the chosen `db` and optional `table`. The existing 128 MB upload and 300-second
+execution settings apply. Import may modify or replace data according to its
+SQL; DDL is not generally transactional and no universal rollback is promised.
+Closing the modal refreshes the live catalog. Databases on other servers are
+not connected by this operation.
 
 ## Language and compatible feedback
 
@@ -84,8 +129,9 @@ interface and future feature rules.
 
 ## Endpoints
 
-- GET `databases`: `{databases:[{name,available}],default_database}`; see database scope above.
-- GET `bootstrap`: `{csrf, databases:[{name,available}],default_database,database:{name,version,status,available}, stats:{tables,views,rows_estimate}, tables:[{name,type:"table"|"view",comment,rows_estimate,columns}]}`. An unavailable database can also return `warning` and `warning_i18n`; bootstrap still supplies the selected database name and CSRF token for recovery.
+- GET `databases`: `{databases:[{name,available}],default_database,can_create}`; see database scope above.
+- POST `prepare-database` exactly `{name}`: `{database,created,databases:[{name,available}],default_database}`; see database preparation above.
+- GET `bootstrap`: `{csrf, databases:[{name,available}],default_database,can_create_database,database:{name,version,status,available}, stats:{tables,views,rows_estimate}, tables:[{name,type:"table"|"view",comment,rows_estimate,columns}]}`. An unavailable database can also return `warning` and `warning_i18n`; bootstrap still supplies the selected database name and CSRF token for recovery.
 - GET `browse&table=...&page=1&page_size=25&q=...`: `{table,columns:[{name,type,nullable,default,generated,primary,comment}],rows:[{column:value}],key_columns:[name],row_keys:[object|null],page,page_size,total,sql,params,truncated,notice,notice_i18n}`. `row_keys` aligns with `rows` and is extracted before preview truncation; key values are exact strings, binary keys hex encoded. Named identifiers verified against live catalog; values bound; max page_size100. App-owned `_govern_` tables excluded from normal list, remain accessible in phpMyAdmin.
 - GET `structure&table=...`: `{table,columns:[...],indexes:[{name,unique,columns:[name]}],foreign_keys:[{name,columns:[name],referenced_table,referenced_columns:[name]}],create_sql}`.
 - GET `schema`: `{database:string,tables:[{name,type:"table"|"view",comment,columns:[...],foreign_keys:[{name,columns:[name],referenced_schema,referenced_table,referenced_columns:[name]}]}]}`. Full live metadata for the schema visualizer, read through the restricted reader with three batched catalog queries. No table rows, DDL, credentials or saved queries; `_govern_` source tables are excluded.
@@ -642,14 +688,23 @@ pattern must fit 64 bytes. Known legacy unescaped default-schema grants are
 narrowed. Runtime app/phpMyAdmin containers never receive the root password.
 Removing an allowlist entry does not revoke existing grants or delete data.
 
+`DatabaseProvisioner` separately reads server-owned `DB_MANAGER_SOCKET`, whose
+Compose value is `/run/govern-databases/provision.sock`. The `database-manager`
+service receives the database host, port, fixed account names and root password;
+the app only receives the socket path. The socket is the only management
+transport. The service has no HTTP listener, published port, SQL execution
+endpoint or file-import channel. Missing setup leaves ordinary browsing usable
+and returns the bounded helper error through the normal API envelope.
+
 PHP8.4+, PDO MySQL, native PHP classes and ES modules, no build framework. Namespace `Govern`, small explicit bootstrap loading or autoloader. Config class `Config::fromEnvironment(): array`. BackupService `__construct(array $config)`, `list(): array`, `create(string $label): array`, `restore(string $id,string $confirmation): array`, `download(string $id): array` returning `{path,filename}`. Backup service verifies files/checksums, invokes clients using argv arrays, credentials only private temporary file. No shell command concatenation.
 
 ## phpMyAdmin integration
 
-Same origin at `/phpmyadmin/` via Nginx. Modal top tabs exactly Browse, Structure,
-SQL. Iframe uses actual phpMyAdmin, not a partial imitation. URL query route
-`/sql` (Browse), `/table/structure`, `/table/sql`, with encoded selected `db` and
-`table`. No-table fallback `/database/structure` or `/database/sql`. Allow only
+Same origin at `/phpmyadmin/` via Nginx. Modal shortcuts are Browse, Structure,
+SQL and Import. Iframe uses actual phpMyAdmin, not a partial imitation. URL query route
+`/sql` (Browse), `/table/structure`, `/table/sql` or `/table/import`, with encoded
+selected `db` and `table`. No-table fallback `/database/structure`,
+`/database/sql` or `/database/import`. Allow only
 same-origin framing; config auth uses the scoped writer account and actual
 MariaDB grants determine available databases. The four system schemas are hidden;
 `only_db` does not restrict additional granted schemas. Display current DB/table,

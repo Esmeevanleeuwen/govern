@@ -7,6 +7,10 @@ namespace Govern;
 final class Messages
 {
     private const TEXT = [
+        'database_create_invalid' => ['nl' => 'Gebruik voor de databasenaam 1–64 letters, cijfers of underscores. Systeemdatabases en te lange permissienamen zijn niet toegestaan.', 'en' => 'Use 1–64 letters, numbers or underscores for the database name. System databases and overlong permission names are not allowed.'],
+        'database_manager_unavailable' => ['nl' => 'De lokale databasebeheerder is niet bereikbaar. Start Govern opnieuw met het startscript.', 'en' => 'The local database manager is unavailable. Restart Govern with the start script.'],
+        'database_manager_invalid' => ['nl' => 'De lokale databasebeheerder gaf geen geldig antwoord. Probeer opnieuw of start Govern opnieuw.', 'en' => 'The local database manager did not return a valid response. Retry or restart Govern.'],
+        'database_prepare_failed' => ['nl' => 'De database kon niet volledig beschikbaar worden gemaakt. Bestaande inhoud is niet vervangen; probeer opnieuw of controleer de lokale databasebeheerder.', 'en' => 'The database could not be fully prepared. Existing contents were not replaced; retry or check the local database manager.'],
         'ai_project_no_evidence' => ['nl' => 'Ik kon dit niet onderbouwen met de gevonden lokale projectbestanden. Probeer een concrete functienaam of een onderdeel van Govern.', 'en' => 'I could not support this with the local project files found. Try a specific function name or a part of Govern.'],
         'ai_project_unavailable' => ['nl' => 'De toegestane lokale projectmappen zijn niet beschikbaar. Controleer of app/ en docs/ alleen-lezen zijn gekoppeld.', 'en' => 'The approved local project folders are unavailable. Check that app/ and docs/ are mounted read-only.'],
         'ai_config_invalid' => ['nl' => 'De lokale AI-instellingen zijn ongeldig. Controleer AI_ENABLED, AI_BASE_URL, AI_MODEL en AI_TIMEOUT_SECONDS.', 'en' => 'The local AI configuration is invalid. Check AI_ENABLED, AI_BASE_URL, AI_MODEL and AI_TIMEOUT_SECONDS.'],

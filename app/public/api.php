@@ -19,20 +19,30 @@ use Govern\QueryRunner;
 use Govern\RowEditor;
 use Govern\SavedQueries;
 use Govern\AiService;
+use Govern\DatabaseProvisioner;
 
 try {
     $baseConfig = Config::fromEnvironment();
     $csrf = Http::start($baseConfig);
     $action = Http::text($_GET, 'action');
-    $posts = ['build-query', 'query', 'save-query', 'delete-query', 'create-snapshot', 'restore-snapshot', 'insert-row', 'update-row', 'delete-row', 'ai-context', 'ai-chat'];
+    $posts = ['build-query', 'query', 'save-query', 'delete-query', 'create-snapshot', 'restore-snapshot', 'insert-row', 'update-row', 'delete-row', 'ai-context', 'ai-chat', 'prepare-database'];
     $input = in_array($action, $posts, true) ? Http::post($csrf) : [];
     if (!in_array($action, $posts, true)) {
         Http::get();
     }
     $scope = new DatabaseScope($baseConfig);
-    if ($action === 'databases') Http::json(['databases' => $scope->databases(), 'default_database' => $baseConfig['name']]);
+    if ($action === 'databases') Http::json(['databases' => $scope->databases(), 'default_database' => $baseConfig['name'],
+        'can_create' => (new DatabaseProvisioner())->isAvailable()]);
     $selectedDatabase = Http::text($_GET, 'database', false) ?: $baseConfig['name'];
     $config = $scope->select($selectedDatabase);
+    if ($action === 'prepare-database') {
+        $lock = new MaintenanceLock($config['maintenance_dir']);
+        $prepared = (new DatabaseProvisioner())->prepare($input);
+        // Permissions changed: discard the catalog cached before provisioning.
+        $freshScope = new DatabaseScope($baseConfig);
+        Http::json([...$prepared, 'databases' => $freshScope->databases(), 'default_database' => $baseConfig['name']],
+            $prepared['created'] ? 201 : 200);
+    }
     $snapshotActions = ['snapshots', 'create-snapshot', 'restore-snapshot', 'download-snapshot'];
     if (in_array($action, $snapshotActions, true)) {
         $backup = new BackupService($config);
@@ -69,6 +79,7 @@ try {
     }
     if ($action === 'bootstrap') {
         $data = ['csrf' => $csrf, 'databases' => $scope->databases(), 'default_database' => $baseConfig['name'],
+            'can_create_database' => (new DatabaseProvisioner())->isAvailable(),
             'database' => ['name' => $config['name'], 'version' => null, 'status' => 'unavailable', 'available' => false],
             'stats' => ['tables' => 0, 'views' => 0, 'rows_estimate' => 0], 'tables' => []];
         try {

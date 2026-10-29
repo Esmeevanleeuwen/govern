@@ -19,13 +19,14 @@ export class SelectionPointer {
         this.on = false;
         this.hovered = null;
         this.tagged = null;
+        this.reviewPinned = false;
         this.keyboardTarget = false;
         this.modalItems = [];
         this.events = new AbortController();
         this.toggle = button('', () => this.setOn(!this.on), {id: 'selection-pointer-toggle', symbol: 'pointer',
             'aria-pressed': 'false', 'aria-describedby': 'selection-pointer-hint selection-pointer-keyboard', className: 'button-small'});
         this.count = button('', () => this.review(), {id: 'selection-pointer-count', className: 'button-small', hidden: true});
-        this.clear = button('', () => { this.selected.clear(); this.update(); this.toggle.focus({preventScroll: true}); },
+        this.clear = button('', () => { this.selected.clear(); this.hideTag(); this.update(); this.toggle.focus({preventScroll: true}); },
             {id: 'selection-pointer-clear', symbol: 'close', className: 'icon-button', hidden: true});
         this.clear.querySelector('span').className = 'sr-only';
         this.controlGroup = el('div', {class: 'selection-pointer-controls', 'data-selection-ui': ''}, this.toggle, this.count, this.clear);
@@ -62,6 +63,9 @@ export class SelectionPointer {
         });
         listen(this.tag, 'pointerenter', () => { clearTimeout(this.hideTimer); clearTimeout(this.dwell); this.hovered = this.tagged; this.draw(); });
         listen(this.tag, 'pointerleave', () => this.delayHide());
+        listen(document, 'pointerdown', event => {
+            if (this.reviewPinned && !this.tag.contains(event.target) && !this.controlGroup.contains(event.target)) this.hideTag();
+        }, {capture: true});
         for (const name of ['pointerdown', 'mousedown', 'dragstart', 'dblclick', 'beforeinput']) {
             listen(root, name, event => {
                 if (!this.shouldInspect(event)) return;
@@ -167,6 +171,7 @@ export class SelectionPointer {
     }
 
     choose(item, multiple = false) {
+        if (this.reviewPinned) this.hideTag();
         if (!multiple) this.selected.clear();
         if (multiple && this.selected.has(item.meta.key)) this.selected.delete(item.meta.key);
         else this.selected.set(item.meta.key, {...item, meta: structuredClone(item.meta)});
@@ -175,6 +180,7 @@ export class SelectionPointer {
     }
 
     hover(item) {
+        if (this.reviewPinned) return;
         if (this.hovered?.node === item?.node) return;
         clearTimeout(this.dwell);
         this.hovered = item;
@@ -186,6 +192,7 @@ export class SelectionPointer {
     }
 
     delayHide(delay = 400) {
+        if (this.reviewPinned) return;
         clearTimeout(this.hideTimer);
         this.hideTimer = setTimeout(() => {
             this.tag.hidden = true;
@@ -195,6 +202,7 @@ export class SelectionPointer {
     }
 
     hideTag() {
+        this.reviewPinned = false;
         clearTimeout(this.dwell); clearTimeout(this.hideTimer);
         this.tag.hidden = true;
         this.tagged = this.hovered = null;
@@ -224,14 +232,15 @@ export class SelectionPointer {
     }
 
     positionTag() {
-        if (this.tag.hidden || !this.tagged?.node.isConnected) return;
-        const box = this.tagged.node.getBoundingClientRect();
+        if (this.tag.hidden) return;
+        const box = this.tagged?.node.isConnected ? this.tagged.node.getBoundingClientRect() : null;
         const width = document.documentElement.clientWidth, height = window.innerHeight;
         this.tag.style.maxWidth = Math.max(0, width - 24) + 'px';
         const own = this.tag.getBoundingClientRect();
-        let top = box.bottom + 8;
-        if (top + own.height > height - 12) top = box.top - own.height - 8;
-        this.tag.style.left = Math.max(12, Math.min(box.left, width - own.width - 12)) + 'px';
+        const left = box ? box.left : parseFloat(this.tag.style.left) || 12;
+        let top = box ? box.bottom + 8 : parseFloat(this.tag.style.top) || 12;
+        if (box && top + own.height > height - 12) top = box.top - own.height - 8;
+        this.tag.style.left = Math.max(12, Math.min(left, width - own.width - 12)) + 'px';
         this.tag.style.top = Math.max(12, Math.min(top, height - own.height - 12)) + 'px';
     }
 
@@ -267,6 +276,9 @@ export class SelectionPointer {
             this.hideTag();
             visible.node.scrollIntoView({block: 'center', inline: 'nearest', behavior: 'instant'});
             this.showTag(visible);
+            // An explicitly reviewed selection must remain reachable while
+            // scrolling settles and the pointer travels to its More button.
+            this.reviewPinned = true;
         }
         else if (this.selected.size) this.openMore([...this.selected.values()]);
     }
@@ -279,7 +291,15 @@ export class SelectionPointer {
             if (replacement && JSON.stringify(item.meta.record) === JSON.stringify(replacement.meta.record) &&
                 JSON.stringify(item.meta.value) === JSON.stringify(replacement.meta.value)) this.selected.set(key, replacement);
         }
-        if (this.tagged && !this.tagged.node.isConnected) this.hideTag();
+        if (this.tagged && !this.tagged.node.isConnected) {
+            const replacement = this.selected.get(this.tagged.meta.key);
+            if (this.reviewPinned && replacement?.node.isConnected
+                && JSON.stringify(this.tagged.meta.record) === JSON.stringify(replacement.meta.record)
+                && JSON.stringify(this.tagged.meta.value) === JSON.stringify(replacement.meta.value)) this.showTag(replacement);
+            // A reviewed query result can be replaced by a metadata refresh.
+            // Preserve its immutable selection snapshot, not a different row.
+            else if (!this.reviewPinned) this.hideTag();
+        }
         this.draw();
     }
 
@@ -292,6 +312,7 @@ export class SelectionPointer {
         const ownControl = this.isUI(event.target);
         if (ownControl && !this.controlGroup.contains(event.target)) return;
         if (['ArrowDown', 'ArrowRight', 'ArrowUp', 'ArrowLeft'].includes(event.key)) {
+            this.reviewPinned = false;
             event.preventDefault(); event.stopImmediatePropagation();
             const nodes = [...this.root.querySelectorAll('[data-selection-kind],h1,h2,h3,p,button,a,input,select,textarea,summary,td,th')];
             const seen = new Set(), targets = nodes.map(node => describeSelection(node, this.root))
@@ -359,7 +380,7 @@ export class SelectionPointer {
         this.modalItems = items || (this.selected.has(this.tagged?.meta.key) ? [...this.selected.values()] : this.tagged ? [this.tagged] : []);
         if (!this.modalItems.length) return;
         this.returnFocus = document.activeElement;
-        clearTimeout(this.dwell); clearTimeout(this.hideTimer);
+        this.hideTag();
         this.renderDialog();
         this.dialog.showModal();
         this.title.focus({preventScroll: true});

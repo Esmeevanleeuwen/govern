@@ -16,7 +16,7 @@ beperking van de werkplek.
   Applicatietabellen hebben prefix `_govern_` en horen bij hun eigen database.
 - phpMyAdmin is de echte officiële toepassing achter dezelfde lokale oorsprong.
   Bouw geen gedeeltelijke imitatie die dezelfde naam of mogelijkheden claimt.
-- De modal heeft Browse, Structure en SQL als snelkeuzes, met de overige
+- De modal heeft Browse, Structure, SQL en Import als snelkeuzes, met de overige
   phpMyAdmin-bediening beschikbaar in het venster.
 
 ## Gegevens en toegang
@@ -32,9 +32,17 @@ beperking van de werkplek.
 - De kiezer gebruikt de doorsnede van echt zichtbare databases voor schrijver
   en lezer, zonder systeemdatabases. Geconfigureerde ontbrekende databases
   blijven bereikbaar voor herstel. Kiezen verleent geen rechten.
-- Alleen de eenmalige opstartservice gebruikt root voor de expliciete
-  `DB_DATABASES`-namen en `DB_NAME`. Geen globale grants; escape `_` in
-  databasepatronen. Bestaande gegevens en accountwachtwoorden blijven behouden.
+- Alleen de opstartservice en de privéservice voor databaseaanmaak gebruiken
+  root; de webapp en phpMyAdmin krijgen deze credentials nooit. Opstarten gebruikt
+  `DB_DATABASES` en `DB_NAME`; de privéservice verwerkt alleen een expliciet
+  gekozen, gevalideerde databasenaam via de lokale Unix-socket.
+- Geef deze service geen vrije SQL, importinhoud, paden of algemene beheertaken.
+  Maak ontbrekende databases aan en verleen alleen rechten per exacte naam.
+  Geen globale grants; escape `_` in databasepatronen. Bestaande gegevens en
+  accountwachtwoorden blijven behouden, ook bij herhalen na een gedeeltelijke fout.
+- Gebruik voor SQL-bestanden de echte phpMyAdmin-import. Houd de gekozen database
+  zichtbaar, ververs de catalogus bij terugkeer en beloof geen algemene rollback
+  voor DDL of imports. Een model mag de databaseaanmaak niet als vrije tool krijgen.
 - Gebruik voor direct wijzigen de volledige primaire sleutel of een volledige
   unieke sleutel zonder NULL-velden of prefixindex. Lees de echte rij opnieuw;
   verkorte browsewaarden zijn nooit een schrijfbron. Behoud exacte getallen,

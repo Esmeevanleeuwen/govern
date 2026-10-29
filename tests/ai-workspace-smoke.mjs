@@ -81,7 +81,12 @@ const reviewSelection = async () => {
     await page.locator('#selection-pointer-count').click();
     if (!await page.locator('#selection-pointer-dialog').isVisible()) {
         await page.locator('#selection-pointer-tag').waitFor();
-        await page.locator('#selection-pointer-more').click();
+        const more = page.locator('#selection-pointer-more');
+        await more.waitFor({state: 'visible'});
+        // Reviewing a low result scrolls the page. Use the same button's real
+        // keyboard flow here; the pointer suite separately checks mouse travel.
+        await more.focus();
+        await more.press('Enter');
     }
     await page.locator('#selection-pointer-dialog[open]').waitFor();
 };
