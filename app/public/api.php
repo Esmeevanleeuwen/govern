@@ -18,12 +18,13 @@ use Govern\QueryDesigner;
 use Govern\QueryRunner;
 use Govern\RowEditor;
 use Govern\SavedQueries;
+use Govern\AiService;
 
 try {
     $baseConfig = Config::fromEnvironment();
     $csrf = Http::start($baseConfig);
     $action = Http::text($_GET, 'action');
-    $posts = ['build-query', 'query', 'save-query', 'delete-query', 'create-snapshot', 'restore-snapshot', 'insert-row', 'update-row', 'delete-row'];
+    $posts = ['build-query', 'query', 'save-query', 'delete-query', 'create-snapshot', 'restore-snapshot', 'insert-row', 'update-row', 'delete-row', 'ai-context', 'ai-chat'];
     $input = in_array($action, $posts, true) ? Http::post($csrf) : [];
     if (!in_array($action, $posts, true)) {
         Http::get();
@@ -59,6 +60,7 @@ try {
     $database = new Database($config);
     $catalog = new Catalog($database);
     $queries = new SavedQueries($database, $config);
+    if ($action === 'ai-status') Http::json((new AiService($database))->status());
     if ($action === 'bootstrap') {
         $data = ['csrf' => $csrf, 'databases' => $scope->databases(), 'default_database' => $baseConfig['name'],
             'database' => ['name' => $config['name'], 'version' => null, 'status' => 'unavailable', 'available' => false],
@@ -96,6 +98,13 @@ try {
         return $data;
     };
     switch ($action) {
+        case 'ai-context':
+            Http::json((new AiService($database))->previewContext($input));
+        case 'ai-chat':
+            $ai = new AiService($database);
+            $prepared = $ai->prepareChat($input);
+            unset($lock);
+            Http::json($ai->completeChat($prepared));
         case 'row-editor':
             $keyText = Http::text($_GET, 'key', false);
             $key = null;

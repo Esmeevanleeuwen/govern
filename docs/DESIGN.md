@@ -1,6 +1,6 @@
 # Govern UX and UI design
 
-**Design baseline 1.5.** Govern is a personal, local workspace for exploring, understanding and changing databases. This guide defines its brand, visual system, behaviour and the process for adding features without disrupting existing work.
+**Design baseline 1.6.** Govern is a personal, local workspace for exploring, understanding and changing databases. This guide defines its brand, visual system, behaviour and the process for adding features without disrupting existing work.
 
 The agreed visual direction is layered glass, soft shadows, custom colour and no hard decorative borders. Dutch and English are equal interface languages. The detailed rules below are the target for implementation; the interactive preview is a visual reference. The production modules implement the core language, appearance and layout controls; the future chart example remains a proposal.
 
@@ -243,6 +243,8 @@ next actions. Use actual values, comments, column types, complete primary keys
 and declared foreign keys. Similar names do not prove a relationship. Unknown
 interface elements get a factual role, text and HTML description. No AI service
 is implied, and an offered SQL action prepares a read query without running it.
+An explicit **Ask AI** action can open the separate optional assistant with the
+selected context; the ordinary explanation remains available without a model.
 
 The pointer intercepts ordinary activation, input and dragging while enabled.
 Inspecting a button must not execute it, and selecting a schema card must not
@@ -259,6 +261,51 @@ Selection is temporary session state. Keep selected data snapshots identifiable
 when their original elements leave the screen; do not present them as a newly
 read database result. Only complete real primary keys, including composite keys,
 can identify records for a prepared query. Keyless rows remain snapshots.
+
+### Ask the local assistant
+
+**AI** in the shared top bar and **Ask AI** in the selection explanation open
+one reusable assistant. On desktop it is a temporary glass panel beside the
+workspace; on narrow screens it becomes a native dialog with contained focus.
+Opening and closing the assistant preserves the current table, SQL and schema
+view. Closing returns focus to the logical opener, including after a language
+change remounts that control.
+
+The assistant header always names its database and configured model. Show the
+selected objects and source preview before sending. The first version uses
+live schema and bounded interface descriptions; it explicitly says that records
+are not included. Never silently attach row values, a full query result or saved
+research merely because it is visible on the screen. The user's typed question
+and conversation are still sent to the chosen local provider.
+
+Give connection states distinct language and next steps: **Disabled**, **Not
+reachable**, **Model missing** and **Ready**. Ready requires a successful check;
+it is not a decoration applied when the panel opens. Keep a question available
+after an error, with a retry action and a route to **Settings → Local AI**.
+Disabled setup has no generated sample answer. Settings shows the server's
+provider/model and connection test; it does not accept an arbitrary provider URL
+from the browser.
+
+Use one labelled question field and one primary **Send** action. During a
+request, prevent duplicate sends and offer **Disconnect response**. State
+honestly that this ends waiting in the browser and may not immediately stop a
+running local model.
+Render answers as text with an optional, separate SQL proposal. **Open in query
+workspace** prepares an editable draft and uses the existing replacement
+confirmation when necessary. It never executes SQL.
+
+Questions, history and context are temporary per-database session state. A
+database switch immediately shows that database's conversation and ignores any
+late response for the previous one. Reopening preserves the current draft;
+clearing a conversation is a deliberate action. A page reload begins a new chat.
+Changing language updates controls and status without erasing text or asking
+the model to regenerate the current answer.
+
+The assistant uses shared glass, shadows, typography and reduced-transparency
+fallbacks. Keep its scrolling inside the panel and preserve a useful amount of
+working space. It must work with the main navigation on either side, enlarged
+text, keyboard-only use and a 320 px viewport. The underlying extension contract
+and local setup live in [the AI architecture](AI.md).
 
 ### Follow the schema
 
@@ -395,6 +442,7 @@ Use one shared version of each pattern. A feature should extend the pattern when
 | Data tables | Column meaning, readable exact values, contained horizontal scrolling and clear empty results |
 | SQL disclosure | Optional explanation beside the relevant task; copying gives feedback |
 | Dialogs | Clear title and consequence, labelled close action, contained focus and return to the opener |
+| Local assistant | Explicit database/sources, truthful connection state, retained draft, separate SQL proposal and no automatic execution |
 | Notices | Persistent for unresolved problems; short toasts only for noncritical confirmations |
 | Dashboard blocks | Stable identity, supported sizes, optional visibility and independent loading or failure |
 
@@ -466,6 +514,7 @@ Preserve the existing PHP, JavaScript module and SQL structure. Add a dependency
 | Requests and consistent failures | `api.js` and the documented API contract |
 | Routes and feature coordination | `app.js`; keep feature behaviour in focused modules |
 | Element inspection | `selection-pointer.js` for interaction, `selection-registry.js` for semantic targets and `selection-content.js` for factual explanations |
+| Local assistant | `ai-workspace.js`, live `AiContext`, `AiService` and the optional configured `OllamaClient` |
 | Query design | `query-builder.js` and the existing backend services |
 | Direct row editing | `row-editor.js`, live catalog metadata and `RowEditor` / `RecordIdentity` |
 | Official database window | `database-modal.js` and the same origin phpMyAdmin integration |
@@ -563,6 +612,7 @@ Implement in small, complete stages. Each stage must leave the existing workspac
 | Appearance settings | Custom accent, background tint, system theme and accessibility preferences | Choices persist and stay readable after reload |
 | Layout system | Block registration, order, widths, visibility and migrations | Save and Cancel work, including mobile and existing saved layouts |
 | Task migration | Apply the patterns to data, structure, research, experiments and phpMyAdmin shell | Real end to end flows pass against an isolated database |
+| Optional local assistant | Context preview, provider status, questions and editable SQL proposals | Disabled/offline paths remain useful; per-database state, language, focus and proposal-only behaviour are verified |
 | Future additions | Add each new capability through the process above | Its design, states, translations and integration checks are complete |
 
 Do not reset the database, replace saved SQL or overwrite user layouts to apply a visual update. If a later feature needs a database migration, give it a separate migration and test its recovery with isolated data.

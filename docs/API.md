@@ -18,8 +18,10 @@ Success envelope `{ "ok": true, "data": ... }`. A failure keeps the existing
 ```
 
 All POST requests use JSON and header `X-CSRF-Token` from bootstrap. PHP session cookie, same origin only.
-No remote services or AI calls. One MySQL/MariaDB server, multiple selectable
-databases and live schema discovery.
+One MySQL/MariaDB server, multiple selectable databases and live schema discovery.
+The optional local Ollama connection is disabled by default; only the separate AI
+endpoints can call that configured provider. Ordinary database operations and
+selection explanations do not require a model.
 
 ## Database scope
 
@@ -98,7 +100,138 @@ interface and future feature rules.
 - POST `restore-snapshot` `{id,confirmation}`: confirmation equals selected database name. `{restored:id,safety_snapshot:<descriptor>|null,message,message_i18n}`. Creates safety export before restore when the DB exists; null if already absent. Snapshot service independent of live schema; can restore a configured target DB that was dropped. Bootstrap still returns CSRF and selected DB name with available=false if absent.
 - GET `download-snapshot&id=...`: attachment SQL. Strict server-generated snapshot ids only.
 - GET `context`: attachment JSON of schema and saved queries, no table rows or credentials.
+- GET `ai-status`: actual optional local-provider configuration and readiness; see the AI contract below.
+- POST `ai-context` `{targets?,route?}`: bounded live schema/UI context for the explicit database, without table records.
+- POST `ai-chat` `{message,targets?,route?,language?,history?}`: explanation and optional SQL proposal only; never executes the proposal.
 - GET `health`: `{status:"ok"}` when selected DB readable; no credentials/errors disclosed.
+
+## Optional local AI
+
+AI calls use the ordinary same-origin session, POST CSRF checks, error envelope
+and explicit `database` URL parameter. A body cannot choose a different database,
+provider address, model or database account. AI is optional; `AI_ENABLED=0` keeps
+the workspace usable and produces a truthful disabled status without a provider
+request. The existing `context` download is separate and retains its contents.
+
+### Status
+
+`GET ai-status` returns:
+
+```json
+{
+  "enabled": false,
+  "provider": "ollama",
+  "model": "qwen3:4b-instruct",
+  "status": "disabled",
+  "ready": false,
+  "models": [],
+  "capabilities": {
+    "schema": true,
+    "records": false,
+    "execution": false,
+    "chat": false,
+    "sql_proposals": false
+  }
+}
+```
+
+When enabled, status checks `/api/tags` with a two-second timeout. Status is
+`offline` for connection/invalid-provider-reply failures, `model_missing` when
+the configured local model is not listed, or `ready` when it is available.
+`chat` and `sql_proposals` become true only when ready. An offline response may
+include `error_code`; readiness is a current connectivity/model-list check,
+not a guarantee that a later generation will succeed. Cloud model aliases are
+not offered as local models and no status check downloads a model.
+
+### Context preview
+
+`POST ai-context` accepts an optional `route` (one of Govern's existing route
+names, default `overzicht`) and `targets`, a list of up to eight objects:
+
+```json
+{
+  "route": "structuur",
+  "targets": [
+    {"kind": "table", "table": "digital_systems"},
+    {"kind": "column", "table": "digital_systems", "column": "code"}
+  ]
+}
+```
+
+Supported kinds are `table`, `column`, `row`, `cell`, `relationship`, `control`,
+`element` and `workspace`. Data kinds require a table; `column` and `cell` also
+require a column. Supplied names are checked against the current selected
+schema. Data target labels are regenerated from those identifiers so a row/cell
+label cannot attach its record value. UI targets can carry bounded `label`
+(240 UTF-8 bytes) and `tag` (64 bytes). These remain untrusted source text.
+Client `record`, `value`, key, SQL and other extra snapshot fields are not
+forwarded as context. App-owned `_govern_` tables are not AI sources.
+
+The result is
+`{database,route,targets,sources,records_included:false,truncated,context_id}`.
+Each source includes `table`, `type`, bounded `comment`, `column_count`,
+`foreign_key_count`, `columns`, `foreign_keys`, `columns_omitted` and
+`foreign_keys_omitted`. Column entries include name/type, nullable/primary/
+generated flags and a bounded comment; foreign keys retain declared source and
+target identifiers. There are no row values, column defaults, saved research,
+app settings or credentials. `context_id` is a SHA-256 fingerprint of the
+selected database/schema/target snapshot, not a permission token.
+
+The whole context JSON is limited to 6,000 UTF-8 bytes, including its ID. Keep
+every chosen source visible and prioritise selected columns; add metadata only
+while it fits. Omitted metadata and shortened comments set `truncated:true` and
+the omission counts remain visible. If the source identities alone cannot fit,
+return 413 instead of silently discarding a selected table. Invalid selection
+input returns 422 `ai_context_invalid`; unavailable table/column names use the
+ordinary catalog errors.
+
+### Chat and proposals
+
+`POST ai-chat` adds `message` (nonblank, at most 4,000 UTF-8 bytes), optional
+`language` (`nl` or `en`, default `nl`) and optional `history`:
+
+```json
+{
+  "message": "Leg uit hoe deze tabellen met elkaar verbonden zijn.",
+  "route": "schema",
+  "targets": [{"kind": "table", "table": "digital_systems"}],
+  "language": "nl",
+  "history": [{"role": "user", "content": "Wat betekent een foreign key?"}]
+}
+```
+
+History accepts up to eight `user`/`assistant` entries, 4,000 bytes in total.
+System/tool roles are rejected. The backend builds context again for this
+request; a preview supplied by the client is not a substitute for live metadata.
+It prepares the snapshot under the ordinary metadata lock, then releases that
+lock before waiting for the provider. No database reads occur in `completeChat`.
+
+The response is
+`{database,model,answer,sql,context,history_truncated}`. `answer` is nonempty plain
+text; `sql` is a string or `null`. Each is limited to 16,000 bytes. A proposal is
+untrusted text and must be shown or placed in the ordinary SQL editor, never
+executed by receiving the response. Server-generated answers are not translated
+again when the interface language changes.
+
+The local `/api/chat` request uses `stream:false`, a JSON response schema for
+`answer`/`sql`, a 4,096-token context setting and at most 768 generated tokens.
+The complete messages JSON is capped at 10,000 UTF-8 bytes; oldest history is
+removed to fit and `history_truncated:true` reports this. If the required current
+context/question cannot fit, the request returns 413. Byte bounds are not an
+exact tokenizer budget. HTTP replies are capped at 128 KiB, redirects are not
+followed, and unexpected tool calls or malformed/incomplete output are rejected.
+
+Known AI failure codes include `ai_disabled` (503), `ai_config_invalid` (503),
+`ai_unavailable` (503), `ai_timeout` (504), `ai_response_invalid` (502),
+`ai_input_invalid` (422), `ai_input_too_large` (413), `ai_context_invalid` (422)
+and `ai_context_too_large` (413). Client abort discards the response and does not
+promise cancellation of an already running model calculation.
+
+Questions and history are client-provided and may contain text the user typed.
+The automatic context exclusion is not a promise to redact that text. The
+frontend keeps conversations and drafts temporarily in memory per database and
+ignores stale responses after scope changes. See [local AI](AI.md) for setup,
+network boundaries and the next implementation stages.
 
 ## Direct row editing
 
@@ -343,6 +476,17 @@ Root owns database seed, docs, integration tests, review and GitHub.
 `password`, `read_user`, `read_password`, `socket`, `backup_dir`, `dump_bin`,
 `client_bin`, `schema_file`, `allowed_hosts`; `DatabaseScope::select` adds
 `maintenance_dir` and scopes `backup_dir`.
+
+Local AI has a separate `AiConfig::fromEnvironment()` configuration:
+`AI_ENABLED=0`, `AI_BASE_URL=http://host.docker.internal:11434`,
+`AI_MODEL=qwen3:4b-instruct`, `AI_TIMEOUT_SECONDS=60` (allowed range 5–120).
+The address is HTTP with no credentials, query, fragment or path beyond `/`;
+supported hosts are `localhost`, `127.0.0.1`, `::1`, `host.docker.internal` and
+`ollama`. Provider/model settings are never accepted from the request body.
+Explicit cloud model names are rejected and there is no cloud fallback.
+Model availability and host networking remain deployment responsibilities;
+see [the local setup guide](AI.md). No Ollama service or model download is added
+to the default Compose startup.
 
 The default database retains the existing `BACKUP_DIR` path. Other databases use
 `BACKUP_DIR/databases/<sha256(database name)>`; manifest database names and

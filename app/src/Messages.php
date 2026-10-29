@@ -7,6 +7,15 @@ namespace Govern;
 final class Messages
 {
     private const TEXT = [
+        'ai_config_invalid' => ['nl' => 'De lokale AI-instellingen zijn ongeldig. Controleer AI_ENABLED, AI_BASE_URL, AI_MODEL en AI_TIMEOUT_SECONDS.', 'en' => 'The local AI configuration is invalid. Check AI_ENABLED, AI_BASE_URL, AI_MODEL and AI_TIMEOUT_SECONDS.'],
+        'ai_disabled' => ['nl' => 'Lokale AI staat nog uit. Schakel de verbinding in via de lokale instellingen en start Govern opnieuw.', 'en' => 'Local AI is disabled. Enable the connection in the local configuration and restart Govern.'],
+        'ai_unavailable' => ['nl' => 'Ollama is niet bereikbaar. Controleer of de lokale toepassing draait en het model is gedownload.', 'en' => 'Ollama is unavailable. Check that the local application is running and the model is downloaded.'],
+        'ai_timeout' => ['nl' => 'Het lokale model heeft de tijdslimiet bereikt. Probeer een kortere vraag of minder context.', 'en' => 'The local model reached the time limit. Try a shorter question or less context.'],
+        'ai_response_invalid' => ['nl' => 'Het lokale model gaf geen volledig, geldig antwoord. Probeer de vraag opnieuw.', 'en' => 'The local model did not return a complete, valid response. Try the question again.'],
+        'ai_context_invalid' => ['nl' => 'Kies maximaal acht geldige onderdelen uit de huidige werkplek voor de AI-context.', 'en' => 'Choose at most eight valid items from the current workspace for AI context.'],
+        'ai_context_too_large' => ['nl' => 'Deze selectie is te groot voor het lokale model. Kies minder onderdelen.', 'en' => 'This selection is too large for the local model. Choose fewer items.'],
+        'ai_input_invalid' => ['nl' => 'Vul een geldige vraag en gesprekscontext in voor de lokale AI.', 'en' => 'Enter a valid question and conversation context for local AI.'],
+        'ai_input_too_large' => ['nl' => 'De vraag of het gesprek is te groot voor het lokale model. Kort de vraag in, begin een nieuw gesprek of kies minder context.', 'en' => 'The question or conversation is too large for the local model. Shorten the question, start a new conversation or choose less context.'],
         'host_not_allowed' => ['nl' => 'Deze hostnaam is niet toegestaan voor de lokale werkplek.', 'en' => 'This hostname is not allowed for the local workspace.'],
         'same_window_required' => ['nl' => 'Open de werkplek rechtstreeks in hetzelfde browservenster.', 'en' => 'Open the workspace directly in the same browser window.'],
         'origin_not_allowed' => ['nl' => 'Dit verzoek komt niet uit de eigen werkplek.', 'en' => 'This request did not come from this workspace.'],

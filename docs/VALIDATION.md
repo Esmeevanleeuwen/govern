@@ -2,6 +2,32 @@
 
 Stand van de controles: **29 oktober 2026**.
 
+## Lokale AI-interface en architectuuropzet
+
+De optionele koppeling is gecontroleerd met **44** context- en serviceproeven,
+**55** providerproeven en **34** controles op actuele metadata in de afzonderlijke
+testdatabase. De providerproef gebruikt ook echte lokale HTTP-antwoorden voor
+modellen, chat, fouten, redirects, ongeldige inhoud, groottelimieten en timeouts.
+Er is geen echt taalmodel gedownload of uitgevoerd.
+
+De browserproef gebruikt de echte uitgeschakelde status en actuele schemacontext.
+Gerichte providerfixtures controleren antwoorden, veilige tekstweergave en
+SQL-voorstellen. Openen in Onderzoeken wijzigt alleen het concept; uitvoeren
+blijft een gebruikershandeling. Rijen, celwaarden en een geselecteerde losse
+queryresultaatwaarde komen niet automatisch in de AI-context terecht.
+
+Ook selectie via Meer, Nederlands/Engels, mobiel op **320 px**, focus, minder
+transparantie, foutbehoud, stoppen met wachten en gescheiden concepten per
+database zijn gecontroleerd. Een laat antwoord van A vervangt B niet. Alle
+**708** interfaceberichten hebben Nederlandse en Engelse teksten. De lichte
+en donkere AI-schermen zijn visueel nagekeken.
+
+De gewone database-, herstel- en HTTP-controles slagen eveneens. Dezelfde nieuwe
+proeven zijn opgenomen in de Docker-workflow; de uitslag staat bij de betreffende
+commit. Deze controle bewijst de applicatie- en protocolstroom met fixtures.
+De kwaliteit, snelheid en netwerkbereikbaarheid van Ollama op de Windows-computer
+van de gebruiker blijven een afzonderlijke aansluitproef. Zie [de AI-opzet](AI.md).
+
 ## Meerdere databases en rechtstreeks rijen wijzigen
 
 De nieuwe integratieproef heeft **74** controles met twee afzonderlijke echte

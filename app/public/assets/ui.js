@@ -22,6 +22,7 @@ export function el(tag, attributes = {}, ...children) {
 }
 
 const iconPaths = {
+    sparkles: ['m12 3 2.4 6.6L21 12l-6.6 2.4L12 21l-2.4-6.6L3 12l6.6-2.4L12 3Z', 'M20 2v4', 'M18 4h4'],
     grid: ['M3 3h7v7H3z', 'M14 3h7v7h-7z', 'M3 14h7v7H3z', 'M14 14h7v7h-7z'],
     table: ['M3 5h18v14H3z', 'M3 10h18', 'M9 10v9'],
     layers: ['m12 3 9 5-9 5-9-5 9-5Z', 'm3 12 9 5 9-5', 'm3 16 9 5 9-5'],

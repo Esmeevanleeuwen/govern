@@ -14,6 +14,7 @@
     <link rel="stylesheet" href="/assets/selection-pointer.css">
     <link rel="stylesheet" href="/assets/database-workspace.css">
     <link rel="stylesheet" href="/assets/row-editor.css">
+    <link rel="stylesheet" href="/assets/ai-workspace.css">
     <script type="module" src="/assets/app.js"></script>
 </head>
 <body>
@@ -38,6 +39,7 @@
                     <span class="topbar-brand">govern</span><div class="topbar-project"><strong id="workspace-database" class="sr-only" data-i18n="app.shell.personal">Persoonlijke werkplek</strong><label class="database-picker"><span id="database-picker-icon" aria-hidden="true"></span><select id="database-select" aria-label="Database kiezen" data-i18n-aria="app.databases.choose" disabled><option value="">Database…</option></select></label><div id="connection-state" class="connection-card"><span class="status-dot waiting"></span><span data-i18n="app.shell.connecting">Verbinding maken…</span></div></div><strong id="breadcrumb-current" class="sr-only">Overzicht</strong>
                 </div>
                 <div class="topbar-actions">
+                    <button id="ai-toggle" class="button button-secondary button-small" type="button" data-selection-ui="" aria-controls="ai-workspace-panel" aria-expanded="false" aria-label="AI-assistent" data-i18n-aria="app.ai.toggle" title="AI-assistent" data-i18n-title="app.ai.toggle"><span class="ai-toggle-label" data-i18n="app.ai.toggle">AI-assistent</span></button>
                     <label class="language-picker"><span id="language-icon" aria-hidden="true"></span><select id="language-select" aria-label="Taal" data-i18n-aria="app.settings.language"><option value="nl">NL</option><option value="en">EN</option></select></label>
                     <a class="icon-button" href="/api.php?action=context" id="context-export" aria-label="Context exporteren" data-i18n-aria="app.shell.export" title="Context exporteren" data-i18n-title="app.shell.export"><span class="sr-only" data-i18n="app.shell.export">Context exporteren</span></a>
                     <button id="refresh-app" class="icon-button" type="button" aria-label="Werkplek verversen" data-i18n-aria="app.shell.refresh" data-i18n-title="app.shell.refresh" title="Werkplek verversen"></button>
