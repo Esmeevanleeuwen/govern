@@ -17,6 +17,14 @@ De lokale ingang verdeelt verzoeken naar de PHP-app en naar phpMyAdmin. Beide
 hebben dezelfde oorsprong, zodat het databasevenster zonder publieke iframe-
 toestemming kan werken. MariaDB is alleen bereikbaar binnen het Docker-netwerk.
 
+Nginx gebruikt benoemde upstreamgroepen met een gedeelde zone en Docker-DNS
+(`127.0.0.11`, vijf seconden geldigheid) voor `app` en `phpmyadmin`. Daardoor
+volgt een bestaande gateway nieuwe container-IP-adressen wanneer Compose na een
+instellingswijziging alleen de webcontainers opnieuw maakt. De proxy blijft
+`/phpmyadmin/` van de upstream-URI verwijderen en bewaart dezelfde cookiepaden,
+headers en redirects. Dit gebruikt de dynamische upstreamresolutie van de
+meegeleverde Nginx 1.30-image.
+
 De PHP-app heeft een kleine API. Een catalogusservice beschrijft tabellen; een
 onderzoekservice voert visuele leesvragen en vrije SQL-scripts uit en bewaart ze;
 een backupservice maakt en
@@ -50,6 +58,9 @@ De onderdelen hebben een kleine, duidelijke taak:
 | `LocalCodeSearch.php` | Begrensde lokale zoekindex van alleen `app/` en `docs/`, met bronpassages en regelnummers |
 | `AiService.php` en `OllamaClient.php` | Gevalideerde vragen, lokaal providerverzoek, gecontroleerde projectcitaten en antwoord zonder uitvoering |
 | `database-modal.js` | Het venster rondom de echte phpMyAdmin |
+| `database-manager.js` | Dialoog voor databasekeuze, expliciete aanmaak en openen van de officiële import |
+| `DatabaseProvisioner.php` | Begrensde client voor de privéservice voor databaseaanmaak |
+| `docker/database-manager/server.php` en `DatabaseManager.php` | Privé Unix-socketserver en uitsluitend databaseaanmaak/rechten per expliciete naam |
 | `row-editor.js` | Rijformulier met vaste databasecontext, exacte waarden en conflictfeedback |
 | `DatabaseScope.php` | Toegestane databasekeuze, afzonderlijke herstelpuntpaden en gedeelde locklocatie |
 | `RecordIdentity.php` en `RowEditor.php` | Volledige rij-identiteit, catalogusgestuurde formulieren en gecontroleerde mutaties |
@@ -60,8 +71,9 @@ De onderdelen hebben een kleine, duidelijke taak:
 `Database::databaseNames` verbindt zonder een werkdatabase te kiezen en vergelijkt
 de zichtbare namen voor schrijver en lezer. `DatabaseScope` gebruikt hun doorsnede,
 laat de vier systeemdatabases weg en voegt geconfigureerde, niet-beschikbare namen
-toe voor herstel. Een onbekende naam krijgt 403. Dit is selectie binnen bestaande
-rechten; een HTTP-verzoek verleent geen databaserechten.
+toe voor herstel. Een onbekende naam krijgt 403. Gewone selectie gebruikt
+bestaande rechten; alleen de afzonderlijke expliciete aanmaakhandeling kan via
+de privéservice toegang tot een gekozen naam voorbereiden.
 
 Elke API-URL bevat de database expliciet, ook bij POST, downloads en contextexports.
 Zonder parameter blijft `DB_NAME` de standaard. Een verbinding kiest de naam met
@@ -82,6 +94,39 @@ Het officiële databasevenster krijgt de geselecteerde `db` in zijn URL en biedt
 zelf een databasekeuze. Het volgt expliciete navigatie binnen phpMyAdmin zonder
 een formulier door gewone shellupdates of taal-/themawisselingen te herladen.
 De gedeelde phpMyAdmin-opslag blijft in de oorspronkelijke `DB_NAME`-database.
+
+## Database toevoegen en SQL importeren
+
+De knop naast de databasekiezer opent een eigen, kleine dialoog. Een bestaande
+database kiezen gebruikt de normale wisselstroom. Een naam voorbereiden gebruikt
+`POST prepare-database` met CSRF en de expliciete huidige databasescope. Het
+antwoord bevat de voorbereide naam, of die nieuw was, en de opnieuw uitgelezen
+databasekeuzes. Pas na een geslaagd antwoord verandert de browser zijn selectie.
+Concepten van de vorige database blijven bewaard.
+
+De webapp praat via een lokale Unix-socket met de afzonderlijke Compose-service
+`database-manager`. Alleen deze service en de bestaande opstart-/databaseprocessen
+hebben het rootwachtwoord. De socket heeft geen gepubliceerde netwerkpoort; de
+Apache-worker kan erop aansluiten, maar de browser kiest geen pad of credentials.
+Een begrensd JSON-bericht kan alleen `prepare_database` met één gevalideerde naam
+vragen. Het is geen algemene SQL-, shell- of beheertool en wordt niet aan AI
+beschikbaar gemaakt.
+
+De service maakt de gekozen database alleen aan als die ontbreekt en verleent de
+twee bestaande accounts rechten per exacte naam. Een bestaande naam toevoegen is
+expliciet toegestaan en behoudt de data. Deze voorbereiding importeert, verwijdert
+of vervangt niets. Herhalen is geschikt om een gedeeltelijk voltooide aanmaak of
+grantstap af te maken. De echte grants blijven in het MariaDB-volume bewaard en
+maken de nieuwe database bij een volgende start opnieuw zichtbaar.
+
+Voor importeren gebruikt Govern de echte phpMyAdmin. De extra snelkeuze
+**Import** opent de officiële database- of tabelimport met dezelfde context als
+de overige tabs. De gebruiker kiest zijn SQL-bestand en start de import daar;
+Govern leest of herschrijft het bestand niet met een eigen parser. Bij sluiten
+worden catalogus, tabellen en relaties opnieuw uitgelezen. De ingestelde
+uploadgrens is 128 MB en de uitvoeringstijd is 300 seconden. De SQL kan bestaande
+data veranderen en DDL heeft geen algemene rollback. Een import is geen
+herstelpunt en is niet automatisch gekoppeld aan de applicatie-onderhoudslock.
 
 ## Gegevens rechtstreeks bewerken
 
@@ -399,8 +444,9 @@ SQL-editor geen extra of globale serverrechten toegevoegd; ontbrekende rechten
 blijven een gewone databasemelding.
 
 De Compose-service `database-access` draait na een gezonde MariaDB en vóór de
-app en phpMyAdmin. Alleen deze opstartservice en de databasecontainer hebben het
-rootwachtwoord. De service gebruikt de expliciete `DB_DATABASES`-lijst plus
+app en phpMyAdmin. Het rootwachtwoord blijft in de databasecontainer, deze
+opstartservice en de afzonderlijke privéservice `database-manager`; de webapp en
+phpMyAdmin krijgen het niet. De opstartservice gebruikt de expliciete `DB_DATABASES`-lijst plus
 `DB_NAME`, maakt ontbrekende schemas leeg aan en verleent schrijver ALL en lezer
 SELECT/SHOW VIEW per exacte naam. Bestaande volumes worden niet opnieuw gevuld
 en bestaande accountwachtwoorden blijven behouden. Opnieuw starten past dezelfde

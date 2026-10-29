@@ -14,6 +14,7 @@
     <link rel="stylesheet" href="/assets/selection-pointer.css">
     <link rel="stylesheet" href="/assets/database-workspace.css">
     <link rel="stylesheet" href="/assets/row-editor.css">
+    <link rel="stylesheet" href="/assets/database-manager.css">
     <link rel="stylesheet" href="/assets/ai-workspace.css">
     <script type="module" src="/assets/app.js"></script>
 </head>
@@ -36,7 +37,7 @@
             <header class="topbar">
                 <div class="topbar-location">
                     <button id="menu-toggle" class="icon-button mobile-menu" type="button" aria-label="Navigatie openen" data-i18n-aria="app.shell.openNavigation" aria-expanded="false"></button>
-                    <span class="topbar-brand">govern</span><div class="topbar-project"><strong id="workspace-database" class="sr-only" data-i18n="app.shell.personal">Persoonlijke werkplek</strong><label class="database-picker"><span id="database-picker-icon" aria-hidden="true"></span><select id="database-select" aria-label="Database kiezen" data-i18n-aria="app.databases.choose" disabled><option value="">Database…</option></select></label><div id="connection-state" class="connection-card"><span class="status-dot waiting"></span><span data-i18n="app.shell.connecting">Verbinding maken…</span></div></div><strong id="breadcrumb-current" class="sr-only">Overzicht</strong>
+                    <span class="topbar-brand">govern</span><div class="topbar-project"><strong id="workspace-database" class="sr-only" data-i18n="app.shell.personal">Persoonlijke werkplek</strong><div class="database-picker-group"><label class="database-picker"><span id="database-picker-icon" aria-hidden="true"></span><select id="database-select" aria-label="Database kiezen" data-i18n-aria="app.databases.choose" disabled><option value="">Database…</option></select></label><button id="manage-databases" class="icon-button database-manager-toggle" type="button" aria-label="Database toevoegen of importeren" data-i18n-aria="app.databases.manage" title="Database toevoegen of importeren" data-i18n-title="app.databases.manage" aria-haspopup="dialog" aria-controls="database-manager-dialog" disabled></button></div><div id="connection-state" class="connection-card"><span class="status-dot waiting"></span><span data-i18n="app.shell.connecting">Verbinding maken…</span></div></div><strong id="breadcrumb-current" class="sr-only">Overzicht</strong>
                 </div>
                 <div class="topbar-actions">
                     <button id="ai-toggle" class="button button-secondary button-small" type="button" data-selection-ui="" aria-controls="ai-workspace-panel" aria-expanded="false" aria-label="AI-assistent" data-i18n-aria="app.ai.toggle" title="AI-assistent" data-i18n-title="app.ai.toggle"><span class="ai-toggle-label" data-i18n="app.ai.toggle">AI-assistent</span></button>

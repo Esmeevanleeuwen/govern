@@ -7,6 +7,7 @@ const routes = {
     browse: {table: '/sql', database: '/database/structure'},
     structure: {table: '/table/structure', database: '/database/structure'},
     sql: {table: '/table/sql', database: '/database/sql'},
+    import: {table: '/table/import', database: '/database/import'},
 };
 
 export function phpMyAdminUrl(database, table, tab = 'browse') {
@@ -39,7 +40,7 @@ export class DatabaseModal {
         this.expand = el('button', {type: 'button', class: 'icon-button', title: t('modal.expand'), 'aria-label': t('modal.expand'), 'aria-pressed': 'false', on: {click: () => this.toggleExpanded()}}, icon('expand'));
         this.tabButtons = {};
         const tablist = el('div', {class: 'database-tabs', role: 'tablist', 'aria-label': t('modal.tools')});
-        for (const [key, label, symbol] of [['browse', 'Browse', 'table'], ['structure', 'Structure', 'layers'], ['sql', 'SQL', 'code']]) {
+        for (const [key, label, symbol] of [['browse', 'Browse', 'table'], ['structure', 'Structure', 'layers'], ['sql', 'SQL', 'code'], ['import', t('modal.import'), 'download']]) {
             const tab = el('button', {type: 'button', class: 'database-tab', id: 'database-tab-' + key, role: 'tab', 'aria-controls': 'database-panel', 'aria-selected': 'false', on: {
                 click: () => { this.tab = key; this.navigate(); },
                 keydown: event => this.tabKeydown(event, key),
@@ -86,6 +87,7 @@ export class DatabaseModal {
         this.closeButton.querySelector('span').textContent = t('modal.close');
         this.closeButton.setAttribute('aria-label', t('modal.close'));
         this.dialog.querySelector('[role="tablist"]').setAttribute('aria-label', t('modal.tools'));
+        this.tabButtons.import.lastChild.textContent = t('modal.import');
         if (this.dialog.open) this.syncLocation();
         this.configure(this.database, this.tables, this.databases);
         this.frame.title = this.currentUrl
@@ -223,7 +225,8 @@ export class DatabaseModal {
             this.table = table;
             this.tableSelect.value = table;
             const route = location.searchParams.get('route') || '';
-            if (route === '/table/sql' || route === '/database/sql') this.tab = 'sql';
+            if (route === '/table/import' || route === '/database/import' || route === '/import') this.tab = 'import';
+            else if (route === '/table/sql' || route === '/database/sql') this.tab = 'sql';
             else if (route === '/table/structure' || route === '/database/structure') this.tab = 'structure';
             else if (route === '/sql') this.tab = 'browse';
             this.updateTabs();

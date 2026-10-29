@@ -23,7 +23,9 @@ jobs:
       - name: Start an isolated Docker stack
         run: sh start.sh
       - name: PHP syntax
-        run: docker compose exec -T app sh -c 'find /var/www/src /var/www/public -name "*.php" -exec php -l {} \;'
+        run: |
+          docker compose exec -T app sh -c 'find /var/www/src /var/www/public -name "*.php" -exec php -l {} \;'
+          docker compose exec -T database-manager sh -c 'find /opt/govern/docker/database-manager -name "*.php" -exec php -l {} \;'
       - name: Focused backend checks
         run: |
           docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" app php /workspace/tests/backend_unit.php
@@ -34,14 +36,18 @@ jobs:
           docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" app php /workspace/tests/ai_provider_unit.php
           docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" app php -d allow_url_fopen=0 -d disable_functions=fsockopen,pfsockopen,stream_socket_client,stream_socket_server,socket_create,socket_connect,curl_exec,exec,shell_exec,system,passthru,popen,proc_open /workspace/tests/local_code_search_unit.php
           docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" app php /workspace/tests/ai_project_unit.php
+          docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" app php /workspace/tests/database_provisioner_unit.php
       - name: Real database integration
         run: |
           docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" app php /workspace/tests/backend_integration.php --confirm-database=bestuursatlas
           docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" app php /workspace/tests/free-sql-integration.php --confirm-database=bestuursatlas
           docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" -e GOVERN_TEST_SECOND_DATABASE app php /workspace/tests/multidatabase-row-integration.php --confirm-database=bestuursatlas --confirm-second-database=govern_multi_test
           docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" -e GOVERN_TEST_SECOND_DATABASE app php /workspace/tests/ai-integration.php --confirm-database=bestuursatlas
+          docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" app php /workspace/tests/database-provisioning-integration.php --confirm-database=bestuursatlas
       - name: Backup and recovery integration
         run: docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" app php /workspace/tests/backup_integration.php --confirm-database=bestuursatlas
+      - name: Proxy follows recreated web containers
+        run: GOVERN_DOCKER_NETWORK_TEST=1 python3 tests/proxy-restart-smoke.py --confirm-project=govern
       - name: HTTP and phpMyAdmin integration
         run: python3 tests/smoke.py --base-url http://127.0.0.1:8080
       - name: Browser and visual query builder
@@ -69,6 +75,7 @@ jobs:
           node tests/multidatabase-row-smoke.mjs
           node tests/ai-workspace-smoke.mjs
           node tests/ai-project-smoke.mjs
+          node tests/database-import-smoke.mjs
       - name: Logs on failure
         if: failure()
         run: docker compose logs --tail=100

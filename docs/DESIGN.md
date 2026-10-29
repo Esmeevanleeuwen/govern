@@ -1,6 +1,6 @@
 # Govern UX and UI design
 
-**Design baseline 1.6.** Govern is a personal, local workspace for exploring, understanding and changing databases. This guide defines its brand, visual system, behaviour and the process for adding features without disrupting existing work.
+**Design baseline 1.7.** Govern is a personal, local workspace for exploring, understanding and changing databases. This guide defines its brand, visual system, behaviour and the process for adding features without disrupting existing work.
 
 The agreed visual direction is layered glass, soft shadows, custom colour and no hard decorative borders. Dutch and English are equal interface languages. The detailed rules below are the target for implementation; the interactive preview is a visual reference. The production modules implement the core language, appearance and layout controls; the future chart example remains a proposal.
 
@@ -221,6 +221,41 @@ visible selected name.
 The phpMyAdmin window opens at the selected database and has its own deliberate
 database navigation. Its frame keeps unsaved work during incidental shell,
 theme and language updates; only explicit tool navigation loads another page.
+
+### Add a database and import SQL
+
+Keep one compact, labelled create/import action beside the shared database
+selector. It opens a focused glass dialog rather than another permanent sidebar.
+The dialog offers existing database choice and import, plus a name field for a
+new database. Keep the selected target visible in every action; changing the
+name must not silently change the active workspace before the request succeeds.
+
+Creating a missing database starts empty. Preparing an existing name preserves
+its data and makes it available to Govern explicitly. Explain that importing SQL
+is a separate operation that can change or replace data. Do not turn the name
+form into a server administration panel or ask the user to paste credentials.
+If the private creation service is unavailable, retain the entered name, show
+the failure and keep existing database selection/import usable.
+
+The create-and-import action prepares the database, switches through the shared
+database flow and opens the official phpMyAdmin Import screen. Import into an
+existing database opens that same screen directly. The user selects the file in
+phpMyAdmin; do not add a duplicate file picker that would require choosing the
+file twice. Add **Import** beside Browse, Structure and SQL as a native modal
+shortcut while leaving all of phpMyAdmin's tools available.
+
+Show pending state during preparation and prevent duplicate creation or a
+competing target switch. Keep validation and server errors beside the name and
+preserve it for retry. Closing the native import window refreshes tables,
+structure and relationships while retaining valid previous workspace state.
+The earlier database's SQL draft remains available when switching back. A
+language change updates the dialog text without discarding its name or moving
+the text caret; it never reloads an active phpMyAdmin import form. Support
+keyboard focus return and a usable single-column dialog at 320 px.
+
+This flow prepares a database on Govern's existing MariaDB server. It does not
+discover or connect remote servers, promise that arbitrary SQL is reversible,
+or bypass the configured import size and execution limits.
 
 ### Inspect any Govern element
 

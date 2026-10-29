@@ -26,7 +26,30 @@ context-export en herstelpunten volgen die keuze. Je onderzoeksconcept en
 tabelkeuze blijven tijdens deze browsersessie per database behouden; de keuze
 geldt alleen voor dit browsertabblad.
 
-Om bijvoorbeeld een extra database `onderzoek` beschikbaar te maken:
+Gebruik **Database toevoegen of importeren** naast de databasekiezer. Je hoeft
+daarvoor `.env` niet aan te passen:
+
+1. Vul een databasenaam in, bijvoorbeeld `onderzoek`.
+2. Kies **Database aanmaken** of **Aanmaken en SQL importeren**.
+3. Govern maakt een ontbrekende database leeg aan en kiest die database. Bij
+   importeren opent de echte phpMyAdmin direct op zijn importscherm.
+4. Kies daar je SQL-bestand en voer de import uit. Sluit het databasevenster om
+   de geïmporteerde tabellen en relaties in Govern te verversen.
+
+In hetzelfde venster kun je een bestaande database kiezen of de import voor de
+geselecteerde database openen. Een bestaande naam toevoegen vervangt geen
+gegevens; de expliciete import kan dat wel doen, afhankelijk van het SQL-bestand.
+Import is geen herstelpunt en heeft geen algemene undo. De bestaande
+phpMyAdmin-importgrens is 128 MB, met maximaal 300 seconden uitvoeringstijd.
+
+Namen gebruiken letters, cijfers en underscores. Systeemdatabases kunnen niet
+worden toegevoegd. De bijbehorende rechten blijven in het databasevolume bewaard,
+zodat een toegevoegde database ook na opnieuw starten in de kiezer verschijnt.
+De privéservice voor databaseaanmaak moet bereikbaar zijn; een ontbrekende
+service geeft een melding en bewaart de ingevulde naam.
+
+De bestaande opstartconfiguratie blijft ook beschikbaar. Om bijvoorbeeld vooraf
+extra databases te laten aanmaken:
 
 1. Open `.env` in de projectmap. Voeg deze regel toe, of voeg de naam toe aan
    de bestaande lijst:
@@ -100,7 +123,7 @@ Een database buiten deze Docker-installatie wordt niet automatisch gekoppeld.
   de SQL zichtbaar; je kunt die daarna zelf aanpassen.
 - **Experimenten:** maak een herstelpunt, download het als SQL en zet het terug.
 - **Databasevenster:** open de echte phpMyAdmin in een groot venster met de tabs
-  **Browse**, **Structure** en **SQL**. Hier kun je ook invoegen, aanpassen,
+  **Browse**, **Structure**, **SQL** en **Import**. Hier kun je ook invoegen, aanpassen,
   verwijderen, tabellen ontwerpen, importeren en exporteren.
 - **Context exporteren:** neem je databasestructuur en opgeslagen onderzoeken
   mee naar een gesprek met ChatGPT. Tabelrecords en wachtwoorden worden niet
@@ -329,7 +352,7 @@ of een verzameling aparte services per onderwerp.
 
 De ingang is alleen aan `127.0.0.1` gekoppeld. Dit is een persoonlijke lokale
 werkplek zonder bezoekersaccounts. Iedereen die jouw lokale ingang kan gebruiken,
-kan de toegestane werkdatabases beheren. De phpMyAdmin-verbinding heeft rechten
+kan werkdatabases toevoegen en de toegestane werkdatabases beheren. De phpMyAdmin-verbinding heeft rechten
 voor de expliciet ingeschakelde databases en eventueel eerder verleende rechten;
 Govern voegt geen globale serverrechten toe. Verwijderen uit `DB_DATABASES`
 trekt bestaande rechten niet automatisch in.

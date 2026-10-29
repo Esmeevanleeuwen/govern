@@ -42,6 +42,31 @@ services:
         condition: service_healthy
     restart: "no"
 
+  database-manager:
+    build:
+      context: .
+      dockerfile: docker/database-manager.Dockerfile
+    environment:
+      DB_HOST: database
+      DB_PORT: 3306
+      DB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?Missing generated root password}
+      DB_USER: govern
+      DB_READ_USER: govern_reader
+      DB_MANAGER_SOCKET: /run/govern-databases/provision.sock
+    volumes:
+      - database_management:/run/govern-databases
+    depends_on:
+      database:
+        condition: service_healthy
+      database-access:
+        condition: service_completed_successfully
+    healthcheck:
+      test: [CMD, php, -r, "exit(@filetype('/run/govern-databases/provision.sock') === 'socket' ? 0 : 1);"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+    restart: unless-stopped
+
   app:
     build:
       context: .
@@ -63,6 +88,7 @@ services:
       AI_MODEL: ${AI_MODEL:-qwen3:4b-instruct}
       AI_TIMEOUT_SECONDS: ${AI_TIMEOUT_SECONDS:-60}
       AI_PROJECT_ROOT: /opt/govern/project
+      DB_MANAGER_SOCKET: /run/govern-databases/provision.sock
     volumes:
       - ./app/public:/var/www/public:ro
       - ./app/src:/var/www/src:ro
@@ -70,11 +96,14 @@ services:
       - ./docs:/opt/govern/project/docs:ro
       - ./docker/database/20-govern.sql:/var/www/workbench.sql:ro
       - backups:/var/lib/govern/backups
+      - database_management:/run/govern-databases:ro
     depends_on:
       database:
         condition: service_healthy
       database-access:
         condition: service_completed_successfully
+      database-manager:
+        condition: service_healthy
     healthcheck:
       test: [CMD, php, -r, "exit(@file_get_contents('http://127.0.0.1/api.php?action=health') === false ? 1 : 0);"]
       interval: 15s
@@ -119,3 +148,4 @@ services:
 volumes:
   database_data:
   backups:
+  database_management:
