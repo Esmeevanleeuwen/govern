@@ -9,6 +9,7 @@ import {mountSchemaVisualizer} from './schema-visualizer.js';
 import {registerSelection} from './selection-registry.js';
 import {SelectionPointer} from './selection-pointer.js';
 import {createRowEditor} from './row-editor.js';
+import {createAiWorkspace} from './ai-workspace.js';
 import './app-messages.js';
 import './workspace-messages.js';
 import './navigation-messages.js';
@@ -78,6 +79,7 @@ const contextContent = document.getElementById('workspace-context-content');
 const panelToggle = document.getElementById('workspace-panel-toggle');
 const databaseViews = ['gegevens', 'structuur', 'schema'];
 const databaseSelect = document.getElementById('database-select');
+const aiToggle = document.getElementById('ai-toggle');
 const databaseCache = new Map();
 const databaseStateKeys = ['bootstrap', 'table', 'queryDraft', 'queryName', 'queryNotes', 'queryId', 'queryResult', 'queryRevision',
     'queryDesign', 'builderDraft', 'builderOpen', 'dataViews', 'catalogSearch', 'snapshotLabel', 'savedQueries', 'queryDirty',
@@ -98,6 +100,25 @@ let currentScope;
 let bootstrapController;
 let routeVersion = 0;
 let recordSnapshotId = 0;
+
+const aiWorkspace = createAiWorkspace({getDatabase,
+    onOpenSql: async (sql, {database}) => {
+        if (database !== getDatabase() || state.restoring || state.switchingDatabase) return false;
+        return openResearch(sql);
+    },
+    onSettings: () => {
+        go('instellingen');
+        requestAnimationFrame(() => document.getElementById('ai-test-connection')?.focus({preventScroll: true}));
+    },
+    onOpenChange: open => aiToggle.setAttribute('aria-expanded', String(open)),
+});
+aiToggle.prepend(icon('sparkles'));
+aiToggle.addEventListener('click', () => {
+    if (aiWorkspace.isOpen) { aiWorkspace.close(); return; }
+    const options = aiContextOptions([...selectionPointer.selected.values()]);
+    selectionPointer.setOn(false);
+    aiWorkspace.open(options);
+});
 
 const rowEditor = createRowEditor({getDatabase,
     onBusy: busy => { state.rowEditorOpen = busy; syncDatabasePicker(); },
@@ -273,6 +294,7 @@ async function switchDatabase(database, {fromHash = false} = {}) {
     Object.assign(state, databaseCache.get(database) || emptyDatabaseState());
     databaseRevision += 1;
     setDatabase(database); rememberDatabase();
+    aiWorkspace.setDatabase(database);
     state.switchingDatabase = true; openDatabase.disabled = true;
     if (selectionPointer.dialog.open) selectionPointer.dialog.close();
     selectionPointer.modalItems = []; selectionPointer.selected.clear(); selectionPointer.setOn(false);
@@ -333,7 +355,28 @@ const selectionPointer = new SelectionPointer({
             go(action.type === 'structure' ? 'structuur' : 'gegevens', {table: action.table});
         }
     },
+    onAskAi: items => aiWorkspace.open(aiContextOptions(items)),
 });
+
+function aiContextOptions(items = []) {
+    if (items.length > 8) toast(t('app.ai.selectionLimited'));
+    const targets = items.slice(0, 8).map(item => {
+        const metadata = item.meta || {};
+        const target = {kind: metadata.kind || 'element', tag: item.tag || ''};
+        if (['row', 'cell'].includes(target.kind) && !metadata.table) {
+            return {kind: 'element', tag: target.tag, label: t('app.ai.resultSelection')};
+        }
+        if (typeof metadata.table === 'string') target.table = metadata.table;
+        if (typeof metadata.column === 'string') target.column = metadata.column;
+        // Record values and keys stay out of this schema-only assistant.
+        if (!target.table && !['row', 'cell'].includes(target.kind)) {
+            target.label = Array.from(String(metadata.label || '')).slice(0, 240).join('');
+        }
+        return target;
+    });
+    if (!targets.length && state.table && tables().some(table => table.name === state.table)) targets.push({kind: 'table', table: state.table});
+    return {targets, route: route().name, table: state.table};
+}
 
 function localizeShell() {
     document.querySelectorAll('[data-i18n]').forEach(node => { node.textContent = t(node.dataset.i18n); });
@@ -454,7 +497,7 @@ function defaultSql(table = state.table || tables()[0]?.name) {
 
 async function openResearch(sql) {
     const revision = databaseRevision;
-    if (!await mayReplaceResearch() || revision !== databaseRevision) return;
+    if (!await mayReplaceResearch() || revision !== databaseRevision) return false;
     state.queryRevision += 1;
     state.queryDraft = sql;
     state.queryId = null;
@@ -466,6 +509,7 @@ async function openResearch(sql) {
     state.queryError = null;
     state.querySaveError = null;
     go('onderzoeken');
+    return true;
 }
 
 function localized(data, field) {
@@ -504,6 +548,7 @@ async function refreshBootstrap(notify = false, {preserveFocus = false, focusFal
         const data = await request('bootstrap', {params: {database}, signal: controller.signal});
         if (controller.signal.aborted || revision !== databaseRevision || bootstrapController !== controller) return;
         setDatabase(data.database.name); rememberDatabase();
+        aiWorkspace.setDatabase(data.database.name);
         knownDatabases = data.databases || [{name: data.database.name, available: data.database.status !== 'unavailable'}];
         history.replaceState(null, '', routeHash(route().name, Object.fromEntries(route().params)));
         state.bootstrap = data;
@@ -819,7 +864,7 @@ function renderSettings() {
         el('div', {}, badge(t('app.settings.previewBadge')), el('h2', {}, t('app.dashboard.title')), el('p', {}, t('app.settings.previewHelp')),
             button(t('app.dashboard.explore'), () => go('gegevens'), {kind: 'primary', symbol: 'arrow'}))),
         el('div', {class: 'card-body'}, el('h3', {}, t('app.settings.preview'))));
-    page.append(el('div', {class: 'settings-grid'}, el('div', {class: 'card'}, language, appearance, layout),
+    page.append(el('div', {class: 'settings-grid'}, el('div', {class: 'card'}, language, appearance, layout, aiWorkspace.renderSettings()),
         el('aside', {class: 'settings-aside'}, preview, brand,
             button(t('app.settings.reset'), () => { const result = resetAppearance(); syncSettingControls(); preferenceFeedback(result.saved); }, {kind: 'ghost', className: 'settings-reset', id: 'reset-appearance'}))),
         el('p', {id: 'preferences-status', class: 'settings-status', role: 'status', 'aria-live': 'polite'}));
@@ -1195,6 +1240,7 @@ async function renderResearch(scope) {
         }
         if (!scope.live()) return;
         state.savedQueries = queries;
+        const focusedControl = savedList.contains(document.activeElement) ? document.activeElement.id : null;
         savedList.replaceChildren();
         if (!queries.length) {
             savedList.append(el('p', {class: 'catalog-empty'}, t('app.core.research.noSaved')));
@@ -1217,7 +1263,8 @@ async function renderResearch(scope) {
                     await updateSavedList();
                 } catch (error) { toast(errorText(error), 'error'); remove.disabled = false; }
                 finally { state.deletingQuery = false; syncDatabasePicker(); }
-            }, {kind: 'ghost', symbol: 'trash', className: 'icon-button', 'aria-label': t('app.core.research.removeLabel', {name: query.name})});
+            }, {id: 'saved-query-remove-' + encodeURIComponent(scope.database) + '-' + query.id,
+                kind: 'ghost', symbol: 'trash', className: 'icon-button', 'aria-label': t('app.core.research.removeLabel', {name: query.name})});
             remove.querySelector('span').className = 'sr-only';
             savedList.append(el('div', {class: 'saved-item'},
                 el('button', {class: 'saved-item-open', type: 'button', on: {click: async () => {
@@ -1242,6 +1289,9 @@ async function renderResearch(scope) {
                     editor.focus();
                 }}}, el('strong', {}, query.name), el('small', {}, dateTime(query.updated_at))), remove));
         });
+        if (focusedControl && document.activeElement === document.body) {
+            document.getElementById(focusedControl)?.focus({preventScroll: true});
+        }
     };
     form.addEventListener('submit', async event => {
         event.preventDefault();

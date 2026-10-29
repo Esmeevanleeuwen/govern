@@ -10,10 +10,11 @@ const kindName = item => t('app.selection.' + (kindKeys[item.meta.kind] || 'kind
 
 /** Read-only inspection is independent of navigation, SQL and schema selection. */
 export class SelectionPointer {
-    constructor({root, controls, getContext = () => ({}), onAction = () => {}}) {
+    constructor({root, controls, getContext = () => ({}), onAction = () => {}, onAskAi = null}) {
         this.root = root;
         this.getContext = getContext;
         this.onAction = onAction;
+        this.onAskAi = onAskAi;
         this.selected = new Map();
         this.on = false;
         this.hovered = null;
@@ -149,6 +150,10 @@ export class SelectionPointer {
         this.close.setAttribute('aria-label', t('app.selection.close'));
         this.back.querySelector('span').textContent = t('app.selection.back');
         this.back.setAttribute('aria-label', t('app.selection.back'));
+        if (this.askAi) {
+            this.askAi.querySelector('span').textContent = t('app.ai.askSelection');
+            this.askAi.setAttribute('aria-label', t('app.ai.askSelection'));
+        }
     }
 
     update() {
@@ -316,9 +321,16 @@ export class SelectionPointer {
         this.close.querySelector('span').className = 'sr-only';
         this.body = el('div', {class: 'selection-pointer-dialog-body', tabindex: '0', role: 'region', 'aria-labelledby': 'selection-pointer-dialog-title'});
         this.back = button('', () => this.dialog.close(), {kind: 'primary'});
+        this.askAi = this.onAskAi ? button('', () => {
+            const items = [...this.modalItems];
+            // Let the original dialog restore focus before opening the AI panel.
+            this.dialog.addEventListener('close', () => this.onAskAi(items), {once: true});
+            this.returnFocus = this.toggle;
+            this.dialog.close(); this.setOn(false);
+        }, {id: 'selection-ask-ai', symbol: 'sparkles'}) : null;
         this.dialog = el('dialog', {id: 'selection-pointer-dialog', class: 'selection-pointer-dialog', 'data-selection-ui': '', 'aria-labelledby': 'selection-pointer-dialog-title'},
             el('header', {class: 'selection-pointer-dialog-head'}, el('div', {}, this.title, this.scope), this.close), this.body,
-            el('footer', {class: 'selection-pointer-dialog-foot'}, this.back));
+            el('footer', {class: 'selection-pointer-dialog-foot'}, this.askAi, this.back));
         document.body.append(this.dialog);
         this.dialog.addEventListener('close', () => {
             this.hideTag();

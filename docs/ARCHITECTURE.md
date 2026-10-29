@@ -44,6 +44,10 @@ De onderdelen hebben een kleine, duidelijke taak:
 | `selection-pointer.js` | Globale selectiepijl, Shift-selectie, vertraagde naamkaartjes en de uitlegdialoog |
 | `selection-registry.js` | Semantische metadata van zichtbare onderdelen, los van hun normale bediening |
 | `selection-content.js` | Feitelijke uitleg en mogelijke vervolgstappen uit geselecteerde metadata |
+| `ai-workspace.js`, `ai-messages.js` en `ai-workspace.css` | Optioneel AI-paneel, status, bronnen, tijdelijke gesprekken en SQL-voorstellen |
+| `AiConfig.php` | Uitsluitend servergestuurde, standaard uitgeschakelde lokale providerconfiguratie |
+| `AiContext.php` | Begrensde context uit geselecteerde schema- en interfaceonderdelen |
+| `AiService.php` en `OllamaClient.php` | Gevalideerde vragen, lokaal providerverzoek en gecontroleerd antwoord zonder uitvoering |
 | `database-modal.js` | Het venster rondom de echte phpMyAdmin |
 | `row-editor.js` | Rijformulier met vaste databasecontext, exacte waarden en conflictfeedback |
 | `DatabaseScope.php` | Toegestane databasekeuze, afzonderlijke herstelpuntpaden en gedeelde locklocatie |
@@ -129,6 +133,50 @@ worden niet als blijvend geïdentificeerde records behandeld. De vervolgstap kan
 een leesquery in Onderzoeken klaarzetten, maar voert die niet uit. De selectie
 verandert geen records, contextexports of opgeslagen voorkeuren. De vertalingen
 gebruiken dezelfde berichtregistratie als de rest van de interface.
+
+## Lokale AI als optionele uitbreiding
+
+De gewone selectie-uitleg blijft feitelijk en lokaal berekend. **Vraag AI**
+opent een afzonderlijk paneel met de gekozen database en broncontext. Dezelfde
+module is via de bovenbalk bereikbaar. Een uitgeschakelde of onbereikbare AI
+verandert de databasewerkplek niet in een foutscherm.
+
+De browser praat uitsluitend met Governs eigen API. `AiConfig` leest de
+serverinstellingen, standaard `AI_ENABLED=0`, en staat de ondersteunde lokale
+provideradressen toe. De browser kan geen willekeurige URL, provider of model
+instellen. `OllamaClient` gebruikt de lokale Ollama-API met begrensde tijd,
+antwoordgrootte en zonder redirects of cloudfallback. De Ollama-server zelf moet
+ook lokaal en passend afgeschermd worden ingesteld; de client kan die host-
+en firewallconfiguratie niet bewijzen.
+
+`AiContext` controleert geselecteerde tabellen en kolommen opnieuw in de actuele
+catalogus van de expliciete database. Het geeft een begrensde momentopname met
+bronnen en een verkortingsindicator terug. Het kopieert geen rijen, celwaarden,
+recordsleutels, queryresultaten, opgeslagen onderzoeken of appconfiguratie uit de
+browser naar de prompt. Vragen en tijdelijke gespreksgeschiedenis zijn wel
+gebruikersinvoer voor het model. Commentaren en interfacebeschrijvingen blijven
+onbetrouwbare brongegevens, geen systeeminstructies.
+
+`AiService::prepareChat` valideert invoer en bouwt context op terwijl de gedeelde
+onderhoudslock geldt. De HTTP-laag laat die lock daarna los.
+`AiService::completeChat` doet alleen de provideraanroep en antwoordcontrole;
+een trage modelgeneratie houdt daardoor geen herstelactie tegen. Het model heeft
+geen SQL-tool of eigen databaseverbinding. SQL uit een antwoord wordt pas door
+een expliciete gebruikersactie een concept in de bestaande querywerkplaats.
+Die route bewaart de bestaande bevestiging voor het vervangen van een concept
+en de gewone uitvoerings- en schrijfgrenzen.
+
+Het paneel bewaart vraag, geschiedenis en bronnen per database in het geheugen
+van het tabblad. Dat is geen blijvende gespreksopslag. Databasewissels breken het
+zichtbare verzoek af en wijzigen de revisie; een antwoord voor A komt niet in B.
+Taal- en themawisselingen behouden de vraag. Stoppen annuleert het wachten in de
+browser en belooft geen onmiddellijke stop van een al draaiend lokaal model.
+
+De uitvoerige opzet, Windows/Docker-netwerkgrens, configuratie en regels voor
+verdere uitbreidingen staan in [lokale AI](AI.md). Er wordt geen nieuw agent-
+framework, vectoropslag of training toegevoegd om dit eerste pad mogelijk te
+maken. Een toekomstige leesfunctie krijgt een afzonderlijke, begrensde
+toegangslaag; de vrije SQL-runner is daarvoor geen veilige automatische tool.
 
 ## Schemavisualisatie
 
@@ -374,8 +422,8 @@ wordt niet als een universele SQL-undo gepresenteerd.
 - De visuele querybouwer kan worden uitgebreid met groeperingen of meer koppelingen.
 - Een schema-ontwerper kan gewone SQL genereren en de wijziging eerst laten zien.
 - Een nieuw datasettype wordt als gewone tabel ingevoerd.
-- Een optionele AI-koppeling kan later expliciete context krijgen, zonder de
-  databaseverbinding standaard aan een externe partij te geven.
+- De optionele lokale AI kan later expliciete, begrensde leesfuncties of
+  documentzoeken krijgen via het contract en de fasering in `docs/AI.md`.
 
 Voeg mogelijkheden toe aan het bestaande pad zolang dat duidelijk blijft. Een
 extra service, database of abstractie is een keuze met kosten, geen vereiste om
@@ -396,3 +444,5 @@ Werk de ontwerpdocumentatie en het API-contract in dezelfde wijziging bij.
 - [phpMyAdmin Docker-installatie](https://docs.phpmyadmin.net/en/latest/setup.html#installing-using-docker)
 - [phpMyAdmin-configuratie](https://docs.phpmyadmin.net/en/latest/config.html)
 - [MariaDB SQL-exports](https://mariadb.com/docs/server/clients-and-utilities/backup-restore-and-import-clients/mariadb-dump)
+- [Ollama chat-API](https://docs.ollama.com/api/chat)
+- [Ollama-modelstatus](https://docs.ollama.com/api/tags)

@@ -58,6 +58,10 @@ services:
       BACKUP_DIR: /var/lib/govern/backups
       WORKBENCH_SCHEMA_FILE: /var/www/workbench.sql
       TZ: UTC
+      AI_ENABLED: ${AI_ENABLED:-0}
+      AI_BASE_URL: ${AI_BASE_URL:-http://host.docker.internal:11434}
+      AI_MODEL: ${AI_MODEL:-qwen3:4b-instruct}
+      AI_TIMEOUT_SECONDS: ${AI_TIMEOUT_SECONDS:-60}
     volumes:
       - ./app/public:/var/www/public:ro
       - ./app/src:/var/www/src:ro

@@ -1,0 +1,112 @@
+/* A temporary workspace companion; the main navigation keeps its width. */
+dialog.ai-workspace {
+    position: fixed;
+    inset: auto 24px 24px auto;
+    z-index: 80;
+    width: min(420px, calc(100vw - 48px));
+    height: min(760px, calc(100dvh - 112px));
+    max-width: none;
+    max-height: none;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius);
+    overflow: hidden;
+    color: var(--ink);
+    background: linear-gradient(145deg, var(--g-shine), transparent 66%), var(--g-dense-frost);
+    box-shadow: var(--g-elevation), 0 24px 80px var(--g-shadow);
+    backdrop-filter: blur(32px) saturate(145%);
+    -webkit-backdrop-filter: blur(32px) saturate(145%);
+}
+.ai-workspace[open] { display: flex; flex-direction: column; }
+.ai-workspace::backdrop { background: var(--backdrop); backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px); }
+.ai-panel-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 20px 20px 12px; flex: 0 0 auto; }
+.ai-panel-heading { min-width: 0; }
+.ai-panel-heading h2 { margin: 0; font-size: 20px; line-height: 1.3; }
+.ai-panel-heading p { margin: 4px 0 0; font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+.ai-panel-actions { display: flex; align-items: center; gap: 4px; flex: none; }
+.ai-icon-button { min-width: 34px; min-height: 34px; padding: 7px; }
+.ai-icon-button > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.ai-panel-status { display: flex; align-items: center; gap: 8px; padding: 0 20px 12px; color: var(--muted); font-size: 12px; flex: 0 0 auto; overflow-wrap: anywhere; }
+.ai-status-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--muted); flex: none; }
+.ai-status-dot.ready { background: var(--success); }
+.ai-status-dot.offline, .ai-status-dot.model_missing { background: var(--warning); }
+.ai-status-dot.loading { background: var(--g-accent); animation: ai-status-pulse 1.2s ease-in-out infinite alternate; }
+.ai-panel-scroll { padding: 0 20px 20px; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; scrollbar-width: thin; flex: 1 1 auto; min-height: 0; }
+.ai-context-block { margin: 0 0 20px; padding: 12px 14px; border-radius: var(--radius-small); background: var(--g-frost); box-shadow: var(--g-control-depth); min-width: 0; }
+.ai-context-block summary { font-size: 12px; font-weight: 600; overflow-wrap: anywhere; }
+.ai-context-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 9px 0 0; min-width: 0; }
+.ai-chip { display: inline-block; padding: 3px 8px; border-radius: 8px; background: var(--g-soft); color: var(--g-accent-text); font-family: var(--mono); font-size: 11px; max-width: 100%; overflow-wrap: anywhere; }
+.ai-context-sources { margin-top: 12px; min-width: 0; }
+.ai-context-sources ul { padding-left: 17px; margin: 6px 0; }
+.ai-context-sources li { margin: 5px 0; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+.ai-context-sources code { color: var(--ink); font-size: 11px; overflow-wrap: anywhere; }
+.ai-context-note { margin: 9px 0 0; color: var(--muted); font-size: 11px; line-height: 1.6; overflow-wrap: anywhere; }
+.ai-thread { display: grid; gap: 14px; min-width: 0; }
+.ai-message { min-width: 0; padding: 14px; border-radius: 16px; background: var(--g-frost); }
+.ai-message.user { margin-left: 22px; background: var(--g-soft); }
+.ai-message.assistant { box-shadow: var(--g-control-depth); }
+.ai-message-meta { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 7px; color: var(--muted); font-size: 11px; }
+.ai-message-content { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; line-height: 1.75; }
+.ai-message-content > :first-child { margin-top: 0; }
+.ai-message-content > :last-child { margin-bottom: 0; }
+.ai-message-actions { display: flex; gap: 7px; flex-wrap: wrap; margin-top: 11px; }
+.ai-message-actions .button { min-height: 34px; font-size: 12px; padding: 7px 10px; }
+.ai-sql { margin-top: 12px; min-width: 0; }
+.ai-sql pre { padding: 12px; margin: 0; max-height: 260px; border-radius: var(--radius-small); background: var(--g-input); color: var(--ink); overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-family: var(--mono); font-size: 12px; line-height: 1.7; }
+.ai-empty { display: grid; gap: 10px; padding: 12px 0 8px; }
+.ai-empty h3 { margin: 0; font-size: 16px; }
+.ai-empty p { margin: 0; font-size: 13px; color: var(--muted); }
+.ai-empty-icon { width: 42px; height: 42px; display: grid; place-items: center; background: var(--g-soft); color: var(--g-accent-text); border-radius: 14px; margin-bottom: 2px; }
+.ai-empty-icon .icon { width: 21px; height: 21px; }
+.ai-suggestions { display: grid; gap: 8px; margin-top: 6px; }
+.ai-suggestions .button { justify-content: flex-start; text-align: left; font-size: 12px; padding: 11px 12px; }
+.ai-panel-error { margin: 0 0 14px; padding: 12px 14px; border-radius: var(--radius-small); background: var(--danger-soft); color: var(--danger); font-size: 12px; overflow-wrap: anywhere; }
+.ai-panel-error p { margin: 0; }
+.ai-panel-error .button { margin-top: 9px; }
+.ai-composer { padding: 14px 20px 16px; flex: 0 0 auto; background: var(--g-row); }
+.ai-composer textarea.input { width: 100%; min-height: 86px; max-height: 180px; resize: vertical; font-size: 14px; line-height: 1.6; }
+.ai-composer-footer { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 10px; }
+.ai-composer-footer .button { flex: none; }
+.ai-composer-hint { font-size: 11px; color: var(--muted); line-height: 1.5; min-width: 0; overflow-wrap: anywhere; }
+.ai-pending { display: flex; align-items: center; gap: 9px; margin: 14px 0 0; color: var(--muted); font-size: 12px; }
+.ai-panel-footer { padding: 0 20px 14px; color: var(--muted); font-size: 10px; flex: 0 0 auto; line-height: 1.5; }
+.ai-settings-section { min-width: 0; }
+.ai-settings-section > p { color: var(--muted); }
+.ai-setting-values { display: grid; gap: 10px; margin: 16px 0; }
+.ai-setting-values > div { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 14px; }
+.ai-setting-values dt { color: var(--muted); font-size: 12px; }
+.ai-setting-values dd { margin: 0; font-size: 12px; font-weight: 500; text-align: right; overflow-wrap: anywhere; min-width: 0; max-width: 100%; }
+.ai-setting-values code { font-size: 11px; }
+.ai-setup { margin-top: 16px; min-width: 0; }
+.ai-setup summary { font-size: 13px; font-weight: 500; }
+.ai-setup p { margin: 10px 0; font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+.ai-setup pre { margin: 10px 0; padding: 12px; border-radius: var(--radius-small); background: var(--g-input); color: var(--ink); font-family: var(--mono); font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; overflow-x: auto; }
+.ai-workspace [hidden], .ai-settings-section [hidden] { display: none !important; }
+@keyframes ai-status-pulse { from { opacity: .4; } to { opacity: 1; } }
+@media (max-width: 1100px) { .ai-toggle-label { display: none; } }
+@media (max-width: 700px) {
+    dialog.ai-workspace { inset: 8px; width: calc(100vw - 16px); height: calc(100dvh - 16px); margin: 0; border-radius: var(--radius); }
+    .ai-panel-header { padding: 18px 16px 12px; }
+    .ai-panel-status { padding-left: 16px; padding-right: 16px; }
+    .ai-panel-scroll { padding: 0 16px 16px; }
+    .ai-composer { padding: 12px 16px 14px; }
+    .ai-composer textarea.input { font-size: 16px; min-height: 88px; }
+    .ai-workspace .button, .ai-workspace .icon-button { min-height: 44px; }
+    .ai-icon-button { min-width: 40px; }
+    .ai-panel-footer { padding-left: 16px; padding-right: 16px; }
+    .ai-message.user { margin-left: 14px; }
+    .ai-composer-hint { font-size: 10px; }
+}
+@media (prefers-reduced-motion: reduce) { .ai-status-dot.loading { animation: none; } }
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) { dialog.ai-workspace { background: var(--g-panel); } }
+:root[data-reduce-transparency="true"] dialog.ai-workspace,
+:root[data-reduce-transparency="true"] .ai-context-block,
+:root[data-reduce-transparency="true"] .ai-message,
+:root[data-reduce-transparency="true"] .ai-composer { background: var(--g-panel); backdrop-filter: none; -webkit-backdrop-filter: none; }
+@media (forced-colors: active) {
+    dialog.ai-workspace, .ai-context-block, .ai-message, .ai-composer, .ai-panel-error { background: Canvas; color: CanvasText; box-shadow: none; outline: 1px solid CanvasText; }
+    .ai-status-dot { background: CanvasText; }
+    .ai-chip, .ai-composer-hint, .ai-message-meta, .ai-panel-status, .ai-panel-footer, .ai-context-note { color: CanvasText; }
+}

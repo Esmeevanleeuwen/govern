@@ -71,6 +71,20 @@ beperking van de werkplek.
   werkende route terug wanneer de database verwijderd of onbereikbaar is.
 - Contextexports bevatten standaard schema en opgeslagen queries, geen records
   of credentials. Wijzig deze inhoud niet ongemerkt.
+- AI blijft optioneel en standaard uitgeschakeld. Toon de werkelijke provider-
+  en modelstatus; geen demo-antwoorden of stille cloudfallback in productie.
+- Bouw AI-context op uit de actuele catalogus van de expliciete database.
+  Selectiemetadata uit de browser is een verzoek, geen vertrouwde bron. Voeg
+  geen records, resultaten, opgeslagen onderzoeken of credentials automatisch toe.
+- Houd AI-geschiedenis en concepten tijdelijk per database apart; negeer late
+  antwoorden na een wissel. Stoppen in de browser garandeert geen onmiddellijke
+  stop van de modelberekening. Render antwoorden als tekst.
+- AI mag SQL alleen als voorstel naar Onderzoeken sturen. Uitvoeren gebruikt
+  de bestaande gebruikersstroom; geef het model geen vrije schrijfverbinding.
+- Laat de onderhoudslock los nadat AI-context is opgebouwd en vóór het wachten
+  op Ollama. Provideradres en model zijn serverconfiguratie, geen browserinvoer.
+- Volg `docs/AI.md` bij nieuwe providers, leesfuncties, documentzoeken of blijvend
+  bewaren. Houd modelkwaliteit en applicatie-integratietests uit elkaar.
 
 ## Controleren
 

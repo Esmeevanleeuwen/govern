@@ -66,6 +66,10 @@ Een database buiten deze Docker-installatie wordt niet automatisch gekoppeld.
   onderdeel om de naam en HTML-tag te zien. **Meer** opent uitleg over precies
   dat onderdeel of de geselecteerde combinatie. Via het pad in het naamkaartje
   kun je bijvoorbeeld de hele rij of tabel kiezen.
+- **Lokale AI:** open het AI-paneel bovenaan of kies **Vraag AI** bij je selectie.
+  Bekijk welke schema-informatie wordt gebruikt, stel een vraag en zet een
+  SQL-voorstel desgewenst klaar in Onderzoeken. De koppeling staat standaard uit;
+  beschikbaarheid wordt gecontroleerd bij je eigen Ollama-server.
 - **Eén menu:** kies Overzicht, Database, Onderzoeken of Experimenten in de
   hoofdbalk. Instellingen staat onderaan. Het aansluitende paneel toont alleen
   de tabellen, opgeslagen onderzoeken of herstelpunten die bij dat gebied horen.
@@ -120,7 +124,8 @@ de pijl opent de selectie zonder hover; wissen maakt de selectie leeg. Gebruik
 de pijltoetsen en Enter, of Shift + Enter, voor toetsenbordselectie. Escape sluit
 eerst de uitleg en verlaat daarna de selectiestand. Scrollen en schemazoom blijven
 werken. De aanwijzer inspecteert niet binnen het afzonderlijke phpMyAdmin-frame.
-De uitleg gebruikt beschikbare metadata; er wordt geen AI-model aangeroepen.
+De gewone selectie-uitleg gebruikt beschikbare metadata en roept geen AI-model aan.
+**Vraag AI** is een afzonderlijke, optionele handeling met zichtbare context.
 Een eventuele recordquery wordt alleen klaargezet, niet automatisch uitgevoerd.
 
 De Database-knop onthoudt tijdens je sessie de laatste weergave en tabel. De
@@ -141,6 +146,26 @@ De glasschermen gebruiken gedeelde kleuren, zachte schaduwen en geen harde
 paneelranden. Het ontwerp en de regels voor uitbreidingen staan in
 [de UX en UI documentatie](docs/DESIGN.md).
 
+## Lokale AI voorbereiden
+
+De AI-interface en backend zijn voorbereid voor een lokale Ollama-installatie.
+Govern installeert geen AI-model en toont geen verzonnen antwoord wanneer die
+verbinding ontbreekt. **Instellingen → Lokale AI** toont de provider, het
+ingestelde model, de status en een verbindingstest.
+
+De eerste versie gebruikt actuele tabel- en kolominformatie en beschreven
+interfaceonderdelen. Records, resultaten en opgeslagen onderzoeken worden niet
+automatisch meegestuurd. Zelf getypte vragen en gespreksgeschiedenis gaan naar
+de ingestelde lokale provider. Gesprekken en concepten blijven tijdelijk per
+database in het open tabblad; herladen begint opnieuw.
+
+Een SQL-voorstel opent alleen een concept in **Onderzoeken**. Bekijk, wijzig en
+voer het daar zelf uit. De AI krijgt geen uitvoerbare databasehandelingen.
+
+Voor het aansluiten van Ollama, `.env`-instellingen, de Windows/Docker-netwerkgrens
+en verdere uitbreidingen: [lokale AI en systeemarchitectuur](docs/AI.md).
+De gewone werkplek blijft werken met `AI_ENABLED=0`, de standaardinstelling.
+
 ## Eerste oefening
 
 1. Open **Database → Gegevens** en kies `digital_systems`.
@@ -152,8 +177,8 @@ paneelranden. Het ontwerp en de regels voor uitbreidingen staan in
    aan. Na bewaren zie je dezelfde wijziging ook in **Databasevenster → Browse**.
 
 Zo leer je met echte gegevens wat een tabel, een verwijzing en een query doen.
-De korte uitleg in het scherm is vaste uitleg over deze handeling; er wordt geen
-extern AI-model aangeroepen.
+De korte uitleg in het scherm is vaste uitleg over deze handeling. De optionele
+AI-koppeling vraagt een afzonderlijke vraag en een beschikbare lokale provider.
 
 ### Een vraag maken zonder eerst SQL te schrijven
 
@@ -284,7 +309,8 @@ De broncode blijft klein en rechtstreeks te volgen:
 - `docs/`: afspraken, uitleg en de API.
 
 Begin bij [de architectuur](docs/ARCHITECTURE.md) en
-[leren met Govern](docs/LEARNING.md). De uitgevoerde controles en commando's om
+[leren met Govern](docs/LEARNING.md). De optionele AI-stroom staat bij
+[lokale AI](docs/AI.md). De uitgevoerde controles en commando's om
 ze te herhalen staan bij [validatie](docs/VALIDATION.md). Het systeem is een gewone PHP-app met
 JavaScriptmodules en SQL. De gegevens zitten niet vast in een eigen bestandstype
 of een verzameling aparte services per onderwerp.
