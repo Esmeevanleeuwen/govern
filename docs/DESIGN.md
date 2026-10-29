@@ -143,12 +143,14 @@ Mobile users also have the table index and textual relationship details.
 Relationship strokes communicate data rather than
 decorating panel boundaries. The cards keep the shared frost and soft shadows.
 
-The primary menu keeps the main product areas stable. The Schema workspace has
-a second, contextual panel with **Tables** and **Selected table** views. Choosing
-a table opens its context with columns, exact connections and relevant actions.
-Keep the table index one action away. Automatic context updates must not steal
-keyboard focus or reopen a deliberately collapsed panel. Collapsing gives space
-back to the canvas and keeps the selection and viewport intact.
+The primary menu keeps the main product areas stable. Schema has a compact tool
+rail beside it. **Tables** and **Selection** expand the related context panel;
+clicking the active tool again collapses the content while keeping the rail
+visible. Another tool switches and expands its own content. Choosing a table
+updates its columns, exact connections and relevant actions. Keep the table index
+one action away. Automatic context updates must not steal keyboard focus or
+reopen a deliberately collapsed panel. Collapsing gives space back to the canvas
+and keeps the selection and viewport intact.
 
 Keep this panel next to the main navigation when navigation is moved to the
 right. On compact screens it starts collapsed, offers a clear opener and bounds
@@ -161,6 +163,16 @@ an area; the second menu offers that area's objects and the selected object's
 actions. Reuse the existing table catalog for Data and Structure, and use saved
 research or restore points as the objects when those screens adopt this pattern.
 Keep task controls such as query execution and canvas zoom beside the workspace.
+
+**What can I do here?** stays available in the Schema tools rail and opens a
+guide modal. Explain actual capabilities: search, declared keys and connections,
+selection actions, wheel zoom, panning, table placement, layout controls and
+refreshing. Include keyboard instructions and make the difference between diagram
+placement and database editing clear. Keep the guide readable with shared glass,
+bounded scrolling, a visible close control and a return action. Tab navigation
+stays inside the modal; Escape, the close controls and the backdrop dismiss it
+and restore the opener's focus. A language change preserves an open guide, while
+leaving Schema closes and disposes it. The guide makes no database changes.
 
 Keep table positions per database and separate from dashboard layout. A language
 or theme switch preserves search, selection, positions and the viewport.

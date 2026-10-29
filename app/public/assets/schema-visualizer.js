@@ -1,6 +1,7 @@
 import {el, icon, button, badge, number, empty} from './ui.js';
 import {t} from './i18n.js';
 import {attachSchemaWheelZoom} from './schema-navigation.js';
+import {createSchemaHelp} from './schema-help.js';
 import {normalizeSchema, initialPositions, tableHeight, filterTables, relatedTables, TABLE_WIDTH, HEADER_HEIGHT, ROW_HEIGHT} from './schema-model.js';
 import './schema-messages.js';
 
@@ -94,26 +95,31 @@ export function mountSchemaVisualizer(root, {data, state = {}, onBrowse, onStruc
     const count = el('p', {class: 'small muted', id: 'schema-visible-count'});
     const index = el('nav', {class: 'schema-index', 'aria-label': t('app.schema.tables')});
     const selected = el('section', {id: 'schema-selected', class: 'schema-selected'});
-    const tablesTab = button(t('app.schema.tables'), () => setPanelTab('tables'), {id: 'schema-tab-tables', role: 'tab', 'aria-controls': 'schema-table-panel'});
-    const selectionTab = button(t('app.schema.selectionTab'), () => setPanelTab('selection'), {id: 'schema-tab-selection', role: 'tab', 'aria-controls': 'schema-selection-panel'});
-    const tabs = el('div', {class: 'schema-panel-tabs', id: 'schema-panel-tabs', role: 'tablist', 'aria-label': t('app.schema.panelTitle')}, tablesTab, selectionTab);
+    const tablesTab = button(t('app.schema.tables'), () => setPanelTab('tables', true), {id: 'schema-tab-tables', symbol: 'table', 'aria-controls': 'schema-table-panel'});
+    const selectionTab = button(t('app.schema.selectionTab'), () => setPanelTab('selection', true), {id: 'schema-tab-selection', symbol: 'link', 'aria-controls': 'schema-selection-panel'});
+    const tabs = el('div', {class: 'schema-tool-buttons', id: 'schema-panel-tabs', role: 'toolbar', 'aria-label': t('app.schema.panelTitle')}, tablesTab, selectionTab);
+    const areaHelp = createSchemaHelp({state});
+    cleanup.push(() => areaHelp.destroy());
+    const rail = el('nav', {id: 'schema-tool-rail', class: 'card schema-tool-rail', 'aria-label': t('app.schema.panelTitle')},
+        el('p', {class: 'schema-rail-label'}, t('app.schema.railTitle')), tabs, areaHelp.button);
     tabs.addEventListener('keydown', event => {
-        if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+        if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return;
         event.preventDefault();
         const next = event.key === 'Home' ? 'tables' : event.key === 'End' ? 'selection' : state.panelTab === 'tables' ? 'selection' : 'tables';
         if (next === 'selection' && !state.selected) return;
-        setPanelTab(next); (next === 'tables' ? tablesTab : selectionTab).focus();
+        setPanelTab(next);
+        if (!window.matchMedia('(max-width: 700px)').matches) (next === 'tables' ? tablesTab : selectionTab).focus();
     });
-    const tablePanel = el('section', {id: 'schema-table-panel', role: 'tabpanel', 'aria-labelledby': 'schema-tab-tables', tabindex: '0'}, count, index);
-    const selectionPanel = el('section', {id: 'schema-selection-panel', role: 'tabpanel', 'aria-labelledby': 'schema-tab-selection', tabindex: '0'}, selected);
+    const tablePanel = el('section', {id: 'schema-table-panel', role: 'region', 'aria-labelledby': 'schema-tab-tables', tabindex: '0'}, count, index);
+    const selectionPanel = el('section', {id: 'schema-selection-panel', role: 'region', 'aria-labelledby': 'schema-tab-selection', tabindex: '0'}, selected);
     const panelClose = button(t('app.schema.panelHide'), () => setPanelCollapsed(true, true), {id: 'schema-panel-close', symbol: 'close', className: 'icon-button'});
     panelClose.querySelector('span').className = 'sr-only';
     const panelChrome = el('div', {class: 'schema-panel-chrome'},
-        el('div', {class: 'schema-panel-heading'}, el('div', {}, el('p', {class: 'eyebrow'}, t('app.schema.panelEyebrow')), el('h2', {}, t('app.schema.panelTitle'))), panelClose), tabs);
+        el('div', {class: 'schema-panel-heading'}, el('div', {}, el('p', {class: 'eyebrow'}, t('app.schema.panelEyebrow')), el('h2', {}, t('app.schema.panelTitle'))), panelClose));
     const sidebar = el('aside', {id: 'schema-context-panel', class: 'card schema-aside', 'aria-label': t('app.schema.panelTitle')},
         panelChrome, tablePanel, selectionPanel);
     sidebar.addEventListener('keydown', event => { if (event.key === 'Escape') { event.preventDefault(); setPanelCollapsed(true, true); } });
-    const layout = el('div', {class: 'schema-layout'}, sidebar, el('div', {class: 'schema-board'}, canvas,
+    const layout = el('div', {class: 'schema-layout'}, rail, sidebar, el('div', {class: 'schema-board'}, canvas,
         el('p', {id: 'schema-canvas-help', class: 'sr-only'}, t('app.schema.canvasHelp')), help));
     const noMatches = el('div', {class: 'schema-no-matches', hidden: true}, el('p', {}, t('app.schema.noMatches')),
         button(t('app.schema.clear'), () => { search.value = ''; state.search = ''; state.neighborhood = false; neighborhood.checked = false; draw(); fit(); }));
@@ -138,18 +144,26 @@ export function mountSchemaVisualizer(root, {data, state = {}, onBrowse, onStruc
         selectionTab.disabled = !state.selected;
         for (const [tab, name, panel] of [[tablesTab, 'tables', tablePanel], [selectionTab, 'selection', selectionPanel]]) {
             const active = state.panelTab === name;
-            tab.setAttribute('aria-selected', String(active));
+            tab.setAttribute('aria-expanded', String(active && !collapsed));
+            tab.setAttribute('aria-pressed', String(active && !collapsed));
             tab.tabIndex = active ? 0 : -1;
             panel.hidden = !active;
             panel.inert = !active;
         }
     }
 
-    function setPanelTab(name) {
+    function setPanelTab(name, toggle = false) {
         if (name === 'selection' && !state.selected) return;
+        const collapse = toggle && state.panelTab === name && !state.panelCollapsed;
         state.panelTab = name;
-        syncPanel();
+        setPanelCollapsed(collapse);
         sidebar.scrollTop = 0;
+        // An explicit tool choice should reveal its mobile drawer immediately.
+        // Canvas selections update context separately without moving the page.
+        if (!collapse && window.matchMedia('(max-width: 700px)').matches) {
+            (name === 'tables' ? tablePanel : selectionPanel).focus({preventScroll: true});
+            sidebar.scrollIntoView({block: 'nearest', behavior: 'auto'});
+        }
     }
 
     function setPanelCollapsed(collapsed, returnFocus = false) {
@@ -163,7 +177,7 @@ export function mountSchemaVisualizer(root, {data, state = {}, onBrowse, onStruc
         state.viewport.y = next.height / 2 - center.y * state.viewport.zoom;
         transform();
         if (returnFocus) {
-            if (collapsed) panelToggle.focus();
+            if (collapsed) (state.panelTab === 'tables' ? tablesTab : selectionTab).focus();
             else {
                 (state.panelTab === 'tables' ? tablesTab : selectionTab).focus({preventScroll: true});
                 if (window.matchMedia('(max-width: 700px)').matches) sidebar.scrollIntoView({block: 'nearest', behavior: 'auto'});
@@ -204,7 +218,9 @@ export function mountSchemaVisualizer(root, {data, state = {}, onBrowse, onStruc
         else { drawSelection(); drawDetails(); }
         syncPanel();
         if (resetPanelScroll) sidebar.scrollTop = 0;
-        if (fromPanel && !state.panelCollapsed) selectionTab.focus({preventScroll: true});
+        if (fromPanel && !state.panelCollapsed) {
+            (window.matchMedia('(max-width: 700px)').matches ? selectionPanel : selectionTab).focus({preventScroll: true});
+        }
         if (center) { pointToTable(name); state.centeredSelected = name; }
     }
 
@@ -449,7 +465,8 @@ export function mountSchemaVisualizer(root, {data, state = {}, onBrowse, onStruc
         }
     });
     if (!model.tables.length) {
-        root.replaceChildren(empty(t('app.schema.empty'), t('app.schema.emptyHelp'), null, 'layers'));
+        canvas.replaceChildren(empty(t('app.schema.empty'), t('app.schema.emptyHelp'), null, 'layers'));
+        syncPanel();
     } else {
         draw();
         if (!model.relationships.length) root.append(el('p', {class: 'small muted schema-help'}, t('app.schema.noConnections')));

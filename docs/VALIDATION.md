@@ -2,6 +2,23 @@
 
 Stand van de controles: **29 oktober 2026**.
 
+## Schemagids en uitklapbare tools
+
+De schemagids en de blijvend zichtbare gereedschapsbalk zijn in de browser
+gecontroleerd. De gids beschrijft zeven onderdelen van het bestaande scherm,
+opent als native dialoog en ondersteunt Tab/Shift+Tab, Escape, sluitknoppen,
+achtergrondklikken en focusherstel. De scrollbare uitleg is met het toetsenbord
+bereikbaar. Een taalwisseling vanuit een tweede tab houdt de gids open in de
+nieuwe taal; het verlaten van Schema ruimt de dialoog op.
+
+De browserproef controleert dat toolklikken het juiste paneel openen, dat een
+tweede klik op de actieve tool de inhoud inklapt en dat de balk met helpknop
+zichtbaar blijft. Zoom, selectie en het midden van de tekening blijven behouden.
+De bestaande wielzoom- en schemacontroles zijn meegenomen, inclusief mobiele
+weergave en rechter navigatie. De gids verstuurt geen schrijvende API-verzoeken.
+Alle **444** berichten hebben Nederlandse en Engelse teksten. De overige
+Node-controles blijven ongewijzigd onderdeel van de verificatie.
+
 ## Scrollzoom en contextmenu
 
 De navigatie-uitbreiding is gecontroleerd met **21** afzonderlijke controles van

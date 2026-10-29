@@ -33,7 +33,9 @@ je lokale `.env`, die niet in Git wordt opgenomen.
 - **Schema:** bekijk alle tabellen, kolommen en foreign keys in een interactief
   diagram. Scroll boven de tekening om rond je muisaanwijzer te zoomen en sleep
   de achtergrond om te verschuiven. Het tweede menu toont automatisch de
-  gekozen tabel en haar verbindingen; klap het in voor meer tekenruimte.
+  gekozen tabel en haar verbindingen. Klik op een tool om het paneel uit te
+  klappen, of nogmaals op de actieve tool om het in te klappen. **Wat kan ik
+  hier doen?** opent een korte uitleg van alle mogelijkheden in dit scherm.
 - **Onderzoeken:** voer leesvragen uit, bekijk resultaten en bewaar queries met uitleg.
 - **Visueel samenstellen:** kies een tabel, kolommen, filters en een sorteervolgorde.
   Voeg eventueel een bestaande verwijzing naar een tweede tabel toe. Govern maakt

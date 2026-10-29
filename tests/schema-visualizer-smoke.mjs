@@ -38,10 +38,9 @@ const load = async (page, hash = '#schema') => {
 };
 const selectTable = async (name, current = page) => {
     // This is the accessible index, also useful when a table is outside the canvas.
-    if (await current.locator('#schema-panel-toggle').getAttribute('aria-expanded') !== 'true') {
-        await current.locator('#schema-panel-toggle').click();
+    if (await current.locator('#schema-tab-tables').getAttribute('aria-expanded') !== 'true') {
+        await current.locator('#schema-tab-tables').click();
     }
-    await current.locator('#schema-tab-tables').click();
     await current.locator('[data-schema-select=' + JSON.stringify(name) + ']').first().click();
     assert.equal(await current.locator('#schema-context-panel').evaluate(panel => panel.scrollTop), 0,
         'Selecting a table reveals its context from the top, even after a long table list.');
@@ -92,6 +91,93 @@ try {
         'Real self references are visible.');
     await noOverflow(page, 'Desktop schema');
     await shot(page, 'all-tables-nl');
+
+    // A persistent rail opens one contextual flyout, and clicking its active
+    // tool closes just that flyout while keeping the diagram centered.
+    assert.equal(await page.locator('#schema-tool-rail').isVisible(), true);
+    assert.equal(await page.locator('#schema-tab-tables').getAttribute('aria-expanded'), 'true');
+    const expandedViewport = await viewportState(page);
+    await page.locator('#schema-tab-tables').click();
+    assert.equal(await page.locator('#schema-context-panel').isVisible(), false, 'Clicking the active tool collapses its flyout.');
+    assert.equal(await page.locator('#schema-tool-rail').isVisible(), true, 'The rail remains available after collapse.');
+    const compactViewport = await viewportState(page);
+    closeTo((expandedViewport.width / 2 - expandedViewport.x) / expandedViewport.zoom,
+        (compactViewport.width / 2 - compactViewport.x) / compactViewport.zoom, 'Tool collapse retains the diagram center X', .02);
+    closeTo((expandedViewport.height / 2 - expandedViewport.y) / expandedViewport.zoom,
+        (compactViewport.height / 2 - compactViewport.y) / compactViewport.zoom, 'Tool collapse retains the diagram center Y', .02);
+    await page.locator('#schema-tab-tables').click();
+    assert.equal(await page.locator('#schema-context-panel').isVisible(), true, 'Clicking a compact tool expands its related flyout.');
+    assert.equal(await page.locator('#schema-tab-tables').getAttribute('aria-expanded'), 'true');
+
+    // Area help is an actual modal, explains only implemented functions, and
+    // leaves catalog data and diagram state untouched.
+    const helpPosts = [];
+    const collectHelpPost = request => { if (request.method() === 'POST') helpPosts.push(request.url()); };
+    page.on('request', collectHelpPost);
+    const beforeHelp = await page.locator('.schema-world').evaluate(element => element.style.transform);
+    await page.locator('#schema-help-open').click();
+    await page.locator('#schema-help-dialog[open]').waitFor();
+    assert.equal(await page.locator('#schema-help-dialog').evaluate(dialog => dialog.matches(':modal')), true,
+        'Area help is shown as a modal dialog.');
+    assert.ok(await page.locator('#schema-help-dialog [data-schema-help-section]').count() >= 5,
+        'The guide explains the main available schema tasks.');
+    assert.equal(await page.locator('#schema-help-dialog').evaluate(dialog => dialog.contains(document.activeElement)), true,
+        'Opening help moves focus inside the guide.');
+    for (let index = 0; index < 7; index++) {
+        await page.keyboard.press('Tab');
+        assert.equal(await page.locator('#schema-help-dialog').evaluate(dialog => dialog.contains(document.activeElement)), true,
+            'Tab stays inside the modal guide.');
+    }
+    await page.keyboard.press('Shift+Tab');
+    assert.equal(await page.locator('#schema-help-dialog').evaluate(dialog => dialog.contains(document.activeElement)), true);
+    await shot(page, 'help-light-nl');
+    await page.keyboard.press('Escape');
+    await page.locator('#schema-help-dialog[open]').waitFor({state: 'hidden'});
+    assert.equal(await page.locator('#schema-help-open').evaluate(button => button === document.activeElement), true,
+        'Escape returns focus to the area-help button.');
+    assert.equal(await page.locator('.schema-world').evaluate(element => element.style.transform), beforeHelp,
+        'Closing help leaves diagram position and zoom unchanged.');
+    await page.locator('#schema-help-open').click();
+    assert.equal(await page.locator('#schema-help-dialog').count(), 1, 'Repeated openings reuse one guide dialog.');
+    await page.locator('#schema-help-close').click();
+    await page.locator('#schema-help-dialog[open]').waitFor({state: 'hidden'});
+    await page.locator('#schema-help-open').click();
+    const helpBounds = await page.locator('#schema-help-dialog').boundingBox();
+    await page.mouse.click(Math.max(1, helpBounds.x - 12), Math.max(1, helpBounds.y + 12));
+    await page.locator('#schema-help-dialog[open]').waitFor({state: 'hidden'});
+    assert.equal(await page.locator('#schema-help-open').evaluate(button => button === document.activeElement), true,
+        'Closing by backdrop returns focus too.');
+
+    await page.locator('#schema-help-open').click();
+    const languagePage = await context.newPage();
+    track(languagePage);
+    await languagePage.goto(new URL('/#instellingen', base).href, {waitUntil: 'networkidle'});
+    await languagePage.locator('#language-select').selectOption('en');
+    await page.waitForFunction(() => document.documentElement.lang === 'en');
+    await page.locator('#schema-help-dialog[open]').waitFor();
+    assert.equal(await page.locator('#schema-help-dialog').count(), 1, 'A live language change cannot leave duplicate guide dialogs.');
+    const englishHelp = await page.locator('#schema-help-dialog').innerText();
+    assert.match(englishHelp, /zoom/i);
+    assert.match(englishHelp, /search|find/i);
+    assert.match(englishHelp, /connections|foreign keys/i);
+    assert.match(englishHelp, /browser|local/i);
+    assert.equal(englishHelp.includes('app.schema.'), false, 'The English guide has no untranslated keys.');
+    await shot(page, 'help-en');
+    await page.locator('#schema-help-close').click();
+    assert.equal(await page.locator('#schema-help-open').evaluate(button => button === document.activeElement), true);
+    await languagePage.locator('#language-select').selectOption('nl');
+    await page.waitForFunction(() => document.documentElement.lang === 'nl');
+    await languagePage.close();
+    await page.locator('#schema-help-open').click();
+    await page.evaluate(() => { location.hash = '#gegevens'; });
+    await page.locator('.table-heading').waitFor();
+    assert.equal(await page.locator('#schema-help-dialog').count(), 0, 'Leaving Schema removes its help dialog from the document.');
+    await load(page);
+    assert.equal(await page.locator('#schema-help-dialog[open]').count(), 0, 'Returning to Schema does not reopen old help.');
+    assert.equal(await page.locator('.schema-world').evaluate(element => element.style.transform), beforeHelp,
+        'A help visit and route round trip retain the diagram viewport.');
+    page.off('request', collectHelpPost);
+    assert.deepEqual(helpPosts, [], 'Reading the area guide never sends database mutation requests.');
 
     // Real unmodified wheel events zoom around the cursor instead of scrolling
     // the document or moving the point beneath the pointer.
@@ -152,15 +238,18 @@ try {
     await page.locator('#schema-actual').click();
     await page.locator('#schema-selected').waitFor();
     assert.match(await page.locator('#schema-selected').innerText(), new RegExp(table.name));
-    assert.equal(await page.locator('#schema-tab-selection').getAttribute('aria-selected'), 'true',
-        'Choosing a table automatically opens its context tab.');
+    assert.equal(await page.locator('#schema-tab-selection').getAttribute('aria-expanded'), 'true',
+        'Choosing a table automatically updates its context tool.');
     await page.locator('#schema-tab-tables').click();
     await page.locator('#schema-tab-tables').press('ArrowRight');
-    assert.equal(await page.locator('#schema-tab-selection').getAttribute('aria-selected'), 'true', 'Context tabs support the keyboard.');
+    assert.equal(await page.locator('#schema-tab-selection').getAttribute('aria-expanded'), 'true', 'Context tools support the keyboard.');
     const panelViewport = await viewportState(page);
     await page.locator('#schema-panel-toggle').click();
     assert.equal(await page.locator('#schema-panel-toggle').getAttribute('aria-expanded'), 'false');
     assert.equal(await page.locator('#schema-context-panel').isVisible(), false, 'Context panel can be collapsed.');
+    assert.equal(await page.locator('#schema-tool-rail').isVisible(), true, 'The compact tool rail remains visible when its flyout is closed.');
+    assert.equal(await page.locator('#schema-tab-tables').isVisible(), true);
+    assert.equal(await page.locator('#schema-help-open').isVisible(), true, 'Area help remains discoverable in the compact tool rail.');
     closeTo((await viewportState(page)).zoom, panelViewport.zoom, 'Collapsing keeps canvas zoom');
     await page.locator('[data-schema-header="' + table.name + '"]').focus();
     await page.keyboard.press('Enter');
@@ -170,7 +259,7 @@ try {
     assert.equal(await page.locator('#schema-panel-toggle').getAttribute('aria-expanded'), 'false', 'Language retains a collapsed panel.');
     await page.locator('#language-select').selectOption('nl');
     await page.locator('#schema-panel-toggle').click();
-    assert.equal(await page.locator('#schema-tab-selection').getAttribute('aria-selected'), 'true', 'Reopening returns to the selected-table context.');
+    assert.equal(await page.locator('#schema-tab-selection').getAttribute('aria-expanded'), 'true', 'Reopening returns to the selected-table context.');
     await page.locator('#schema-column-summary').click();
     assert.deepEqual(await page.locator('.schema-detail-columns li > div > code').allTextContents(),
         table.columns.map(column => column.name), 'The context menu shows every exact column for the selected table.');
@@ -301,7 +390,7 @@ try {
     });
     assert.ok(stickyBounds.scrollTop > 0, 'The selected context is long enough to exercise its own scroll owner.');
     assert.ok(stickyBounds.chromeTop >= stickyBounds.panelTop - 1 && stickyBounds.chromeBottom <= stickyBounds.panelBottom + 1,
-        'Context tabs and close action remain visible while long relationships scroll.');
+        'Context heading and close action remain visible while long relationships scroll.');
     await page.locator('#schema-context-panel').evaluate(panel => { panel.scrollTop = 0; });
     await shot(page, 'selection-dark-en');
     await page.locator('#settings-shortcut').click();
@@ -328,7 +417,7 @@ try {
     const rightCanvas = await page.locator('#schema-viewport').boundingBox();
     const rightPanel = await page.locator('#schema-context-panel').boundingBox();
     assert.ok(rightPanel.x > rightCanvas.x, 'Right navigation places the context panel on the right side of the diagram.');
-    assert.equal(await page.locator('#schema-tab-selection').getAttribute('aria-selected'), 'true');
+    assert.equal(await page.locator('#schema-tab-selection').getAttribute('aria-expanded'), 'true');
     assert.match(await page.locator('#schema-selected').innerText(), /organizations/, 'Changing navigation side retains the selected table.');
     await noOverflow(page, 'Right-side context menu');
     await shot(page, 'context-right');
@@ -353,13 +442,37 @@ try {
     assert.equal(await mobilePage.locator('#schema-panel-toggle').getAttribute('aria-expanded'), 'false',
         'A fresh mobile workspace starts with the context menu compact.');
     assert.equal(await mobilePage.locator('#schema-context-panel').isVisible(), false);
-    await mobilePage.locator('#schema-panel-toggle').click();
+    assert.equal(await mobilePage.locator('#schema-tool-rail').isVisible(), true, 'Mobile keeps the compact tools visible.');
+    await mobilePage.locator('#schema-help-open').click();
+    await mobilePage.locator('#schema-help-dialog[open]').waitFor();
+    const mobileHelp = await mobilePage.locator('#schema-help-dialog').boundingBox();
+    assert.ok(mobileHelp.width <= 375 && mobileHelp.height <= 900, 'The area guide fits the mobile viewport.');
+    await noOverflow(mobilePage, 'Mobile area guide');
+    await mobilePage.keyboard.press('Tab');
+    assert.equal(await mobilePage.locator('#schema-help-close').evaluate(button => button === document.activeElement), true);
+    await mobilePage.keyboard.press('Tab');
+    assert.equal(await mobilePage.locator('.schema-help-body').evaluate(body => body === document.activeElement), true,
+        'The scrollable guide body is reachable with the keyboard.');
+    await mobilePage.keyboard.press('PageDown');
+    await mobilePage.waitForFunction(() => document.querySelector('#schema-help-dialog .schema-help-body').scrollTop > 0);
+    await mobilePage.locator('.schema-help-body').evaluate(body => { body.scrollTop = 0; });
+    await shot(mobilePage, 'help-mobile');
+    await mobilePage.locator('#schema-help-done').click();
+    assert.equal(await mobilePage.locator('#schema-help-open').evaluate(button => button === document.activeElement), true);
+    await mobilePage.locator('#schema-tab-tables').click();
+    assert.equal(await mobilePage.locator('#schema-table-panel').evaluate(panel => panel === document.activeElement), true,
+        'Opening a mobile tool moves focus into its expanded content.');
+    const visibleMobilePanel = await mobilePage.locator('#schema-context-panel').boundingBox();
+    assert.ok(visibleMobilePanel.y >= -1 && visibleMobilePanel.y + visibleMobilePanel.height <= 901,
+        'Clicking a mobile tool brings its new flyout into the viewport.');
     const mobileBoard = await mobilePage.locator('.schema-board').boundingBox();
     const mobilePanel = await mobilePage.locator('#schema-context-panel').boundingBox();
     assert.ok(mobilePanel.y >= mobileBoard.y + mobileBoard.height, 'Mobile keeps the diagram before the secondary menu.');
     assert.ok(mobilePanel.height <= 450, 'Mobile menu height is bounded instead of pushing the canvas down.');
     await selectTable('sources', mobilePage);
-    assert.equal(await mobilePage.locator('#schema-tab-selection').getAttribute('aria-selected'), 'true');
+    assert.equal(await mobilePage.locator('#schema-selection-panel').evaluate(panel => panel === document.activeElement), true,
+        'A mobile table choice keeps keyboard focus in the visible selected-table content.');
+    assert.equal(await mobilePage.locator('#schema-tab-selection').getAttribute('aria-expanded'), 'true');
     assert.match(await mobilePage.locator('#schema-selected').innerText(), /sources/);
     await noOverflow(mobilePage, 'Fresh mobile context menu');
     const mobileFocus = await mobilePage.evaluate(() => ({activeId: document.activeElement?.id,
@@ -372,6 +485,7 @@ try {
     await shot(mobilePage, 'context-mobile');
     await mobilePage.locator('#schema-panel-close').click();
     assert.equal(await mobilePage.locator('#schema-context-panel').isVisible(), false);
+    assert.equal(await mobilePage.locator('#schema-tool-rail').isVisible(), true, 'Mobile keeps the compact tools visible.');
     await mobilePage.locator('#schema-viewport').scrollIntoViewIfNeeded();
     await shot(mobilePage, 'canvas-mobile');
     await mobilePage.close();
@@ -424,6 +538,8 @@ try {
     await fixturePage.reload({waitUntil: 'networkidle'});
     await fixturePage.locator('#page .empty-state').waitFor();
     assert.equal(await fixturePage.locator('[data-schema-node]').count(), 0);
+    assert.equal(await fixturePage.locator('#schema-tool-rail').isVisible(), true, 'An empty schema retains its tool rail.');
+    assert.equal(await fixturePage.locator('#schema-help-open').isVisible(), true, 'Area help remains available before tables are imported.');
     await fixturePage.addInitScript(() => {
         const setItem = Storage.prototype.setItem;
         Storage.prototype.setItem = function (key, value) {

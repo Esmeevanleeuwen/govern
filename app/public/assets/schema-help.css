@@ -1,0 +1,21 @@
+/* A readable guide uses the same materials as the workspace. */
+.schema-help-dialog { width: min(760px, calc(100vw - 32px)); max-width: none; max-height: calc(100dvh - 40px); padding: 0; border: 0; border-radius: var(--radius); color: var(--ink); background: linear-gradient(145deg, var(--g-shine), transparent 65%), var(--g-dense-frost); box-shadow: var(--g-elevation), 0 24px 80px var(--g-shadow); backdrop-filter: blur(32px); -webkit-backdrop-filter: blur(32px); overflow: hidden; }
+.schema-help-dialog[open] { display: flex; flex-direction: column; }
+.schema-help-dialog::backdrop { background: var(--backdrop); backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px); }
+.schema-help-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 24px 24px 16px; flex: 0 0 auto; }
+.schema-help-header h2 { font-size: 24px; line-height: 1.25; }
+.schema-help-header .icon-button { min-width: 44px; min-height: 44px; background: var(--g-glass); box-shadow: var(--g-control-depth); }
+.schema-help-body { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0 24px 8px; scrollbar-width: thin; }
+.schema-help-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 20px; }
+.schema-help-card { padding: 16px; border-radius: 16px; background: var(--g-frost); min-width: 0; }
+.schema-help-card > .icon { color: var(--g-accent-text); margin-bottom: 8px; }
+.schema-help-card h3 { margin-bottom: 8px; }
+.schema-help-card p, .schema-help-keyboard li, .schema-help-limits { font-size: 14px; line-height: 1.6; }
+.schema-help-keyboard { padding: 20px 0 8px; }
+.schema-help-keyboard ul { padding-left: 20px; margin: 10px 0; display: grid; gap: 8px; }
+.schema-help-limits { padding: 16px; border-radius: 16px; background: var(--g-row); color: var(--muted); }
+.schema-help-footer { display: flex; justify-content: flex-end; padding: 16px 24px 24px; flex: 0 0 auto; }
+@media (max-width: 620px) { .schema-help-grid { grid-template-columns: minmax(0, 1fr); } .schema-help-header { padding: 20px 16px 16px; } .schema-help-header h2 { font-size: 21px; } .schema-help-body { padding: 0 16px 8px; } .schema-help-footer { padding: 16px; } .schema-help-footer .button { width: 100%; min-height: 44px; } }
+@supports not (backdrop-filter: blur(1px)) { .schema-help-dialog, .schema-help-card { background: var(--g-panel); } }
+:root[data-reduce-transparency="true"] .schema-help-dialog, :root[data-reduce-transparency="true"] .schema-help-card { background: var(--g-panel); backdrop-filter: none; -webkit-backdrop-filter: none; }
+@media (forced-colors: active) { .schema-help-dialog { background: Canvas; color: CanvasText; outline: 1px solid CanvasText; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; } .schema-help-card, .schema-help-limits { background: Canvas; color: CanvasText; } }
