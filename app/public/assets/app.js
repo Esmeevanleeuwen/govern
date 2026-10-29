@@ -5,6 +5,7 @@ import {QueryBuilder} from './query-builder.js';
 import {t, getLanguage, setLanguage} from './i18n.js';
 import {getPreferences, updatePreferences, resetAppearance, subscribePreferences} from './preferences.js';
 import {createDashboardLayout} from './dashboard-layout.js';
+import {mountSchemaVisualizer} from './schema-visualizer.js';
 import './app-messages.js';
 import './workspace-messages.js';
 
@@ -14,6 +15,7 @@ const routes = {
     overzicht: {labelKey: 'app.route.overview', icon: 'grid'},
     gegevens: {labelKey: 'app.route.data', icon: 'table'},
     structuur: {labelKey: 'app.route.structure', icon: 'layers'},
+    schema: {labelKey: 'app.route.schema', icon: 'network'},
     onderzoeken: {labelKey: 'app.route.research', icon: 'search'},
     experimenten: {labelKey: 'app.route.experiments', icon: 'flask'},
     instellingen: {labelKey: 'app.route.settings', icon: 'settings'},
@@ -42,6 +44,8 @@ const state = {
     queryError: null,
     querySaveError: null,
     snapshotError: null,
+    schemaData: null,
+    schemaView: {},
 };
 const blockRegistry = [
     {id: 'overview.tables', titleKey: 'app.dashboard.tables', defaultSize: 'wide'},
@@ -252,6 +256,7 @@ async function refreshBootstrap(notify = false) {
         state.bootstrap = data;
         state.connectionError = null;
         state.savedQueries = null;
+        state.schemaData = null;
         setCsrf(data.csrf);
         databaseModal.configure(data.database.name, data.tables || []);
         openDatabase.disabled = false;
@@ -303,7 +308,7 @@ function render() {
     document.title = t(routes[location.name].labelKey) + ' — Govern';
     renderConnectionNotice();
     page.replaceChildren();
-    const views = {overzicht: renderOverview, gegevens: renderData, structuur: renderStructure, onderzoeken: renderResearch, experimenten: renderExperiments, instellingen: renderSettings};
+    const views = {overzicht: renderOverview, gegevens: renderData, structuur: renderStructure, schema: renderSchema, onderzoeken: renderResearch, experimenten: renderExperiments, instellingen: renderSettings};
     Promise.resolve(views[location.name](scope)).catch(error => {
         if (error.name !== 'AbortError' && scope.live()) page.append(errorPanel(error, () => render()));
     });
@@ -631,7 +636,9 @@ async function renderData(scope) {
 }
 
 async function renderStructure(scope) {
-    page.append(heading(t('app.core.structure.eyebrow'), t('app.core.structure.title'), t('app.core.structure.help')));
+    page.append(heading(t('app.core.structure.eyebrow'), t('app.core.structure.title'), t('app.core.structure.help'), [
+        button(t('app.schema.open'), () => { state.schemaView.selected = state.table; go('schema'); }, {symbol: 'network'}),
+    ]));
     if (!tables().length) { page.append(noTables()); return; }
     const table = tables().find(item => item.name === state.table);
     const workspace = el('section', {class: 'table-workspace'}, loading(t('app.core.structure.loading')));
@@ -680,6 +687,30 @@ async function renderStructure(scope) {
         el('pre', {class: 'code-block'}, el('code', {}, data.create_sql)),
         button(t('app.core.structure.copyDefinition'), () => copyText(data.create_sql), {kind: 'ghost', className: 'button-small', symbol: 'copy'}));
     workspace.append(ddl);
+}
+
+async function renderSchema(scope) {
+    page.append(heading(t('app.schema.eyebrow'), t('app.schema.title'), t('app.schema.help'), [
+        button(t('app.schema.refresh'), () => refreshBootstrap(true), {symbol: 'refresh', id: 'schema-refresh'}),
+    ]));
+    const workspace = el('section', {id: 'schema-workspace'}, loading(t('app.schema.loading')));
+    page.append(workspace);
+    try {
+        if (!state.schemaData) {
+            const data = await request('schema', {signal: scope.signal});
+            if (!scope.live()) return;
+            state.schemaData = data;
+        }
+        const visualizer = mountSchemaVisualizer(workspace, {
+            data: state.schemaData,
+            state: state.schemaView,
+            onBrowse: table => go('gegevens', {table}),
+            onStructure: table => go('structuur', {table}),
+        });
+        scope.cleanup.push(() => visualizer.destroy());
+    } catch (error) {
+        if (error.name !== 'AbortError' && scope.live()) workspace.replaceChildren(errorPanel(error, () => render()));
+    }
 }
 
 async function renderResearch(scope) {

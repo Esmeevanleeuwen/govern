@@ -53,6 +53,8 @@ $parentName = $name . '_parent';
 $childName = $name . '_child';
 $parent = Database::identifier($parentName);
 $child = Database::identifier($childName);
+$internalName = '_govern_probe_' . bin2hex(random_bytes(6));
+$internal = Database::identifier($internalName);
 $id = null;
 
 try {
@@ -188,6 +190,29 @@ try {
     $compositeDesign['columns'] = [['source' => 'base', 'column' => 'id'], ['source' => 'related', 'column' => 'label']];
     $assert($runDesign($compositeDesign)['rows'] === [['1', 'right tenant']], 'A composite foreign key joins every part, preventing cross-tenant false matches.');
 
+    // The diagram must use catalog constraints, including their ordered pairs,
+    // rather than guessing relationships from similarly named columns.
+    $pdo->exec('ALTER TABLE ' . $child . ' ADD alternate_tenant INT NULL, ADD alternate_parent INT NULL,
+        ADD CONSTRAINT ' . Database::identifier($name . '_alternate_fk') . '
+        FOREIGN KEY (alternate_tenant,alternate_parent) REFERENCES ' . $parent . ' (tenant,id)');
+    $pdo->exec('CREATE TABLE ' . $internal . ' (id INT PRIMARY KEY) ENGINE=InnoDB');
+    $schema = $catalog->schema();
+    $diagramTables = array_column($schema['tables'], null, 'name');
+    $assert($schema['database'] === $config['name'] && isset($diagramTables[$name], $diagramTables[$parentName], $diagramTables[$childName]), 'Diagram metadata discovers every current public table in the configured database.');
+    $assert(!isset($diagramTables[$internalName]) && !isset($diagramTables['_govern_queries']), 'Diagram excludes internal support tables.');
+    $assert($diagramTables[$name]['columns'] === $catalog->columns($name), 'Diagram column descriptors match the existing structure contract exactly.');
+    $assert($diagramTables[$name]['foreign_keys'] === $catalog->foreignKeys($name), 'Diagram preserves self-referential foreign keys.');
+    $diagramKeys = array_column($diagramTables[$childName]['foreign_keys'], null, 'name');
+    $assert(count($diagramKeys) === 2 && isset($diagramKeys[$name . '_composite_fk'], $diagramKeys[$name . '_alternate_fk']), 'Separate foreign-key constraints between the same two tables remain distinct.');
+    $assert($diagramKeys[$name . '_composite_fk']['columns'] === ['tenant', 'parent_id']
+        && $diagramKeys[$name . '_composite_fk']['referenced_columns'] === ['tenant', 'id']
+        && $diagramKeys[$name . '_composite_fk']['referenced_schema'] === $config['name'], 'Diagram composite keys preserve positional pairs and the referenced schema.');
+    $assert($diagramKeys[$name . '_alternate_fk']['columns'] === ['alternate_tenant', 'alternate_parent'], 'Diagram does not merge separate constraints or column pairs.');
+    $diagramParentColumns = array_column($diagramTables[$parentName]['columns'], null, 'name');
+    $assert($diagramParentColumns['tenant']['primary'] && $diagramParentColumns['id']['primary']
+        && $diagramTables[$childName]['columns'][1]['nullable'], 'Diagram distinguishes every primary-key part and nullable columns.');
+    $assert(array_keys($schema) === ['database', 'tables'] && array_keys($diagramTables[$name]) === ['name', 'type', 'comment', 'columns', 'foreign_keys'], 'Diagram response contains metadata only, without rows, DDL, credentials or saved research.');
+
     foreach ([
         'unexpected key' => ['raw_sql' => 'SELECT 1'],
         'non-list columns' => ['columns' => ['source' => 'base', 'column' => 'id']],
@@ -251,6 +276,9 @@ try {
     // A normal view must remain usable by the compiler and both execution
     // forms. Keep its compiled query for the changed-definition check below.
     $pdo->exec('CREATE VIEW ' . $view . ' AS SELECT id AS touched FROM ' . $quoted . ' WHERE id=1');
+    $diagramView = array_column($catalog->schema()['tables'], null, 'name')[$viewName];
+    $assert($diagramView['type'] === 'view' && $diagramView['columns'][0]['name'] === 'touched'
+        && $diagramView['foreign_keys'] === [], 'Diagram includes view columns without inventing links from its SELECT definition.');
     $viewDesign = $baseDesign;
     $viewDesign['table'] = $viewName;
     $viewDesign['columns'] = [['source' => 'base', 'column' => 'touched']];
@@ -272,6 +300,8 @@ try {
     // expression invokes a writing function under READ ONLY metadata access.
     // Reject exactly that unavailable-metadata case; do not hide other errors.
     $unsafeColumns = $catalog->columns($viewName);
+    $catalog->schema();
+    $assert($pdo->query('SELECT hits FROM ' . $quoted . ' WHERE id=1')->fetchColumn() === '0', 'Whole-schema inspection cannot write through a DEFINER view.');
     if ($unsafeColumns === []) {
         try {
             $designer->compile($viewDesign);
@@ -324,5 +354,6 @@ try {
     $pdo->exec('DROP FUNCTION IF EXISTS ' . $function);
     $pdo->exec('DROP TABLE IF EXISTS ' . $child);
     $pdo->exec('DROP TABLE IF EXISTS ' . $parent);
+    $pdo->exec('DROP TABLE IF EXISTS ' . $internal);
     $pdo->exec('DROP TABLE IF EXISTS ' . $quoted);
 }

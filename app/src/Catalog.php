@@ -9,6 +9,68 @@ final class Catalog
 {
     public function __construct(private readonly Database $database) {}
 
+    /** Complete diagram metadata in three reads, independent of the table count. */
+    public function schema(): array
+    {
+        $pdo = $this->database->reader();
+        $statement = $pdo->prepare(
+            'SELECT TABLE_NAME, TABLE_TYPE, TABLE_COMMENT
+             FROM information_schema.TABLES WHERE TABLE_SCHEMA=:schema ORDER BY TABLE_NAME'
+        );
+        $statement->execute(['schema' => $this->database->name()]);
+        $tables = [];
+        foreach ($statement as $row) {
+            if (str_starts_with($row['TABLE_NAME'], '_govern_')) {
+                continue;
+            }
+            $tables[$row['TABLE_NAME']] = [
+                'name' => $row['TABLE_NAME'],
+                'type' => $row['TABLE_TYPE'] === 'VIEW' ? 'view' : 'table',
+                'comment' => $row['TABLE_COMMENT'] === 'VIEW' ? '' : $row['TABLE_COMMENT'],
+                'columns' => [],
+                'foreign_keys' => [],
+            ];
+        }
+        $statement = $pdo->prepare(
+            'SELECT TABLE_NAME, COLUMN_NAME, COLUMN_TYPE, DATA_TYPE, IS_NULLABLE, COLUMN_DEFAULT,
+                    EXTRA, COLUMN_KEY, COLUMN_COMMENT, GENERATION_EXPRESSION
+             FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=:schema
+             ORDER BY TABLE_NAME, ORDINAL_POSITION'
+        );
+        $statement->execute(['schema' => $this->database->name()]);
+        foreach ($statement as $row) {
+            if (isset($tables[$row['TABLE_NAME']])) {
+                $tables[$row['TABLE_NAME']]['columns'][] = self::columnMetadata($row);
+            }
+        }
+        $statement = $pdo->prepare(
+            'SELECT TABLE_NAME, CONSTRAINT_NAME, COLUMN_NAME, REFERENCED_TABLE_NAME,
+                    REFERENCED_COLUMN_NAME, REFERENCED_TABLE_SCHEMA
+             FROM information_schema.KEY_COLUMN_USAGE
+             WHERE TABLE_SCHEMA=:schema AND REFERENCED_TABLE_NAME IS NOT NULL
+             ORDER BY TABLE_NAME, CONSTRAINT_NAME, ORDINAL_POSITION'
+        );
+        $statement->execute(['schema' => $this->database->name()]);
+        foreach ($statement as $row) {
+            $table = $row['TABLE_NAME'];
+            if (!isset($tables[$table])) {
+                continue;
+            }
+            $name = $row['CONSTRAINT_NAME'];
+            $tables[$table]['foreign_keys'][$name] ??= [
+                'name' => $name, 'columns' => [], 'referenced_table' => $row['REFERENCED_TABLE_NAME'],
+                'referenced_schema' => $row['REFERENCED_TABLE_SCHEMA'], 'referenced_columns' => [],
+            ];
+            $tables[$table]['foreign_keys'][$name]['columns'][] = $row['COLUMN_NAME'];
+            $tables[$table]['foreign_keys'][$name]['referenced_columns'][] = $row['REFERENCED_COLUMN_NAME'];
+        }
+        foreach ($tables as &$table) {
+            $table['foreign_keys'] = array_values($table['foreign_keys']);
+        }
+        unset($table);
+        return ['database' => $this->database->name(), 'tables' => array_values($tables)];
+    }
+
     public function tables(): array
     {
         $statement = $this->database->reader()->prepare(
@@ -46,19 +108,7 @@ final class Catalog
         $statement->execute(['schema' => $this->database->name(), 'table' => $table]);
         $columns = [];
         foreach ($statement as $row) {
-            $columns[] = [
-                'name' => $row['COLUMN_NAME'],
-                'type' => $row['COLUMN_TYPE'],
-                'data_type' => $row['DATA_TYPE'],
-                'nullable' => $row['IS_NULLABLE'] === 'YES',
-                'default' => $row['COLUMN_DEFAULT'],
-                'generated' => ($row['GENERATION_EXPRESSION'] ?? '') !== '',
-                'generation_expression' => $row['GENERATION_EXPRESSION'] ?: null,
-                'primary' => $row['COLUMN_KEY'] === 'PRI',
-                'auto_increment' => str_contains(strtolower($row['EXTRA']), 'auto_increment'),
-                'extra' => $row['EXTRA'],
-                'comment' => $row['COLUMN_COMMENT'],
-            ];
+            $columns[] = self::columnMetadata($row);
         }
         return $columns;
     }
@@ -199,5 +249,22 @@ final class Catalog
             throw ApiException::fromCode('table_missing', 404);
         }
         return $row['TABLE_TYPE'];
+    }
+
+    private static function columnMetadata(array $row): array
+    {
+        return [
+            'name' => $row['COLUMN_NAME'],
+            'type' => $row['COLUMN_TYPE'],
+            'data_type' => $row['DATA_TYPE'],
+            'nullable' => $row['IS_NULLABLE'] === 'YES',
+            'default' => $row['COLUMN_DEFAULT'],
+            'generated' => ($row['GENERATION_EXPRESSION'] ?? '') !== '',
+            'generation_expression' => $row['GENERATION_EXPRESSION'] ?: null,
+            'primary' => $row['COLUMN_KEY'] === 'PRI',
+            'auto_increment' => str_contains(strtolower($row['EXTRA']), 'auto_increment'),
+            'extra' => $row['EXTRA'],
+            'comment' => $row['COLUMN_COMMENT'],
+        ];
     }
 }

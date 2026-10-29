@@ -116,6 +116,8 @@ Keep primary actions visible without hover. Check the layout at 320 px, tablet w
 
 - **Structure / Structuur:** columns, keys, relationships and table definitions from the live catalog. Related objects have a clear route back.
 
+- **Schema / Schema:** a whole-database diagram for following declared foreign keys between tables. This recurring spatial exploration task has its own workspace, with a direct entry from the selected table in Structure.
+
 - **Research / Onderzoeken:** visual query building, editable SQL, results and saved research. Explain the relationship between a visual design and hand edited SQL.
 
 - **Experiments / Experimenten:** creating, downloading and restoring named restore points. Recovery remains reachable when the database is unavailable.
@@ -123,6 +125,26 @@ Keep primary actions visible without hover. Check the layout at 320 px, tablet w
 - **Settings / Instellingen:** language, appearance and workspace preferences. Keep it in a consistent, easy to find position.
 
 ## Core user flows
+
+### Follow the schema
+
+Open **Schema**, or choose **View schema** from Structure to select the current
+table. The canvas shows live tables, views, columns, primary keys and declared
+foreign keys. Search by table or column, select an object to read its exact
+connections, and continue to its data or structure. Focus on a selected table's
+connections to reduce visual density, then return to the complete diagram.
+
+Table headers can be dragged or moved with the keyboard. Zoom, fit and reset
+controls keep the diagram navigable; mobile users also have the table index and
+textual relationship details. Relationship strokes communicate data rather than
+decorating panel boundaries. The cards keep the shared frost and soft shadows.
+
+Keep table positions per database and separate from dashboard layout. A language
+or theme switch preserves search, selection, positions and the viewport.
+Refreshing reads current metadata, keeps valid positions and discovers new
+objects. Resetting the diagram changes its arrangement only. A view or a field
+with a similar name does not establish a foreign key. Explain references outside
+the visible catalog instead of drawing a connection to the wrong local table.
 
 ### Explore and change data
 
