@@ -210,6 +210,8 @@ try {
     assert.equal(englishHelp.includes('app.schema.'), false, 'The English guide has no untranslated keys.');
     await shot(page, 'help-en');
     await page.locator('#schema-help-close').click();
+    await page.waitForFunction(() => !document.querySelector('#schema-help-dialog')?.open
+        && document.activeElement?.id === 'schema-help-open', undefined, {timeout: 5000});
     assert.equal(await page.locator('#schema-help-open').evaluate(button => button === document.activeElement), true);
     await languagePage.locator('#language-select').selectOption('nl');
     await page.waitForFunction(() => document.documentElement.lang === 'nl');
