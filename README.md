@@ -330,6 +330,10 @@ Werk je al met Git, dan kun je vanuit deze map `git pull --ff-only` gebruiken en
 daarna hetzelfde startbestand uitvoeren. Heb je zelf code aangepast, bewaar of
 combineer die wijzigingen voordat je projectbestanden vervangt.
 
+Werk je bij vanaf een versie zonder dynamische proxy-adressen? Voer na het
+starten eenmalig `docker compose restart gateway` uit om de nieuwe
+Nginx-instellingen te laden. Dit verwijdert geen databases of volumes.
+
 ## Samen verder bouwen
 
 De broncode blijft klein en rechtstreeks te volgen:

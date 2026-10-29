@@ -65,6 +65,7 @@ jobs:
           export BROWSER_BIN
           export BASE_URL=http://127.0.0.1:8080
           export GOVERN_UI_WRITE_TESTS=1
+          node tests/database-import-smoke.mjs
           node tests/frontend-smoke.mjs
           node tests/query-builder-smoke.mjs
           node tests/ui-settings-smoke.mjs
@@ -75,7 +76,6 @@ jobs:
           node tests/multidatabase-row-smoke.mjs
           node tests/ai-workspace-smoke.mjs
           node tests/ai-project-smoke.mjs
-          node tests/database-import-smoke.mjs
       - name: Logs on failure
         if: failure()
         run: docker compose logs --tail=100
