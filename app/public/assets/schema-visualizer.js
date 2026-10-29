@@ -26,6 +26,7 @@ export function mountSchemaVisualizer(root, {data, state = {}, onBrowse, onStruc
     let pointer = null;
     let frame;
     let resizeObserver;
+    let previousCanvasSize;
     const nodes = new Map();
     const cleanup = [];
     if (state.database !== model.database) {
@@ -119,6 +120,17 @@ export function mountSchemaVisualizer(root, {data, state = {}, onBrowse, onStruc
         const toggleLabel = t(open ? 'app.schema.panelHide' : 'app.schema.panelShow');
         panelToggle.setAttribute('aria-label', toggleLabel);
         panelToggle.querySelector('span').textContent = toggleLabel;
+        syncCanvasSize();
+    }
+    function syncCanvasSize() {
+        if (destroyed || !canvas.isConnected) return;
+        const next = {width: canvas.clientWidth, height: canvas.clientHeight};
+        if (previousCanvasSize) {
+            state.viewport.x += (next.width - previousCanvasSize.width) / 2;
+            state.viewport.y += (next.height - previousCanvasSize.height) / 2;
+        }
+        previousCanvasSize = next;
+        transform();
     }
     document.addEventListener('govern:explorerchange', syncPanel);
     cleanup.push(() => document.removeEventListener('govern:explorerchange', syncPanel));
@@ -416,15 +428,8 @@ export function mountSchemaVisualizer(root, {data, state = {}, onBrowse, onStruc
         if (needsInitialFit && !state.selected) fit();
         if (state.selected && state.centeredSelected !== state.selected) { pointToTable(state.selected); state.centeredSelected = state.selected; }
         if (typeof ResizeObserver !== 'undefined') {
-            let previousSize = {width: canvas.clientWidth, height: canvas.clientHeight};
-            resizeObserver = new ResizeObserver(() => {
-                if (destroyed) return;
-                const next = {width: canvas.clientWidth, height: canvas.clientHeight};
-                state.viewport.x += (next.width - previousSize.width) / 2;
-                state.viewport.y += (next.height - previousSize.height) / 2;
-                previousSize = next;
-                transform();
-            });
+            previousCanvasSize = {width: canvas.clientWidth, height: canvas.clientHeight};
+            resizeObserver = new ResizeObserver(syncCanvasSize);
             resizeObserver.observe(canvas);
         }
     }
