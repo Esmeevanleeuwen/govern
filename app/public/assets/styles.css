@@ -313,6 +313,9 @@ textarea.input { resize: vertical; line-height: 1.6; }
 .editor-action-buttons { display: flex; gap: 8px; }
 .keyboard-hint { color: var(--muted); font-size: 12px; }
 .query-hint { color: var(--muted); font-size: 12px; padding: 0 19px 15px; }
+.sql-preview { margin: 0; padding: 0 19px 12px; color: var(--muted); font: 12px/1.5 ui-monospace, monospace; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 7em; overflow: auto; }
+.confirm-list { margin: 8px 0 0; padding-left: 18px; text-align: left; font-size: 13px; }
+.confirm-list code { overflow-wrap: anywhere; }
 .query-explanation { padding: 20px; border: 0; background: transparent; font-size: 13px; color: var(--ink); }
 .query-explanation:empty { display: none; }
 .query-explanation h3 { display: flex; gap: 8px; align-items: center; font-size: 13px; }

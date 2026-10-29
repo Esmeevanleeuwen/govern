@@ -96,8 +96,8 @@ try {
             $built = (new QueryDesigner($database))->compile($input['design']);
             Http::json(['sql' => $built['sql'], 'explanation' => $built['explanation'], 'explanation_i18n' => $built['explanation_i18n']]);
         case 'query':
-            if (array_keys($input) === ['sql']) {
-                Http::json((new QueryRunner($database))->execute(Http::text($input, 'sql')));
+            if (array_keys($input) === ['sql'] || array_keys($input) === ['sql', 'confirm']) {
+                Http::json((new QueryRunner($database))->executeScript(Http::text($input, 'sql'), ($input['confirm'] ?? false) === true));
             }
             if (array_keys($input) === ['design']) {
                 $built = (new QueryDesigner($database))->compile($input['design']);

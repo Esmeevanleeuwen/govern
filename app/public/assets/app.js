@@ -1030,13 +1030,31 @@ async function renderResearch(scope) {
     const drawResult = () => {
         result.replaceChildren();
         if (state.queryError) {
-            result.append(errorPanel(state.queryError), el('p', {class: 'table-caption'}, t('app.core.research.writeHelp')));
+            result.append(errorPanel(state.queryError));
             return;
         }
         const data = state.queryResult;
         if (!data) {
             result.append(el('div', {class: 'card query-placeholder'},
                 empty(t('app.core.research.resultPlaceholder'), t('app.core.research.resultHelp'), null, 'search')));
+            return;
+        }
+        if (data.statements) {
+            data.statements.forEach((item, index) => {
+                const rowsResult = item.columns.length > 0;
+                const metrics = el('div', {class: 'query-metrics'},
+                    badge(rowsResult ? t('app.core.research.rowCount', {count: number(item.returned_rows)}) : t('app.core.research.affectedCount', {count: number(item.affected_rows)}), 'badge-green'),
+                    el('span', {}, number(item.duration_ms) + ' ms'));
+                const card = el('section', {class: 'card'},
+                    el('div', {class: 'card-header'}, el('h2', {}, t('app.core.research.statementTitle', {number: index + 1})), metrics),
+                    el('pre', {class: 'sql-preview'}, item.sql));
+                if (rowsResult) card.append(dataTable(item.columns, item.rows, {caption: t('app.core.research.resultCaption'), emptyMessage: t('app.core.research.noRows')}));
+                result.append(card);
+                if (item.truncated) result.append(notice(t('app.core.research.truncated')));
+            });
+            if (data.failed) {
+                result.append(errorPanel(Object.assign(new Error(t('app.core.research.statementFailed', {number: data.failed.index}) + ' ' + data.failed.detail), {})));
+            }
             return;
         }
         const metrics = el('div', {class: 'query-metrics'}, badge(t('app.core.research.rowCount', {count: number(data.returned_rows)}), 'badge-green'),
@@ -1064,7 +1082,16 @@ async function renderResearch(scope) {
         runButton.disabled = true;
         result.replaceChildren(loading(t('app.core.research.running')));
         try {
-            const data = await request('query', {body, signal: scope.signal});
+            let data = await request('query', {body, signal: scope.signal});
+            if (data.confirm_required) {
+                const list = el('ul', {class: 'confirm-list'}, ...data.destructive.map(item =>
+                    el('li', {}, el('strong', {}, t('app.core.research.destructive.' + item.reason)), ' ', el('code', {}, item.sql.slice(0, 200)))));
+                const confirmed = await confirmAction({title: t('app.core.research.confirmTitle'),
+                    description: el('div', {}, el('p', {}, t('app.core.research.confirmHelp')), list),
+                    confirmLabel: t('app.core.research.confirmRun'), danger: true});
+                if (!confirmed) { result.replaceChildren(); drawResult(); return; }
+                data = await request('query', {body: {sql, confirm: true}, signal: scope.signal});
+            }
             if (!scope.live() || revision !== state.queryRevision || editor.value !== sql) return;
             if (body.design) {
                 if (data.sql !== sql) {
@@ -1078,7 +1105,7 @@ async function renderResearch(scope) {
             }
             state.queryResult = data;
             drawResult();
-        } catch (error) {
+            if (data.statements?.some(item => item.affected_rows !== null)) refreshBootstrap();
             if (error.name !== 'AbortError' && scope.live() && revision === state.queryRevision && editor.value === sql) {
                 state.queryError = error;
                 drawResult();
@@ -1115,7 +1142,7 @@ async function renderResearch(scope) {
         editor.focus();
     };
     const editorCard = el('section', {class: 'card'},
-        el('div', {class: 'editor-topbar'}, el('h2', {}, t('app.core.research.editorTitle')), badge(t('app.core.research.readOnly'), 'badge-green')),
+        el('div', {class: 'editor-topbar'}, el('h2', {}, t('app.core.research.editorTitle'))),
         el('div', {class: 'editor-wrap'}, editor),
         el('div', {class: 'editor-actions'}, el('div', {class: 'editor-action-buttons'}, runButton,
             button(t('app.core.research.new'), newQuery, {kind: 'ghost', symbol: 'plus'}),

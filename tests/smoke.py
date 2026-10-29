@@ -121,7 +121,7 @@ def main():
           and result["data"]["rows"][0][1] == "DigiD", "Visual design executes against actual data with bound filter values")
     designed_rows = result["data"]["rows"]
     status, result, _ = request("query", {"sql": designed_sql})
-    check(status == 200 and result["data"]["rows"] == designed_rows, "Editable generated SQL returns the same rows as the bound design")
+    check(status == 200 and result["data"]["statements"][0]["rows"] == designed_rows, "Editable generated SQL returns the same rows as the bound design")
 
     join_design = {
         "table": "system_responsibilities", "join": {"foreign_key": organization_link["name"], "type": "left"},
@@ -140,13 +140,14 @@ def main():
     check(status == 422 and result["ok"] is False, "A fabricated identifier cannot bypass live column validation")
 
     status, result, _ = request("query", {"sql": "SELECT 1 AS value, 2 AS value, NULL AS missing"})
-    check(status == 200 and result["data"]["columns"] == ["value", "value", "missing"] and result["data"]["rows"] == [["1", "2", None]], "Query preserves duplicate aliases and NULL")
+    check(status == 200 and result["data"]["statements"][0]["columns"] == ["value", "value", "missing"] and result["data"]["statements"][0]["rows"] == [["1", "2", None]], "Query preserves duplicate aliases and NULL")
     status, result, _ = request("query", {"sql": "SELECT 1"}, token=False)
     check(status == 403 and result["ok"] is False, "A write-style request requires the browser CSRF token")
     status, result, _ = request("query", {"sql": "UPDATE digital_systems SET name='should not happen'"})
-    check(status == 403 and result["ok"] is False, "Reader grants reject a genuine UPDATE")
+    check(status == 200 and result["data"]["confirm_required"] is True
+          and result["data"]["destructive"][0]["reason"] == "update_no_where", "UPDATE without WHERE asks for confirmation and changes nothing")
     status, result, _ = request("query", {"sql": "SELECT 1; SELECT 2"})
-    check(status == 422, "Native driver rejects multiple statements")
+    check(status == 200 and [s["rows"] for s in result["data"]["statements"]] == [[["1"]], [["2"]]], "Several statements run in one request")
 
     saved_id = None
     try:
@@ -158,7 +159,7 @@ def main():
         check(any(str(q["id"]) == str(saved_id) for q in result["data"]), "Saved investigation is read back")
         saved_query = next(q for q in result["data"] if str(q["id"]) == str(saved_id))
         status, result, _ = request("query", {"sql": saved_query["sql"]})
-        check(status == 200 and result["data"]["rows"] == designed_rows, "Saved visual investigation remains executable ordinary SQL")
+        check(status == 200 and result["data"]["statements"][0]["rows"] == designed_rows, "Saved visual investigation remains executable ordinary SQL")
         status, context, headers = request("context")
         check(status == 200 and context["format"] == "govern-context" and "attachment" in headers.get("Content-Disposition", ""), "Schema and query context can be downloaded")
         check("rows" not in context and "password" not in context and len(context["schema"]) >= 23, "Context is schema-based, without record export or credentials")
