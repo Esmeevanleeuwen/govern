@@ -15,6 +15,7 @@ use Govern\Database;
 use Govern\QueryDesigner;
 use Govern\QueryRunner;
 use Govern\SavedQueries;
+use Govern\SqlScript;
 
 $config = Config::fromEnvironment();
 $options = getopt('', ['confirm-database:']);
@@ -272,6 +273,20 @@ try {
     $reject(static fn () => $runner->execute('SELECT SLEEP(8)'), [408], 'Long-running SQL is interrupted.');
     $assert(microtime(true) - $start < 7.5, 'Timeout returned before full sleep completed.');
     $assert($runner->execute('SELECT 1 AS recovered')['rows'] === [['1']], 'Next query works after interruption.');
+
+    $split = SqlScript::split("SELECT ';' AS a; -- c; x\n UPDATE t SET x='1';; /* ; */ DELETE FROM t");
+    $assert(count($split) === 3 && SqlScript::destructiveReason($split[1]['clean']) === 'update_no_where'
+        && SqlScript::destructiveReason($split[2]['clean']) === 'delete_no_where', 'Statement splitter honours quotes and comments.');
+    $assert(SqlScript::destructiveReason('DELETE FROM t WHERE id = 1') === null, 'DELETE with WHERE needs no confirmation.');
+    $script = $runner->executeScript("INSERT INTO $quoted (label) VALUES ('script one'); SELECT COUNT(*) AS n FROM $quoted WHERE label = 'script one'");
+    $assert(!$script['confirm_required'] && $script['failed'] === null && $script['statements'][0]['affected_rows'] === 1
+        && $script['statements'][1]['rows'] === [['1']], 'Free SQL runs several statements incl. writes.');
+    $pending = $runner->executeScript("DELETE FROM $quoted");
+    $assert($pending['confirm_required'] === true && $pending['destructive'][0]['reason'] === 'delete_no_where', 'Destructive SQL asks for confirmation.');
+    $assert($pdo->query("SELECT COUNT(*) FROM $quoted WHERE label = 'script one'")->fetchColumn() === '1', 'Unconfirmed destructive SQL changed nothing.');
+    $script = $runner->executeScript("DELETE FROM $quoted WHERE label = 'script one'; SELECT nonsense FROM nowhere; SELECT 1", true);
+    $assert($script['executed'] === 1 && $script['failed']['index'] === 2, 'Script stops at the first failing statement.');
+    $assert($runner->execute("SELECT 1")['rows'] === [['1']], 'Reader path unaffected.');
 
     // A normal view must remain usable by the compiler and both execution
     // forms. Keep its compiled query for the changed-definition check below.

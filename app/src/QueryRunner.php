@@ -12,6 +12,94 @@ final class QueryRunner
 
     public function __construct(private readonly Database $database) {}
 
+    /**
+     * Free SQL as in phpMyAdmin: several statements, any privilege the write
+     * account has. Statements run in order on a throwaway session and stop at the
+     * first error. Destructive statements need confirm=true first.
+     */
+    public function executeScript(string $sql, bool $confirm = false): array
+    {
+        $sql = trim($sql);
+        if ($sql === '') {
+            throw ApiException::fromCode('sql_required');
+        }
+        if (strlen($sql) > 262144) {
+            throw ApiException::fromCode('query_too_large', 413);
+        }
+        $statements = SqlScript::split($sql);
+        if ($statements === []) {
+            throw ApiException::fromCode('sql_required');
+        }
+        $destructive = [];
+        foreach ($statements as $index => $statement) {
+            $reason = SqlScript::destructiveReason($statement['clean']);
+            if ($reason !== null) {
+                $destructive[] = ['index' => $index + 1, 'sql' => $statement['sql'], 'reason' => $reason];
+            }
+        }
+        if ($destructive !== [] && !$confirm) {
+            return ['confirm_required' => true, 'destructive' => $destructive, 'statement_count' => count($statements)];
+        }
+        $pdo = $this->database->scriptConnection();
+        $results = [];
+        $failed = null;
+        $started = hrtime(true);
+        try {
+            foreach ($statements as $index => $statement) {
+                try {
+                    $results[] = $this->runStatement($pdo, $statement['sql']);
+                } catch (PDOException $exception) {
+                    $driver = (int) ($exception->errorInfo[1] ?? 0);
+                    $message = in_array($driver, [1205, 1317, 1969, 3024], true)
+                        ? Messages::text('query_timeout')
+                        : (string) ($exception->errorInfo[2] ?? Messages::text('query_database_error'));
+                    $failed = ['index' => $index + 1, 'sql' => $statement['sql'], 'detail' => substr($message, 0, 2000)];
+                    break;
+                }
+            }
+        } finally {
+            $pdo = null;
+        }
+        return ['confirm_required' => false, 'statements' => $results, 'failed' => $failed,
+            'statement_count' => count($statements), 'executed' => count($results),
+            'duration_ms' => round((hrtime(true) - $started) / 1e6, 2), 'sql' => $sql];
+    }
+
+    private function runStatement(PDO $pdo, string $sql): array
+    {
+        $started = hrtime(true);
+        $statement = $pdo->query($sql);
+        $columns = [];
+        $rows = [];
+        $shortened = false;
+        try {
+            for ($index = 0; $index < $statement->columnCount(); $index++) {
+                $metadata = $statement->getColumnMeta($index);
+                $columns[] = $metadata['name'] ?? ('kolom_' . ($index + 1));
+            }
+            $bytes = 0;
+            while ($columns !== [] && ($row = $statement->fetch(PDO::FETCH_NUM))) {
+                if (count($rows) >= self::ROW_LIMIT) {
+                    $shortened = true;
+                    break;
+                }
+                $row = Preview::row($row, $shortened);
+                $rows[] = $row;
+                $bytes += Preview::bytes($row);
+                if ($bytes > Preview::RESULT_BYTES) {
+                    $shortened = true;
+                    break;
+                }
+            }
+            $affected = $columns === [] ? $statement->rowCount() : null;
+        } finally {
+            $statement->closeCursor();
+        }
+        return ['sql' => $sql, 'columns' => $columns, 'rows' => $rows, 'truncated' => $shortened,
+            'returned_rows' => count($rows), 'affected_rows' => $affected,
+            'duration_ms' => round((hrtime(true) - $started) / 1e6, 2)];
+    }
+
     public function execute(string $sql, array $parameters = []): array
     {
         $sql = trim($sql);
