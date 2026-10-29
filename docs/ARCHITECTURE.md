@@ -197,8 +197,20 @@ niet rechtstreeks uit vrije invoer overgenomen.
 met een ontwerp gebruikt `QueryRunner` een prepared statement met gebonden
 waarden. De weergegeven SQL is een zelfstandig uitvoerbare weergave van dezelfde
 vraag. Een handmatige wijziging in de editor schakelt over naar de bestaande
-vrije SQL-route. Beide routes gebruiken dezelfde leesrechten, tijdslimiet en
-resultaatweergave.
+vrije SQL-route. De ontwerproute gebruikt de leesverbinding met leesrechten,
+tijdslimiet en resultaatweergave.
+
+De vrije SQL-route is bewust ruimer: `QueryRunner::executeScript` splitst de tekst
+met `SqlScript` (die quotes en commentaar respecteert), voert de opdrachten in
+volgorde uit op een eigen schrijfsessie (`Database::scriptConnection`, UTC,
+strikte SQL-modus, tijdslimiet, `LOCAL INFILE` uit) en gooit die sessie na het
+verzoek weg. De uitvoering stopt bij de eerste fout; eerdere opdrachten zijn dan
+al doorgevoerd, want DDL is niet transactioneel. Opdrachten die ingrijpend zijn
+(`DROP`, `TRUNCATE`, `DELETE`/`UPDATE` zonder `WHERE`, `ALTER ... DROP`) worden
+niet uitgevoerd zolang het verzoek geen `confirm: true` bevat. Dit is een
+bevestigingsstap en geen beveiligingsgrens; de rechten van het schrijfaccount
+blijven de echte grens. Opdrachten met een eigen `;` (opgeslagen procedures,
+`DELIMITER`) worden niet ondersteund; gebruik daarvoor phpMyAdmin.
 
 Het ontwerp is tijdelijke schermtoestand. Opgeslagen onderzoeken blijven gewone
 SQL in `_govern_queries`; een nieuw opslagmodel of een kopie van de catalogus is

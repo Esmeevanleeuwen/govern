@@ -48,13 +48,23 @@ final class Database
         return $this->write ??= $this->connect($this->config['user'], $this->config['password']);
     }
 
+    /** A fresh writer session for free SQL; the caller drops it after one request. */
+    public function scriptConnection(): PDO
+    {
+        return $this->connect($this->config['user'], $this->config['password'], [
+            // Text protocol, so statements such as USE or LOCK TABLES also run.
+            PDO::ATTR_EMULATE_PREPARES => true,
+            PDO::MYSQL_ATTR_USE_BUFFERED_QUERY => false,
+        ]);
+    }
+
     public function discardReader(): void
     {
         // An investigation may change session settings. Never reuse that session.
         $this->read = null;
     }
 
-    private function connect(string $user, #[\SensitiveParameter] string $password): PDO
+    private function connect(string $user, #[\SensitiveParameter] string $password, array $options = []): PDO
     {
         if ($user === '' || $password === '') {
             throw ApiException::fromCode('credentials_missing', 503);
@@ -63,7 +73,7 @@ final class Database
         $address = $socket !== ''
             ? 'unix_socket=' . $socket
             : 'host=' . $this->config['host'] . ';port=' . $this->config['port'];
-        $pdo = new PDO('mysql:' . $address . ';charset=utf8mb4', $user, $password, [
+        $pdo = new PDO('mysql:' . $address . ';charset=utf8mb4', $user, $password, array_replace([
             PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
             PDO::ATTR_EMULATE_PREPARES => false,
@@ -72,7 +82,7 @@ final class Database
             PDO::ATTR_TIMEOUT => 5,
             PDO::MYSQL_ATTR_MULTI_STATEMENTS => false,
             PDO::MYSQL_ATTR_LOCAL_INFILE => false,
-        ]);
+        ], $options));
         $pdo->exec('USE ' . self::identifier($this->name()));
         $pdo->exec("SET time_zone = '+00:00'");
         $pdo->exec("SET SESSION sql_mode = '" . self::SQL_MODE . "'");

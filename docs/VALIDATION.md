@@ -23,7 +23,7 @@ sleutels, dubbele selectie van hetzelfde record, SQL-stringescaping, werkelijk
 vastgelegde foreign keys en momentopnamen zonder betrouwbare recordidentiteit.
 Verkorte/binaire voorbeeldwaarden leveren geen veronderstelde selectiesleutel
 op. De queryactie zet alleen een leesvraag klaar; uitvoeren blijft een aparte
-handeling. Alle **559** berichten zijn volledig in Nederlands en Engels.
+handeling. Alle **569** berichten zijn volledig in Nederlands en Engels.
 
 Deze controles gebruikten PHP **8.4.27**, MariaDB **10.11.14**, Nginx **1.24.0**
 en de officiële phpMyAdmin **5.2.3**. De nieuwe model- en browserproef zijn ook

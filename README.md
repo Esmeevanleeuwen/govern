@@ -49,7 +49,9 @@ je lokale `.env`, die niet in Git wordt opgenomen.
   gegroepeerd boven het werkvlak: weergave, indeling, zoom en hulp. Ze blijven
   bereikbaar als je het paneel inklapt. **Help**
   opent een korte uitleg van alle mogelijkheden in dit scherm.
-- **Onderzoeken:** voer leesvragen uit, bekijk resultaten en bewaar queries met uitleg.
+- **Onderzoeken:** voer SQL uit, bekijk resultaten en bewaar queries met uitleg.
+  Vrije SQL kan meerdere opdrachten bevatten; ingrijpende opdrachten vragen om
+  bevestiging. De visuele querybouwer gebruikt de leesverbinding.
 - **Visueel samenstellen:** kies een tabel, kolommen, filters en een sorteervolgorde.
   Voeg eventueel een bestaande verwijzing naar een tweede tabel toe. Govern maakt
   de SQL zichtbaar; je kunt die daarna zelf aanpassen.
@@ -219,10 +221,10 @@ werkplek zonder bezoekersaccounts. Iedereen die jouw lokale ingang kan gebruiken
 kan de gekoppelde werkdatabase beheren. De phpMyAdmin-verbinding heeft rechten
 voor deze database; serverbeheer en andere databases vallen daar niet onder.
 
-**Onderzoeken** gebruikt een apart databaseaccount met leesrechten. Voor
-schrijvende SQL en structuurwijzigingen gebruik je het databasevenster. Die
-scheiding beperkt de gewone onderzoeksknop, niet de mogelijkheden in je
-persoonlijke phpMyAdmin-venster.
+De **visuele querybouwer** gebruikt een apart databaseaccount met leesrechten.
+Vrije SQL in **Onderzoeken** en het databasevenster gebruiken het schrijfaccount
+voor deze werkdatabase. Vrije SQL vraagt bevestiging voor ingrijpende opdrachten;
+eerdere opdrachten in een script kunnen al zijn uitgevoerd als een latere faalt.
 
 De interface en configuratie zijn niet bedoeld om rechtstreeks openbaar op
 internet te zetten. Voor delen of publiceren hoort eerst authenticatie en een

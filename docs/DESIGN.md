@@ -276,7 +276,7 @@ Choose a table, read or search its rows, and optionally open the SQL explanation
 
 ### Build and save research
 
-Choose a table, columns and filters, then generate SQL. Show that SQL before execution. Run through the existing read only research connection and show results, limits and any truncation.
+Choose a table, columns and filters, then generate SQL. Show that SQL before execution. Run visual designs through the read only research connection and show results, limits and any truncation. Free SQL in the editor may hold several statements and any change; show one result card per statement (rows or affected rows), stop visibly at the first failure, and ask for confirmation before destructive statements.
 
 Editing generated SQL changes the active mode to manual SQL. The builder must not quietly overwrite that work. Changing builder choices creates a draft until the user applies them. Saved research remains ordinary SQL with its name and notes. Reopening it must not invent a visual design that was never saved.
 
@@ -388,7 +388,7 @@ stable object keys; do not add a custom inspector or copied explanation for each
 database table. Generic interface inspection remains available without a
 registration, while registered targets provide the more precise data context.
 
-Continue discovering tables, columns and relationships from the live catalog. Bind values, validate identifiers, keep research read only and preserve CSRF protection. Add an API endpoint only when the existing contract cannot serve the task. Update frontend, backend and API documentation together. If a real feature needs app owned database tables, use the existing `_govern_` namespace and a tested migration.
+Continue discovering tables, columns and relationships from the live catalog. Bind values, validate identifiers, keep visual designs read only and preserve CSRF protection. Add an API endpoint only when the existing contract cannot serve the task. Update frontend, backend and API documentation together. If a real feature needs app owned database tables, use the existing `_govern_` namespace and a tested migration.
 
 ### Make new blocks safe for saved layouts
 

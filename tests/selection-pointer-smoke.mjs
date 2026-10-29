@@ -289,6 +289,74 @@ try {
     await closeDialog();
     await page.keyboard.press('Escape');
     assert.deepEqual(mutations, [], 'Inspecting and explaining selections never sends a database mutation.');
+
+    // Free SQL and the visual design endpoint intentionally have different
+    // result shapes. Inspect a second statement's real result without guessing
+    // a source table, then retain a successful result when statement two fails.
+    const scriptPage = await context.newPage();
+    scriptPage.on('pageerror', error => errors.push(error.message));
+    const scriptPosts = [];
+    scriptPage.on('request', request => {
+        if (request.method() === 'POST') scriptPosts.push({url: request.url(), body: request.postDataJSON()});
+    });
+    await scriptPage.goto(new URL('/#onderzoeken', base).href, {waitUntil: 'networkidle'});
+    const runScript = async sql => {
+        await scriptPage.locator('#sql-editor').fill(sql);
+        const pending = scriptPage.waitForResponse(response => {
+            const url = new URL(response.url());
+            return url.pathname === '/api.php' && url.searchParams.get('action') === 'query';
+        });
+        await scriptPage.getByRole('button', {name: /^(Run query|Query uitvoeren)$/, exact: true}).click();
+        const response = await pending;
+        const payload = await response.json();
+        assert.equal(response.status(), 200, payload.error);
+        assert.equal(payload.ok, true, payload.error);
+        await scriptPage.locator('.query-result .loading-state').waitFor({state: 'hidden'});
+        return payload.data;
+    };
+    const script = await runScript('SELECT 1 AS first_value; SELECT 2 AS second_value;');
+    assert.equal(script.statements.length, 2);
+    assert.equal(script.failed, null);
+    const scriptTables = scriptPage.locator('.query-result .data-table');
+    await scriptTables.nth(1).waitFor();
+    assert.equal(await scriptTables.count(), 2, 'Every successful SELECT statement has its own result table.');
+    assert.deepEqual(await scriptTables.nth(1).locator('th').allTextContents(), ['second_value']);
+    const secondResultCell = scriptTables.nth(1).locator('tbody td');
+    assert.equal(await secondResultCell.innerText(), '2');
+    assert.equal(await secondResultCell.getAttribute('data-selection-kind'), 'cell');
+    const resultMeta = await secondResultCell.evaluate(async node => {
+        const {describeSelection} = await import('/assets/selection-registry.js');
+        return describeSelection(node, document.querySelector('.app-shell')).meta;
+    });
+    assert.equal(resultMeta.snapshot, true, 'Free SQL result cells are snapshots.');
+    assert.equal(resultMeta.table, undefined, 'A query alias must not invent a source table.');
+    assert.deepEqual(resultMeta.primaryKey, [], 'A query result must not invent a record key.');
+    await scriptPage.locator('#selection-pointer-toggle').click();
+    await secondResultCell.click();
+    await scriptPage.locator('#selection-pointer-count').click();
+    await scriptPage.locator('#selection-pointer-more').click();
+    const scriptDialog = scriptPage.locator('#selection-pointer-dialog[open]');
+    await scriptDialog.waitFor();
+    assert.match(await scriptDialog.innerText(), /second_value/);
+    assert.match(await scriptDialog.innerText(), /snapshot|momentopname/i);
+    assert.equal(await scriptDialog.locator('[data-selection-action]').count(), 0,
+        'A keyless SQL result cannot offer a guessed table route or selection query.');
+    await scriptPage.keyboard.press('Escape');
+    await scriptPage.keyboard.press('Escape');
+    const absentTable = '__govern_missing_selection_smoke_' + Date.now();
+    const partial = await runScript('SELECT 1 AS before_error; SELECT * FROM `' + absentTable + '`; SELECT 3 AS not_run;');
+    assert.equal(partial.statements.length, 1);
+    assert.equal(partial.failed.index, 2);
+    await scriptPage.locator('.query-result .notice-error').waitFor();
+    assert.equal(await scriptTables.count(), 1, 'A later SQL failure retains completed results and stops before the third statement.');
+    assert.deepEqual(await scriptTables.locator('th').allTextContents(), ['before_error']);
+    assert.deepEqual(await scriptTables.locator('td').allTextContents(), ['1']);
+    assert.match(await scriptPage.locator('.query-result .notice-error').innerText(), /(?:statement|opdracht) 2/i);
+    assert.equal(scriptPosts.length, 2);
+    assert.ok(scriptPosts.every(request => new URL(request.url).searchParams.get('action') === 'query'
+        && typeof request.body.sql === 'string' && request.body.sql.startsWith('SELECT ')),
+    'The script compatibility probes only send the two explicit read-only SQL scripts.');
+    await scriptPage.close();
     assert.deepEqual(errors, [], 'The selection flow has no uncaught browser errors.');
     console.log('PASS: arbitrary UI/data selection, Shift toggle, three-second tags, parent path, exact and combined explanations, modal focus, language continuity, safe text, schema input separation and mobile appearance.');
 } finally {
