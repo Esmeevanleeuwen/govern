@@ -50,8 +50,10 @@ je lokale `.env`, die niet in Git wordt opgenomen.
   bereikbaar als je het paneel inklapt. **Help**
   opent een korte uitleg van alle mogelijkheden in dit scherm.
 - **Onderzoeken:** voer SQL uit, bekijk resultaten en bewaar queries met uitleg.
-  Vrije SQL kan meerdere opdrachten bevatten; ingrijpende opdrachten vragen om
-  bevestiging. De visuele querybouwer gebruikt de leesverbinding.
+  Schrijf ook `INSERT`, `UPDATE`, `DELETE`, `CREATE`, `ALTER` en `DROP`, of maak
+  procedures, functies en triggers met `DELIMITER`. Meerdere opdrachten en alle
+  resultaatsets van `CALL` blijven samen zichtbaar. Ingrijpende opdrachten vragen
+  om bevestiging. De visuele querybouwer gebruikt de leesverbinding.
 - **Visueel samenstellen:** kies een tabel, kolommen, filters en een sorteervolgorde.
   Voeg eventueel een bestaande verwijzing naar een tweede tabel toe. Govern maakt
   de SQL zichtbaar; je kunt die daarna zelf aanpassen.
@@ -125,6 +127,28 @@ De visuele bouwer helpt bij één basistabel en eventueel één bestaande verwij
 Voor bijvoorbeeld meerdere koppelingen, groeperingen of berekeningen werk je
 verder in de SQL-editor. De voorbeelden in de bouwer hebben dezelfde grens van
 200 resultaatrijen als de onderzoekweergave.
+
+### Zelf SQL schrijven
+
+De SQL-editor gebruikt hetzelfde databaseaccount als het phpMyAdmin-venster.
+Je kunt de SQL-opdrachten uitvoeren waarvoor dat account rechten heeft op deze
+werkdatabase; er is geen lijst die alleen leesopdrachten toestaat. Bestanden
+importeren en serverbeheer blijven aparte mogelijkheden van de officiële tool
+en de beschikbare databaserechten.
+
+Eén klik op **Query uitvoeren** gebruikt één tijdelijke databasesessie. Zet een
+hele transactie, inclusief `COMMIT` of `ROLLBACK`, in dezelfde uitvoering.
+Variabelen en tijdelijke tabellen bestaan alleen tijdens die uitvoering.
+Een nog open transactie wordt aan het einde teruggedraaid en krijgt een melding.
+DDL kan zelf committen en is geen algemene terugdraaifunctie.
+
+Je ziet per opdracht de rijen of het aantal gewijzigde rijen, alle resultaatsets
+van een procedure en de waarschuwingenteller. Voor de precieze meldingen van een
+eerdere stap zet je daar direct `SHOW WARNINGS` in het script. Bij een fout blijven eerdere
+resultaten zichtbaar en stoppen latere opdrachten. De voorvertoning bevat
+maximaal 200 rijen per resultaatset; die weergavegrens beperkt niet hoeveel
+rijen een schrijvende opdracht wijzigt. Na uitvoeren wordt de catalogus ververst
+met behoud van je SQL, resultaten en invoerpositie.
 
 ## Gegevens en herstelpunten
 

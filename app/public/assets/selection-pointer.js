@@ -258,7 +258,11 @@ export class SelectionPointer {
 
     review() {
         const visible = [...this.selected.values()].findLast(item => item.node.isConnected && item.node.getClientRects().length && !item.node.closest('[hidden],[inert]'));
-        if (visible && this.on) this.showTag(visible);
+        if (visible && this.on) {
+            this.hideTag();
+            visible.node.scrollIntoView({block: 'center', inline: 'nearest', behavior: 'instant'});
+            this.showTag(visible);
+        }
         else if (this.selected.size) this.openMore([...this.selected.values()]);
     }
 

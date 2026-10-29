@@ -1,6 +1,6 @@
 # Govern UX and UI design
 
-**Design baseline 1.3.** Govern is a personal, local workspace for exploring, understanding and changing a database. This guide defines its brand, visual system, behaviour and the process for adding features without disrupting existing work.
+**Design baseline 1.4.** Govern is a personal, local workspace for exploring, understanding and changing a database. This guide defines its brand, visual system, behaviour and the process for adding features without disrupting existing work.
 
 The agreed visual direction is layered glass, soft shadows, custom colour and no hard decorative borders. Dutch and English are equal interface languages. The detailed rules below are the target for implementation; the interactive preview is a visual reference. The production modules implement the core language, appearance and layout controls; the future chart example remains a proposal.
 
@@ -276,7 +276,29 @@ Choose a table, read or search its rows, and optionally open the SQL explanation
 
 ### Build and save research
 
-Choose a table, columns and filters, then generate SQL. Show that SQL before execution. Run visual designs through the read only research connection and show results, limits and any truncation. Free SQL in the editor may hold several statements and any change; show one result card per statement (rows or affected rows), stop visibly at the first failure, and ask for confirmation before destructive statements.
+Choose a table, columns and filters, then generate SQL. Show that SQL before execution. Run visual designs through the read only research connection and show results, limits and any truncation. The free SQL editor uses the same scoped database account as phpMyAdmin. Clearly describe its writable DML, DDL, routine and transaction capabilities in Dutch and English; do not label that editor read only.
+
+One **Run query** submits a script using one temporary database session. Support
+multiple statements and `DELIMITER` routines, functions and triggers. Keep one
+result card per statement, with compact **Result n** headings when a `CALL`
+produces multiple rowsets. Show actual row counts, affected counts, warnings and
+truncation. Keep per-statement warning counts and available final diagnostic
+text distinct; offer `SHOW WARNINGS` for messages needed at an earlier point in
+the script. Stop visibly at the first failure while retaining completed and
+partial procedure results. Every result set supports snapshot inspection without
+guessing a source table or record key.
+
+Use the existing confirmation dialog for potentially destructive SQL. Its
+preflight is advisory and makes no changes; mode-dependent scripts may not have
+an exact statement count before execution. Database grants determine which SQL
+can run. File import controls and server administration remain separate official
+tool capabilities rather than claims made by the query editor.
+
+Keep a complete transaction, including `COMMIT` or `ROLLBACK`, in one run. Report
+an unfinished transaction being rolled back when its session ends, and do not
+imply that committed work or DDL was undone. After execution, refresh the live
+catalog without discarding the SQL, results, focus or caret. A procedure can
+change data even when its visible result contains only rows.
 
 Editing generated SQL changes the active mode to manual SQL. The builder must not quietly overwrite that work. Changing builder choices creates a draft until the user applies them. Saved research remains ordinary SQL with its name and notes. Reopening it must not invent a visual design that was never saved.
 
