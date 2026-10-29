@@ -124,7 +124,9 @@ export class DatabaseModal {
         this.tableSelect.value = this.table;
         const nextUrl = phpMyAdminUrl(this.database, this.table, this.tab);
         if (!this.dialog.open) this.dialog.showModal();
-        if (nextUrl !== this.currentUrl || this.frame.getAttribute('src') === 'about:blank') this.navigate();
+        // A completed native import can keep the same URL while showing its result.
+        // An explicit Import action must open a fresh file form each time.
+        if (this.tab === 'import' || nextUrl !== this.currentUrl || this.frame.getAttribute('src') === 'about:blank') this.navigate();
         else this.updateTabs();
         clearInterval(this.poll);
         this.poll = setInterval(() => this.syncLocation(), 800);
