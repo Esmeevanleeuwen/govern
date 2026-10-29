@@ -28,14 +28,20 @@ je lokale `.env`, die niet in Git wordt opgenomen.
   licht/donker/systeem, minder transparantie en de plaats van je navigatie.
 - **Dashboard indelen:** verplaats, verbreed of verberg blokken via
   **Indeling aanpassen**. Je kunt slepen of de verplaatsknoppen gebruiken.
-- **Gegevens:** bekijk records, zoek, blader en bekijk de gebruikte SQL.
-- **Structuur:** lees velden, sleutels, relaties en de echte tabeldefinitie.
-- **Schema:** bekijk alle tabellen, kolommen en foreign keys in een interactief
+- **Eén menu:** kies Overzicht, Database, Onderzoeken of Experimenten in de
+  hoofdbalk. Instellingen staat onderaan. Het aansluitende paneel toont alleen
+  de tabellen, opgeslagen onderzoeken of herstelpunten die bij dat gebied horen.
+  Overzicht en Instellingen openen direct, zonder herhaalde navigatielijst.
+- **Database → Gegevens:** bekijk records, zoek, blader en bekijk de gebruikte SQL.
+- **Database → Structuur:** lees velden, sleutels, relaties en de echte tabeldefinitie.
+- **Database → Schema:** bekijk alle tabellen, kolommen en foreign keys in een interactief
   diagram. Scroll boven de tekening om rond je muisaanwijzer te zoomen en sleep
-  de achtergrond om te verschuiven. Het tweede menu toont automatisch de
-  gekozen tabel en haar verbindingen. Klik op een tool om het paneel uit te
-  klappen, of nogmaals op de actieve tool om het in te klappen. **Wat kan ik
-  hier doen?** opent een korte uitleg van alle mogelijkheden in dit scherm.
+  de achtergrond om te verschuiven. De tabellenlijst blijft zichtbaar wanneer
+  je een tabel kiest; de details staan eronder. Wissel direct naar een andere
+  tabel of naar Gegevens en Structuur. Zoeken filtert alleen deze lijst; gebruik
+  de aparte verbindingsfilter om het diagram te beperken. Schematools blijven
+  bij het werkvlak, ook als je het paneel inklapt. **Wat kan ik hier doen?**
+  opent een korte uitleg van alle mogelijkheden in dit scherm.
 - **Onderzoeken:** voer leesvragen uit, bekijk resultaten en bewaar queries met uitleg.
 - **Visueel samenstellen:** kies een tabel, kolommen, filters en een sorteervolgorde.
   Voeg eventueel een bestaande verwijzing naar een tweede tabel toe. Govern maakt
@@ -52,6 +58,12 @@ De eigen schermen lezen de actuele database. Een nieuwe tabel wordt na verversen
 zichtbaar; je hoeft daarvoor geen nieuw onderdeel te programmeren. phpMyAdmin
 blijft zijn volledige interface tonen, inclusief functies buiten de drie snelkeuzes.
 
+De Database-knop onthoudt tijdens je sessie de laatste weergave en tabel. De
+bestaande links naar `#gegevens`, `#structuur` en `#schema` blijven werken.
+Je tabelkeuze, zoekopdracht en schema-indeling blijven behouden wanneer je
+tussen de databaseweergaven wisselt. De hele navigatie kan links of rechts staan;
+op een klein scherm open je hetzelfde menu via de navigatieknop.
+
 Taal, uiterlijk en dashboardindeling worden in deze browser bewaard. Je keuzes
 blijven bij verversen behouden en veranderen geen databasegegevens. Als de browser
 bewaren blokkeert, werkt je keuze voor de huidige sessie en krijg je daar een melding
@@ -63,9 +75,9 @@ paneelranden. Het ontwerp en de regels voor uitbreidingen staan in
 
 ## Eerste oefening
 
-1. Open **Gegevens** en kies `digital_systems`.
+1. Open **Database → Gegevens** en kies `digital_systems`.
 2. Bekijk de beschrijving van een systeem en de SQL achter het overzicht.
-3. Open **Structuur** en zoek de verwijzing `evidence_id`.
+3. Open **Structuur** binnen Database en zoek de verwijzing `evidence_id`.
 4. Volg de onderbouwing in `evidence` en de bronkoppeling in `evidence_sources`.
 5. Maak bij **Experimenten** een herstelpunt voordat je iets verandert.
 6. Open **Databasevenster → Browse**, pas een beschrijving aan en ververs het

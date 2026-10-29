@@ -168,7 +168,7 @@ try {
 
     // Both the applied SQL and the independent, unfinished design survive a
     // visit to another screen. Nothing is parsed back out of arbitrary SQL.
-    await page.getByRole('link', {name: 'Gegevens', exact: true}).click();
+    await page.locator('#navigation [data-area="database"]').click();
     await page.getByRole('heading', {name: 'Verken je database.', exact: true}).waitFor();
     await page.getByRole('link', {name: 'Onderzoeken', exact: true}).click();
     await page.getByRole('button', {name: 'Query maken', exact: true}).waitFor();
@@ -258,7 +258,7 @@ try {
     await schemaPage.getByRole('checkbox', {name: 'Basiskolom name', exact: true}).waitFor();
     assert.equal(await schemaPage.getByRole('checkbox', {name: 'Basiskolom name', exact: true}).isChecked(), true);
     hideColumn = true;
-    await schemaPage.getByRole('link', {name: 'Gegevens', exact: true}).click();
+    await schemaPage.locator('#navigation [data-area="database"]').click();
     await schemaPage.getByRole('heading', {name: 'Verken je database.', exact: true}).waitFor();
     await schemaPage.getByRole('link', {name: 'Onderzoeken', exact: true}).click();
     const missing = schemaPage.getByRole('button', {name: 'Ontbrekende kolom digital_systems.name verwijderen', exact: true});
