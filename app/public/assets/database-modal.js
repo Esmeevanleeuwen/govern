@@ -2,6 +2,7 @@ import {t, getLanguage} from './i18n.js';
 import './modal-messages.js';
 import './database-messages.js';
 import {el, icon, button, badge} from './ui.js';
+import {ImportInspectionPanel} from './import-inspection.js';
 
 const routes = {
     browse: {table: '/sql', database: '/database/structure'},
@@ -26,6 +27,7 @@ export class DatabaseModal {
         this.tab = 'browse';
         this.currentUrl = '';
         this.onClose = onClose;
+        this.importInspection = new ImportInspectionPanel();
         this.dialog = el('dialog', {id: 'database-dialog', class: 'database-dialog', 'aria-labelledby': 'database-title'});
         this.name = el('span', {class: 'database-name sr-only'});
         this.databaseSelect = el('select', {id: 'modal-database', class: 'input select modal-database-select',
@@ -64,6 +66,7 @@ export class DatabaseModal {
                 el('div', {class: 'database-context'},
                     el('div', {class: 'modal-database'}, icon('database'), this.name, this.databaseSelect),
                     el('label', {class: 'sr-only', for: 'modal-table', 'data-i18n': 'modal.table'}, t('modal.table')), this.tableSelect)),
+            this.importInspection.panel,
             this.panel,
             el('div', {class: 'database-dialog-footer'}, el('span', {class: 'status-dot'}), this.status,
                 el('span', {class: 'modal-footer-hint', 'data-i18n': 'modal.footerHint'}, t('modal.footerHint'))));
@@ -71,6 +74,7 @@ export class DatabaseModal {
         this.dialog.addEventListener('close', () => {
             clearInterval(this.poll);
             clearTimeout(this.loadTimeout);
+            this.importInspection.close();
             this.onClose?.();
         });
         document.body.append(this.dialog);
@@ -89,6 +93,7 @@ export class DatabaseModal {
         this.dialog.querySelector('[role="tablist"]').setAttribute('aria-label', t('modal.tools'));
         this.tabButtons.import.lastChild.textContent = t('modal.import');
         if (this.dialog.open) this.syncLocation();
+        this.importInspection.translate();
         this.configure(this.database, this.tables, this.databases);
         this.frame.title = this.currentUrl
             ? this.tabButtons[this.tab].textContent + ' — ' + (this.table || this.database)
@@ -134,6 +139,8 @@ export class DatabaseModal {
     }
 
     navigate() {
+        if (this.tab === 'import') this.importInspection.open(this.database);
+        else this.importInspection.close();
         this.updateTabs();
         this.currentUrl = phpMyAdminUrl(this.database, this.table, this.tab);
         this.lastObserved = this.currentUrl;
@@ -182,6 +189,18 @@ export class DatabaseModal {
                 this.frameMessage.hidden = true;
                 clearTimeout(this.loadTimeout);
                 this.syncLocation();
+                // Track the native form's actual submission, not just the Import tab.
+                const upload = document.querySelector('#input_import_file');
+                const form = upload?.closest('form');
+                if (form && !form.dataset.governImportWatch) {
+                    form.dataset.governImportWatch = '1';
+                    form.addEventListener('submit', () => this.importInspection.submittedFile());
+                    document.querySelector('#buttonGo')?.addEventListener('click', () => this.importInspection.submittedFile(), {once: true});
+                }
+                if (this.importInspection.submitted) {
+                    const nativeError = document.querySelector('.alert-danger, .alert-error, #error_message')?.textContent?.trim() || '';
+                    this.importInspection.finishedFile(nativeError);
+                }
             }
         } catch {
             this.showFallback();
