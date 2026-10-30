@@ -118,7 +118,7 @@ export class ImportInspectionPanel {
         if (report.template === 'bestuursatlas') {
             items.push(el('h4', {}, t('imports.completeness')));
             for (const group of report.sections) {
-                const title = t('imports.section_' + group.key);
+                const title = t('imports.' + 'section_' + group.key);
                 const line = t('imports.sectionStatus', {name: title, present: group.present,
                     expected: group.expected, records: group.records === null ? t('imports.notAllCounted') : group.records});
                 const missing = group.missing.length ? t('imports.missingNames', {names: group.missing.join(', ')}) : '';
