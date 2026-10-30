@@ -104,6 +104,7 @@ try {
     assert.equal(atlas.sections.length, 5);
     assert.deepEqual(atlas.missing_tables, []);
     assert.deepEqual(atlas.missing_views, []);
+    assert.deepEqual(atlas.missing_foreign_keys, []);
     assert.ok(atlas.foreign_keys >= 54, 'Bestuursatlas foreign keys are present.');
     const listing = data(await api('databases'));
     assert.equal(listing.can_create, true);
