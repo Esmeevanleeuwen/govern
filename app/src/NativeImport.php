@@ -15,6 +15,7 @@ final class NativeImport
     public function __construct(
         private readonly Database $database,
         private readonly Catalog $catalog,
+        private readonly array $config,
     ) {}
 
     public static function validate(string $sql): string
@@ -75,6 +76,12 @@ final class NativeImport
         if (!hash_equals(self::token($this->database->name(), $sql, $before), $previewToken)) {
             throw ApiException::fromCode('import_preview_stale', 409);
         }
+        // Protect the previous state before a possibly non-transactional DDL import.
+        // A fresh empty database does not need a data snapshot.
+        $safety = ($before['tables'] !== [] || $before['views'] !== [])
+            ? (new BackupService($this->config))->createUnderExclusiveLock(
+                'Automatisch vóór SQL-import ' . gmdate('Y-m-d H:i:s')
+            ) : null;
         $result = (new QueryRunner($this->database))->executeScript($sql, true);
         $after = $this->inspection();
         $failed = $result['failed'];
@@ -84,6 +91,7 @@ final class NativeImport
             'executed' => $result['executed'],
             'statement_count' => $result['statement_count'],
             'transaction_rolled_back' => $result['transaction_rolled_back'],
+            'safety_snapshot' => $safety === null ? null : ['id' => $safety['id']],
             'failed' => $failed === null ? null : [
                 'index' => $failed['index'] ?? null,
                 'detail' => substr((string) ($failed['detail'] ?? ''), 0, 500),

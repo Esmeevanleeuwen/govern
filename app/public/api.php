@@ -77,8 +77,8 @@ try {
         Http::json((new ImportInspection($database, $catalog))->inspect());
     }
     if ($action === 'native-import-preview' || $action === 'native-import-execute') {
-        $lock = new MaintenanceLock($config['maintenance_dir']);
-        $import = new NativeImport($database, $catalog);
+        $lock = new MaintenanceLock($config['maintenance_dir'], $action === 'native-import-execute');
+        $import = new NativeImport($database, $catalog, $config);
         $sql = Http::text($input, 'sql');
         if ($action === 'native-import-preview') {
             Http::json($import->preview($sql));
