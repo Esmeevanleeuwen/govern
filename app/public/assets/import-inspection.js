@@ -107,7 +107,7 @@ export class ImportInspectionPanel {
         if (report.template === 'bestuursatlas') {
             if (report.missing_tables.length || report.missing_views.length) {
                 note('imports.missing', {tables: report.missing_tables.length, views: report.missing_views.length});
-            } else if (report.foreign_keys < report.expected_foreign_keys) {
+            } else if (report.missing_foreign_keys.length) {
                 note('imports.missingRelations', {found: report.foreign_keys, expected: report.expected_foreign_keys});
             } else note('imports.structureComplete', {}, 'info');
         }
@@ -119,12 +119,14 @@ export class ImportInspectionPanel {
             items.push(el('h4', {}, t('imports.completeness')));
             for (const group of report.sections) {
                 const title = t('imports.section_' + group.key);
-                const line = t('imports.sectionStatus', {name: title, present: group.present, expected: group.expected});
+                const line = t('imports.sectionStatus', {name: title, present: group.present,
+                    expected: group.expected, records: group.records === null ? t('imports.notAllCounted') : group.records});
                 const missing = group.missing.length ? t('imports.missingNames', {names: group.missing.join(', ')}) : '';
                 const empty = group.empty.length ? t('imports.emptyNames', {names: group.empty.join(', ')}) : '';
                 items.push(el('p', {}, line + (missing ? ' · ' + missing : '') + (empty ? ' · ' + empty : '')));
             }
             if (report.missing_views.length) items.push(el('p', {}, t('imports.missingViews', {names: report.missing_views.join(', ')})));
+            if (report.missing_foreign_keys.length) items.push(el('p', {}, t('imports.missingKeys', {names: report.missing_foreign_keys.join(', ')})));
         }
         if (report.unchecked_rows.length) items.push(el('p', {}, t('imports.uncheckedNames', {names: report.unchecked_rows.join(', ')})));
         this.contents.replaceChildren(...items);
