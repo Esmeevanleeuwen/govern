@@ -42,3 +42,21 @@
     .modal-database-select { min-width: 0; width: 100%; max-width: 100%; }
     .modal-table { min-width: 0; }
 }
+
+
+/* Compact status above the official phpMyAdmin iframe. No replacement import UI. */
+.import-inspection { margin: 8px 18px; padding: 11px 15px; border-radius: 15px; background: var(--g-row); line-height: 1.5; }
+.import-inspection[hidden] { display: none; }
+.import-inspection-heading { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; }
+.import-inspection-heading h3 { font-size: 13px; margin: 0; }
+.import-inspection-summary { margin: 7px 0; font-size: 12px; }
+.import-inspection-warnings p { margin: 5px 0; padding: 6px 9px; border-radius: 9px; font-size: 12px; overflow-wrap: anywhere; }
+.import-inspection-warning { background: var(--warning-soft); color: var(--warning); }
+.import-inspection-error { background: var(--danger-soft); color: var(--danger); }
+.import-inspection-info { background: var(--g-frost); color: var(--ink); }
+.import-inspection-details { font-size: 12px; line-height: 1.6; }
+.import-inspection-details summary { cursor: pointer; font-weight: 600; padding: 5px 0; }
+.import-inspection-contents { max-height: 180px; overflow: auto; overscroll-behavior: contain; overflow-wrap: anywhere; }
+.import-inspection-contents h4 { margin: 6px 0; font-size: 12px; }
+.import-inspection-contents p { margin: 4px 0; }
+@media (max-width: 620px) { .import-inspection { margin: 6px 10px; padding: 10px; } }
