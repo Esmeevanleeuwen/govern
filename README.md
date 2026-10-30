@@ -32,12 +32,13 @@ daarvoor `.env` niet aan te passen:
 1. Vul een databasenaam in, bijvoorbeeld `onderzoek`.
 2. Kies **Database aanmaken** of **Aanmaken en SQL importeren**.
 3. Govern maakt een ontbrekende database leeg aan en kiest die database. Bij
-   importeren opent de echte phpMyAdmin direct op zijn importscherm.
-4. Kies daar je SQL-bestand en voer de import uit. Sluit het databasevenster om
-   de geïmporteerde tabellen en relaties in Govern te verversen.
+   importeren opent de importcontrole met een **eigen Govern-import** boven het bestaande phpMyAdmin-venster.
+4. Kies voor een UTF-8 `.sql`-bestand tot 256 KiB **Controleer bestand**, lees de risico's,
+   typ de exacte databasenaam en kies **Import uitvoeren**. Bekijk daarna de nacontrole.
+   Gebruik voor grotere of complexe dumps de officiële phpMyAdmin-import eronder.
 
 De tab **Import** toont vóór het uploaden hoeveel tabellen, views, relaties en records al
-bestaan. Na een native SQL-upload vergelijkt Govern de actuele structuur en
+bestaan. Na een SQL-import vergelijkt Govern de actuele structuur en
 rijaantallen met de voorcontrole. Onder **Tabellen en inhoudelijke volledigheid**
 zie je bij Bestuursatlas ook welke onderdelen ontbreken of nog leeg zijn.
 Foutmeldingen uit phpMyAdmin en de leescontrole worden zichtbaar gemaakt; het
@@ -48,8 +49,14 @@ Dit is geen garantie dat een import veilig of volledig is.
 In hetzelfde venster kun je een bestaande database kiezen of de import voor de
 geselecteerde database openen. Een bestaande naam toevoegen vervangt geen
 gegevens; de expliciete import kan dat wel doen, afhankelijk van het SQL-bestand.
-Import is geen herstelpunt en heeft geen algemene undo. De bestaande
-phpMyAdmin-importgrens is 128 MB, met maximaal 300 seconden uitvoeringstijd.
+De eigen Govern-import maakt vooraf een herstelpunt als er al zichtbare tabellen
+of views bestaan. Het herstelpunt is geen algemene undo en de controle garandeert
+geen inhoudelijke volledigheid. Tijdens de eigen import worden overige
+Govern-bewerkingen vergrendeld; open phpMyAdmin-verzoeken volgen die lock niet.
+SQL heeft de rechten van het schrijvende databaseaccount en kan ook een andere
+reeds toegestane database wijzigen, bijvoorbeeld via `USE`. Importeer daarom alleen
+vertrouwde SQL-bestanden. De eigen begrenzing is voorlopig 256 KiB.
+De officiële phpMyAdmin-import blijft beschikbaar tot 128 MB en maximaal 300 seconden.
 
 Namen gebruiken letters, cijfers en underscores. Systeemdatabases kunnen niet
 worden toegevoegd. De bijbehorende rechten blijven in het databasevolume bewaard,

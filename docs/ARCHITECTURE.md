@@ -31,6 +31,10 @@ een backupservice maakt en
 herstelt SQL-exports. Het HTTP-bestand behandelt sessie, CSRF, foutstatus en JSON.
 Deze verdeling volgt verantwoordelijkheden, niet afzonderlijke overheidsdomeinen.
 
+Het native importscherm is onderdeel van `import-inspection.js`, naast
+de bestaande phpMyAdmin-import. Er is geen tweede SQL-parser of extra
+backendservice; de import werkt alleen op expliciet geselecteerde bestanden.
+
 De browser gebruikt herbruikbare onderdelen voor tabellen, meldingen, dialoog-
 vensters, SQL-blokken en API-verzoeken. Tabnamen uit de database zijn gegevens,
 geen uitvoerbare JavaScript of HTML.
@@ -119,7 +123,20 @@ of vervangt niets. Herhalen is geschikt om een gedeeltelijk voltooide aanmaak of
 grantstap af te maken. De echte grants blijven in het MariaDB-volume bewaard en
 maken de nieuwe database bij een volgende start opnieuw zichtbaar.
 
-Voor importeren gebruikt Govern de echte phpMyAdmin. De extra snelkeuze
+Voor SQL-bestanden tot 256 KiB heeft Govern ook een beperkte eerste-partij import
+in de Import-tab. `NativeImport` hergebruikt `SqlScript`, `QueryRunner` en
+`ImportInspection`: eerst voorcontrole zonder uitvoering, daarna bevestiging
+van exact de databasenaam, vergelijking van de voorcontrole-token, exclusieve
+onderhoudslock en uitvoer met nacontrole. Bij een bestaande database met
+inhoudelijke tabellen of views wordt onder de exclusieve lock een herstelpunt
+gemaakt vóór uitvoering. De controle van structuur en rijen is best effort; bij
+grotere tabellen zijn aantallen expliciet onbekend. De SQL zelf is niet beperkt
+tot de geselecteerde database: het schrijvende account heeft ook rechten op
+andere geselecteerde databases. SQL kan daarom met `USE` of gekwalificeerde
+namen andere toegestane databases raken. De UI waarschuwt daarvoor en voert
+geen SQL uit zonder afzonderlijke bevestiging. Er is geen algemene undo.
+
+Voor grotere of complexe SQL-bestanden gebruikt Govern de echte phpMyAdmin. De extra snelkeuze
 **Import** opent de officiële database- of tabelimport met dezelfde context als
 de overige tabs. De gebruiker kiest zijn SQL-bestand en start de import daar;
 Govern leest of herschrijft het bestand niet met een eigen parser. Bij sluiten

@@ -23,6 +23,35 @@ The optional local Ollama connection is disabled by default; only the separate A
 endpoints can call that configured provider. Ordinary database operations and
 selection explanations do not require a model.
 
+## Eerste eigen SQL-import
+
+Govern ondersteunt naast de officiële phpMyAdmin-import een beperkte eigen route in de
+bestaande Import-tab. Deze route accepteert **UTF-8 SQL-bestanden tot 262144 bytes**.
+De browser leest het bestand lokaal als tekst en verstuurt JSON met CSRF, zonder
+server-side uploadbestand of opgeslagen SQL-concept.
+
+- `POST native-import-preview?database=<name>` met `{sql:string}` retourneert
+  `{database,bytes,sha256,statement_count,destructive,destructive_truncated,before,preview_token,max_bytes}`.
+  `before` is dezelfde best-effort cataloguscontrole als `GET import-inspection`.
+  Er wordt nog geen SQL uitgevoerd. De risicoselectie is **geen volledige parser-audit**.
+- `POST native-import-execute?database=<name>` met
+  `{sql:string,preview_token:string,confirmation:string}` vraagt de exacte
+  databasenaam als bevestiging. De preview-token bindt bestand, database en
+  geobserveerde staat. Wanneer de staat wijzigde volgt HTTP 409.
+  De server houdt bij deze fase een exclusieve onderhoudslock vast.
+  Als vooraf al inhoudelijke tabellen of views bestaan, wordt onder die lock
+  eerst een automatisch herstelpunt gemaakt. De uitvoerder stopt op een SQL-fout.
+  De respons bevat `completed,executed,statement_count,failed,before,after`,
+  toegevoegde/verwijderde objectnamen, `unchecked_rows` en zo nodig
+  `safety_snapshot:{id}`. Er wordt nooit automatisch hersteld na een fout.
+
+Import gebruikt de bestaande `SqlScript` en `QueryRunner`, met dezelfde
+schrijfrechten als vrije SQL. Een bestand met `USE` of gekwalificeerde namen
+kan dus ook een **andere toegestane database** wijzigen. Een token of
+databasekeuzelabel is geen SQL-sandbox. De controle toont alleen wat daadwerkelijk
+wordt gemeten en kan gelijktijdige wijzigingen in phpMyAdmin niet blokkeren.
+De phpMyAdmin-import blijft nodig voor grote of niet-ondersteunde SQL-bestanden.
+
 ## Database scope
 
 Every scoped endpoint accepts the URL parameter `database=<exact name>`, on GET

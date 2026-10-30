@@ -233,6 +233,36 @@ try {
     await waitWorkspace(emptyDatabase);
     assert.equal(await nativeDialog.isVisible(), false, 'Create-only does not open a file upload automatically.');
     assert.deepEqual(data(await api('schema', emptyDatabase)).tables, []);
+
+    // First-party import: plan, exact database confirmation, execution and postflight.
+    await openManager();
+    await manager.locator('#database-manager-existing').selectOption(emptyDatabase);
+    await manager.locator('#database-manager-import-existing').click();
+    await manager.waitFor({state: 'hidden'});
+    await waitImport(emptyDatabase);
+    const ownSql = 'CREATE TABLE govern_native_import (id INT PRIMARY KEY, value VARCHAR(30));\n'
+        + "INSERT INTO govern_native_import VALUES (1,'verified');\n";
+    const ownFile = nativeDialog.locator('#native-import-file');
+    await ownFile.setInputFiles({name: 'govern-native.sql', mimeType: 'application/sql', buffer: Buffer.from(ownSql)});
+    const ownPlanResponse = responseFor('native-import-preview');
+    await nativeDialog.locator('.native-import button').first().click();
+    const ownPlan = await (await ownPlanResponse).json();
+    assert.equal(ownPlan.ok, true, JSON.stringify(ownPlan));
+    assert.equal(ownPlan.data.database, emptyDatabase);
+    assert.equal(ownPlan.data.before.tables.length, 0);
+    assert.equal(await nativeDialog.locator('.native-import button').last().isDisabled(), true,
+        'Import requires confirmation.');
+    await nativeDialog.locator('#native-import-confirm').fill(emptyDatabase);
+    const ownExecuteResponse = responseFor('native-import-execute');
+    await nativeDialog.locator('.native-import button').last().click();
+    const ownResult = await (await ownExecuteResponse).json();
+    assert.equal(ownResult.ok, true, JSON.stringify(ownResult));
+    assert.equal(ownResult.data.completed, true, JSON.stringify(ownResult.data.failed));
+    assert.ok(ownResult.data.added_tables.includes('govern_native_import'));
+    const nativeRows = data(await api('browse', emptyDatabase, {params: {table: 'govern_native_import'}}));
+    assert.equal(nativeRows.rows[0].value, 'verified');
+    await nativeDialog.locator('.database-dialog-header .button').click();
+    await nativeDialog.waitFor({state: 'hidden'});
     await openManager();
     await manager.locator('#database-manager-existing').selectOption(created);
     await manager.locator('#database-manager-import-existing').click();
