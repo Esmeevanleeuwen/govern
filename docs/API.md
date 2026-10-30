@@ -86,7 +86,7 @@ not expose SQL or credentials.
 using the same maintenance lock and the reader account. It returns
 `{database,tables:[name],views:[name],foreign_keys,row_counts:{table:integer},
 unchecked_rows:[name],total_records:integer|null,template,expected_foreign_keys,
-missing_tables,missing_views,sections:[{key,expected,present,missing,empty}]}`.
+missing_tables,missing_views,missing_foreign_keys,sections:[{key,expected,present,missing,empty,records}]}`.
 Only catalog-resolved tables are counted; large tables (>250,000 estimated rows),
 tables beyond the first 40 and failed counts are marked unchecked. A null
 `total_records` means the result is not exact. A `bestuursatlas` template report
