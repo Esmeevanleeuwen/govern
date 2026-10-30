@@ -49,8 +49,8 @@ Dit is geen garantie dat een import veilig of volledig is.
 In hetzelfde venster kun je een bestaande database kiezen of de import voor de
 geselecteerde database openen. Een bestaande naam toevoegen vervangt geen
 gegevens; de expliciete import kan dat wel doen, afhankelijk van het SQL-bestand.
-De eigen Govern-import maakt vooraf een herstelpunt als er al zichtbare tabellen
-of views bestaan. Het herstelpunt is geen algemene undo en de controle garandeert
+De eigen Govern-import maakt vooraf een herstelpunt als er al tabellen
+of views bestaan (ook interne Govern-tabellen). Het herstelpunt is geen algemene undo en de controle garandeert
 geen inhoudelijke volledigheid. Tijdens de eigen import worden overige
 Govern-bewerkingen vergrendeld; open phpMyAdmin-verzoeken volgen die lock niet.
 SQL heeft de rechten van het schrijvende databaseaccount en kan ook een andere

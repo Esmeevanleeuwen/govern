@@ -39,7 +39,7 @@ server-side uploadbestand of opgeslagen SQL-concept.
   databasenaam als bevestiging. De preview-token bindt bestand, database en
   geobserveerde staat. Wanneer de staat wijzigde volgt HTTP 409.
   De server houdt bij deze fase een exclusieve onderhoudslock vast.
-  Als vooraf al inhoudelijke tabellen of views bestaan, wordt onder die lock
+  Als vooraf al tabellen of views bestaan, inclusief interne applicatietabellen, wordt onder die lock
   eerst een automatisch herstelpunt gemaakt. De uitvoerder stopt op een SQL-fout.
   De respons bevat `completed,executed,statement_count,failed,before,after`,
   toegevoegde/verwijderde objectnamen, `unchecked_rows` en zo nodig

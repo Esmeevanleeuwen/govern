@@ -76,9 +76,13 @@ final class NativeImport
         if (!hash_equals(self::token($this->database->name(), $sql, $before), $previewToken)) {
             throw ApiException::fromCode('import_preview_stale', 409);
         }
-        // Protect the previous state before a possibly non-transactional DDL import.
-        // A fresh empty database does not need a data snapshot.
-        $safety = ($before['tables'] !== [] || $before['views'] !== [])
+        // Include internal _govern_ tables, which ImportInspection deliberately
+        // hides from the user's ordinary catalog. They still deserve protection.
+        $rawCount = $this->database->reader()->query(
+            'SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE()'
+        )->fetchColumn();
+        // Protect the previous state before possibly non-transactional DDL.
+        $safety = ((int) $rawCount > 0)
             ? (new BackupService($this->config))->createUnderExclusiveLock(
                 'Automatisch vóór SQL-import ' . gmdate('Y-m-d H:i:s')
             ) : null;

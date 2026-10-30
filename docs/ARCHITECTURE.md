@@ -128,7 +128,7 @@ in de Import-tab. `NativeImport` hergebruikt `SqlScript`, `QueryRunner` en
 `ImportInspection`: eerst voorcontrole zonder uitvoering, daarna bevestiging
 van exact de databasenaam, vergelijking van de voorcontrole-token, exclusieve
 onderhoudslock en uitvoer met nacontrole. Bij een bestaande database met
-inhoudelijke tabellen of views wordt onder de exclusieve lock een herstelpunt
+tabellen of views (ook verborgen interne applicatietabellen) wordt onder de exclusieve lock een herstelpunt
 gemaakt vóór uitvoering. De controle van structuur en rijen is best effort; bij
 grotere tabellen zijn aantallen expliciet onbekend. De SQL zelf is niet beperkt
 tot de geselecteerde database: het schrijvende account heeft ook rechten op

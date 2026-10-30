@@ -43,7 +43,7 @@ beperking van de werkplek.
 - De beperkte eigen SQL-import (maximaal 256 KiB UTF-8) gebruikt dezelfde SQL-parser
   en uitvoerder als Onderzoeken. Bewaar geen SQL-bestanden, toon voor- en nacontrole,
   eis bevestiging van de exacte databasenaam en neem vooraf bij bestaande
-  inhoudelijke tabellen/views een herstelpunt onder de exclusieve onderhoudslock.
+  tabellen/views, ook interne `_govern_`-objecten een herstelpunt onder de exclusieve onderhoudslock.
   Een import is geen SQL-sandbox: `USE` kan andere reeds toegestane databases raken.
   Voor grotere bestanden blijft de echte phpMyAdmin-import beschikbaar. Beloof
   nooit een algemene rollback of sluitende inhoudelijke controle. Geef AI geen
