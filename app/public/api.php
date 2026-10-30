@@ -20,6 +20,7 @@ use Govern\RowEditor;
 use Govern\SavedQueries;
 use Govern\AiService;
 use Govern\DatabaseProvisioner;
+use Govern\ImportInspection;
 
 try {
     $baseConfig = Config::fromEnvironment();
@@ -70,6 +71,10 @@ try {
     $database = new Database($config);
     $catalog = new Catalog($database);
     $queries = new SavedQueries($database, $config);
+    if ($action === 'import-inspection') {
+        $lock = new MaintenanceLock($config['maintenance_dir']);
+        Http::json((new ImportInspection($database, $catalog))->inspect());
+    }
     if ($action === 'ai-status') Http::json((new AiService($database))->status());
     // Project search reads approved local files, never the database catalog.
     // It does not need to hold the database maintenance lock during retrieval.

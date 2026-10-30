@@ -99,6 +99,13 @@ try {
     first = bootstrap.database.name;
     csrf = bootstrap.csrf;
     assert.equal(bootstrap.can_create_database, true, 'The private manager is available in this disposable stack.');
+    const atlas = data(await api('import-inspection', first));
+    assert.equal(atlas.template, 'bestuursatlas');
+    assert.equal(atlas.sections.length, 5);
+    assert.deepEqual(atlas.missing_tables, []);
+    assert.deepEqual(atlas.missing_views, []);
+    assert.deepEqual(atlas.missing_foreign_keys, []);
+    assert.ok(atlas.foreign_keys >= 54, 'Bestuursatlas foreign keys are present.');
     const listing = data(await api('databases'));
     assert.equal(listing.can_create, true);
     assert.ok(listing.databases.some(item => item.name === first));
@@ -147,6 +154,13 @@ try {
     await manager.waitFor({state: 'hidden'});
     await waitImport(created);
     assert.equal(await page.locator('#database-select').inputValue(), created);
+    const beforeImport = data(await api('import-inspection', created));
+    assert.deepEqual(beforeImport.tables, []);
+    assert.deepEqual(beforeImport.views, []);
+    assert.equal(beforeImport.foreign_keys, 0);
+    assert.equal(beforeImport.total_records, 0);
+    await page.locator('#import-inspection').waitFor({state: 'visible'});
+    await page.waitForFunction(() => document.querySelector('#import-inspection .import-inspection-summary')?.textContent.includes('0 tables'));
 
     const dump = `-- Govern isolated native import fixture\nSET NAMES utf8mb4;\n`
         + 'CREATE TABLE imported_people (id INT PRIMARY KEY, name VARCHAR(100)) ENGINE=InnoDB;\n'
@@ -168,6 +182,11 @@ try {
         const payload = await response.json();
         return payload.ok && payload.data.tables.some(table => table.name === 'imported_notes');
     }, {database: created});
+    const importReport = data(await api('import-inspection', created));
+    assert.deepEqual(importReport.tables.sort(), ['imported_notes', 'imported_people']);
+    assert.equal(importReport.foreign_keys, 1);
+    assert.equal(importReport.total_records, 2);
+    await page.waitForFunction(() => document.querySelector('#import-inspection .import-inspection-summary')?.textContent.includes('After import: 2 tables'));
     const schema = data(await api('schema', created));
     assert.deepEqual(schema.tables.map(table => table.name).sort(), ['imported_notes', 'imported_people']);
     const notes = schema.tables.find(table => table.name === 'imported_notes');
@@ -219,6 +238,7 @@ try {
     await manager.locator('#database-manager-import-existing').click();
     await manager.waitFor({state: 'hidden'});
     await waitImport(created);
+    await page.waitForFunction(() => document.querySelector('#import-inspection .import-inspection-warnings')?.textContent.includes('already contains 2 tables'));
     const frameSrc = await page.locator('#database-frame').getAttribute('src');
     await language('nl');
     assert.equal(await page.locator('#database-frame').getAttribute('src'), frameSrc,
@@ -247,7 +267,7 @@ try {
     await mobile.locator('#database-manager-dialog').waitFor({state: 'hidden'});
     await mobile.close();
     assert.deepEqual(errors, []);
-    console.log('PASS: real private provisioning, official phpMyAdmin SQL-file import, readback and relationships, existing data, scope/drafts, CSRF, busy/focus, NL/EN and320px layout.');
+    console.log('PASS: preflight/post-import schema and exact records, Bestuursatlas completeness, native SQL import, database safety and navigation.');
 } finally {
     releaseRequest?.();
     if (first && csrf) for (const fixture of owned) {

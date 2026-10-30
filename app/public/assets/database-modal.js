@@ -2,6 +2,7 @@ import {t, getLanguage} from './i18n.js';
 import './modal-messages.js';
 import './database-messages.js';
 import {el, icon, button, badge} from './ui.js';
+import {ImportInspectionPanel} from './import-inspection.js';
 
 const routes = {
     browse: {table: '/sql', database: '/database/structure'},
@@ -26,6 +27,7 @@ export class DatabaseModal {
         this.tab = 'browse';
         this.currentUrl = '';
         this.onClose = onClose;
+        this.importInspection = new ImportInspectionPanel();
         this.dialog = el('dialog', {id: 'database-dialog', class: 'database-dialog', 'aria-labelledby': 'database-title'});
         this.name = el('span', {class: 'database-name sr-only'});
         this.databaseSelect = el('select', {id: 'modal-database', class: 'input select modal-database-select',
@@ -64,6 +66,7 @@ export class DatabaseModal {
                 el('div', {class: 'database-context'},
                     el('div', {class: 'modal-database'}, icon('database'), this.name, this.databaseSelect),
                     el('label', {class: 'sr-only', for: 'modal-table', 'data-i18n': 'modal.table'}, t('modal.table')), this.tableSelect)),
+            this.importInspection.panel,
             this.panel,
             el('div', {class: 'database-dialog-footer'}, el('span', {class: 'status-dot'}), this.status,
                 el('span', {class: 'modal-footer-hint', 'data-i18n': 'modal.footerHint'}, t('modal.footerHint'))));
@@ -71,6 +74,7 @@ export class DatabaseModal {
         this.dialog.addEventListener('close', () => {
             clearInterval(this.poll);
             clearTimeout(this.loadTimeout);
+            this.importInspection.close();
             this.onClose?.();
         });
         document.body.append(this.dialog);
@@ -89,6 +93,7 @@ export class DatabaseModal {
         this.dialog.querySelector('[role="tablist"]').setAttribute('aria-label', t('modal.tools'));
         this.tabButtons.import.lastChild.textContent = t('modal.import');
         if (this.dialog.open) this.syncLocation();
+        this.importInspection.translate();
         this.configure(this.database, this.tables, this.databases);
         this.frame.title = this.currentUrl
             ? this.tabButtons[this.tab].textContent + ' — ' + (this.table || this.database)
@@ -129,11 +134,13 @@ export class DatabaseModal {
         if (this.tab === 'import' || nextUrl !== this.currentUrl || this.frame.getAttribute('src') === 'about:blank') this.navigate();
         else this.updateTabs();
         clearInterval(this.poll);
-        this.poll = setInterval(() => this.syncLocation(), 800);
+        this.poll = setInterval(() => { this.syncLocation(); this.watchNativeImport(); }, 800);
         this.tabButtons[this.tab].focus();
     }
 
     navigate() {
+        if (this.tab === 'import') this.importInspection.open(this.database);
+        else this.importInspection.close();
         this.updateTabs();
         this.currentUrl = phpMyAdminUrl(this.database, this.table, this.tab);
         this.lastObserved = this.currentUrl;
@@ -182,9 +189,31 @@ export class DatabaseModal {
                 this.frameMessage.hidden = true;
                 clearTimeout(this.loadTimeout);
                 this.syncLocation();
+                this.watchNativeImport();
             }
         } catch {
             this.showFallback();
+        }
+    }
+
+    /** phpMyAdmin may finish its import through AJAX without reloading the iframe. */
+    watchNativeImport() {
+        if (!this.dialog.open || this.tab !== 'import' || !this.importInspection.database) return;
+        try {
+            const document = this.frame.contentDocument;
+            if (!document?.body || !this.frame.contentWindow.location.pathname.startsWith('/phpmyadmin/')) return;
+            const form = document.querySelector('#input_import_file')?.closest('form');
+            if (form && !form.dataset.governImportWatch) {
+                form.dataset.governImportWatch = '1';
+                form.addEventListener('submit', () => this.importInspection.submittedFile());
+                document.querySelector('#buttonGo')?.addEventListener('click', () => this.importInspection.submittedFile());
+            }
+            if (!this.importInspection.submitted) return;
+            const error = document.querySelector('.alert-danger, .alert-error, #error_message');
+            const success = document.querySelector('.alert-success');
+            if (error || success) this.importInspection.finishedFile(error?.textContent?.trim() || '');
+        } catch {
+            // Keep the native import available even if the frame cannot be inspected.
         }
     }
 

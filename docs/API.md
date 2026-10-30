@@ -82,6 +82,18 @@ returns 503 `database_prepare_failed`; an invalid helper reply returns 502
 `database_manager_invalid`. Errors use the ordinary bilingual envelope and do
 not expose SQL or credentials.
 
+`GET import-inspection?database=<name>` is a read-only snapshot of the selected database,
+using the same maintenance lock and the reader account. It returns
+`{database,tables:[name],views:[name],foreign_keys,row_counts:{table:integer},
+unchecked_rows:[name],total_records:integer|null,template,expected_foreign_keys,
+missing_tables,missing_views,missing_foreign_keys,sections:[{key,expected,present,missing,empty,records}]}`.
+Only catalog-resolved tables are counted; large tables (>250,000 estimated rows),
+tables beyond the first 40 and failed counts are marked unchecked. A null
+`total_records` means the result is not exact. A `bestuursatlas` template report
+compares 23 known tables, three views and 54 foreign-key constraints and groups
+missing or empty tables into five content areas. These checks detect structural
+and numerical differences, not semantic truth or a successful transaction.
+
 SQL upload is handled by official phpMyAdmin, not by a new Govern import parser.
 The database modal's Import shortcut opens `/database/import` or `/table/import`
 with the chosen `db` and optional `table`. The existing 128 MB upload and 300-second

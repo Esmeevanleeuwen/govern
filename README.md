@@ -36,6 +36,15 @@ daarvoor `.env` niet aan te passen:
 4. Kies daar je SQL-bestand en voer de import uit. Sluit het databasevenster om
    de geïmporteerde tabellen en relaties in Govern te verversen.
 
+De tab **Import** toont vóór het uploaden hoeveel tabellen, views, relaties en records al
+bestaan. Na een native SQL-upload vergelijkt Govern de actuele structuur en
+rijaantallen met de voorcontrole. Onder **Tabellen en inhoudelijke volledigheid**
+zie je bij Bestuursatlas ook welke onderdelen ontbreken of nog leeg zijn.
+Foutmeldingen uit phpMyAdmin en de leescontrole worden zichtbaar gemaakt; het
+volledige importresultaat blijft in phpMyAdmin. Niet alle grote tabellen kunnen
+exact worden geteld: zulke aantallen staan uitdrukkelijk als niet gecontroleerd.
+Dit is geen garantie dat een import veilig of volledig is.
+
 In hetzelfde venster kun je een bestaande database kiezen of de import voor de
 geselecteerde database openen. Een bestaande naam toevoegen vervangt geen
 gegevens; de expliciete import kan dat wel doen, afhankelijk van het SQL-bestand.
