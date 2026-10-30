@@ -12,12 +12,49 @@ export class ImportInspectionPanel {
         this.after = null;
         this.submitted = false;
         this.nativeError = '';
+
+        this.ownEpoch = 0;
+        this.ownWorking = false;
+        this.ownExecuting = false;
+        this.ownSql = '';
+        this.ownPlan = null;
+        this.ownHeading = el('h4', {}, t('imports.ownTitle'));
+        this.ownDescription = el('p', {class: 'small muted'}, t('imports.ownDescription'));
+        this.ownFile = el('input', {id: 'native-import-file', type: 'file', accept: '.sql,text/plain', class: 'input'});
+        this.ownFileLabel = el('label', {class: 'field-label', for: 'native-import-file'}, t('imports.ownChoose'));
+        this.ownPreviewButton = button(t('imports.ownPreview'), () => this.previewOwn(),
+            {symbol: 'search', className: 'button-small'});
+        this.ownConfirmLabel = el('label', {class: 'field-label', for: 'native-import-confirm'}, t('imports.ownConfirm'));
+        this.ownConfirm = el('input', {id: 'native-import-confirm', type: 'text', autocomplete: 'off', class: 'input'});
+        this.ownRunButton = button(t('imports.ownRun'), () => this.executeOwn(),
+            {symbol: 'play', kind: 'primary', className: 'button-small'});
+        this.ownStatus = el('p', {role: 'status', 'aria-live': 'polite', class: 'small muted'});
+        this.ownError = el('p', {role: 'alert', class: 'notice notice-error', hidden: true});
+        this.ownPanel = el('section', {class: 'native-import'},
+            this.ownHeading, this.ownDescription, this.ownFileLabel, this.ownFile,
+            el('div', {class: 'database-manager-actions'}, this.ownPreviewButton),
+            this.ownConfirmLabel, this.ownConfirm,
+            el('div', {class: 'database-manager-actions'}, this.ownRunButton),
+            this.ownStatus, this.ownError);
+        this.ownFile.addEventListener('change', () => {
+            this.ownEpoch++;
+            this.ownSql = '';
+            this.ownPlan = null;
+            this.ownConfirm.value = '';
+            this.ownStatus.textContent = '';
+            this.ownError.hidden = true;
+            this.ownControls();
+        });
+        this.ownConfirm.addEventListener('input', () => this.ownControls());
+        this.ownControls();
+
         this.panel = el('section', {id: 'import-inspection', class: 'import-inspection', hidden: true,
             'aria-labelledby': 'import-inspection-title'},
             el('div', {class: 'import-inspection-heading'},
                 this.title = el('h3', {id: 'import-inspection-title'}, t('imports.title')),
                 this.refreshButton = button(t('imports.refresh'), () => this.refresh(this.after ? 'after' : 'before'),
                     {className: 'button-small'})),
+            this.ownPanel,
             this.summary = el('p', {class: 'import-inspection-summary', role: 'status', 'aria-live': 'polite'}),
             this.warnings = el('div', {class: 'import-inspection-warnings'}),
             this.details = el('details', {class: 'import-inspection-details'},
@@ -25,7 +62,111 @@ export class ImportInspectionPanel {
                 this.contents = el('div', {class: 'import-inspection-contents'})));
     }
 
+
+    ownControls() {
+        this.ownFile.disabled = this.ownWorking;
+        this.ownPreviewButton.disabled = this.ownWorking || !this.ownFile.files?.length;
+        this.ownConfirm.disabled = this.ownWorking || !this.ownPlan;
+        this.ownRunButton.disabled = this.ownWorking || !this.ownPlan || this.ownConfirm.value !== this.database;
+    }
+
+    ownFailure(error) {
+        this.ownError.hidden = false;
+        this.ownError.textContent = error.message || String(error);
+        this.ownStatus.textContent = '';
+    }
+
+    async previewOwn() {
+        const file = this.ownFile.files?.[0];
+        if (!file || this.ownWorking || !this.database) return;
+        const epoch = this.ownEpoch;
+        const database = this.database;
+        this.ownPlan = null;
+        this.ownSql = '';
+        this.ownError.hidden = true;
+        if (file.size > 262144) {
+            this.ownFailure(new Error(t('imports.ownTooLarge')));
+            return;
+        }
+        this.ownWorking = true;
+        this.ownStatus.textContent = t('imports.ownChecking');
+        this.ownControls();
+        try {
+            // Reject malformed UTF-8 instead of silently altering the SQL.
+            const sql = new TextDecoder('utf-8', {fatal: true}).decode(await file.arrayBuffer());
+            if (epoch !== this.ownEpoch || database !== this.database) return;
+            const plan = await request('native-import-preview', {params: {database}, body: {sql}});
+            if (epoch !== this.ownEpoch || database !== this.database) return;
+            this.ownSql = sql;
+            this.ownPlan = plan;
+            this.before = plan.before;
+            this.after = null;
+            this.render(plan.before, 'before');
+            this.ownStatus.textContent = t('imports.ownPlanReady', {
+                bytes: plan.bytes, count: plan.statement_count === null ? '?' : plan.statement_count,
+                risky: plan.destructive.length + (plan.destructive_truncated ? '+' : ''),
+            });
+            this.ownConfirm.value = '';
+        } catch (error) {
+            if (epoch === this.ownEpoch && database === this.database) this.ownFailure(error);
+        } finally {
+            if (epoch === this.ownEpoch && database === this.database) {
+                this.ownWorking = false;
+                this.ownControls();
+            }
+        }
+    }
+
+    async executeOwn() {
+        const plan = this.ownPlan;
+        if (!plan || this.ownWorking || !this.database || this.ownConfirm.value !== this.database) return;
+        const epoch = this.ownEpoch;
+        const database = this.database;
+        this.ownWorking = true;
+        this.ownExecuting = true;
+        this.ownError.hidden = true;
+        this.ownStatus.textContent = t('imports.ownRunning');
+        this.ownControls();
+        try {
+            const result = await request('native-import-execute', {params: {database},
+                body: {sql: this.ownSql, preview_token: plan.preview_token, confirmation: database}});
+            if (epoch !== this.ownEpoch || database !== this.database) return;
+            this.ownPlan = null;
+            this.ownSql = '';
+            this.after = result.after;
+            this.render(result.after, 'after');
+            const detail = result.failed?.detail || '';
+            this.ownStatus.textContent = t(result.completed ? 'imports.ownSucceeded' : 'imports.ownPartial',
+                {count: result.executed, detail: detail || '—'});
+            if (result.safety_snapshot?.id) {
+                this.ownStatus.textContent += ' ' + t('imports.ownBackup', {id: result.safety_snapshot.id});
+            }
+            this.ownConfirm.value = '';
+        } catch (error) {
+            if (epoch === this.ownEpoch && database === this.database) {
+                this.ownPlan = null; // A changed database must be checked again.
+                this.ownFailure(error);
+            }
+        } finally {
+            if (epoch === this.ownEpoch && database === this.database) {
+                this.ownWorking = false;
+                this.ownExecuting = false;
+                this.ownControls();
+            }
+        }
+    }
+
     open(database) {
+        this.ownEpoch++;
+        this.ownWorking = false;
+        this.ownExecuting = false;
+        this.ownSql = '';
+        this.ownPlan = null;
+        this.ownFile.value = '';
+        this.ownConfirm.value = '';
+        this.ownStatus.textContent = '';
+        this.ownError.hidden = true;
+        this.ownControls();
         this.version++;
         this.database = database;
         this.before = null;
@@ -41,6 +182,12 @@ export class ImportInspectionPanel {
     }
 
     close() {
+        this.ownEpoch++;
+        this.ownPlan = null;
+        this.ownSql = '';
+        this.ownWorking = false;
+        this.ownExecuting = false;
+        this.ownControls();
         this.version++;
         this.database = '';
         this.panel.hidden = true;
@@ -133,6 +280,12 @@ export class ImportInspectionPanel {
     }
 
     translate() {
+        this.ownHeading.textContent = t('imports.ownTitle');
+        this.ownDescription.textContent = t('imports.ownDescription');
+        this.ownFileLabel.textContent = t('imports.ownChoose');
+        this.ownConfirmLabel.textContent = t('imports.ownConfirm');
+        this.ownPreviewButton.querySelector('span').textContent = t('imports.ownPreview');
+        this.ownRunButton.querySelector('span').textContent = t('imports.ownRun');
         this.title.textContent = t('imports.title');
         this.refreshButton.querySelector('span').textContent = t('imports.refresh');
         this.detailsTitle.textContent = t('imports.details');

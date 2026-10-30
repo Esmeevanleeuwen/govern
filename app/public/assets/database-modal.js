@@ -32,11 +32,12 @@ export class DatabaseModal {
         this.name = el('span', {class: 'database-name sr-only'});
         this.databaseSelect = el('select', {id: 'modal-database', class: 'input select modal-database-select',
             'aria-label': t('app.databases.choose'), 'data-i18n-aria': 'app.databases.choose', on: {change: () => {
+                if (this.importInspection.ownExecuting) return;
                 this.database = this.databaseSelect.value; this.tables = []; this.table = '';
                 this.configure(this.database, [], this.databases); this.navigate();
             }}});
         this.tableSelect = el('select', {id: 'modal-table', class: 'input select modal-table', on: {
-            change: () => { this.table = this.tableSelect.value; this.navigate(); },
+            change: () => { if (this.importInspection.ownExecuting) return; this.table = this.tableSelect.value; this.navigate(); },
         }});
         this.external = el('a', {class: 'icon-button', target: '_blank', rel: 'noopener', title: t('modal.externalTitle'), 'aria-label': t('modal.externalLabel')}, icon('external'));
         this.expand = el('button', {type: 'button', class: 'icon-button', title: t('modal.expand'), 'aria-label': t('modal.expand'), 'aria-pressed': 'false', on: {click: () => this.toggleExpanded()}}, icon('expand'));
@@ -44,7 +45,7 @@ export class DatabaseModal {
         const tablist = el('div', {class: 'database-tabs', role: 'tablist', 'aria-label': t('modal.tools')});
         for (const [key, label, symbol] of [['browse', 'Browse', 'table'], ['structure', 'Structure', 'layers'], ['sql', 'SQL', 'code'], ['import', t('modal.import'), 'download']]) {
             const tab = el('button', {type: 'button', class: 'database-tab', id: 'database-tab-' + key, role: 'tab', 'aria-controls': 'database-panel', 'aria-selected': 'false', on: {
-                click: () => { this.tab = key; this.navigate(); },
+                click: () => { if (this.importInspection.ownExecuting) return; this.tab = key; this.navigate(); },
                 keydown: event => this.tabKeydown(event, key),
             }}, icon(symbol), label);
             this.tabButtons[key] = tab;
@@ -61,7 +62,7 @@ export class DatabaseModal {
                 el('div', {class: 'database-dialog-title'}, el('span', {class: 'database-dialog-icon'}, icon('database')),
                     el('div', {}, el('h2', {id: 'database-title', 'data-i18n': 'modal.title'}, t('modal.title')), el('p', {'data-i18n': 'modal.description'}, t('modal.description')))),
                 el('div', {class: 'modal-tools'}, this.external, this.expand,
-                    this.closeButton = button(t('modal.close'), () => this.dialog.close(), {symbol: 'close', className: 'button-small'}))),
+                    this.closeButton = button(t('modal.close'), () => this.importInspection.ownExecuting ? null : this.dialog.close(), {symbol: 'close', className: 'button-small'}))),
             el('div', {class: 'database-toolbar'}, tablist,
                 el('div', {class: 'database-context'},
                     el('div', {class: 'modal-database'}, icon('database'), this.name, this.databaseSelect),
@@ -71,6 +72,7 @@ export class DatabaseModal {
             el('div', {class: 'database-dialog-footer'}, el('span', {class: 'status-dot'}), this.status,
                 el('span', {class: 'modal-footer-hint', 'data-i18n': 'modal.footerHint'}, t('modal.footerHint'))));
         this.fallbackVisible = false;
+        this.dialog.addEventListener('cancel', event => { if (this.importInspection.ownExecuting) event.preventDefault(); });
         this.dialog.addEventListener('close', () => {
             clearInterval(this.poll);
             clearTimeout(this.loadTimeout);
@@ -165,6 +167,7 @@ export class DatabaseModal {
     }
 
     tabKeydown(event, current) {
+        if (this.importInspection.ownExecuting) return;
         const keys = Object.keys(this.tabButtons);
         let next = keys.indexOf(current);
         if (event.key === 'ArrowRight') next = (next + 1) % keys.length;

@@ -30,6 +30,7 @@ jobs:
         run: |
           docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" app php /workspace/tests/backend_unit.php
           docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" app php /workspace/tests/sql_script_unit.php
+          docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" app php /workspace/tests/native_import_unit.php
           docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" app php /workspace/tests/backup_unit.php
           docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" app php /workspace/tests/backend_localization.php
           docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" app php /workspace/tests/ai_unit.php

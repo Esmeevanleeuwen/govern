@@ -7,6 +7,13 @@ namespace Govern;
 final class Messages
 {
     private const TEXT = [
+        'import_sql_required' => ['nl' => 'Selecteer een SQL-bestand met uitvoerbare opdrachten.', 'en' => 'Select an SQL file with executable statements.'],
+        'import_sql_too_large' => ['nl' => 'De eigen import ondersteunt voorlopig SQL-bestanden tot 256 KiB. Gebruik phpMyAdmin voor grotere bestanden.', 'en' => 'The built-in import currently supports SQL files up to 256 KiB. Use phpMyAdmin for larger files.'],
+        'import_sql_invalid' => ['nl' => 'Het bestand is geen geldige UTF-8 SQL-tekst.', 'en' => 'The file is not valid UTF-8 SQL text.'],
+        'import_confirm_database' => ['nl' => 'Typ de exacte databasenaam om deze SQL-import te bevestigen.', 'en' => 'Type the exact database name to confirm this SQL import.'],
+        'import_preview_invalid' => ['nl' => 'De voorcontrole ontbreekt of is ongeldig. Controleer het bestand opnieuw.', 'en' => 'The preflight check is missing or invalid. Check the file again.'],
+        'import_preview_stale' => ['nl' => 'De database is sinds de voorcontrole gewijzigd. Controleer het bestand opnieuw voordat je importeert.', 'en' => 'The database has changed since preflight. Check the file again before importing.'],
+
         'database_create_invalid' => ['nl' => 'Gebruik voor de databasenaam 1–64 letters, cijfers of underscores. Systeemdatabases en te lange permissienamen zijn niet toegestaan.', 'en' => 'Use 1–64 letters, numbers or underscores for the database name. System databases and overlong permission names are not allowed.'],
         'database_manager_unavailable' => ['nl' => 'De lokale databasebeheerder is niet bereikbaar. Start Govern opnieuw met het startscript.', 'en' => 'The local database manager is unavailable. Restart Govern with the start script.'],
         'database_manager_invalid' => ['nl' => 'De lokale databasebeheerder gaf geen geldig antwoord. Probeer opnieuw of start Govern opnieuw.', 'en' => 'The local database manager did not return a valid response. Retry or restart Govern.'],

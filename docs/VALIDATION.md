@@ -1,6 +1,19 @@
 # Validatie
 
-Stand van de controles: **29 oktober 2026**.
+Stand van de eerder uitgevoerde controles: **29 oktober 2026**. De nieuwe eigen import is in deze wijziging opgenomen, maar de Docker/Playwright-uitslag moet bij de nieuwe GitHub-commit worden gecontroleerd.
+
+## Eerste eigen import: nieuwe controles
+
+`tests/native_import_unit.php` controleert de bestandsgrens, UTF-8,
+lege invoer en binding van database, bestand en catalogus aan de voorcontrole-token.
+De bestaande browserproef `tests/database-import-smoke.mjs` controleert aanvullend
+een echte eigen import in een afzonderlijke testdatabase, herstel van de actieve
+database en nacontrole op inhoud. De bestaande phpMyAdmin-import blijft apart
+getest. Ook de CSRF-beveiliging en bevestiging blijven onderdeel van deze route.
+
+Er is hier geen lokale Docker-stack uitgevoerd; CI moet de volledige nieuwe
+integratietest nog bevestigen. Een geslaagde SQL-uitvoer bewijst niet dat alle
+records of verwijzingen van een externe dataset inhoudelijk compleet zijn.
 
 ## Databases toevoegen en echte SQL-import
 
