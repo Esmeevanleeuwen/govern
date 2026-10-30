@@ -15,6 +15,7 @@ export class ImportInspectionPanel {
 
         this.ownEpoch = 0;
         this.ownWorking = false;
+        this.ownExecuting = false;
         this.ownSql = '';
         this.ownPlan = null;
         this.ownHeading = el('h4', {}, t('imports.ownTitle'));
@@ -122,6 +123,7 @@ export class ImportInspectionPanel {
         const epoch = this.ownEpoch;
         const database = this.database;
         this.ownWorking = true;
+        this.ownExecuting = true;
         this.ownError.hidden = true;
         this.ownStatus.textContent = t('imports.ownRunning');
         this.ownControls();
@@ -148,6 +150,7 @@ export class ImportInspectionPanel {
         } finally {
             if (epoch === this.ownEpoch && database === this.database) {
                 this.ownWorking = false;
+                this.ownExecuting = false;
                 this.ownControls();
             }
         }
@@ -156,6 +159,7 @@ export class ImportInspectionPanel {
     open(database) {
         this.ownEpoch++;
         this.ownWorking = false;
+        this.ownExecuting = false;
         this.ownSql = '';
         this.ownPlan = null;
         this.ownFile.value = '';
@@ -182,6 +186,7 @@ export class ImportInspectionPanel {
         this.ownPlan = null;
         this.ownSql = '';
         this.ownWorking = false;
+        this.ownExecuting = false;
         this.ownControls();
         this.version++;
         this.database = '';
