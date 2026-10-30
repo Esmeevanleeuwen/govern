@@ -60,3 +60,12 @@
 .import-inspection-contents h4 { margin: 6px 0; font-size: 12px; }
 .import-inspection-contents p { margin: 4px 0; }
 @media (max-width: 620px) { .import-inspection { margin: 6px 10px; padding: 10px; } }
+
+/* First-party SQL import shares the existing import inspection, not a second modal. */
+.native-import { display: grid; gap: .65rem; padding: 1rem; border-radius: 1rem;
+    background: var(--g-surface, rgba(255,255,255,.4)); margin-bottom: .85rem; }
+.native-import h4, .native-import p { margin: 0; }
+.native-import .database-manager-actions { justify-content: flex-start; }
+.native-import .field-label { display: block; }
+.native-import .input { width: 100%; max-width: 100%; }
+.native-import [role="status"]:empty { display: none; }
