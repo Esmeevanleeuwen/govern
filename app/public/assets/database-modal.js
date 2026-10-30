@@ -134,7 +134,7 @@ export class DatabaseModal {
         if (this.tab === 'import' || nextUrl !== this.currentUrl || this.frame.getAttribute('src') === 'about:blank') this.navigate();
         else this.updateTabs();
         clearInterval(this.poll);
-        this.poll = setInterval(() => this.syncLocation(), 800);
+        this.poll = setInterval(() => { this.syncLocation(); this.watchNativeImport(); }, 800);
         this.tabButtons[this.tab].focus();
     }
 
@@ -189,21 +189,31 @@ export class DatabaseModal {
                 this.frameMessage.hidden = true;
                 clearTimeout(this.loadTimeout);
                 this.syncLocation();
-                // Track the native form's actual submission, not just the Import tab.
-                const upload = document.querySelector('#input_import_file');
-                const form = upload?.closest('form');
-                if (form && !form.dataset.governImportWatch) {
-                    form.dataset.governImportWatch = '1';
-                    form.addEventListener('submit', () => this.importInspection.submittedFile());
-                    document.querySelector('#buttonGo')?.addEventListener('click', () => this.importInspection.submittedFile(), {once: true});
-                }
-                if (this.importInspection.submitted) {
-                    const nativeError = document.querySelector('.alert-danger, .alert-error, #error_message')?.textContent?.trim() || '';
-                    this.importInspection.finishedFile(nativeError);
-                }
+                this.watchNativeImport();
             }
         } catch {
             this.showFallback();
+        }
+    }
+
+    /** phpMyAdmin may finish its import through AJAX without reloading the iframe. */
+    watchNativeImport() {
+        if (!this.dialog.open || this.tab !== 'import' || !this.importInspection.database) return;
+        try {
+            const document = this.frame.contentDocument;
+            if (!document?.body || !this.frame.contentWindow.location.pathname.startsWith('/phpmyadmin/')) return;
+            const form = document.querySelector('#input_import_file')?.closest('form');
+            if (form && !form.dataset.governImportWatch) {
+                form.dataset.governImportWatch = '1';
+                form.addEventListener('submit', () => this.importInspection.submittedFile());
+                document.querySelector('#buttonGo')?.addEventListener('click', () => this.importInspection.submittedFile());
+            }
+            if (!this.importInspection.submitted) return;
+            const error = document.querySelector('.alert-danger, .alert-error, #error_message');
+            const success = document.querySelector('.alert-success');
+            if (error || success) this.importInspection.finishedFile(error?.textContent?.trim() || '');
+        } catch {
+            // Keep the native import available even if the frame cannot be inspected.
         }
     }
 
