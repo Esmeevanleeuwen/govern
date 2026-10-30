@@ -40,7 +40,7 @@ const usedKeys = new Set();
 for (const file of files.filter(name => name.endsWith('.js') && !name.endsWith('-messages.js'))) {
     const source = await readFile(path.join(assets, file), 'utf8');
     // Includes t() arguments, route label keys, operator keys and client error keys.
-    for (const match of source.matchAll(/['"]((?:app|ui|api|builder|modal)\.[A-Za-z0-9_.]+)['"]/g)) {
+    for (const match of source.matchAll(/['"]((?:app|ui|api|builder|modal|imports)\.[A-Za-z0-9_.]+)['"]/g)) {
         if (!match[1].endsWith('.')) usedKeys.add(match[1]);
     }
 }
