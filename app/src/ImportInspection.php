@@ -120,7 +120,7 @@ final class ImportInspection
         return [
             'database' => $this->database->name(),
             'tables' => $tableNames, 'views' => $viewNames,
-            'foreign_keys' => $foreignKeys, 'row_counts' => $rowCounts,
+            'foreign_keys' => $foreignKeys, 'row_counts' => (object) $rowCounts,
             'unchecked_rows' => $unchecked,
             'total_records' => count($unchecked) === 0 ? array_sum($rowCounts) : null,
             'template' => $recognized ? 'bestuursatlas' : null,
