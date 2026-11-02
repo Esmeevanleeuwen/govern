@@ -10,6 +10,7 @@
  *
  * node tests/frontend-smoke.mjs
  */
+import {authenticatedPage} from './auth-session.mjs';
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 import {mkdir} from 'node:fs/promises';
@@ -57,9 +58,10 @@ const switchModalTab = async (page, label) => {
 };
 
 try {
-    const page = await browser.newPage({locale: 'nl-NL', viewport: {width: 1440, height: 1000}});
+    const page = await authenticatedPage(browser, base, {locale: 'nl-NL', viewport: {width: 1440, height: 1000}});
     trackErrors(page);
-    await page.goto(base.href, {waitUntil: 'networkidle'});
+    await page.goto(new URL('/#overzicht', base).href, {waitUntil: 'networkidle'});
+    await page.waitForURL(url => url.pathname === '/workspace.php' && url.hash === '#overzicht');
     await page.locator('.stats-grid').waitFor();
     const bootstrap = await page.evaluate(async () => (await (await fetch('/api.php?action=bootstrap')).json()).data);
     assert.equal(bootstrap.database.status, 'ready');
@@ -68,7 +70,7 @@ try {
     assert.ok(table, 'Seed at least one table before testing.');
     await shot(page, 'overview');
 
-    await page.goto(new URL('/#gegevens?table=' + encodeURIComponent(table.name), base).href);
+    await page.goto(new URL('/workspace.php#gegevens?table=' + encodeURIComponent(table.name), base).href);
     await page.locator('.table-heading').getByRole('heading', {name: table.name, exact: true}).waitFor();
     await waitForPage(page);
     assert.equal(await page.locator('.table-heading h2').textContent(), table.name);
@@ -176,9 +178,9 @@ try {
 
     // New browser page avoids carrying a pending catalog refresh into viewport
     // assertions. The navigation itself is exercised with real clicks.
-    const mobile = await browser.newPage({locale: 'nl-NL', viewport: {width: 390, height: 844}});
+    const mobile = await authenticatedPage(browser, base, {locale: 'nl-NL', viewport: {width: 390, height: 844}});
     trackErrors(mobile);
-    await mobile.goto(new URL('/#overzicht', base).href, {waitUntil: 'networkidle'});
+    await mobile.goto(new URL('/workspace.php#overzicht', base).href, {waitUntil: 'networkidle'});
     await mobile.locator('.stats-grid').waitFor();
     assert.equal(await mobile.locator('#sidebar').getAttribute('aria-hidden'), 'true');
     assert.equal(await mobile.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);

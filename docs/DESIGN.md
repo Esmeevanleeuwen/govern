@@ -1,8 +1,59 @@
 # Govern UX and UI design
 
-**Design baseline 1.7.** Govern is a personal, local workspace for exploring, understanding and changing databases. This guide defines its brand, visual system, behaviour and the process for adding features without disrupting existing work.
+**Design baseline 1.8.** Govern is a personal, local workspace for exploring, understanding and changing databases. This guide defines its brand, visual system, behaviour and the process for adding features without disrupting existing work.
 
 The agreed visual direction is layered glass, soft shadows, custom colour and no hard decorative borders. Dutch and English are equal interface languages. The detailed rules below are the target for implementation; the interactive preview is a visual reference. The production modules implement the core language, appearance and layout controls; the future chart example remains a proposal.
+
+## Public homepage and account journey
+
+The homepage at `/` introduces Govern with **Your data. Your next idea.** and
+an invitation to help shape the project: **Be here at the beginning.** Use
+oversized sans serif typography, the existing open geometric mark, and the
+application's actual lagoon/sage palette. Subtle lavender and pale gold ambient
+light support the same pearl glass materials as the workspace. A dark sample
+workspace provides contrast within the light marketing canvas.
+
+The product preview is labelled **Illustrative workspace · sample data**.
+Its Data, Structure and Schema controls explore a small fictional store; the
+preview never executes SQL or connects to a visitor's work databases. Do not
+make its sample counts or example queries look like real installation results.
+The setup dialog offers Windows and macOS/Linux instructions and copy feedback.
+Project, documentation and setup links remain real navigation actions.
+
+**Start exploring / Make it your workspace** opens registration for this
+installation. **Log in** opens the shared account form in login mode. Account
+screens support EN/NL, labelled fields, browser autofill, password visibility,
+password confirmation, keyboard-operated mode tabs, disabled pending controls,
+nearby errors and retry. Preserve entered data after a rejected request; never
+store a password in browser storage. Use at least twelve characters and a
+clear 12–128-character hint rather than invented strength claims.
+
+Registration explains the real access boundary. The first account owns this
+installation and signs in immediately. Every later request waits for the owner;
+show that outcome explicitly, without suggesting access or email verification
+has been completed. Approved users share the same permitted work databases.
+An account is not a private database, hosted cloud workspace or new tenant.
+
+`/account.php` shows the escaped name/email, local role and shared-database
+boundary, a route into `/workspace.php`, and logout. Owners additionally see
+pending requests, refresh, and explicit approval controls with a statement of
+the database access being granted. Members do not receive owner controls.
+Logout uses the authenticated POST endpoint and returns to the public entry.
+The workspace keeps an account link without replacing its existing navigation.
+
+The real workspace is now served from `/workspace.php`, behind the same
+server-side session gate as data APIs and official phpMyAdmin. Preserve old
+workspace hashes and database parameters when forwarding links from `/`.
+Homepage, auth and account controls reuse the application's language mechanism
+and visual vocabulary; ordinary schema, SQL, layout and preference flows retain
+their existing responsibilities. Account syncing, email delivery and password
+reset are not part of this delivery.
+
+Responsive layouts keep the headline, primary action and account fields
+readable at 320 px. Dense sample tables stay within their own region. Keep
+visible focus, dialog focus return, sensible reading order, labelled non-colour
+states, and reduced-motion/reduced-transparency fallbacks. No invented users,
+testimonials, live collaboration or adoption statistics belong in this story.
 
 ## Interactive design reference
 

@@ -3,6 +3,7 @@
  * Uses the same Playwright environment as the other browser tests. This test
  * reads metadata only; edge-case catalogs are intercepted browser fixtures.
  */
+import {authenticatedContext} from './auth-session.mjs';
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 import {mkdir} from 'node:fs/promises';
@@ -17,7 +18,7 @@ const screenshots = process.env.SCREENSHOTS_DIR;
 if (screenshots) await mkdir(screenshots, {recursive: true});
 const browser = await chromium.launch({headless: true, args: browserArgs,
     ...(process.env.BROWSER_BIN ? {executablePath: process.env.BROWSER_BIN} : {})});
-const context = await browser.newContext({locale: 'nl-NL', viewport: {width: 1440, height: 1100}});
+const context = await authenticatedContext(browser, base, {locale: 'nl-NL', viewport: {width: 1440, height: 1100}});
 const page = await context.newPage();
 const errors = [];
 const track = page => page.on('pageerror', error => errors.push(error.message));
@@ -34,7 +35,7 @@ const shot = async (page, name) => {
     }
 };
 const load = async (page, hash = '#schema') => {
-    await page.goto(new URL('/' + hash, base).href, {waitUntil: 'networkidle'});
+    await page.goto(new URL('/workspace.php' + hash, base).href, {waitUntil: 'networkidle'});
     await page.locator('#schema-search').waitFor({state: 'attached'});
 };
 const ensureExplorer = async (current = page) => {
@@ -197,7 +198,7 @@ try {
     await page.locator('#schema-help-open').click();
     const languagePage = await context.newPage();
     track(languagePage);
-    await languagePage.goto(new URL('/#instellingen', base).href, {waitUntil: 'networkidle'});
+    await languagePage.goto(new URL('/workspace.php#instellingen', base).href, {waitUntil: 'networkidle'});
     await languagePage.locator('#language-select').selectOption('en');
     await page.waitForFunction(() => document.documentElement.lang === 'en');
     await page.locator('#schema-help-dialog[open]').waitFor();
@@ -423,14 +424,14 @@ try {
     await page.locator('.structure-section').first().waitFor();
 
     // Navigating to the diagram does not replace research in progress.
-    await page.goto(new URL('/#onderzoeken', base).href);
+    await page.goto(new URL('/workspace.php#onderzoeken', base).href);
     await page.locator('#sql-editor').waitFor();
     const draft = 'SELECT 42 AS kept_schema_draft;';
     await page.locator('#sql-editor').fill(draft);
     await load(page);
     await page.locator('#settings-link').click();
     await page.locator('#preference-theme').selectOption('dark');
-    await page.goto(new URL('/#schema', base).href);
+    await page.goto(new URL('/workspace.php#schema', base).href);
     await page.locator('#schema-search').waitFor();
     await searchFor('organizations');
     await selectTable('organizations');
@@ -445,7 +446,7 @@ try {
     await shot(page, 'selection-dark-en');
     await page.locator('#settings-link').click();
     await page.locator('#preference-reduceTransparency').check();
-    await page.goto(new URL('/#schema', base).href);
+    await page.goto(new URL('/workspace.php#schema', base).href);
     await page.locator('#schema-search').waitFor();
     assert.equal(await page.locator('.schema-node, .schema-node-header, #schema-viewport').evaluateAll(nodes =>
         nodes.every(element => getComputedStyle(element).backdropFilter === 'none')), true,
@@ -457,7 +458,7 @@ try {
                 style.getPropertyValue('border-' + side + '-style') !== 'none' &&
                 !['transparent', 'rgba(0, 0, 0, 0)'].includes(style.getPropertyValue('border-' + side + '-color'));
         })).map(element => element.className)), [], 'Schema surfaces have no hard decorative borders.');
-    await page.goto(new URL('/#onderzoeken', base).href);
+    await page.goto(new URL('/workspace.php#onderzoeken', base).href);
     await page.locator('#sql-editor').waitFor();
     assert.equal(await page.locator('#sql-editor').inputValue(), draft, 'Schema/settings navigation retains research.');
 

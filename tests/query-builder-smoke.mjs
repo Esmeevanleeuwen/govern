@@ -6,6 +6,7 @@
  * Uses the same BASE_URL, PLAYWRIGHT_MODULE, BROWSER_BIN, BROWSER_ARGS_JSON and SCREENSHOTS_DIR
  * options as frontend-smoke.mjs. No extra runtime package in Govern is needed.
  */
+import {authenticatedPage} from './auth-session.mjs';
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 import {mkdir} from 'node:fs/promises';
@@ -55,9 +56,9 @@ const run = async page => {
 };
 
 try {
-    const page = await browser.newPage({locale: 'nl-NL', viewport: {width: 1440, height: 1000}});
+    const page = await authenticatedPage(browser, base, {locale: 'nl-NL', viewport: {width: 1440, height: 1000}});
     page.on('pageerror', error => errors.push(error.message));
-    await page.goto(new URL('/#onderzoeken?table=digital_systems', base).href, {waitUntil: 'networkidle'});
+    await page.goto(new URL('/workspace.php#onderzoeken?table=digital_systems', base).href, {waitUntil: 'networkidle'});
     await page.getByRole('button', {name: 'Query maken', exact: true}).waitFor();
     assert.equal(await page.getByRole('combobox', {name: 'Basistabel', exact: true}).inputValue(), 'digital_systems');
     const structure = await page.evaluate(async () => (await (await fetch('/api.php?action=structure&table=digital_systems')).json()).data);
@@ -245,7 +246,7 @@ try {
 
     // A focused metadata fixture models a removed selected column. The design
     // must keep it until the user explicitly removes that one choice.
-    const schemaPage = await browser.newPage({locale: 'nl-NL', viewport: {width: 1440, height: 1000}});
+    const schemaPage = await authenticatedPage(browser, base, {locale: 'nl-NL', viewport: {width: 1440, height: 1000}});
     schemaPage.on('pageerror', error => errors.push(error.message));
     let hideColumn = false;
     let attemptedDesign;
@@ -264,7 +265,7 @@ try {
         }
         return route.continue();
     });
-    await schemaPage.goto(new URL('/#onderzoeken?table=digital_systems', base).href, {waitUntil: 'networkidle'});
+    await schemaPage.goto(new URL('/workspace.php#onderzoeken?table=digital_systems', base).href, {waitUntil: 'networkidle'});
     await schemaPage.getByRole('checkbox', {name: 'Basiskolom name', exact: true}).waitFor();
     assert.equal(await schemaPage.getByRole('checkbox', {name: 'Basiskolom name', exact: true}).isChecked(), true);
     hideColumn = true;
@@ -292,9 +293,9 @@ try {
     await schemaPage.getByRole('button', {name: 'Query maken', exact: true}).waitFor();
     assert.equal(await schemaPage.evaluate(() => document.activeElement.getAttribute('aria-label')), 'Basistabel');
 
-    const mobile = await browser.newPage({locale: 'nl-NL', viewport: {width: 390, height: 844}});
+    const mobile = await authenticatedPage(browser, base, {locale: 'nl-NL', viewport: {width: 390, height: 844}});
     mobile.on('pageerror', error => errors.push(error.message));
-    await mobile.goto(new URL('/#onderzoeken?table=digital_systems', base).href, {waitUntil: 'networkidle'});
+    await mobile.goto(new URL('/workspace.php#onderzoeken?table=digital_systems', base).href, {waitUntil: 'networkidle'});
     await mobile.getByRole('button', {name: 'Query maken', exact: true}).waitFor();
     await mobile.getByRole('button', {name: 'Voorwaarde toevoegen', exact: true}).click();
     await mobile.getByRole('combobox', {name: 'Kolom voor voorwaarde 1', exact: true}).selectOption(ref('base', 'name'));

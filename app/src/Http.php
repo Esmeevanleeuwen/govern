@@ -10,6 +10,8 @@ final class Http
         header('Cache-Control: no-store');
         header('X-Content-Type-Options: nosniff');
         header('Referrer-Policy: same-origin');
+        header('X-Frame-Options: SAMEORIGIN');
+        header("Content-Security-Policy: frame-ancestors 'self'; base-uri 'self'; form-action 'self'");
         $authority = (string) ($_SERVER['HTTP_HOST'] ?? '');
         $parts = parse_url('http://' . $authority);
         $host = strtolower(trim((string) ($parts['host'] ?? ''), '[]'));

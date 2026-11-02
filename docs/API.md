@@ -1,6 +1,7 @@
 # API contract — Govern
 
-Personal local workbench. All endpoints are `GET/POST /api.php?action=...`, JSON.
+Personal local workbench. Database endpoints are `GET/POST /api.php?action=...`,
+and installation-account endpoints are `GET/POST /auth-api.php?action=...`, JSON.
 Success envelope `{ "ok": true, "data": ... }`. A failure keeps the existing
 `error` string and adds stable localization fields, with the same HTTP status:
 
@@ -17,11 +18,77 @@ Success envelope `{ "ok": true, "data": ... }`. A failure keeps the existing
 }
 ```
 
-All POST requests use JSON and header `X-CSRF-Token` from bootstrap. PHP session cookie, same origin only.
+All POST requests use JSON and header `X-CSRF-Token` from authenticated bootstrap
+or account status. PHP session cookie, same origin only. Except fixed database
+readiness, every database API route requires an approved installation account.
 One MySQL/MariaDB server, multiple selectable databases and live schema discovery.
 The optional local Ollama connection is disabled by default; only the separate AI
 endpoints can call that configured provider. Ordinary database operations and
 selection explanations do not require a model.
+
+## Installation accounts and HTML routes
+
+`GET /` renders the public homepage and its clearly labelled fictional product
+preview. `GET /workspace.php` requires an approved account and renders the
+existing workspace. Legacy workspace hashes entered at `/` retain their hash
+and database parameter when forwarded to `/workspace.php`. `/auth.php?mode=login`
+and `?mode=register` render the account forms; `/account.php` requires login and
+contains account/logout controls and owner-only approval controls. HTML page
+guards redirect unauthenticated requests with 303; JSON routes return 401.
+
+All account endpoints use the ordinary success/error envelope and bilingual
+error fields. Public user records are
+`{id:integer,name,email,role:"owner"|"member",status:"active"|"pending",created_at}`;
+they never include a password hash. The request `action` is a URL parameter.
+
+| Method / account action | Input | Successful data |
+| --- | --- | --- |
+| GET `status` | None | `{csrf,user:PublicUser|null,has_owner:boolean}` |
+| POST `register` | `{name,email,password}` | 201 `{csrf,user:PublicUser|null,registration:"active"|"pending"}` |
+| POST `login` | `{email,password}` | `{csrf,user:PublicUser}` |
+| POST `logout` | `{}` | `{csrf,user:null}` |
+| GET `requests` | None; owner required | `{users:PublicUser[]}` with up to 100 pending requests |
+| POST `approve` | `{user_id:integer}`; owner required | `{user:PublicUser}` |
+
+Registration atomically makes the first account the active owner and signs it
+in. Later accounts stay pending; supplied role/status properties grant nothing.
+Duplicate email registration has the same public pending response. Only the
+owner can approve a pending member. Approved accounts deliberately share access
+to this installation's existing work databases; they do not create isolated
+tenants or private schemas. A correct password for a pending account returns
+403 `auth_pending`; incorrect or unknown credentials return the same 401
+`auth_credentials_invalid`. Owner-only actions return 403
+`auth_owner_required`; missing/expired login returns 401 `auth_required`.
+
+Passwords contain 12–128 UTF-8 characters and at most 512 bytes, without NUL;
+they are hashed using Argon2id. Login rate limits are 60 attempts per peer and
+10 per normalized email over 15 minutes; registration allows 15 attempts per
+peer over one hour. Counters persist in SQLite using hashed bucket keys.
+The gateway is the PHP peer in Docker, so its peer limit is shared by this
+local installation. A full bucket returns 429 `auth_rate_limited` and a
+`Retry-After` header. Account input validation uses stable `auth_*` error codes.
+
+`Http::start()` checks host/origin and creates the Strict, HttpOnly session
+cookie; Secure follows HTTPS. Every account mutation requires the current
+session's CSRF header. Login and logout rotate both session ID and CSRF token:
+clients must retain the returned token or reload status before their next
+mutation. A logged-in session is valid for at most 43,200 seconds, and access
+checks re-read status/role from server storage. Failure to open that storage
+returns 503 `auth_unavailable`, never a guest bypass.
+
+`AUTH_DIR=/var/lib/govern/auth` stores `accounts.sqlite` in the separate
+`account_data` Docker volume, outside public files and work-database exports.
+PHP PDO SQLite and Argon2id support are required. Email is only an account
+identifier: email verification, email delivery and password-reset/recovery
+endpoints are not implemented. Bindings/allowed hosts remain loopback-only;
+these accounts do not make this configuration an internet service.
+
+Nginx protects every native `/phpmyadmin/` route with internal
+`/_govern_auth` → `/auth-check.php`. An approved session returns 204; missing
+login returns 401, and failed checks deny access. The gateway converts missing
+login to an explicit 302 redirect to `/auth.php?mode=login`. The internal location
+cannot be requested directly. Native uploads/downloads and direct links receive
+the same check; official phpMyAdmin remains the actual application.
 
 ## Database scope
 
@@ -161,7 +228,9 @@ interface and future feature rules.
 - GET `ai-status`: actual optional local-provider configuration and readiness; see the AI contract below.
 - POST `ai-context` `{scope?,message?,targets?,route?}`: bounded schema/UI context, or local project passages when `scope:"project"`; without table records.
 - POST `ai-chat` `{scope?,message,targets?,route?,language?,history?}`: schema explanation and optional SQL proposal, or cited project explanation; never executes a proposal.
-- GET `health`: `{status:"ok"}` when selected DB readable; no credentials/errors disclosed.
+- GET `health`: unauthenticated `{status:"ok"}` when the fixed base-configuration
+  database is readable. Caller-supplied `database` does not change that check.
+  This route does not enumerate accessible schemas or disclose credentials.
 
 ## Optional local AI
 
@@ -650,7 +719,7 @@ format or hidden builder state in the database.
 ## Ownership
 
 Backend owns `app/src/*` and `app/public/api.php`, except BackupService.php.
-Frontend owns `app/public/index.php`, `app/public/assets/*`.
+Frontend owns the public page templates, `workspace.php`, and `app/public/assets/*`.
 Infrastructure owns Docker files, compose.yaml, bootstrap scripts, app/src/BackupService.php.
 Root owns database seed, docs, integration tests, review and GitHub.
 
@@ -708,7 +777,7 @@ transport. The service has no HTTP listener, published port, SQL execution
 endpoint or file-import channel. Missing setup leaves ordinary browsing usable
 and returns the bounded helper error through the normal API envelope.
 
-PHP8.4+, PDO MySQL, native PHP classes and ES modules, no build framework. Namespace `Govern`, small explicit bootstrap loading or autoloader. Config class `Config::fromEnvironment(): array`. BackupService `__construct(array $config)`, `list(): array`, `create(string $label): array`, `restore(string $id,string $confirmation): array`, `download(string $id): array` returning `{path,filename}`. Backup service verifies files/checksums, invokes clients using argv arrays, credentials only private temporary file. No shell command concatenation.
+PHP8.4+, PDO MySQL and PDO SQLite, Argon2id support, native PHP classes and ES modules, no build framework. Namespace `Govern`, small explicit bootstrap loading or autoloader. Config class `Config::fromEnvironment(): array`. BackupService `__construct(array $config)`, `list(): array`, `create(string $label): array`, `restore(string $id,string $confirmation): array`, `download(string $id): array` returning `{path,filename}`. Backup service verifies files/checksums, invokes clients using argv arrays, credentials only private temporary file. No shell command concatenation.
 
 ## phpMyAdmin integration
 

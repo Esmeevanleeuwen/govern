@@ -7,6 +7,11 @@ Thumbs.db
 node_modules/
 vendor/
 backups/
+auth/
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
 test-results/
 playwright-report/
 __pycache__/

@@ -14,10 +14,46 @@ De eerste start haalt de onderdelen op, maakt lokale wachtwoorden aan en vult
 een nieuwe database met de Bestuursatlas. Open daarna
 [http://localhost:8080](http://localhost:8080).
 
+De startpagina laat zien wat Govern doet. Kies **Create account** om een account
+voor deze installatie te maken. Het eerste account wordt de eigenaar en opent
+meteen de werkplek. Volgende accounts wachten op goedkeuring; de eigenaar regelt
+dat via **Account → Access requests**. Daarna kun je inloggen, de werkplek openen
+en via Account weer uitloggen. De startpagina, accountschermen en werkplek
+ondersteunen Nederlands en Engels.
+
 Je hoeft PHP, Node, Composer of MariaDB niet zelf te installeren. Docker Compose
 moet de optie `--wait` ondersteunen; een actuele Docker Desktop bevat die. Je bestaande
 database buiten Docker wordt niet aangeraakt. De wachtwoorden staan alleen in
 je lokale `.env`, die niet in Git wordt opgenomen.
+
+## Startpagina en lokale accounts
+
+- `/`: de publieke startpagina met een duidelijk gemarkeerde voorbeeldwerkplek
+  en Docker-startinstructies. De voorbeelden voeren geen SQL uit.
+- `/workspace.php`: de bestaande databasewerkplek, na inloggen. Bestaande
+  `/#gegevens`, `/#schema`, `/#onderzoeken` en andere werkpleklinks blijven hun
+  route en databaseparameter behouden.
+- `/auth.php?mode=register` en `/auth.php?mode=login`: account maken en inloggen.
+- `/account.php`: accountgegevens, uitloggen en voor de eigenaar openstaande
+  toegangsverzoeken goedkeuren.
+
+Accounts horen bij één Docker-installatie. Een goedgekeurd account krijgt
+dezelfde toegang tot de toegestane werkdatabases als de eigenaar: bekijken,
+wijzigen, SQL uitvoeren en herstelpunten beheren. Het account maakt geen
+afzonderlijke privéomgeving of eigen database. Keur daarom alleen mensen goed
+die je deze toegang wilt geven. Je kunt ook een eigen Govern-installatie starten.
+
+Wachtwoorden worden met Argon2id gehasht. De accounts staan in het afzonderlijke
+Docker-volume `account_data`, buiten de webroot en buiten SQL-herstelpunten van
+werkdatabases. Bewaar dat volume als je accounts wilt behouden. Bestaande
+databasevolumes, SQL, onderzoeken en herstelpunten worden door deze uitbreiding
+niet vervangen.
+
+Een sessie duurt maximaal twaalf uur en eindigt ook bij uitloggen of verlies van
+de browsersessie. Inloggen en registreren hebben een tijdelijke pogingenlimiet.
+E-mail is een inlognaam; deze versie verstuurt geen verificatie- of herstelmail
+en heeft geen wachtwoordherstel. Bewaar het wachtwoord van het eigenaarsaccount.
+De taal- en uiterlijkvoorkeuren blijven bij de browser, zonder accountsynchronisatie.
 
 ## Een andere database kiezen of toevoegen
 
@@ -339,9 +375,12 @@ Werk je al met Git, dan kun je vanuit deze map `git pull --ff-only` gebruiken en
 daarna hetzelfde startbestand uitvoeren. Heb je zelf code aangepast, bewaar of
 combineer die wijzigingen voordat je projectbestanden vervangt.
 
-Werk je bij vanaf een versie zonder dynamische proxy-adressen? Voer na het
-starten eenmalig `docker compose restart gateway` uit om de nieuwe
-Nginx-instellingen te laden. Dit verwijdert geen databases of volumes.
+Gebruik bij deze update het startbestand. Na een geslaagde Compose-start test
+het startbestand de Nginx-configuratie en herlaadt het ook een al bestaande
+gateway. Zo gelden de nieuwe sessiecontroles ook voor phpMyAdmin. Mislukt de
+start, configuratiecontrole of herlaadactie, dan stopt het script alleen de
+gateway en geeft het een fout. De volumes blijven behouden. Los de gemelde fout
+op en voer het startbestand opnieuw uit.
 
 ## Samen verder bouwen
 
@@ -363,9 +402,11 @@ of een verzameling aparte services per onderwerp.
 
 ## Toegang
 
-De ingang is alleen aan `127.0.0.1` gekoppeld. Dit is een persoonlijke lokale
-werkplek zonder bezoekersaccounts. Iedereen die jouw lokale ingang kan gebruiken,
-kan werkdatabases toevoegen en de toegestane werkdatabases beheren. De phpMyAdmin-verbinding heeft rechten
+De ingang is alleen aan `127.0.0.1` gekoppeld. De startpagina en accountformulieren
+zijn zonder sessie bereikbaar. Een goedgekeurd account is nodig voor de werkplek,
+alle gegevens-API's en de officiële phpMyAdmin, ook bij rechtstreeks openen.
+Een goedgekeurde gebruiker kan werkdatabases toevoegen en de toegestane
+werkdatabases beheren. De phpMyAdmin-verbinding heeft rechten
 voor de expliciet ingeschakelde databases en eventueel eerder verleende rechten;
 Govern voegt geen globale serverrechten toe. Verwijderen uit `DB_DATABASES`
 trekt bestaande rechten niet automatisch in.
@@ -375,6 +416,7 @@ Vrije SQL in **Onderzoeken** en het databasevenster gebruiken het schrijfaccount
 voor de toegestane databases. Vrije SQL vraagt bevestiging voor ingrijpende opdrachten;
 eerdere opdrachten in een script kunnen al zijn uitgevoerd als een latere faalt.
 
-De interface en configuratie zijn niet bedoeld om rechtstreeks openbaar op
-internet te zetten. Voor delen of publiceren hoort eerst authenticatie en een
-passende toegangsconfiguratie te worden toegevoegd.
+De accountfunctie maakt deze lokale configuratie niet geschikt voor rechtstreeks
+publiceren op internet. Daarvoor zijn onder meer een afzonderlijke beoordeling
+van hosting, HTTPS, toegang en accountherstel nodig. De geleverde configuratie
+houdt de loopbackbinding en bestaande databasegrenzen aan.

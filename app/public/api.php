@@ -4,6 +4,7 @@ declare(strict_types=1);
 require_once dirname(__DIR__) . '/src/bootstrap.php';
 
 use Govern\ApiException;
+use Govern\Auth;
 use Govern\BackupService;
 use Govern\BackupException;
 use Govern\BackupInputException;
@@ -26,6 +27,13 @@ try {
     $baseConfig = Config::fromEnvironment();
     $csrf = Http::start($baseConfig);
     $action = Http::text($_GET, 'action');
+    // Readiness never accepts a caller-selected schema or enumerates databases.
+    if ($action === 'health') {
+        Http::get();
+        (new Database($baseConfig))->reader()->query('SELECT 1')->fetchColumn();
+        Http::json(['status' => 'ok']);
+    }
+    (new Auth())->requireUser();
     $posts = ['build-query', 'query', 'save-query', 'delete-query', 'create-snapshot', 'restore-snapshot', 'insert-row', 'update-row', 'delete-row', 'ai-context', 'ai-chat', 'prepare-database'];
     $input = in_array($action, $posts, true) ? Http::post($csrf) : [];
     if (!in_array($action, $posts, true)) {
@@ -143,9 +151,6 @@ try {
             Http::json($recordResponse((new RowEditor($database))->update($input)));
         case 'delete-row':
             Http::json($recordResponse((new RowEditor($database))->delete($input)));
-        case 'health':
-            $database->reader()->query('SELECT 1')->fetchColumn();
-            Http::json(['status' => 'ok']);
         case 'browse':
             Http::json($recordResponse($catalog->browse(Http::text($_GET, 'table'), Http::integer($_GET, 'page', 1), Http::integer($_GET, 'page_size', 25), Http::text($_GET, 'q', false))));
         case 'structure':

@@ -1,4 +1,5 @@
 /** Real schema context with isolated provider-response fixtures; never calls a model. */
+import {authenticatedContext} from './auth-session.mjs';
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 import {mkdir} from 'node:fs/promises';
@@ -11,7 +12,7 @@ assert.ok(['127.0.0.1', 'localhost', '[::1]'].includes(base.hostname), 'Use an i
 const args = process.env.BROWSER_ARGS_JSON ? JSON.parse(process.env.BROWSER_ARGS_JSON) : ['--no-sandbox'];
 const browser = await chromium.launch({headless: true, args,
     ...(process.env.BROWSER_BIN ? {executablePath: process.env.BROWSER_BIN} : {})});
-const context = await browser.newContext({locale: 'nl-NL', viewport: {width: 1440, height: 1100}});
+const context = await authenticatedContext(browser, base, {locale: 'nl-NL', viewport: {width: 1440, height: 1100}});
 const page = await context.newPage();
 const errors = [];
 const track = current => current.on('pageerror', error => errors.push(error.message));
@@ -110,7 +111,7 @@ const switchDatabase = async database => {
 };
 
 try {
-    await page.goto(new URL('/#gegevens?table=organizations', base).href, {waitUntil: 'networkidle'});
+    await page.goto(new URL('/workspace.php#gegevens?table=organizations', base).href, {waitUntil: 'networkidle'});
     await page.locator('.table-workspace .data-table tbody tr').first().waitFor();
     const bootstrap = await api('bootstrap');
     assert.equal(bootstrap.payload.ok, true);

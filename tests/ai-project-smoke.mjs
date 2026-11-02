@@ -1,4 +1,5 @@
 /** Live local-code retrieval and isolated provider UI fixtures; no model is run. */
+import {authenticatedContext} from './auth-session.mjs';
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 import {mkdir, readFile} from 'node:fs/promises';
@@ -13,7 +14,7 @@ const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '
 const args = process.env.BROWSER_ARGS_JSON ? JSON.parse(process.env.BROWSER_ARGS_JSON) : ['--no-sandbox'];
 const browser = await chromium.launch({headless: true, args,
     ...(process.env.BROWSER_BIN ? {executablePath: process.env.BROWSER_BIN} : {})});
-const browserContext = await browser.newContext({locale: 'nl-NL', viewport: {width: 1440, height: 1100}, serviceWorkers: 'block'});
+const browserContext = await authenticatedContext(browser, base, {locale: 'nl-NL', viewport: {width: 1440, height: 1100}, serviceWorkers: 'block'});
 const externalRequests = [];
 await browserContext.route(url => url.origin !== base.origin, async route => {
     externalRequests.push(route.request().url());
@@ -113,7 +114,7 @@ const verifySources = async sources => {
 };
 
 try {
-    await page.goto(new URL('/#overzicht', base).href, {waitUntil: 'networkidle'});
+    await page.goto(new URL('/workspace.php#overzicht', base).href, {waitUntil: 'networkidle'});
     await page.locator('#ai-toggle').waitFor();
     const bootstrap = await api('bootstrap');
     assert.equal(bootstrap.payload.ok, true);

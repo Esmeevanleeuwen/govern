@@ -24,12 +24,24 @@ if not exist .env (
 docker compose up -d --build --wait --wait-timeout 180
 if errorlevel 1 (
   echo Docker kon Govern nog niet starten. De foutmelding staat hierboven.
-  pause
-  exit /b 1
+  goto gateway_failed
 )
+rem Reload an existing gateway after testing the bind-mounted access rules.
+docker compose exec -T gateway nginx -t
+if errorlevel 1 goto gateway_failed
+docker compose exec -T gateway nginx -s reload
+if errorlevel 1 goto gateway_failed
 set "GOVERN_PORT=8080"
 for /f "tokens=1,* delims==" %%a in ('findstr /b "APP_PORT=" .env') do set "GOVERN_PORT=%%b"
 echo.
 echo Open Govern op http://localhost:%GOVERN_PORT%
 echo De eerste start kan even duren terwijl Docker de onderdelen downloadt.
 pause
+exit /b 0
+
+:gateway_failed
+echo De nieuwe toegangsregels konden niet worden geladen. De ingang wordt gestopt.
+echo Je databases en accountgegevens blijven behouden. Los de fout op en start opnieuw.
+docker compose stop gateway
+pause
+exit /b 1

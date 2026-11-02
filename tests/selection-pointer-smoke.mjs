@@ -1,4 +1,5 @@
 /** Inspect real database data and arbitrary interface elements without activating them. */
+import {authenticatedContext} from './auth-session.mjs';
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 import {mkdir} from 'node:fs/promises';
@@ -13,7 +14,7 @@ const screenshots = process.env.SCREENSHOTS_DIR;
 if (screenshots) await mkdir(screenshots, {recursive: true});
 const browser = await chromium.launch({headless: true, args,
     ...(process.env.BROWSER_BIN ? {executablePath: process.env.BROWSER_BIN} : {})});
-const context = await browser.newContext({locale: 'nl-NL', viewport: {width: 1440, height: 1100}});
+const context = await authenticatedContext(browser, base, {locale: 'nl-NL', viewport: {width: 1440, height: 1100}});
 const page = await context.newPage();
 const errors = [];
 const mutations = [];
@@ -55,7 +56,7 @@ const stateOfCanvas = () => page.locator('.schema-world').evaluate(world => ({
 }));
 
 try {
-    await page.goto(new URL('/#gegevens?table=organizations', base).href, {waitUntil: 'networkidle'});
+    await page.goto(new URL('/workspace.php#gegevens?table=organizations', base).href, {waitUntil: 'networkidle'});
     await page.locator('.table-workspace .data-table tbody tr').nth(1).waitFor();
     const dataTable = page.locator('.table-workspace .data-table');
     const nameIndex = await dataTable.locator('thead th').evaluateAll(cells => cells.findIndex(cell => cell.textContent.trim() === 'name'));
@@ -143,7 +144,7 @@ try {
     // the selected records or their raw text.
     const languagePage = await context.newPage();
     languagePage.on('pageerror', error => errors.push(error.message));
-    await languagePage.goto(new URL('/#instellingen', base).href, {waitUntil: 'networkidle'});
+    await languagePage.goto(new URL('/workspace.php#instellingen', base).href, {waitUntil: 'networkidle'});
     await languagePage.locator('#language-select').selectOption('en');
     await page.waitForFunction(() => document.documentElement.lang === 'en');
     await page.locator('#selection-pointer-dialog[open]').waitFor();
@@ -299,7 +300,7 @@ try {
     scriptPage.on('request', request => {
         if (request.method() === 'POST') scriptPosts.push({url: request.url(), body: request.postDataJSON()});
     });
-    await scriptPage.goto(new URL('/#onderzoeken', base).href, {waitUntil: 'networkidle'});
+    await scriptPage.goto(new URL('/workspace.php#onderzoeken', base).href, {waitUntil: 'networkidle'});
     const runScript = async sql => {
         await scriptPage.locator('#sql-editor').fill(sql);
         const pending = scriptPage.waitForResponse(response => {

@@ -24,7 +24,18 @@ if [ ! -f .env ]; then
     echo 'Lokale instellingen aangemaakt. Bestaande instellingen worden voortaan behouden.'
 fi
 
-docker compose up -d --build --wait --wait-timeout 180
+if ! docker compose up -d --build --wait --wait-timeout 180; then
+    echo 'Govern kon niet volledig starten. De ingang wordt gestopt om oude toegangsregels niet actief te laten.' >&2
+    docker compose stop gateway || true
+    exit 1
+fi
+# A bind-mounted configuration change does not reload an existing Nginx worker.
+# Apply the session gate on upgrades too; never leave an older public route live.
+if ! docker compose exec -T gateway nginx -t || ! docker compose exec -T gateway nginx -s reload; then
+    echo 'De nieuwe toegangsregels konden niet worden geladen. De ingang wordt gestopt; je gegevens blijven behouden.' >&2
+    docker compose stop gateway || true
+    exit 1
+fi
 port=$(sed -n 's/^APP_PORT=\([0-9][0-9]*\)$/\1/p' .env | head -n 1)
 printf '\nOpen Govern op http://localhost:%s\n' "${port:-8080}"
 printf 'De eerste start kan even duren terwijl Docker de onderdelen downloadt.\n'

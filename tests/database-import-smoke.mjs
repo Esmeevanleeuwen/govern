@@ -1,4 +1,5 @@
 /** Real database creation and official phpMyAdmin SQL-file import, isolated stack only. */
+import {authenticatedContext} from './auth-session.mjs';
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 import {mkdir} from 'node:fs/promises';
@@ -12,7 +13,7 @@ assert.ok(['127.0.0.1', 'localhost', '[::1]'].includes(base.hostname), 'Use a di
 const args = process.env.BROWSER_ARGS_JSON ? JSON.parse(process.env.BROWSER_ARGS_JSON) : ['--no-sandbox'];
 const browser = await chromium.launch({headless: true, args,
     ...(process.env.BROWSER_BIN ? {executablePath: process.env.BROWSER_BIN} : {})});
-const context = await browser.newContext({locale: 'nl-NL', viewport: {width: 1440, height: 1050}});
+const context = await authenticatedContext(browser, base, {locale: 'nl-NL', viewport: {width: 1440, height: 1050}});
 const page = await context.newPage();
 const errors = [];
 context.on('page', current => current.on('pageerror', error => errors.push(error.message)));
@@ -93,7 +94,7 @@ const waitImport = async database => {
 };
 
 try {
-    await page.goto(new URL('/#onderzoeken', base).href, {waitUntil: 'networkidle'});
+    await page.goto(new URL('/workspace.php#onderzoeken', base).href, {waitUntil: 'networkidle'});
     await page.locator('#sql-editor').waitFor();
     const bootstrap = data(await api('bootstrap', ''));
     first = bootstrap.database.name;
@@ -200,7 +201,7 @@ try {
     await nativeDialog.waitFor({state: 'hidden'});
     await waitWorkspace(created);
     await page.locator('#sql-editor').fill(importedDraft);
-    await page.goto(new URL('/#gegevens?' + new URLSearchParams({database: created, table: 'imported_notes'}), base).href);
+    await page.goto(new URL('/workspace.php#gegevens?' + new URLSearchParams({database: created, table: 'imported_notes'}), base).href);
     await page.locator('.table-heading h2').filter({hasText: 'imported_notes'}).waitFor();
     assert.ok((await page.locator('.table-workspace .data-table').innerText()).includes(literal));
     assert.equal(await page.evaluate(() => window.importUnsafe), undefined, 'Imported text is rendered safely in the custom workspace.');
@@ -215,7 +216,7 @@ try {
     await manager.locator('#database-manager-switch').click();
     await manager.waitFor({state: 'hidden'});
     await waitWorkspace(first);
-    await page.goto(new URL('/#onderzoeken?' + new URLSearchParams({database: first}), base).href);
+    await page.goto(new URL('/workspace.php#onderzoeken?' + new URLSearchParams({database: first}), base).href);
     await page.locator('#sql-editor').waitFor();
     assert.equal(await page.locator('#sql-editor').inputValue(), beforeDraft, 'The original database query draft survives create/import and switching back.');
     await switchDatabase(created);
@@ -253,7 +254,7 @@ try {
 
     const mobile = await context.newPage();
     await mobile.setViewportSize({width: 320, height: 900});
-    await mobile.goto(new URL('/#overzicht?' + new URLSearchParams({database: first}), base).href, {waitUntil: 'networkidle'});
+    await mobile.goto(new URL('/workspace.php#overzicht?' + new URLSearchParams({database: first}), base).href, {waitUntil: 'networkidle'});
     await mobile.locator('#manage-databases:not([disabled])').waitFor();
     await mobile.locator('#manage-databases').click();
     await mobile.locator('#database-manager-dialog[open]').waitFor();

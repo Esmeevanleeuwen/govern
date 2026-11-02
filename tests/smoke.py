@@ -14,6 +14,8 @@ import urllib.parse
 import urllib.request
 import uuid
 
+from auth_http import ensure_authenticated
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -23,6 +25,7 @@ def main():
     client = urllib.request.build_opener(
         urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar())
     )
+    ensure_authenticated(client, base)
     csrf = None
     checks = []
 

@@ -81,6 +81,7 @@ services:
       DB_READ_USER: govern_reader
       DB_READ_PASSWORD: ${DB_READ_PASSWORD}
       BACKUP_DIR: /var/lib/govern/backups
+      AUTH_DIR: /var/lib/govern/auth
       WORKBENCH_SCHEMA_FILE: /var/www/workbench.sql
       TZ: UTC
       AI_ENABLED: ${AI_ENABLED:-0}
@@ -96,6 +97,7 @@ services:
       - ./docs:/opt/govern/project/docs:ro
       - ./docker/database/20-govern.sql:/var/www/workbench.sql:ro
       - backups:/var/lib/govern/backups
+      - account_data:/var/lib/govern/auth
       - database_management:/run/govern-databases:ro
     depends_on:
       database:
@@ -149,3 +151,4 @@ volumes:
   database_data:
   backups:
   database_management:
+  account_data:

@@ -2,6 +2,7 @@
  * Follow the unified navigation with real catalog data on a disposable local
  * stack. This test does not write database records or create restore points.
  */
+import {authenticatedContext} from './auth-session.mjs';
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 import {mkdir} from 'node:fs/promises';
@@ -65,10 +66,10 @@ const databasePlacement = async (page, schema = false) => {
 };
 
 try {
-    const context = await browser.newContext({locale: 'nl-NL', viewport: {width: 1440, height: 1100}});
+    const context = await authenticatedContext(browser, base, {locale: 'nl-NL', viewport: {width: 1440, height: 1100}});
     const page = await context.newPage();
     track(page);
-    await page.goto(new URL('/#overzicht', base).href, {waitUntil: 'networkidle'});
+    await page.goto(new URL('/workspace.php#overzicht', base).href, {waitUntil: 'networkidle'});
     await page.locator('.stats-grid').waitFor();
     const bootstrap = await page.evaluate(async () => (await (await fetch('/api.php?action=bootstrap')).json()).data);
     for (const name of ['organizations', 'digital_systems', 'sources']) {
@@ -84,7 +85,7 @@ try {
     await shot(page, 'overview');
 
     // Direct links remain valid and populate the same persistent explorer.
-    await page.goto(new URL('/#gegevens?table=organizations', base).href, {waitUntil: 'networkidle'});
+    await page.goto(new URL('/workspace.php#gegevens?table=organizations', base).href, {waitUntil: 'networkidle'});
     await waitForTable(page, 'organizations');
     await databasePlacement(page);
     assert.equal(await page.locator('#workspace-context .catalog-item').count(), tableCount);
@@ -226,7 +227,7 @@ try {
         ];
         await route.fulfill({response, json: payload});
     });
-    await boundary.goto(new URL('/#gegevens?table=organizations', base).href, {waitUntil: 'networkidle'});
+    await boundary.goto(new URL('/workspace.php#gegevens?table=organizations', base).href, {waitUntil: 'networkidle'});
     await waitForTable(boundary, 'organizations');
     await boundary.locator('#workspace-selected .workspace-detail').nth(1).locator('summary').click();
     const externalTarget = boundary.locator('#workspace-selected .workspace-related').filter({
@@ -241,10 +242,10 @@ try {
 
     // The mobile menu is one drawer. Table selection updates its workspace
     // without closing the table list; Escape gives the workspace its full width.
-    const mobileContext = await browser.newContext({locale: 'nl-NL', viewport: {width: 390, height: 900}});
+    const mobileContext = await authenticatedContext(browser, base, {locale: 'nl-NL', viewport: {width: 390, height: 900}});
     const mobile = await mobileContext.newPage();
     track(mobile);
-    await mobile.goto(new URL('/#schema', base).href, {waitUntil: 'networkidle'});
+    await mobile.goto(new URL('/workspace.php#schema', base).href, {waitUntil: 'networkidle'});
     await mobile.locator('#schema-viewport').waitFor();
     assert.equal(await mobile.locator('#sidebar').getAttribute('aria-hidden'), 'true');
     await mobile.locator('#workspace-explorer-open').click();

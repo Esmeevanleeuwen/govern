@@ -1,5 +1,58 @@
 # Architectuur
 
+## Startpagina en installatieaccounts
+
+`app/public/index.php` toont de publieke, responsive startpagina uit
+`homepage.php`. `homepage.js` verzorgt vertalingen, de expliciet als voorbeeld
+gemarkeerde databaseweergaven en de Docker-installatiedialoog. De voorbeelden
+zijn gewone lokale schermgegevens; ze maken geen databaseverbinding en voeren
+geen SQL uit. Oude werkplekhashes en hun queryparameters worden naar
+`workspace.php` doorgestuurd, zodat bestaande links hun betekenis behouden.
+
+`workspace.php` bevat de bestaande applicatieshell en vraagt vóór uitvoer
+`Web::user()` om een goedgekeurde gebruiker. `Web.php` gebruikt dezelfde
+`Http::start()`- en `Auth`-grens als de API. Zonder sessie volgt een redirect naar
+inloggen; bij onbeschikbare accountopslag blijft de werkplek gesloten.
+`auth.php` toont inloggen en registreren; `account.php` toont het lokale account,
+uitloggen en alleen voor de eigenaar de openstaande toegangsverzoeken.
+
+`Auth.php` bewaart accounts en pogingenlimieten met PDO SQLite in
+`AUTH_DIR/accounts.sqlite`, standaard `/var/lib/govern/auth`, in het afzonderlijke
+`account_data`-volume. De map is alleen toegankelijk voor de webservergebruiker;
+de bestanden worden privé aangemaakt. Deze opslag staat buiten de webroot,
+werkdatabases, schema-exports en SQL-herstelpunten. PHP's sessiecookie blijft
+HttpOnly en SameSite Strict, met Secure bij HTTPS. Aanmelden en afmelden
+vernieuwen sessie-ID en CSRF-token. De sessie heeft een absolute bovengrens van
+twaalf uur; elke toegangscontrole leest actuele rol en status uit de accountopslag.
+
+De eerste registratie wordt onder een `BEGIN IMMEDIATE`-transactie eigenaar.
+Een gedeeltelijke unieke index staat slechts één eigenaar toe. Elke latere
+registratie is `pending`, zonder toegang, totdat de eigenaar die aanvraag
+goedkeurt. De database bewaart uitsluitend Argon2id-wachtwoordhashes. Login en
+registratie verbruiken blijvende, begrensde pogingenvakken; ruwe inlognamen en
+IP-adressen worden niet in de throttle-sleutels bewaard. Dubbele registratie
+krijgt dezelfde openbare uitkomst als een wachtende aanvraag.
+
+Dit is installatiebrede toegang, geen gebruikersspecifieke databasescheiding.
+Elke goedgekeurde gebruiker krijgt dezelfde bestaande databasefuncties en
+MariaDB-rechten. Er is geen mailverificatie, herstelmail, wachtwoordreset of
+account-/apparaatsynchronisatie. De loopbackbinding blijft gelden; deze
+authenticatie is geen claim dat het platform klaar is voor openbare hosting.
+
+`auth-api.php` biedt het kleine accountcontract. `api.php` behandelt alleen de
+vaste, minimale database-readinesscontrole zonder login; alle andere routes
+vergen een goedgekeurde gebruiker vóór databasescope en gegevenswerk. De health-
+route negeert een opgegeven database en gebruikt de vaste startconfiguratie.
+Nginx controleert ieder `/phpmyadmin/`-verzoek met een interne `auth_request`
+naar `auth-check.php`. Dat geldt ook voor uploads, downloads en AJAX-verzoeken;
+een nog geldige native phpMyAdmin-cookie geeft zonder Govern-sessie geen toegang.
+
+Beide startbestanden voeren na `docker compose up --wait` eerst `nginx -t` en
+daarna `nginx -s reload` in de gateway uit. Een gewijzigd bind-mounted bestand
+zou bestaande workers anders niet bijwerken. Bij start-/configuratie-/reloadfouten
+stoppen de scripts de gateway, zonder volumes te verwijderen, zodat oudere
+toegangsregels niet actief achterblijven.
+
 ## Actuele databases, herbruikbare schermen
 
 De geselecteerde werkdatabase is de bron voor zowel Govern als phpMyAdmin.

@@ -1,4 +1,5 @@
 /** Exercise writable SQL and routine results only in an isolated local stack. */
+import {authenticatedPage} from './auth-session.mjs';
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 import {mkdir} from 'node:fs/promises';
@@ -12,7 +13,7 @@ assert.ok(['127.0.0.1', 'localhost', '[::1]'].includes(base.hostname), 'Use a di
 const args = process.env.BROWSER_ARGS_JSON ? JSON.parse(process.env.BROWSER_ARGS_JSON) : ['--no-sandbox'];
 const browser = await chromium.launch({headless: true, args,
     ...(process.env.BROWSER_BIN ? {executablePath: process.env.BROWSER_BIN} : {})});
-const page = await browser.newPage({locale: 'nl-NL', viewport: {width: 1440, height: 1100}});
+const page = await authenticatedPage(browser, base, {locale: 'nl-NL', viewport: {width: 1440, height: 1100}});
 const errors = [];
 page.on('pageerror', error => errors.push(error.message));
 const suffix = Date.now().toString(16) + Math.random().toString(16).slice(2, 8);
@@ -72,7 +73,7 @@ const exists = async () => {
 };
 
 try {
-    await page.goto(new URL('/#onderzoeken', base).href, {waitUntil: 'networkidle'});
+    await page.goto(new URL('/workspace.php#onderzoeken', base).href, {waitUntil: 'networkidle'});
     await page.locator('#sql-editor').waitFor();
     const sql = `CREATE TABLE ${table} (id BIGINT UNSIGNED PRIMARY KEY, label VARCHAR(80), amount DECIMAL(30,2)) ENGINE=InnoDB;
 INSERT INTO ${table} VALUES (9007199254740993, 'original', 123456789012345678901234.12);

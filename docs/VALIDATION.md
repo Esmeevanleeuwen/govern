@@ -1,6 +1,56 @@
 # Validatie
 
-Stand van de controles: **29 oktober 2026**.
+Stand van de controles: **2 november 2026**. Eerdere resultaten hieronder horen
+bij hun beschreven wijziging en zijn niet automatisch opnieuw uitgevoerd.
+
+## Startpagina en lokale accounts
+
+Voor deze wijziging zijn in de afzonderlijke native omgeving met PHP 8.3,
+PDO SQLite en tijdelijke opslag uitgevoerd:
+
+- `php tests/auth_unit.php`: **42 controles geslaagd**, waaronder Argon2id zonder
+  bcrypt-afkapping, sessie-/CSRF-vernieuwing, verlopen sessies, status/rol opnieuw
+  uitlezen, blijvende pogingenlimieten, eigenaar-goedkeuring en twee gelijktijdige
+  registratieprocessen die samen precies één eigenaar opleveren.
+- `python3 tests/auth-integration.py`: **33 HTTP-controles geslaagd** tegen een
+  afzonderlijke PHP-testserver. Deze gebruiken echte sessiecookies en endpoints
+  voor registreren, pending/approve, inloggen en uitloggen, ongeldige CSRF/origin,
+  gasttoegang tot gegevensroutes, en de directe `auth-check.php`-grens.
+- PHP-syntaxis: **56 bestanden zonder fouten** op het moment van die controle.
+- De **zeven bestaande Node-unitsuites** zijn geslaagd: `i18n-unit.mjs`,
+  `frontend-messages-unit.mjs` (928 tweetalige sleutels), `preferences-unit.mjs`,
+  `dashboard-layout-unit.mjs`, `schema-model-unit.mjs`, `schema-navigation-unit.mjs`
+  en `selection-content-unit.mjs`. De gewijzigde browser-/Docker-suites bevatten
+  accountfixtures; het aanpassen van die fixtures betekent niet dat die
+  volledige suites lokaal zijn uitgevoerd.
+- `python3 tests/start-gateway-reload.py`: **24 fixturecontroles geslaagd** voor
+  de Unix-startvolgorde, configuratiecontrole vóór reload, stoppen van alleen de
+  gateway bij drie afzonderlijke foutpaden, en behoud van volumes. Deze proef
+  gebruikt een Docker-commandofixture, geen echte containers. `sh -n` slaagde.
+- `git diff --check` en Python-syntaxiscontrole van de auth-HTTP-proef slaagden.
+
+De rootcontrole van homepage en accountvormgeving gebruikt een statische
+browserpreview van de markup. Daarmee is de vormgeving bekeken; het is geen
+volledige browser → PHP → databaseproef van de bestaande werkplek. Een blijvende
+PHP-previewserver is in deze browseromgeving niet ondersteund. De auth-HTTP-
+proef voert de echte backend wel afzonderlijk in tijdelijke opslag uit.
+
+Docker is in deze werkomgeving niet beschikbaar. De echte Nginx `auth_request`
+naar `auth-check.php`, de officiële phpMyAdmin en de volledige Compose-stack
+zijn daarom lokaal niet als geheel uitgevoerd. De stacksmokecontrole/CI moet
+rechtstreeks phpMyAdmin vóór login blokkeren met een echte redirect, na login
+toelaten en na logout opnieuw blokkeren. Alleen een geslaagde directe
+`auth-check.php`-proef bewijst die proxygrens niet.
+
+Beide startbestanden testen en herladen na een geslaagde Compose-start de
+gatewayconfiguratie. Mislukt de start of het toepassen van de nieuwe regels,
+dan stoppen ze alleen de gateway en behouden ze de volumes. Windows-
+batchuitvoering en een echte Docker-herlaadactie blijven omgevingscontroles.
+
+Accounts zijn installatiebreed, geen tenants. De pogingenlimieten, sessies en
+eigenaar-goedkeuring bewijzen geen geschiktheid voor openbare hosting. Mail-
+verificatie, wachtwoordreset, herstelmail en privéschema's per gebruiker zijn
+niet geïmplementeerd. De configuratie blijft uitsluitend op loopback bereikbaar.
 
 ## Databases toevoegen en echte SQL-import
 

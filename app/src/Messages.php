@@ -7,6 +7,17 @@ namespace Govern;
 final class Messages
 {
     private const TEXT = [
+        'auth_required' => ['nl' => 'Log in om deze werkplek te openen.', 'en' => 'Sign in to open this workspace.'],
+        'auth_owner_required' => ['nl' => 'Alleen de eigenaar kan toegang goedkeuren.', 'en' => 'Only the owner can approve access.'],
+        'auth_unavailable' => ['nl' => 'De lokale accountopslag is niet beschikbaar. Start Govern opnieuw of controleer de toegangsrechten.', 'en' => 'The local account store is unavailable. Restart Govern or check its permissions.'],
+        'auth_credentials_invalid' => ['nl' => 'Het e-mailadres of wachtwoord klopt niet.', 'en' => 'The email address or password is incorrect.'],
+        'auth_pending' => ['nl' => 'Je account wacht op goedkeuring van de eigenaar van deze installatie.', 'en' => 'Your account is waiting for approval from this installation’s owner.'],
+        'auth_name_invalid' => ['nl' => 'Gebruik een naam van maximaal 160 bytes, zonder besturingstekens.', 'en' => 'Use a name of at most 160 bytes, without control characters.'],
+        'auth_email_invalid' => ['nl' => 'Vul een geldig e-mailadres in.', 'en' => 'Enter a valid email address.'],
+        'auth_password_invalid' => ['nl' => 'Gebruik een wachtwoord van 12 tot 128 tekens, maximaal 512 bytes.', 'en' => 'Use a password of 12 to 128 characters, at most 512 bytes.'],
+        'auth_rate_limited' => ['nl' => 'Te veel pogingen. Wacht even en probeer het opnieuw.', 'en' => 'Too many attempts. Wait a little and try again.'],
+        'auth_user_invalid' => ['nl' => 'Kies een geldig accountverzoek.', 'en' => 'Choose a valid account request.'],
+        'auth_request_missing' => ['nl' => 'Dit accountverzoek is niet meer beschikbaar. Vernieuw het overzicht.', 'en' => 'This account request is no longer available. Refresh the list.'],
         'database_create_invalid' => ['nl' => 'Gebruik voor de databasenaam 1–64 letters, cijfers of underscores. Systeemdatabases en te lange permissienamen zijn niet toegestaan.', 'en' => 'Use 1–64 letters, numbers or underscores for the database name. System databases and overlong permission names are not allowed.'],
         'database_manager_unavailable' => ['nl' => 'De lokale databasebeheerder is niet bereikbaar. Start Govern opnieuw met het startscript.', 'en' => 'The local database manager is unavailable. Restart Govern with the start script.'],
         'database_manager_invalid' => ['nl' => 'De lokale databasebeheerder gaf geen geldig antwoord. Probeer opnieuw of start Govern opnieuw.', 'en' => 'The local database manager did not return a valid response. Retry or restart Govern.'],

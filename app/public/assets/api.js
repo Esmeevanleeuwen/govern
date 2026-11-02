@@ -1,5 +1,6 @@
 import {t, getLanguage, hasMessage} from './i18n.js';
 import './ui-messages.js';
+import {accountRequest} from './session.js';
 
 let token = '';
 let database = '';
@@ -23,6 +24,12 @@ export function endpoint(action, params = {}) {
 
 export async function request(action, {params, body, signal} = {}) {
     const url = endpoint(action, params);
+    // After signing in again, obtain the rotated token before the user's next
+    // explicit write. Never replay a database mutation automatically.
+    if (body !== undefined && !token) {
+        const session = await accountRequest('status');
+        token = session.csrf;
+    }
     let response;
     try {
         response = await fetch(url, {
@@ -45,6 +52,8 @@ export async function request(action, {params, body, signal} = {}) {
         throw translatedError('api.unreadable');
     }
     if (!response.ok || !payload.ok) {
+        if (response.status === 401 || payload.error_code === 'csrf_invalid') token = '';
+        if (response.status === 401 && typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('govern:authrequired'));
         const key = payload.error_code ? 'error.' + payload.error_code : null;
         const error = translatedError(key, payload.error_params, payload.error_i18n?.[getLanguage()] || payload.error);
         error.status = response.status;
