@@ -42,6 +42,47 @@ PostgreSQL-verbinding opnieuw. Een oudere browsermodule kan nog in de cache
 staan. De API ondersteunt ook de volledige scopesleutel die deze module stuurt,
 met dezelfde controle op de ingestelde database en schema's.
 
+## Voorbeeldgegevens toevoegen
+
+De optionele voorbeelden gaan over fictieve organisaties, digitale systemen,
+projecten en contactpersonen. Start eerst Govern met PostgreSQL ingeschakeld.
+Open daarna PowerShell in de Govern-map en voer uit:
+
+```powershell
+.\load-postgres-demo.cmd
+```
+
+Op macOS/Linux:
+
+```sh
+sh load-postgres-demo.sh
+```
+
+Het script gebruikt de draaiende PostgreSQL-container en diens ingestelde
+database. `PG_SCHEMAS` moet `public` bevatten. De voorbeelden bestaan uit:
+
+| Tabel | Records | Relatie |
+| --- | ---: | --- |
+| `demo_organizations` | 5 | Fictieve organisaties |
+| `demo_systems` | 6 | Een eigenaar per systeem |
+| `demo_projects` | 8 | Een systeem en leidende organisatie per project |
+| `demo_contacts` | 8 | Contactpersonen per organisatie |
+| `demo_project_participants` | 12 | Organisaties die aan projecten deelnemen |
+
+De view `demo_project_overview` combineert de acht projecten met hun systeem
+en leidende organisatie. De zes foreign keys zijn zichtbaar in het schemadiagram.
+Namen en e-mailadressen zijn verzonnen; bedragen en projectgegevens zijn voorbeelden.
+
+Klik na het laden op **Refresh** in Govern. Kies de PostgreSQL-vermelding met
+`public`, open **Database → Data** en selecteer bijvoorbeeld `demo_systems`.
+Onder **Schema** zie je de gekoppelde tabellen.
+
+Opnieuw laden behoudt bestaande voorbeeldrecords, ook als je die later buiten
+Govern hebt bewerkt. Als er al een ander object met een van deze namen bestaat,
+stopt de eerste import voordat gegevens worden toegevoegd. De import gebruikt
+één transactie en geeft het webaccount alleen leesrechten op de voorbeelden.
+Normaal starten laadt de voorbeelden niet automatisch.
+
 ## Database en schema's
 
 `PG_DATABASE` kiest één PostgreSQL-database voor deze verbinding. `PG_SCHEMAS`

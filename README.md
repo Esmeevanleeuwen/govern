@@ -74,6 +74,17 @@ het optionele Docker-profiel. De nieuwe database is aanvankelijk leeg;
 Govern importeert geen MariaDB-gegevens automatisch. PostgreSQL gebruikt een
 eigen volume. De webapp krijgt alleen het afzonderlijke leesaccount.
 
+Wil je meteen tabellen en relaties bekijken? Voer na het starten in PowerShell
+vanuit de Govern-map uit:
+
+```powershell
+.\load-postgres-demo.cmd
+```
+
+Op macOS/Linux gebruik je `sh load-postgres-demo.sh`. Dit voegt vijf gekoppelde
+voorbeeldtabellen met 39 fictieve records en één overzichtsview toe aan `public`.
+Klik daarna op **Refresh** in Govern en kies de PostgreSQL-verbinding.
+
 Meer over configuratie, schema's en de volgende bouwfasen:
 [PostgreSQL in Govern](docs/POSTGRESQL.md).
 

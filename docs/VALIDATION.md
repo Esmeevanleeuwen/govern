@@ -3,6 +3,30 @@
 Stand van de controles: **2 november 2026**. Eerdere resultaten hieronder horen
 bij hun beschreven wijziging en zijn niet automatisch opnieuw uitgevoerd.
 
+## Optionele PostgreSQL-voorbeeldgegevens
+
+De nieuwe `load-postgres-demo.cmd` en `load-postgres-demo.sh` laden vijf
+gekoppelde tabellen met 39 fictieve records en de view `demo_project_overview`.
+Normaal starten blijft ongewijzigd; laden is een expliciete gebruikershandeling.
+
+Uitgevoerd met het afzonderlijke Docker-testproject en PostgreSQL 18:
+
+- **30** loaderfixtures voor de shellopdracht, ingesteld doel, SQL-invoer,
+  foutstatussen en behoud van `.env`.
+- **31** echte databasecontroles voor de schema- en leesrolvoorwaarden, een
+  bestaande naam met ongewijzigde gegevens, ontbreken van gedeeltelijke imports,
+  rijaantallen, zes foreign keys, de view, echte leesrechten en geweigerde writes.
+  Opnieuw laden behoudt een bewerkte voorbeeldrij; bestaande niet-demotabellen
+  blijven ongewijzigd.
+- Chromium leest voorbeeldrecords, toont alle vijf tabellen en zes verbindingen
+  in het diagram, leest de samengevoegde view en behoudt de selectie na herladen.
+- De echte shellloader en de bestaande **66** PostgreSQL-HTTP-controles slagen
+  ook met de voorbeelden aanwezig. De API-scope-JavaScriptcontrole slaagt.
+
+De loaderfixtures, databaseproef en browsersuite zijn opgenomen in CI. De
+Windows-loader is beoordeeld maar niet op Windows uitgevoerd; de volledige
+CI-workflow en de gebruikerinstallatie zijn niet opnieuw uitgevoerd.
+
 ## PostgreSQL kiezen na een update met een oudere browsermodule
 
 De verbindingsfout is gereproduceerd in Chromium met de echte `api.js` uit

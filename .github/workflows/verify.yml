@@ -35,7 +35,9 @@ jobs:
               environment.write('GOVERN_TEST_PASSWORD=' + password + '\n')
           PY
       - name: Startup gateway reload checks
-        run: python3 tests/start-gateway-reload.py
+        run: |
+          python3 tests/start-gateway-reload.py
+          python3 tests/postgres-demo-loader-unit.py
       - name: Start an isolated Docker stack
         run: sh start.sh
       - name: Initialize the test installation owner through registration
@@ -43,6 +45,8 @@ jobs:
       - name: Prepare the explicitly isolated PostgreSQL fixtures
         run: |
           docker compose --profile postgres exec -T postgres sh -c 'test "$POSTGRES_DB" = govern_pg && exec psql --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" --set ON_ERROR_STOP=1' < tests/postgres-fixture.sql
+      - name: PostgreSQL sample data and repeat loading
+        run: python3 tests/postgres-demo-integration.py --confirm-project=govern --confirm-database=govern_pg
       - name: PHP syntax
         run: |
           docker compose exec -T app sh -c 'find /var/www/src /var/www/public -name "*.php" -exec php -l {} \;'
@@ -106,6 +110,7 @@ jobs:
             tests/homepage-auth-smoke.mjs \
             tests/postgres-smoke.mjs \
             tests/postgres-cached-api-smoke.mjs \
+            tests/postgres-demo-smoke.mjs \
             tests/database-import-smoke.mjs \
             tests/frontend-smoke.mjs \
             tests/query-builder-smoke.mjs \
