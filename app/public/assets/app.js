@@ -1069,8 +1069,8 @@ function renderRecordMap(scope) {
             if (!scope.live()) return;
             state.table = table;
             history.replaceState(null, '', databaseHash('verbanden'));
-            const label = document.getElementById('database-selected-table');
-            if (label) label.textContent = table;
+            page.querySelector('.database-heading')?.replaceWith(databaseHeading('verbanden'));
+            syncWorkspaceNavigation();
             contextContent.replaceChildren(); inspector = databaseContext('verbanden', scope); drawContext();
         },
         onSelectRecord: node => {

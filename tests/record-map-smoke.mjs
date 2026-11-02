@@ -144,6 +144,43 @@ try {
     await selectScope('bestuursatlas');
     await count(graphNodes, 3);
     assert.equal(await page.locator('#record-map-search').inputValue(), '%_');
+    await page.locator('#record-map-table').selectOption('zz_record_map_projects');
+    await page.locator('[data-database-view="gegevens"]').click();
+    await page.locator('.table-heading h2').filter({hasText: 'zz_record_map_projects'}).waitFor();
+    assert.equal(await page.locator('.table-heading h2').innerText(), 'zz_record_map_projects', 'Changing the map table updates the shared Data destination.');
+    assert.equal(await page.evaluate(() => new URLSearchParams(location.hash.split('?')[1]).get('table')), 'zz_record_map_projects');
+    await page.locator('[data-database-view="verbanden"]').click();
+    assert.equal(await page.locator('#record-map-table').inputValue(), 'zz_record_map_projects');
+    await page.locator('#record-map-table').selectOption('zz_record_map_people');
+    await page.locator('[data-record-node="' + info.focus.id + '"]').focus();
+    await page.locator('[data-record-node="' + info.focus.id + '"]').press('Enter');
+    const refreshSource = () => inspection.getByRole('button', {name: 'Read source again', exact: true});
+    let reread = mapResponse('mariadb', undefined);
+    await refreshSource().click();
+    await reread;
+    await count(graphEdges, 0, 'Re-reading a source removes its previously expanded evidence.');
+    await page.waitForFunction(id => !document.querySelector('[data-record-relation="' + id + '"]')?.disabled, incoming.id);
+    let releaseExpansion, markExpansionHeld;
+    const expansionHeld = new Promise(resolve => { markExpansionHeld = resolve; });
+    const expansionReleased = new Promise(resolve => { releaseExpansion = releaseHeld = resolve; });
+    await page.route(url => url.pathname === '/api.php' && url.searchParams.get('action') === 'record-map'
+        && url.searchParams.get('database') === 'bestuursatlas', async route => {
+        if (route.request().postDataJSON()?.relation !== incoming.id) return route.continue();
+        const response = await route.fetch(); markExpansionHeld(); await expansionReleased;
+        try { await route.fulfill({response}); } catch { /* Re-reading may already have aborted this expansion. */ }
+    });
+    await page.locator('[data-record-relation="' + incoming.id + '"]').click();
+    await bounded(expansionHeld);
+    reread = mapResponse('mariadb', undefined);
+    await refreshSource().click();
+    await reread;
+    await page.waitForFunction(id => !document.querySelector('[data-record-relation="' + id + '"]')?.disabled, incoming.id);
+    releaseExpansion();
+    await page.unrouteAll({behavior: 'wait'});
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    await count(graphEdges, 0, 'A held expansion cannot restore evidence after the source is re-read.');
+    assert.equal(await page.locator('[data-record-relation="' + incoming.id + '"]').isDisabled(), false,
+        'An obsolete expansion cannot mark the refreshed relation as complete.');
     await page.locator('#record-map-table').selectOption('zz_record_map_no_identity');
     await page.locator('#record-map-records .notice').waitFor();
     assert.equal(await page.locator('#record-map-records [data-map-record]').count(), 0);

@@ -210,8 +210,9 @@ export function mountRecordMap(root, {state = {}, tables = [], scopeKey = '', in
             if (!active() || error.name === 'AbortError' || capturedEpoch !== epoch) return;
             relationErrors.set(id, error);
         } finally {
-            controllers.delete(pending); pendingRelations.delete(id);
+            controllers.delete(pending);
             if (active() && capturedEpoch === epoch) {
+                pendingRelations.delete(id);
                 renderInspector();
                 const target = [...inspector.querySelectorAll('[data-record-relation]')].find(item => item.dataset.recordRelation === relation.id);
                 if (document.activeElement === document.body) target?.focus({preventScroll: true});
@@ -255,6 +256,10 @@ export function mountRecordMap(root, {state = {}, tables = [], scopeKey = '', in
     function transform() {
         const view = camera();
         world.setAttribute('transform', 'translate(' + view.x + ' ' + view.y + ') scale(' + view.zoom + ')');
+        const labelScale = Math.max(1, 1 / view.zoom);
+        for (const label of world.querySelectorAll('.record-map-node-label')) label.style.fontSize = 12 * labelScale + 'px';
+        for (const label of world.querySelectorAll('.record-map-node-type')) label.style.fontSize = 11 * labelScale + 'px';
+        for (const hit of world.querySelectorAll('.record-map-node-hit')) hit.setAttribute('r', Math.max(27, 22 / view.zoom));
         zoomValue.textContent = Math.round(view.zoom * 100) + '%';
     }
     function fit() {
@@ -445,15 +450,21 @@ export function mountRecordMap(root, {state = {}, tables = [], scopeKey = '', in
             .find(item => item.dataset.recordRelation === focusedRelation)?.focus({preventScroll: true});
     }
 
+    function cancelGraphRequests() {
+        epoch++; selectionVersion++;
+        for (const pending of controllers) {
+            if (pending !== seedController) { pending.abort(); controllers.delete(pending); }
+        }
+        pendingRelations.clear(); relationErrors.clear();
+    }
     function refreshNode(node) {
+        cancelGraphRequests();
         invalidateRecordMapNode(state, node.id);
         selectRecord(node);
     }
     function clear() {
-        epoch++; selectionVersion++;
-        for (const pending of controllers) pending.abort();
-        controllers.clear(); pendingRelations.clear(); relationErrors.clear();
-        seedLoading = false; inspecting = ''; selectionError = null;
+        cancelGraphRequests();
+        inspecting = ''; selectionError = null;
         clearRecordMap(state); onSelectRecord?.(null);
         renderSeeds(); renderFilters(); renderGraph(); renderInspector();
         announce(text('chooseRecord'));
