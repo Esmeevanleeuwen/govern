@@ -55,6 +55,49 @@ toegangsregels niet actief achterblijven.
 
 ## Actuele databases, herbruikbare schermen
 
+### Optionele PostgreSQL-verbinding
+
+De PostgreSQL-uitbreiding bouwt voort op de startpagina en installatieaccounts
+uit PR #16. Ze voegt een tweede SQL-engine toe aan dezelfde werkplek, zonder
+een tweede tabelverkenner of schemadiagram. De eerste bouwfase is alleen lezen:
+tabellen, kolommen, sleutels, relaties, records en zoeken binnen de gekozen tabel.
+
+`Database` blijft de gedeelde facade en kiest `MariaDbAdapter` of
+`PostgresAdapter`. `Catalog` kiest overeenkomstig `MariaDbCatalog` of
+`PostgresCatalog`; beide geven dezelfde metadata aan de bestaande schermen.
+MySQL-DSN's, sessie-instellingen, identifierquoting en catalogusvragen blijven
+bij de MariaDB-adapter. PostgreSQL gebruikt PDO PostgreSQL, een verbinding met
+één database, expliciet gequote schemanamen en zijn eigen catalogusvragen.
+
+`ConnectionScope` combineert de bestaande `DatabaseScope` met de optionele
+PostgreSQL-configuratie. Alleen de server bepaalt host en leesaccount.
+Ieder verzoek bevat de verbinding, database en het schema. De PostgreSQL-kiezer
+toont alleen de geconfigureerde database en de schema's uit `PG_SCHEMAS`;
+de werkelijke leesbaarheid wordt met het leesaccount gecontroleerd. Een
+ontbrekend of ontoegankelijk schema blijft herkenbaar als niet beschikbaar.
+
+De browser bewaart voor PostgreSQL een volledige `scope_key` met database én
+schema. Daardoor delen gelijknamige tabellen geen cache, selectie, concept of
+diagramindeling. MariaDB houdt zijn bestaande databasesleutel en oude links.
+Een wissel annuleert oude leesacties en laat late antwoorden uit de vorige
+scope buiten de huidige weergave.
+
+De capabilityvelden in bootstrap sturen de zichtbare bediening. De API weigert
+voor PostgreSQL alle acties buiten bootstrap, catalogus, structuur en bladeren;
+de writer- en vrije-SQL-verbinding weigeren eveneens. Er wordt geen MariaDB-
+snapshot-, query-, import- of AI-service op een PostgreSQL-scope aangeroepen.
+phpMyAdmin blijft de officiële MariaDB-toepassing en wordt niet als
+PostgreSQL-beheerder gepresenteerd.
+
+Het optionele Compose-profiel `postgres` gebruikt een eigen datavolume en een
+eenmalige leesrechtenservice. Alleen PostgreSQL en die opstartservice ontvangen
+het bootstrapwachtwoord; de webapp ontvangt uitsluitend de lezergegevens.
+De startbestanden schakelen het profiel in bij `PG_ENABLED=1` en bewaren
+bestaande wachtwoorden en volumes. Zie [POSTGRESQL.md](POSTGRESQL.md) voor de
+configuratie en de grens van deze eerste bouwfase.
+
+### Bestaande MariaDB-werkplek
+
 De geselecteerde werkdatabase is de bron voor zowel Govern als phpMyAdmin.
 Govern vraagt de catalogus op en bouwt daar zijn verkenner uit. Een nieuwe tabel verschijnt na
 verversen, zonder een nieuwe resourceklasse of een kopie van de database in

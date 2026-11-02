@@ -21,7 +21,8 @@ Success envelope `{ "ok": true, "data": ... }`. A failure keeps the existing
 All POST requests use JSON and header `X-CSRF-Token` from authenticated bootstrap
 or account status. PHP session cookie, same origin only. Except fixed database
 readiness, every database API route requires an approved installation account.
-One MySQL/MariaDB server, multiple selectable databases and live schema discovery.
+One MySQL/MariaDB server with multiple selectable databases, plus an optional
+server-configured PostgreSQL connection with a selected database and allowlisted schemas.
 The optional local Ollama connection is disabled by default; only the separate AI
 endpoints can call that configured provider. Ordinary database operations and
 selection explanations do not require a model.
@@ -92,12 +93,56 @@ the same check; official phpMyAdmin remains the actual application.
 
 ## Database scope
 
+### Optional PostgreSQL connection
+
+The default connection remains `mariadb`. PostgreSQL requests specify
+`connection=postgres&database=<configured database>&schema=<configured schema>`
+on every scoped API URL. Missing `database`/`schema` parameters use that
+connection's configured defaults. The browser cannot submit a hostname, port,
+role or password. Unknown connections, databases and schemas return 403
+`database_not_available`; selecting a scope does not grant access.
+
+`GET databases` remains an installation-wide list. Each entry retains
+`name` and `available`, and adds `connection`, `engine`, `schema`, `scope_key`
+and `label`. MariaDB scope keys remain the exact database name. PostgreSQL keys
+are `postgres:` + RFC 3986 percent-encoded database + `:` + percent-encoded schema.
+The UI stores this complete key in its per-tab selection, state caches, diagram
+layout and bookmarks. API requests expand it into separate connection/database/
+schema parameters, so equal table names in separate schemas stay independent.
+Only names from `PG_DATABASE` and `PG_SCHEMAS` are listed for PostgreSQL;
+configured schemas that cannot be read remain visible with `available:false`.
+
+PostgreSQL supports only authenticated GET actions `bootstrap`, `schema`,
+`structure` and `browse`, alongside the global `databases` action. Normal HTTP
+method and CSRF validation still apply. Every other scoped PostgreSQL action
+returns 403 `postgres_read_only` before the corresponding service is invoked.
+This includes arbitrary SQL, row editing, saved queries, snapshots, import
+inspection/database creation, context export and AI. These controls are also
+unavailable in the UI; the server guard remains authoritative.
+
+Bootstrap adds top-level `scope_key` and `capabilities`, and database fields
+`connection`, `engine`, `schema` and `scope_key`. PostgreSQL capabilities
+`browse`, `structure`, `schema` are true; `write`, `query`, `saved_queries`,
+`snapshots`, `phpmyadmin`, `import`, `create_database`, `ai`, `context` are false.
+The normalized catalog/browse response retains the existing table, column and
+relationship fields. PostgreSQL browse returns no editable row identities;
+`row_keys` contain null and `key_columns` is empty. Schema responses use
+`database` for the selected schema namespace and `database_name` for the real
+PostgreSQL database, keeping external-schema foreign keys distinguishable.
+Structure can leave `create_sql` empty rather than inventing a full table DDL.
+
+The public `health` action continues to check only the fixed MariaDB startup
+connection. PostgreSQL readiness appears in its authenticated bootstrap data;
+an unavailable optional PostgreSQL connection does not become a health target.
+
+### Existing MariaDB scope
+
 Every scoped endpoint accepts the URL parameter `database=<exact name>`, on GET
 and POST alike. The request body does not change the target database. Omitting
 the parameter retains `DB_NAME` for older clients and links. There is no mutable
 server-session selection; two browser tabs can use different databases safely.
 
-`GET databases` returns `{databases:[{name,available}],default_database,can_create}` without
+`GET databases` returns `{databases:[{name,available,...}],default_database,can_create}` without
 requiring a selected database connection. Available names are the intersection
 of the writer's and reader's live `SHOW DATABASES` results, excluding
 `information_schema`, `mysql`, `performance_schema` and `sys`. `DB_NAME` and

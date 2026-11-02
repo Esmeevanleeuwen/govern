@@ -67,6 +67,48 @@ services:
       retries: 15
     restart: unless-stopped
 
+  # Optional local PostgreSQL reader. Enable with PG_ENABLED=1 and start.cmd/start.sh.
+  postgres:
+    image: postgres:18
+    profiles: [postgres]
+    environment:
+      POSTGRES_DB: ${PG_DATABASE:-govern_pg}
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${PG_ADMIN_PASSWORD:-}
+      PG_READ_USER: ${PG_READ_USER:-govern_pg_reader}
+      PG_READ_PASSWORD: ${PG_READ_PASSWORD:-}
+      PG_SCHEMAS: ${PG_SCHEMAS:-public}
+    volumes:
+      # PostgreSQL 18 keeps its versioned PGDATA below this directory.
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    restart: unless-stopped
+
+  postgres-access:
+    image: postgres:18
+    profiles: [postgres]
+    entrypoint: ["/bin/bash", "/opt/govern/enable-postgres.sh"]
+    environment:
+      PGHOST: postgres
+      PGPORT: 5432
+      PGDATABASE: ${PG_DATABASE:-govern_pg}
+      PGUSER: postgres
+      PGPASSWORD: ${PG_ADMIN_PASSWORD:-}
+      PG_READ_USER: ${PG_READ_USER:-govern_pg_reader}
+      PG_READ_PASSWORD: ${PG_READ_PASSWORD:-}
+      PG_SCHEMAS: ${PG_SCHEMAS:-public}
+    volumes:
+      - ./docker/postgres/enable-postgres.sh:/opt/govern/enable-postgres.sh:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
   app:
     build:
       context: .
@@ -82,6 +124,13 @@ services:
       DB_READ_PASSWORD: ${DB_READ_PASSWORD}
       BACKUP_DIR: /var/lib/govern/backups
       AUTH_DIR: /var/lib/govern/auth
+      PG_ENABLED: ${PG_ENABLED:-0}
+      PG_HOST: ${PG_HOST:-postgres}
+      PG_PORT: ${PG_PORT:-5432}
+      PG_DATABASE: ${PG_DATABASE:-govern_pg}
+      PG_SCHEMAS: ${PG_SCHEMAS:-public}
+      PG_READ_USER: ${PG_READ_USER:-govern_pg_reader}
+      PG_READ_PASSWORD: ${PG_READ_PASSWORD:-}
       WORKBENCH_SCHEMA_FILE: /var/www/workbench.sql
       TZ: UTC
       AI_ENABLED: ${AI_ENABLED:-0}
@@ -106,6 +155,9 @@ services:
         condition: service_completed_successfully
       database-manager:
         condition: service_healthy
+      postgres-access:
+        condition: service_completed_successfully
+        required: false
     healthcheck:
       test: [CMD, php, -r, "exit(@file_get_contents('http://127.0.0.1/api.php?action=health') === false ? 1 : 0);"]
       interval: 15s
@@ -148,6 +200,7 @@ services:
     restart: unless-stopped
 
 volumes:
+  postgres_data:
   database_data:
   backups:
   database_management:

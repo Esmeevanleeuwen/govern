@@ -21,7 +21,7 @@ dat via **Account → Access requests**. Daarna kun je inloggen, de werkplek ope
 en via Account weer uitloggen. De startpagina, accountschermen en werkplek
 ondersteunen Nederlands en Engels.
 
-Je hoeft PHP, Node, Composer of MariaDB niet zelf te installeren. Docker Compose
+Je hoeft PHP, Node, Composer, MariaDB of PostgreSQL niet zelf te installeren. Docker Compose
 moet de optie `--wait` ondersteunen; een actuele Docker Desktop bevat die. Je bestaande
 database buiten Docker wordt niet aangeraakt. De wachtwoorden staan alleen in
 je lokale `.env`, die niet in Git wordt opgenomen.
@@ -38,7 +38,7 @@ je lokale `.env`, die niet in Git wordt opgenomen.
   toegangsverzoeken goedkeuren.
 
 Accounts horen bij één Docker-installatie. Een goedgekeurd account krijgt
-dezelfde toegang tot de toegestane werkdatabases als de eigenaar: bekijken,
+dezelfde toegang tot de toegestane MariaDB-werkdatabases als de eigenaar: bekijken,
 wijzigen, SQL uitvoeren en herstelpunten beheren. Het account maakt geen
 afzonderlijke privéomgeving of eigen database. Keur daarom alleen mensen goed
 die je deze toegang wilt geven. Je kunt ook een eigen Govern-installatie starten.
@@ -54,6 +54,28 @@ de browsersessie. Inloggen en registreren hebben een tijdelijke pogingenlimiet.
 E-mail is een inlognaam; deze versie verstuurt geen verificatie- of herstelmail
 en heeft geen wachtwoordherstel. Bewaar het wachtwoord van het eigenaarsaccount.
 De taal- en uiterlijkvoorkeuren blijven bij de browser, zonder accountsynchronisatie.
+
+## PostgreSQL gebruiken
+
+PostgreSQL is een optionele tweede verbinding. De bestaande tabelverkenner,
+structuurweergave en het schemadiagram kunnen PostgreSQL-tabellen en relaties
+tonen. Deze eerste versie ondersteunt alleen bekijken en zoeken; wijzigen,
+vrije SQL, import, herstelpunten en AI zijn voor PostgreSQL nog niet beschikbaar.
+phpMyAdmin blijft alleen bij de MariaDB-verbinding horen.
+
+1. Open `.env` in de Govern-map en zet `PG_ENABLED=1`.
+2. Bewaar de standaardwaarden `PG_DATABASE=govern_pg` en `PG_SCHEMAS=public`,
+   of kies de bestaande schema's die je wilt tonen, gescheiden door komma's.
+3. Start opnieuw met `.\start.cmd` in PowerShell, of `sh start.sh` op macOS/Linux.
+4. Log in en kies bovenaan de vermelding **govern_pg · public · PostgreSQL**.
+
+De startbestanden maken ontbrekende PostgreSQL-wachtwoorden aan en starten
+het optionele Docker-profiel. De nieuwe database is aanvankelijk leeg;
+Govern importeert geen MariaDB-gegevens automatisch. PostgreSQL gebruikt een
+eigen volume. De webapp krijgt alleen het afzonderlijke leesaccount.
+
+Meer over configuratie, schema's en de volgende bouwfasen:
+[PostgreSQL in Govern](docs/POSTGRESQL.md).
 
 ## Een andere database kiezen of toevoegen
 
@@ -120,6 +142,9 @@ Een geconfigureerde database die ontbreekt blijft in de kiezer staan voor herste
 Een database buiten deze Docker-installatie wordt niet automatisch gekoppeld.
 
 ## Wat kun je ermee?
+
+De volledige functies hieronder gelden voor MariaDB. Voor PostgreSQL geldt
+de hierboven beschreven eerste versie met alleen bekijken en zoeken.
 
 - **Overzicht:** zie welke tabellen en overzichten je database bevat.
 - **Nederlands of Engels:** verander de taal bovenaan of bij Instellingen. Je

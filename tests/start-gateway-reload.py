@@ -41,7 +41,7 @@ for failure in ('', 'up', 'check', 'reload'):
         docker.chmod(0o700)
         log = workspace / 'commands.jsonl'
         environment = {**os.environ, 'PATH': str(workspace / 'bin') + os.pathsep + os.environ['PATH'],
-                       'GOVERN_START_TEST_LOG': str(log), 'GOVERN_START_TEST_FAILURE': failure}
+                       'GOVERN_START_TEST_LOG': str(log), 'GOVERN_START_TEST_FAILURE': failure, 'PG_ENABLED': '0'}
         result = subprocess.run(['sh', str(workspace / 'scripts/start.sh')], env=environment, capture_output=True, text=True)
         commands = [json.loads(line) for line in log.read_text().splitlines()]
         up = ['compose', 'up', '-d', '--build', '--wait', '--wait-timeout', '180']
@@ -66,4 +66,42 @@ for failure in ('', 'up', 'check', 'reload'):
             else:
                 check(commands.index(config_check) < commands.index(reload) < commands.index(stop), 'A failed reload closes the old gateway after configuration validation.')
 
-print(f'Startup gateway fixture checks: {checks} passed.')
+with tempfile.TemporaryDirectory(prefix='govern-postgres-start-test-') as directory:
+    workspace = Path(directory)
+    (workspace / 'scripts').mkdir()
+    (workspace / 'bin').mkdir()
+    shutil.copy2(root / 'scripts/start.sh', workspace / 'scripts/start.sh')
+    settings = workspace / '.env'
+    settings.write_text('APP_PORT=8089\nDB_PASSWORD=existing-maria-password\nPG_ENABLED=1\nPG_READ_PASSWORD=\nPG_ADMIN_PASSWORD=\n')
+    docker = workspace / 'bin/docker'
+    docker.write_text(fixture)
+    docker.chmod(0o700)
+    log = workspace / 'commands.jsonl'
+    environment = {key: value for key, value in os.environ.items()
+                   if key not in {'PG_ENABLED', 'PG_READ_PASSWORD', 'PG_ADMIN_PASSWORD', 'GOVERN_START_TEST_FAILURE'}}
+    environment.update({'PATH': str(workspace / 'bin') + os.pathsep + os.environ['PATH'],
+                        'GOVERN_START_TEST_LOG': str(log)})
+    result = subprocess.run(['sh', str(workspace / 'scripts/start.sh')], env=environment, capture_output=True, text=True)
+    commands = [json.loads(line) for line in log.read_text().splitlines()]
+    check(result.returncode == 0, 'PostgreSQL opt-in startup succeeds.')
+    check(['compose', '--profile', 'postgres', 'up', '-d', '--build', '--wait', '--wait-timeout', '180'] in commands,
+          'The optional PostgreSQL profile participates in startup readiness.')
+    check(['compose', '--profile', 'postgres', 'exec', '-T', 'gateway', 'nginx', '-s', 'reload'] in commands,
+          'Profile startup still reloads the gateway access rules.')
+    generated = dict(line.split('=', 1) for line in settings.read_text().splitlines() if '=' in line)
+    check(generated['DB_PASSWORD'] == 'existing-maria-password', 'PostgreSQL opt-in preserves the MariaDB password.')
+    check(all(len(generated[key]) == 64 and all(c in '0123456789abcdef' for c in generated[key])
+              for key in ['PG_READ_PASSWORD', 'PG_ADMIN_PASSWORD']), 'Blank PostgreSQL placeholders receive random passwords.')
+    check(all(generated[key] not in result.stdout + result.stderr for key in ['PG_READ_PASSWORD', 'PG_ADMIN_PASSWORD']),
+          'Startup does not print generated PostgreSQL passwords.')
+    before = settings.read_text()
+    result = subprocess.run(['sh', str(workspace / 'scripts/start.sh')], env=environment, capture_output=True, text=True)
+    check(result.returncode == 0 and settings.read_text() == before, 'Restart preserves generated PostgreSQL credentials.')
+    log.unlink()
+    result = subprocess.run(['sh', str(workspace / 'scripts/start.sh')], env={**environment, 'PG_ENABLED': '0'},
+                            capture_output=True, text=True)
+    commands = [json.loads(line) for line in log.read_text().splitlines()]
+    check(result.returncode == 0 and not any('--profile' in command for command in commands),
+          'Explicit environment opt-out overrides a saved PostgreSQL opt-in.')
+
+print(f'Startup gateway and PostgreSQL fixture checks: {checks} passed.')

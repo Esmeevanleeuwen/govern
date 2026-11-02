@@ -20,7 +20,8 @@ const svg = (tag, attributes = {}) => {
 /** A read-only view of the current catalog. Coordinates never change the database. */
 export function mountSchemaVisualizer(root, {data, state = {}, contextRoot, onSelect, onSearch, initialSearch, onRefresh} = {}) {
     const model = normalizeSchema(data);
-    const storageKey = 'govern.schema-layout.v1.' + encodeURIComponent(model.database);
+    const scopeKey = typeof data?.scope_key === 'string' ? data.scope_key : model.database;
+    const storageKey = 'govern.schema-layout.v1.' + encodeURIComponent(scopeKey);
     const defaults = initialPositions(model.tables);
     const lookup = new Map(model.tables.map(table => [table.name, table]));
     const tableMetadata = table => ({kind: 'table', key: 'table:' + JSON.stringify(table.name),
@@ -38,8 +39,8 @@ export function mountSchemaVisualizer(root, {data, state = {}, contextRoot, onSe
     let previousCanvasSize;
     const nodes = new Map();
     const cleanup = [];
-    if (state.database !== model.database) {
-        Object.assign(state, {database: model.database, positions: Object.create(null), viewport: null, search: '', neighborhood: false, loadedPositions: false, storageFailed: false, centeredSelected: ''});
+    if ((state.scope_key || state.database) !== scopeKey) {
+        Object.assign(state, {database: model.database, scope_key: scopeKey, positions: Object.create(null), viewport: null, search: '', neighborhood: false, loadedPositions: false, storageFailed: false, centeredSelected: ''});
     }
     if (!state.positions || typeof state.positions !== 'object') state.positions = Object.create(null);
     if (!state.loadedPositions) {

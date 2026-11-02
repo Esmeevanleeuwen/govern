@@ -12,6 +12,7 @@ use Govern\Catalog;
 use Govern\Config;
 use Govern\Database;
 use Govern\DatabaseScope;
+use Govern\ConnectionScope;
 use Govern\Http;
 use Govern\MaintenanceLock;
 use Govern\Messages;
@@ -39,16 +40,19 @@ try {
     if (!in_array($action, $posts, true)) {
         Http::get();
     }
-    $scope = new DatabaseScope($baseConfig);
+    $scope = new ConnectionScope($baseConfig);
     if ($action === 'databases') Http::json(['databases' => $scope->databases(), 'default_database' => $baseConfig['name'],
         'can_create' => (new DatabaseProvisioner())->isAvailable()]);
-    $selectedDatabase = Http::text($_GET, 'database', false) ?: $baseConfig['name'];
-    $config = $scope->select($selectedDatabase);
+    $connection = Http::text($_GET, 'connection', false) ?: 'mariadb';
+    $selectedDatabase = Http::text($_GET, 'database', false) ?: ($connection === 'postgres'
+        ? ($baseConfig['postgres']['name'] ?? '') : $baseConfig['name']);
+    $config = $scope->select($selectedDatabase, $connection, Http::text($_GET, 'schema', false));
+    ConnectionScope::requireAction($config, $action);
     if ($action === 'prepare-database') {
         $lock = new MaintenanceLock($config['maintenance_dir']);
         $prepared = (new DatabaseProvisioner())->prepare($input);
         // Permissions changed: discard the catalog cached before provisioning.
-        $freshScope = new DatabaseScope($baseConfig);
+        $freshScope = new ConnectionScope($baseConfig);
         Http::json([...$prepared, 'databases' => $freshScope->databases(), 'default_database' => $baseConfig['name']],
             $prepared['created'] ? 201 : 200);
     }
@@ -92,11 +96,17 @@ try {
     }
     if ($action === 'bootstrap') {
         $data = ['csrf' => $csrf, 'databases' => $scope->databases(), 'default_database' => $baseConfig['name'],
-            'can_create_database' => (new DatabaseProvisioner())->isAvailable(),
-            'database' => ['name' => $config['name'], 'version' => null, 'status' => 'unavailable', 'available' => false],
+            'can_create_database' => $config['engine'] === 'mariadb' && (new DatabaseProvisioner())->isAvailable(),
+            'scope_key' => $config['scope_key'], 'capabilities' => ConnectionScope::capabilities($config),
+            'database' => ['name' => $config['name'], 'connection' => $connection, 'engine' => $config['engine'],
+                'schema' => $config['schema'] ?? $config['name'], 'scope_key' => $config['scope_key'],
+                'version' => null, 'status' => 'unavailable', 'available' => false],
             'stats' => ['tables' => 0, 'views' => 0, 'rows_estimate' => 0], 'tables' => []];
         try {
             $lock = new MaintenanceLock($config['maintenance_dir']);
+            if ($config['engine'] === 'postgres' && !in_array($config['schema'], $database->schemaNames(), true)) {
+                throw ApiException::fromCode('postgres_schema_unavailable', 503);
+            }
             $data['tables'] = $catalog->tables();
             $data['database']['version'] = $database->reader()->getAttribute(PDO::ATTR_SERVER_VERSION);
             $data['database']['status'] = 'ready';

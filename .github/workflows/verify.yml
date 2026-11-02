@@ -18,6 +18,9 @@ jobs:
     env:
       DB_DATABASES: bestuursatlas,govern_multi_test
       GOVERN_TEST_SECOND_DATABASE: govern_multi_test
+      PG_ENABLED: "1"
+      PG_DATABASE: govern_pg
+      PG_SCHEMAS: public,archive
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Prepare isolated test account credentials
@@ -37,6 +40,9 @@ jobs:
         run: sh start.sh
       - name: Initialize the test installation owner through registration
         run: python3 tests/auth_http.py --initialize
+      - name: Prepare the explicitly isolated PostgreSQL fixtures
+        run: |
+          docker compose --profile postgres exec -T postgres sh -c 'test "$POSTGRES_DB" = govern_pg && exec psql --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" --set ON_ERROR_STOP=1' < tests/postgres-fixture.sql
       - name: PHP syntax
         run: |
           docker compose exec -T app sh -c 'find /var/www/src /var/www/public -name "*.php" -exec php -l {} \;'
@@ -44,6 +50,7 @@ jobs:
       - name: Focused backend checks
         run: |
           docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/backend_unit.php
+          docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/postgres_scope_unit.php
           docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/sql_script_unit.php
           docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/backup_unit.php
           docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/backend_localization.php
@@ -69,15 +76,19 @@ jobs:
           docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/database-provisioning-integration.php --confirm-database=bestuursatlas
       - name: Backup and recovery integration
         run: docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/backup_integration.php --confirm-database=bestuursatlas
+      - name: PostgreSQL catalog and read-only permissions
+        run: docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/postgres-integration.php --confirm-database=govern_pg
       - name: Proxy follows recreated web containers
         run: GOVERN_DOCKER_NETWORK_TEST=1 python3 tests/proxy-restart-smoke.py --confirm-project=govern
       - name: HTTP and phpMyAdmin integration
         run: |
           python3 tests/smoke.py --base-url http://127.0.0.1:8080
           python3 tests/auth-gateway.py --base-url http://127.0.0.1:8080
+          python3 tests/postgres-http.py --base-url http://127.0.0.1:8080 --confirm-database=govern_pg
       - name: Browser and visual query builder
         run: |
           node tests/i18n-unit.mjs
+          node tests/api-scope-unit.mjs
           node tests/frontend-messages-unit.mjs
           node tests/preferences-unit.mjs
           node tests/dashboard-layout-unit.mjs
@@ -93,6 +104,7 @@ jobs:
           failed_suites=()
           for suite in \
             tests/homepage-auth-smoke.mjs \
+            tests/postgres-smoke.mjs \
             tests/database-import-smoke.mjs \
             tests/frontend-smoke.mjs \
             tests/query-builder-smoke.mjs \
@@ -118,4 +130,4 @@ jobs:
         run: docker compose logs --tail=100
       - name: Stop this isolated test stack
         if: always()
-        run: docker compose down
+        run: docker compose --profile postgres down
