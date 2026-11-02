@@ -7,6 +7,8 @@ namespace Govern;
 final class Messages
 {
     private const TEXT = [
+        'explore_key_invalid' => ['nl' => 'Kies een record met zijn volledige, exacte sleutel.', 'en' => 'Choose a record using its complete, exact key.'],
+        'explore_record_missing' => ['nl' => 'Dit record is niet meer beschikbaar. Vernieuw de verkenning.', 'en' => 'This record is no longer available. Refresh the explorer.'],
         'postgres_config_invalid' => ['nl' => 'Controleer de PostgreSQL-instellingen op de server.', 'en' => 'Check the PostgreSQL settings on the server.'],
         'postgres_schema_unavailable' => ['nl' => 'Dit PostgreSQL-schema is niet beschikbaar voor het leesaccount.', 'en' => 'This PostgreSQL schema is unavailable to the reader account.'],
         'postgres_read_only' => ['nl' => 'PostgreSQL ondersteunt nu alleen tabellen, structuur en schema bekijken. Deze handeling is nog niet beschikbaar.', 'en' => 'PostgreSQL currently supports browsing tables, structure and schemas. This action is not available yet.'],

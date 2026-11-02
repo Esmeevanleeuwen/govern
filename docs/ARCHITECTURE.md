@@ -90,7 +90,7 @@ Een wissel annuleert oude leesacties en laat late antwoorden uit de vorige
 scope buiten de huidige weergave.
 
 De capabilityvelden in bootstrap sturen de zichtbare bediening. De API weigert
-voor PostgreSQL alle acties buiten bootstrap, catalogus, structuur en bladeren;
+voor PostgreSQL alle acties buiten bootstrap, catalogus, structuur, bladeren en records verkennen;
 de writer- en vrije-SQL-verbinding weigeren eveneens. Er wordt geen MariaDB-
 snapshot-, query-, import- of AI-service op een PostgreSQL-scope aangeroepen.
 phpMyAdmin blijft de officiële MariaDB-toepassing en wordt niet als
@@ -102,6 +102,34 @@ het bootstrapwachtwoord; de webapp ontvangt uitsluitend de lezergegevens.
 De startbestanden schakelen het profiel in bij `PG_ENABLED=1` en bewaren
 bestaande wachtwoorden en volumes. Zie [POSTGRESQL.md](POSTGRESQL.md) voor de
 configuratie en de grens van deze eerste bouwfase.
+
+### Records verkennen
+
+`RecordExplorer.php` leest dezelfde genormaliseerde catalogus als de bestaande
+schermen. De nieuwe GET-actie `explore` bouwt een begrensde buurt rond één echt
+record met een primaire of volledige, niet-nullbare unieke sleutel. Alle
+recordvragen lopen via de reader van de gekozen adapter. Kolomnamen en relaties
+komen uit de actuele catalogus; waarden worden gebonden en tabellen zijn binnen
+het geselecteerde schema gekwalificeerd.
+
+Het antwoord scheidt exacte identiteit en foreign-keywaarden van verkorte
+weergavevelden. Een stabiele node-ID bevat verbinding, database, schema, tabel
+en volledige sleutel. Een edge bevat de echte bron- en doelvelden en waarden.
+Er worden geen relaties afgeleid uit gelijkende namen en er wordt niet buiten
+de geselecteerde scope gezocht. Tabellen zonder bruikbare sleutel en externe
+verwijzingen blijven herkenbaar overgeslagen.
+
+`record-explorer.js` koppelt een SVG-grafiek, recordlijst en uitleg binnen de
+bestaande Database-werkplek. Alleen lezen is een servergrens en een UI-keuze;
+de PostgreSQL-writer blijft ontoegankelijk. De route `#verkennen` gebruikt
+dezelfde tabellenkiezer, taal, materialen en databasewisseling. Tijdelijke
+selectie en filters staan per scope in `recordExploreView`; annulering en
+scopecontrole verhinderen dat een oud antwoord een nieuwe werkplek vervangt.
+
+Vaste aantals-, preview- en tijdgrenzen begrenzen iedere vraag. Het scherm
+beschrijft de geladen buurt en haar beperkingen; verder verkennen vraagt een
+nieuwe buurt op. Er is geen blijvende index, aparte grafiekdatabase of nieuwe
+frameworklaag nodig.
 
 ### Bestaande MariaDB-werkplek
 

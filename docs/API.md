@@ -128,7 +128,7 @@ Only names from `PG_DATABASE` and `PG_SCHEMAS` are listed for PostgreSQL;
 configured schemas that cannot be read remain visible with `available:false`.
 
 PostgreSQL supports only authenticated GET actions `bootstrap`, `schema`,
-`structure` and `browse`, alongside the global `databases` action. Normal HTTP
+`structure`, `browse` and `explore`, alongside the global `databases` action. Normal HTTP
 method and CSRF validation still apply. Every other scoped PostgreSQL action
 returns 403 `postgres_read_only` before the corresponding service is invoked.
 This includes arbitrary SQL, row editing, saved queries, snapshots, import
@@ -137,7 +137,7 @@ unavailable in the UI; the server guard remains authoritative.
 
 Bootstrap adds top-level `scope_key` and `capabilities`, and database fields
 `connection`, `engine`, `schema` and `scope_key`. PostgreSQL capabilities
-`browse`, `structure`, `schema` are true; `write`, `query`, `saved_queries`,
+`browse`, `structure`, `schema`, `explore` are true; `write`, `query`, `saved_queries`,
 `snapshots`, `phpmyadmin`, `import`, `create_database`, `ai`, `context` are false.
 The normalized catalog/browse response retains the existing table, column and
 relationship fields. PostgreSQL browse returns no editable row identities;
@@ -145,6 +145,41 @@ relationship fields. PostgreSQL browse returns no editable row identities;
 `database` for the selected schema namespace and `database_name` for the real
 PostgreSQL database, keeping external-schema foreign keys distinguishable.
 Structure can leave `create_sql` empty rather than inventing a full table DDL.
+
+### Read-only record exploration
+
+`GET explore` accepts a catalog `table` and an optional `key` containing a JSON
+object with the record's complete primary or non-nullable unique key. Ordinary
+connection/database/schema scoping, account access and GET-only checks apply.
+The service uses the database reader for both engines and accepts no SQL.
+Keys are limited to 2,048 encoded JSON bytes so generated GET requests remain
+usable; oversized or unsupported stored identities are explicitly omitted.
+
+The response contains `scope_key`, `table`, `center` (a node ID or null),
+`candidates` for the starting-record picker, `nodes`, `edges`, `relations`,
+`limits`, `partial`, `omitted` and `elapsed_ms`. Each node carries an opaque,
+scope-specific stable `id`, `table`, `label`, exact `key`, preview `values` and
+`truncated` flag. Preview values are never used as record identity.
+
+Edges point from the referencing record to the referenced record. Each includes
+its source/target node IDs, foreign-key `name`, source/target tables, ordered
+`columns`/`referenced_columns`, and matching `source_values`/`target_values`.
+Only catalog-declared foreign keys within the selected schema are followed.
+The evidence describes database references, not a claim of causal influence.
+
+Each response covers one starting record and one hop of incoming/outgoing
+neighbors. Fixed limits are 25 starting candidates, 15 neighbors per relation,
+12 relations, 60 nodes and 120 edges. `partial` and `omitted` describe skipped
+or bounded content; the response is not a full-database graph or total count.
+Keyless tables/views produce an empty graph and an explicit omission. Malformed
+keys return 422 and a requested record that no longer exists returns 404.
+Exact key and relationship scalars are serialized as text by the engine before
+PDO conversion, preserving adjacent DOUBLE values as separate identities.
+
+The browser keeps graph selection, filters and focus in temporary per-scope
+view state. Switching database/schema aborts pending reads and ignores their
+late responses. This feature performs no row, schema, privilege or account
+mutation and does not enable the PostgreSQL SQL editor.
 
 The public `health` action continues to check only the fixed MariaDB startup
 connection. PostgreSQL readiness appears in its authenticated bootstrap data;

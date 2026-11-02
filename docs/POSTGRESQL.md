@@ -2,7 +2,7 @@
 
 Govern kan naast MariaDB een optionele lokale PostgreSQL-verbinding tonen.
 Deze eerste versie laat tabellen, records, kolommen, indexen en relaties zien
-in dezelfde werkplek. Ze ondersteunt zoeken en bladeren, maar nog geen wijzigen,
+in dezelfde werkplek. Ze ondersteunt zoeken, bladeren en records verkennen, maar nog geen wijzigen,
 vrije SQL, opgeslagen onderzoeken, import, herstelpunten, context-export of AI
 voor PostgreSQL. phpMyAdmin blijft alleen voor MariaDB beschikbaar.
 
@@ -82,6 +82,24 @@ Govern hebt bewerkt. Als er al een ander object met een van deze namen bestaat,
 stopt de eerste import voordat gegevens worden toegevoegd. De import gebruikt
 één transactie en geeft het webaccount alleen leesrechten op de voorbeelden.
 Normaal starten laadt de voorbeelden niet automatisch.
+
+## Records en hun verbindingen verkennen
+
+Open **Database → Explore** (Nederlands: **Verkennen**) en kies een tabel en
+startrecord. Een punt in deze grafiek is een echt record. De lijnen volgen
+de foreign keys uit de actuele database. Het bestaande tabblad **Schema** blijft
+de structuur van tabellen tonen.
+
+Selecteer een punt of een rij in de lijst om hetzelfde record in beide te
+markeren. De uitleg toont zijn velden en de bron- en doelwaarden van een
+verwijzing. Met **Explore from here** ga je verder vanaf het gekozen record.
+Gebruik de relatiekeuzes en het zoekveld om de geladen weergave te beperken.
+
+De eerste versie toont één stap rond het startrecord, met zichtbare grenzen
+voor het aantal records en relaties. De teller beschrijft geladen records;
+een ontbrekende lijn bewijst niet dat de hele database geen verbinding bevat.
+Tabellen zonder bruikbare unieke sleutel blijven in de gewone gegevensbrowser
+beschikbaar. Selecteren, zoeken en verder verkennen veranderen geen gegevens.
 
 ## Database en schema's
 

@@ -85,6 +85,10 @@ Op macOS/Linux gebruik je `sh load-postgres-demo.sh`. Dit voegt vijf gekoppelde
 voorbeeldtabellen met 39 fictieve records en één overzichtsview toe aan `public`.
 Klik daarna op **Refresh** in Govern en kies de PostgreSQL-verbinding.
 
+Onder **Database → Explore** kun je een startrecord kiezen en zijn echte
+verbindingen volgen. De grafiek, recordlijst en uitleg selecteren samen hetzelfde
+record. Met **Explore from here** ga je verder; dit blijft volledig alleen lezen.
+
 Meer over configuratie, schema's en de volgende bouwfasen:
 [PostgreSQL in Govern](docs/POSTGRESQL.md).
 

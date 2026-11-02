@@ -75,6 +75,26 @@ diagram state. Cached data and delayed responses from another scope must never
 replace the visible selection. A configured but unreadable schema uses the
 same honest unavailable state as other connection failures.
 
+## Record exploration
+
+The shared Database area adds **Explore / Verkennen** beside Data, Structure
+and Schema. Schema shows table definitions; Explore shows actual keyed records
+and the declared references between them. Use a bounded neighborhood centered
+on one chosen record, a synchronized record list, and a nearby explanation
+panel. Selection and relationship filters change the view only.
+
+Keep the current record visibly distinct, provide keyboard alternatives for
+graph nodes and edges, and show non-colour selection states in the record list.
+The explanation names the exact source and referenced fields/values instead
+of inventing a semantic or causal relationship. Scope, loaded counts, truncation
+and skipped relationships remain visible. A partial neighborhood must never
+look like a complete graph of the database.
+
+Keep search, relationship choices and the selected record when changing
+language or appearance. A database/schema change owns separate view state and
+invalidates old network callbacks. On compact screens stack graph, records
+and explanation within the viewport; controls retain readable labels and focus.
+
 ## Interactive design reference
 
 Use **EN / NL**, **Settings** and **Edit layout** to explore the design. The interactive reference remains on the Govern Page. Production screens use the real catalog, research service and restore points. Keep these written rules beside a visual reference when designing a new screen.

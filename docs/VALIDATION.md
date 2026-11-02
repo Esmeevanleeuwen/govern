@@ -3,6 +3,39 @@
 Stand van de controles: **2 november 2026**. Eerdere resultaten hieronder horen
 bij hun beschreven wijziging en zijn niet automatisch opnieuw uitgevoerd.
 
+## Alleen-lezen records verkennen
+
+De nieuwe Database-weergave **Explore / Verkennen** toont echte records, hun
+gedeclareerde foreign keys, een gekoppelde recordlijst en uitleg met exacte
+bron- en doelwaarden. De eerste versie haalt één begrensde buurt per vraag op.
+
+Uitgevoerd op het afzonderlijke Docker-project met PostgreSQL 18 en MariaDB 10.11:
+
+- **68** backend-integratiecontroles voor echte relaties, stabiele scopes en
+  identiteit, samengestelde/unieke sleutels, exacte grote getallen, NULL en
+  binaire previews, zelfverwijzingen, parallelle relaties, grote buurten en
+  verkorte velden. De proef toonde PDO-afronding van aangrenzende DOUBLE-sleutels;
+  serverconversie naar tekst behoudt nu beide records en hun herselectie.
+- **90** PostgreSQL-scopecontroles en **207** backend-lokalisatiecontroles.
+- **66** geauthenticeerde Explore-HTTP-controles voor gast-/methodebeveiliging,
+  echte catalogusbewijzen, exacte sleutels, schema-afbakening, ontbrekende
+  records, keyless views en behoud van de PostgreSQL-schrijfbeperking.
+- De Explore-browsersuite controleert grafiek-/lijstselectie, zichtbaarheid
+  van de geselecteerde rij, toetsenbordbediening, bronwaarden, filters, verder
+  verkennen, NL/EN, bewaarde focus, een vertraagd antwoord over een schemawissel,
+  MariaDB en een mobiele breedte van **320 px**. Alle dataverzoeken blijven GET.
+- De modelproef controleert filters, onveranderde bronwaarden, stabiele kleuren
+  en een niet-overlappende indeling voor **60** records. De bestaande
+  JavaScript-unitsuites, **1.002** tweetalige berichten, PostgreSQL-browsersuite
+  en gedeelde navigatieproef slagen eveneens.
+- De bestaande **66** PostgreSQL-HTTP- en **39** MariaDB-/phpMyAdmin-controles
+  slagen na toevoeging van de nieuwe leesactie.
+
+Desktop en mobiel zijn visueel bekeken. De nieuwe proeven staan in CI; de
+volledige CI-workflow en de installatie op de gebruikercomputer zijn niet
+opnieuw uitgevoerd. Er zijn geen nieuwe afhankelijkheden of schrijfbevoegdheden
+voor de webapp toegevoegd.
+
 ## Optionele PostgreSQL-voorbeeldgegevens
 
 De nieuwe `load-postgres-demo.cmd` en `load-postgres-demo.sh` laden vijf

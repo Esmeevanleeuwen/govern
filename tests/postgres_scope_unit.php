@@ -64,12 +64,12 @@ try {
     $assert(ConnectionScope::scopeKey('mariadb', 'existing') === 'existing', 'Existing MariaDB scope keys remain compatible.');
     $assert(ConnectionScope::scopeKey('postgres', 'data:set', 'a b') === 'postgres:data%3Aset:a%20b', 'Workspace keys encode identifier delimiters.');
     $capabilities = ConnectionScope::capabilities($public);
-    foreach (['browse', 'structure', 'schema'] as $capability) $assert($capabilities[$capability] === true, 'Supported read capability: ' . $capability);
+    foreach (['browse', 'structure', 'schema', 'explore'] as $capability) $assert($capabilities[$capability] === true, 'Supported read capability: ' . $capability);
     foreach (['write', 'query', 'saved_queries', 'snapshots', 'phpmyadmin', 'import', 'create_database', 'ai', 'context'] as $capability) {
         $assert($capabilities[$capability] === false, 'Unsupported PostgreSQL capability: ' . $capability);
     }
     $assert(!in_array(false, ConnectionScope::capabilities($base), true), 'MariaDB retains all existing capabilities.');
-    foreach (['bootstrap', 'schema', 'structure', 'browse'] as $action) {
+    foreach (['bootstrap', 'schema', 'structure', 'browse', 'explore'] as $action) {
         ConnectionScope::requireAction($public, $action);
         $assert(true, 'Supported action allowed without connecting: ' . $action);
     }

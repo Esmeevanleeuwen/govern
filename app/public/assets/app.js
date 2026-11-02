@@ -7,6 +7,7 @@ import {t, getLanguage, setLanguage} from './i18n.js';
 import {getPreferences, updatePreferences, resetAppearance, subscribePreferences} from './preferences.js';
 import {createDashboardLayout} from './dashboard-layout.js';
 import {mountSchemaVisualizer} from './schema-visualizer.js';
+import {mountRecordExplorer} from './record-explorer.js';
 import {registerSelection} from './selection-registry.js';
 import {SelectionPointer} from './selection-pointer.js';
 import {createRowEditor} from './row-editor.js';
@@ -24,6 +25,7 @@ const routes = {
     gegevens: {labelKey: 'app.route.data', icon: 'table'},
     structuur: {labelKey: 'app.route.structure', icon: 'layers'},
     schema: {labelKey: 'app.route.schema', icon: 'network'},
+    verkennen: {labelKey: 'app.explorer.title', icon: 'network'},
     onderzoeken: {labelKey: 'app.route.research', icon: 'search'},
     experimenten: {labelKey: 'app.route.experiments', icon: 'flask'},
     instellingen: {labelKey: 'app.route.settings', icon: 'settings'},
@@ -59,6 +61,7 @@ const state = {
     snapshotError: null,
     schemaData: null,
     schemaView: {},
+    recordExploreView: {},
     databaseView: 'gegevens',
     contextOpen: {database: true, research: true, experiments: true},
     structureData: new Map(),
@@ -80,25 +83,25 @@ const navigation = document.getElementById('navigation');
 const workspaceContext = document.getElementById('workspace-context');
 const contextContent = document.getElementById('workspace-context-content');
 const panelToggle = document.getElementById('workspace-panel-toggle');
-const databaseViews = ['gegevens', 'structuur', 'schema'];
+const databaseViews = ['gegevens', 'structuur', 'schema', 'verkennen'];
 const databaseSelect = document.getElementById('database-select');
 const manageDatabases = document.getElementById('manage-databases');
 const aiToggle = document.getElementById('ai-toggle');
 const databaseCache = new Map();
 const databaseStateKeys = ['bootstrap', 'table', 'queryDraft', 'queryName', 'queryNotes', 'queryId', 'queryResult', 'queryRevision',
     'queryDesign', 'builderDraft', 'builderOpen', 'dataViews', 'catalogSearch', 'snapshotLabel', 'savedQueries', 'queryDirty',
-    'connectionError', 'queryError', 'querySaveError', 'snapshotError', 'schemaData', 'schemaView', 'databaseView',
+    'connectionError', 'queryError', 'querySaveError', 'snapshotError', 'schemaData', 'schemaView', 'recordExploreView', 'databaseView',
     'contextOpen', 'structureData', 'inspectorExpanded', 'explorerScroll'];
 const emptyDatabaseState = () => ({bootstrap: null, table: '', queryDraft: '', queryName: '', queryNotes: '', queryId: null,
     queryResult: null, queryRevision: 0, queryDesign: null, builderDraft: null, builderOpen: true, dataViews: new Map(),
     catalogSearch: {}, snapshotLabel: '', savedQueries: null, queryDirty: false, connectionError: null, queryError: null,
-    querySaveError: null, snapshotError: null, schemaData: null, schemaView: {}, databaseView: 'gegevens',
+    querySaveError: null, snapshotError: null, schemaData: null, schemaView: {}, recordExploreView: {}, databaseView: 'gegevens',
     contextOpen: {database: true, research: true, experiments: true}, structureData: new Map(), inspectorExpanded: {}, explorerScroll: {}});
 const scopeKey = item => item.scope_key || item.name;
 const schemaName = () => state.bootstrap?.database?.schema || state.bootstrap?.database?.name || '';
 function supports(capability) {
     if (state.bootstrap?.capabilities?.[capability] !== undefined) return state.bootstrap.capabilities[capability] === true;
-    return !getDatabase().startsWith('postgres:') || ['browse', 'structure', 'schema'].includes(capability);
+    return !getDatabase().startsWith('postgres:') || ['browse', 'structure', 'schema', 'explore'].includes(capability);
 }
 function unavailableFeature() {
     return el('section', {'data-capability-unavailable': ''}, notice(t('app.postgres.unavailable')),
@@ -698,8 +701,9 @@ function render() {
     renderConnectionNotice();
     page.replaceChildren();
     contextContent.replaceChildren();
-    const views = {overzicht: renderOverview, gegevens: renderData, structuur: renderStructure, schema: renderSchema, onderzoeken: renderResearch, experimenten: renderExperiments, instellingen: renderSettings};
-    if (location.name === 'onderzoeken' && !supports('query') || location.name === 'experimenten' && !supports('snapshots')) {
+    const views = {overzicht: renderOverview, gegevens: renderData, structuur: renderStructure, schema: renderSchema, verkennen: renderExplore, onderzoeken: renderResearch, experimenten: renderExperiments, instellingen: renderSettings};
+    if (location.name === 'onderzoeken' && !supports('query') || location.name === 'experimenten' && !supports('snapshots')
+        || location.name === 'verkennen' && !supports('explore')) {
         page.append(unavailableFeature());
         return;
     }
@@ -1254,6 +1258,47 @@ async function renderSchema(scope) {
             workspace.replaceChildren(errorPanel(error, () => render()));
             contextContent.replaceChildren(errorPanel(error, () => render()));
         }
+    }
+}
+
+async function renderExplore(scope) {
+    page.append(databaseHeading('verkennen'));
+    contextContent.append(catalog('verkennen'));
+    const workspace = el('section', {id: 'record-explorer-workspace'}, loading(t('app.explorer.loading')));
+    page.append(workspace);
+    const selectRootTable = name => {
+        if (!scope.live() || !tables().some(table => table.name === name)) return;
+        state.table = name;
+        history.replaceState(null, '', databaseHash('verkennen'));
+        document.getElementById('database-selected-table').textContent = name;
+        document.querySelectorAll('[data-database-view]').forEach(link => { link.href = databaseHash(link.dataset.databaseView); });
+        contextContent.replaceChildren(catalog('verkennen'));
+        syncWorkspaceNavigation();
+    };
+    try {
+        // On a direct first visit, start with a table that connects to others.
+        // Tab changes and explicit table links retain the user's selection.
+        if (!route().params.has('table') && !state.recordExploreView.table) {
+            const schema = state.schemaData || await request('schema', {params: {database: scope.database}, signal: scope.signal});
+            if (!scope.live()) return;
+            state.schemaData = schema;
+            const incoming = new Map(schema.tables.map(table => [table.name, 0]));
+            for (const table of schema.tables) for (const key of table.foreign_keys || []) {
+                if ((!key.referenced_schema || key.referenced_schema === schemaName()) && incoming.has(key.referenced_table)) {
+                    incoming.set(key.referenced_table, incoming.get(key.referenced_table) + 1);
+                }
+            }
+            const candidates = schema.tables.filter(table => table.type !== 'view' && table.columns.some(column => column.primary));
+            candidates.sort((a, b) => incoming.get(b.name) - incoming.get(a.name) || a.name.localeCompare(b.name));
+            if (candidates[0]) selectRootTable(candidates[0].name);
+        }
+        if (!scope.live()) return;
+        const explorer = mountRecordExplorer(workspace, {database: scope.database, tables: tables(),
+            initialTable: state.table, state: state.recordExploreView, signal: scope.signal,
+            isLive: scope.live, onSelectTable: selectRootTable});
+        scope.cleanup.push(() => explorer.destroy());
+    } catch (error) {
+        if (error.name !== 'AbortError' && scope.live()) workspace.replaceChildren(errorPanel(error, () => render()));
     }
 }
 

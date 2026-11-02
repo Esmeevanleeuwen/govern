@@ -17,6 +17,7 @@ $governUser = \Govern\Web::user();
     <link rel="stylesheet" href="/assets/schema-help.css">
     <link rel="stylesheet" href="/assets/workspace-navigation.css">
     <link rel="stylesheet" href="/assets/schema-workspace.css">
+    <link rel="stylesheet" href="/assets/record-explorer.css">
     <link rel="stylesheet" href="/assets/selection-pointer.css">
     <link rel="stylesheet" href="/assets/database-workspace.css">
     <link rel="stylesheet" href="/assets/row-editor.css">

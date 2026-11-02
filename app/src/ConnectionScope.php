@@ -80,7 +80,7 @@ final class ConnectionScope
     public static function capabilities(array $config): array
     {
         $write = ($config['engine'] ?? 'mariadb') !== 'postgres';
-        return ['browse' => true, 'structure' => true, 'schema' => true, 'write' => $write, 'query' => $write,
+        return ['browse' => true, 'structure' => true, 'schema' => true, 'explore' => true, 'write' => $write, 'query' => $write,
             'saved_queries' => $write, 'snapshots' => $write, 'phpmyadmin' => $write, 'import' => $write,
             'create_database' => $write, 'ai' => $write, 'context' => $write];
     }
@@ -88,7 +88,7 @@ final class ConnectionScope
     public static function requireAction(array $config, string $action): void
     {
         if (($config['engine'] ?? 'mariadb') === 'postgres'
-            && !in_array($action, ['bootstrap', 'schema', 'structure', 'browse'], true)) {
+            && !in_array($action, ['bootstrap', 'schema', 'structure', 'browse', 'explore'], true)) {
             throw ApiException::fromCode('postgres_read_only', 403);
         }
     }

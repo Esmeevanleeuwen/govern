@@ -23,6 +23,7 @@ use Govern\SavedQueries;
 use Govern\AiService;
 use Govern\DatabaseProvisioner;
 use Govern\ImportInspection;
+use Govern\RecordExplorer;
 
 try {
     $baseConfig = Config::fromEnvironment();
@@ -137,6 +138,17 @@ try {
         return $data;
     };
     switch ($action) {
+        case 'explore':
+            $keyText = Http::text($_GET, 'key', false);
+            $key = null;
+            if ($keyText !== '') {
+                if (strlen($keyText) > RecordExplorer::KEY_BYTES) throw ApiException::fromCode('explore_key_invalid', 422);
+                try { $decodedKey = json_decode($keyText, false, 16, JSON_THROW_ON_ERROR); }
+                catch (\JsonException) { throw ApiException::fromCode('explore_key_invalid', 422); }
+                if (!$decodedKey instanceof \stdClass) throw ApiException::fromCode('explore_key_invalid', 422);
+                $key = get_object_vars($decodedKey);
+            }
+            Http::json((new RecordExplorer($database))->explore(Http::text($_GET, 'table'), $key));
         case 'ai-context':
             Http::json((new AiService($database))->previewContext($input));
         case 'ai-chat':

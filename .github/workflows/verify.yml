@@ -73,6 +73,8 @@ jobs:
           python3 tests/auth-integration.py
       - name: PostgreSQL catalog and read-only permissions
         run: docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/postgres-integration.php --confirm-database=govern_pg
+      - name: Read-only record neighborhoods and exact identities
+        run: docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/record-explorer-integration.php --confirm-database=bestuursatlas --confirm-postgres=govern_pg
       - name: Real database integration
         run: |
           docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/backend_integration.php --confirm-database=bestuursatlas
@@ -89,6 +91,7 @@ jobs:
           python3 tests/smoke.py --base-url http://127.0.0.1:8080
           python3 tests/auth-gateway.py --base-url http://127.0.0.1:8080
           python3 tests/postgres-http.py --base-url http://127.0.0.1:8080 --confirm-database=govern_pg
+          python3 tests/record-explorer-http.py --base-url http://127.0.0.1:8080 --confirm-database=govern_pg
       - name: Browser and visual query builder
         run: |
           node tests/i18n-unit.mjs
@@ -99,6 +102,7 @@ jobs:
           node tests/schema-model-unit.mjs
           node tests/schema-navigation-unit.mjs
           node tests/selection-content-unit.mjs
+          node tests/record-explorer-unit.mjs
           npm install --no-save --ignore-scripts --prefix "$RUNNER_TEMP/govern-browser" playwright@1.62.1
           export PLAYWRIGHT_MODULE="$RUNNER_TEMP/govern-browser/node_modules/playwright"
           BROWSER_BIN="$(command -v google-chrome)"
@@ -111,6 +115,7 @@ jobs:
             tests/postgres-smoke.mjs \
             tests/postgres-cached-api-smoke.mjs \
             tests/postgres-demo-smoke.mjs \
+            tests/record-explorer-smoke.mjs \
             tests/database-import-smoke.mjs \
             tests/frontend-smoke.mjs \
             tests/query-builder-smoke.mjs \
