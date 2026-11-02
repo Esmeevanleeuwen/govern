@@ -78,6 +78,13 @@ with tempfile.TemporaryDirectory(prefix='govern-auth-http-') as temporary:
             for action in ('bootstrap', 'databases', 'schema', 'context', 'snapshots', 'download-snapshot', 'ai-status'):
                 code, data, _ = request(owner, '/api.php?action=' + action)
                 check(code == 401 and data['error_code'] == 'auth_required', f'Guest data route {action} is denied before any database work.')
+            # Opening a link from an external page is an ordinary browser
+            # document navigation. It must reach the sign-in form, not a 503.
+            document_navigation = {'Sec-Fetch-Site': 'cross-site', 'Sec-Fetch-Mode': 'navigate', 'Sec-Fetch-Dest': 'document'}
+            for path in ('/workspace.php', '/account.php'):
+                code, document, _ = request(owner, path, headers=document_navigation)
+                check(code == 200 and 'data-account-page="auth"' in document,
+                      f'External guest navigation to {path} follows the normal login redirect.')
             registration = {'name': 'Test Owner', 'email': 'owner@example.test', 'password': 'test-only passphrase 8392'}
             check(api(owner, 'register', registration)[0] == 403, 'Registration requires a valid CSRF token.')
             check(api(owner, 'register', registration, csrf, {'Origin': 'https://untrusted.example'})[0] == 403, 'Cross-origin registration is rejected.')
@@ -88,6 +95,32 @@ with tempfile.TemporaryDirectory(prefix='govern-auth-http-') as temporary:
             csrf = body['data']['csrf']
             check(old_session != next(c.value for c in owner_cookies if c.name == 'govern_session'), 'Login regenerates the browser session ID.')
             check(request(owner, '/auth-check.php')[0] == 204, 'The native phpMyAdmin gate accepts the approved owner.')
+
+            # Supplying the same metadata with an authenticated test cookie
+            # exercises the HTML boundary independently of browser SameSite
+            # cookie handling. APIs never opt into this HTML-only exception.
+            for path, marker in (('/workspace.php', 'class="app-shell"'), ('/account.php', 'data-account-page="account"')):
+                code, document, _ = request(owner, path, headers=document_navigation)
+                check(code == 200 and marker in document, f'External GET document navigation to {path} renders the signed-in page.')
+                for metadata in (
+                    {'Sec-Fetch-Site': 'cross-site', 'Sec-Fetch-Mode': 'cors', 'Sec-Fetch-Dest': 'empty'},
+                    {'Sec-Fetch-Site': 'cross-site', 'Sec-Fetch-Mode': 'navigate', 'Sec-Fetch-Dest': 'iframe'},
+                    {'Sec-Fetch-Site': 'cross-site'},
+                ):
+                    check(request(owner, path, headers=metadata)[0] == 403,
+                          f'Cross-site fetch/embed/missing navigation metadata cannot open {path}.')
+                check(request(owner, path, {}, csrf, document_navigation)[0] == 403,
+                      f'A cross-site POST cannot use the document-navigation exception for {path}.')
+                check(request(owner, path, headers={**document_navigation, 'Origin': 'https://untrusted.example'})[0] == 403,
+                      f'The Origin check remains enforced for {path} document navigation.')
+            for path in ('/api.php?action=bootstrap', '/auth-api.php?action=status', '/auth-check.php'):
+                code, rejected, _ = request(owner, path, headers=document_navigation)
+                check(code == 403 and (not isinstance(rejected, dict) or rejected.get('error_code') == 'same_window_required'),
+                      f'The HTML exception never permits cross-site API/gate navigation to {path}.')
+            for path in ('/api.php?action=query', '/auth-api.php?action=logout'):
+                code, rejected, _ = request(owner, path, {}, csrf, document_navigation)
+                check(code == 403 and rejected.get('error_code') == 'same_window_required',
+                      f'Cross-site API POST {path} remains blocked even with a valid token.')
 
             guest, _ = browser()
             guest_csrf = api(guest, 'status')[1]['data']['csrf']

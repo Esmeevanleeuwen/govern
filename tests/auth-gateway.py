@@ -38,8 +38,8 @@ def main():
             raise AssertionError(message)
         checks.append(message)
 
-    def request(path, payload=None, csrf=None):
-        headers = {"Accept-Language": "en"}
+    def request(path, payload=None, csrf=None, headers=None):
+        headers = {"Accept-Language": "en", **(headers or {})}
         data = None
         if payload is not None:
             data = json.dumps(payload).encode()
@@ -52,6 +52,21 @@ def main():
         with response:
             body = response.read().decode("utf-8", errors="replace")
             return response.status, body, response.headers
+
+    def cache_directives(headers):
+        return {directive.strip().lower() for value in headers.get_all("Cache-Control", [])
+                for directive in value.split(",")}
+
+    # Cover entry modules and imported modules: refreshing only app.js is not
+    # enough when api.js still has an older engine-selection contract cached.
+    for path in ("/assets/app.js", "/assets/api.js", "/assets/styles.css"):
+        code, body, headers = request(path)
+        check(code == 200 and bool(body), "The gateway serves " + path)
+        check("no-cache" in cache_directives(headers), "Browsers must revalidate " + path + " after an update")
+        if headers.get("ETag"):
+            code, _, validated = request(path, headers={"If-None-Match": headers["ETag"]})
+            check(code == 304 and "no-cache" in cache_directives(validated),
+                  "Conditional asset responses retain the revalidation policy for " + path)
 
     native = "/phpmyadmin/index.php?route=%2F&server=1&lang=en"
 
@@ -80,6 +95,14 @@ def main():
 
     session = ensure_authenticated(client, base)
     check(session["user"]["role"] == "owner", "The dedicated approved owner signs in through the real endpoint")
+    code, body, headers = request("/api.php?action=databases")
+    check(code == 200 and json.loads(body)["ok"], "The approved owner can still list database connections")
+    check("no-store" in cache_directives(headers) and "no-cache" not in cache_directives(headers),
+          "The asset policy leaves the database API's no-store response unchanged")
+    code, body, headers = request("/workspace.php")
+    check(code == 200 and "app-shell" in body, "The approved owner can still load the workspace document")
+    check("no-store" in cache_directives(headers) and "no-cache" not in cache_directives(headers),
+          "The asset policy leaves the workspace's no-store response unchanged")
     code, body, _ = request(native)
     check(code == 200 and "phpMyAdmin" in body, "The real gateway serves native phpMyAdmin to the approved owner")
     code, body, _ = request("/auth-api.php?action=logout", {}, session["csrf"])

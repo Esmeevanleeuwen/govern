@@ -37,6 +37,13 @@ and `?mode=register` render the account forms; `/account.php` requires login and
 contains account/logout controls and owner-only approval controls. HTML page
 guards redirect unauthenticated requests with 303; JSON routes return 401.
 
+Workspace and account HTML pages accept a cross-site GET only for a top-level
+document navigation (`Sec-Fetch-Mode: navigate`, `Sec-Fetch-Dest: document`).
+This permits opening a local workspace link from another site. It does not
+relax API, Origin, Host or CSRF checks; cross-site fetches, embeds and POSTs
+remain rejected. Browser assets under `/assets/` require cache revalidation so
+updated modules do not keep sending an older database-selection format.
+
 All account endpoints use the ordinary success/error envelope and bilingual
 error fields. Public user records are
 `{id:integer,name,email,role:"owner"|"member",status:"active"|"pending",created_at}`;

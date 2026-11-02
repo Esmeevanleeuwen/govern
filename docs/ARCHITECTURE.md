@@ -47,6 +47,13 @@ Nginx controleert ieder `/phpmyadmin/`-verzoek met een interne `auth_request`
 naar `auth-check.php`. Dat geldt ook voor uploads, downloads en AJAX-verzoeken;
 een nog geldige native phpMyAdmin-cookie geeft zonder Govern-sessie geen toegang.
 
+Alleen de HTML-paginagrens staat een cross-site GET voor een documentnavigatie
+toe. Daardoor opent een werkpleklink vanuit een andere website zonder onjuiste
+503. De API houdt zijn afzonderlijke cross-sitegrens en Origin/CSRF-controles.
+`Web` logt de stabiele foutcode en bewaart de HTTP-status van een `ApiException`.
+Nginx laat assets bij ieder gebruik hervalideren; API/HTML-cachebeleid blijft
+afkomstig van de bestaande PHP-antwoorden.
+
 Beide startbestanden voeren na `docker compose up --wait` eerst `nginx -t` en
 daarna `nginx -s reload` in de gateway uit. Een gewijzigd bind-mounted bestand
 zou bestaande workers anders niet bijwerken. Bij start-/configuratie-/reloadfouten
