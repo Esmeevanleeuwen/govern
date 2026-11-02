@@ -47,8 +47,21 @@ const mapResponse = (scope, relation) => page.waitForResponse(response => {
 });
 const selectScope = async value => {
     await page.locator('#database-select').selectOption(value);
-    await page.waitForFunction(key => document.querySelector('#database-select')?.value === key
-        && document.querySelector('#record-map-table') && !document.querySelector('#refresh-app')?.disabled, value);
+    try {
+        await page.waitForFunction(key => document.querySelector('#database-select')?.value === key
+            && !document.querySelector('#database-select')?.disabled && !document.querySelector('#refresh-app')?.disabled, value);
+        // Each database restores its own last Database view; a new scope starts in Data.
+        if (!await page.locator('#record-map-table').count()) await page.locator('[data-database-view="verbanden"]').click();
+        await page.locator('#record-map-table').waitFor();
+    } catch (error) {
+        console.error('Record-map scope navigation failed:', {expected: value, ...await page.evaluate(() => ({
+            url: location.href, selected: document.querySelector('#database-select')?.value,
+            switching: document.querySelector('#database-select')?.disabled,
+            refreshing: document.querySelector('#refresh-app')?.disabled,
+            mapPresent: Boolean(document.querySelector('#record-map-table')),
+        }))});
+        throw error;
+    }
 };
 const seed = label => page.locator('#record-map-records [data-map-record]').filter({hasText: label}).first();
 const selectSeed = async label => {
