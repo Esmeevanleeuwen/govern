@@ -131,6 +131,24 @@ beschrijft de geladen buurt en haar beperkingen; verder verkennen vraagt een
 nieuwe buurt op. Er is geen blijvende index, aparte grafiekdatabase of nieuwe
 frameworklaag nodig.
 
+### Begeleide kijkmodus
+
+`explorer-guide.js` voegt boven dezelfde recordverkenner een begeleide
+presentatielaag toe. Vaste vraagknoppen filteren de al geladen records, tonen
+de uitleg van een echte edge of halen via de bestaande GET-actie een nieuwe
+buurt op. Aantallen gebruiken verschillende node-ID's; parallelle verwijzingen
+tellen hetzelfde item niet dubbel. Er is geen AI-interpretatie of vrije SQL.
+
+Leesbare aliassen veranderen alleen de weergave van schema-identifiers.
+Bronlabels, exacte sleutels, edge-richting en queryparameters blijven behouden.
+Technische details zijn op verzoek beschikbaar; Detailed herstelt de originele
+bediening met dezelfde tijdelijke selectie en filters. Beide modi gebruiken
+dezelfde scope- en annuleringscontroles.
+
+De browservoorkeur `govern.explorer.mode.v1` bevat uitsluitend `guided` of
+`detailed`. Bij geblokkeerde opslag blijft de keuze voor deze pagina in geheugen.
+Records, sleutels en antwoorden worden hiervoor niet in localStorage gezet.
+
 ### Bestaande MariaDB-werkplek
 
 De geselecteerde werkdatabase is de bron voor zowel Govern als phpMyAdmin.

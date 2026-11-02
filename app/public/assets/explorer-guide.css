@@ -1,0 +1,37 @@
+/* Guided questions use the same materials as the record explorer. */
+.explorer-guide { min-width: 0; margin: 0 0 20px; padding: 16px; border-radius: 20px; background: var(--g-glass); box-shadow: var(--g-control-depth); }
+.explorer-guide-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.explorer-guide h3 { margin: 0; font-size: 16px; line-height: 1.4; }
+.explorer-guide-steps { display: flex; flex-wrap: wrap; gap: 8px 14px; margin: 0; padding: 0; list-style: none; }
+.explorer-guide-steps li { display: flex; align-items: center; gap: 6px; color: var(--g-muted); font-size: 12px; }
+.explorer-guide-steps li > span { display: inline-grid; place-items: center; width: 22px; height: 22px; flex: 0 0 22px; border-radius: 50%; color: var(--g-accent-text); background: var(--g-soft); font-size: 12px; font-weight: 600; }
+.explorer-guide-summary { margin: 12px 0; font-size: 13px; line-height: 1.5; }
+.explorer-guide-choices { display: flex; flex-wrap: wrap; gap: 8px; }
+.explorer-guide-question { min-height: 42px; max-width: 100%; white-space: normal; text-align: left; font-size: 12px; }
+.explorer-guide-more { margin-top: 14px; }
+.explorer-guide-more > summary { width: fit-content; cursor: pointer; font-size: 12px; color: var(--g-accent-text); }
+.explorer-guide-explain { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: end; gap: 10px; margin-top: 12px; }
+.explorer-guide-field { display: flex; flex-direction: column; min-width: 0; gap: 6px; font-size: 12px; color: var(--g-muted); }
+.explorer-guide-field .input { width: 100%; max-width: 100%; min-width: 0; margin: 0; }
+.explorer-guide-explain .button { min-height: 42px; white-space: normal; font-size: 12px; }
+.explorer-guide-limited { margin: 12px 0 0; color: var(--g-muted); font-size: 12px; line-height: 1.5; }
+.explorer-guide-mode { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 4px; border-radius: 13px; background: var(--g-glass); }
+.explorer-guide-mode .button { min-height: 38px; padding: 8px 12px; background: transparent; box-shadow: none; }
+.explorer-guide-mode .button[aria-pressed="true"] { background: var(--g-dense-frost); color: var(--g-accent-text); box-shadow: var(--g-control-depth); }
+.explorer-guide-technical { min-width: 0; margin-top: 16px; }
+.explorer-guide-technical > summary { cursor: pointer; color: var(--g-accent-text); font-size: 12px; }
+.explorer-guide-technical > div { margin-top: 12px; }
+@media (max-width: 760px) {
+    .explorer-guide-heading { align-items: flex-start; }
+    .explorer-guide-explain { grid-template-columns: minmax(0, 1fr); }
+    .explorer-guide-explain .input { font-size: 16px; }
+    .explorer-guide-explain .button { width: 100%; }
+}
+@media (max-width: 440px) {
+    .explorer-guide { padding: 14px 12px; }
+    .explorer-guide-steps { gap: 6px 10px; }
+    .explorer-guide-choices { display: grid; grid-template-columns: minmax(0, 1fr); }
+    .explorer-guide-question { width: 100%; }
+}
+@media (pointer: coarse) { .explorer-guide-question, .explorer-guide-explain .button, .explorer-guide-mode .button { min-height: 44px; } }
+:root[data-reduce-transparency="true"] .explorer-guide { background: var(--g-panel); }

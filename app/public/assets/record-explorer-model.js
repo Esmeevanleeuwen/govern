@@ -13,7 +13,7 @@ export function tableColor(table) {
     return [...String(table)].reduce((hash, letter) => (hash * 31 + letter.codePointAt(0)) >>> 0, 0) % 6;
 }
 /** Keep the focus as context, even when its text does not match. */
-export function visibleNeighborhood(data, {search = '', enabledRelations = null} = {}) {
+export function visibleNeighborhood(data, {search = '', enabledRelations = null, searchLabels = () => []} = {}) {
     const nodes = data.nodes || [], edges = data.edges || [], relations = data.relations || [];
     const enabled = enabledRelations === null ? null : new Set(enabledRelations);
     const allowed = new Set(relations.filter(relation => enabled === null || enabled.has(relation.id)).map(relationKey));
@@ -22,7 +22,7 @@ export function visibleNeighborhood(data, {search = '', enabledRelations = null}
     for (const edge of eligibleEdges) { connected.add(edge.source); connected.add(edge.target); }
     const query = search.trim().toLocaleLowerCase();
     const matching = new Set(nodes.filter(node => connected.has(node.id) && (!query ||
-        [node.label, node.table, ...Object.values(node.values || {}).map(valueText)]
+        [node.label, node.table, ...searchLabels(node), ...Object.values(node.values || {}).map(valueText)]
             .join(' ').toLocaleLowerCase().includes(query))).map(node => node.id));
     const visible = new Set([...matching, data.center]);
     return {nodes: nodes.filter(node => visible.has(node.id)),

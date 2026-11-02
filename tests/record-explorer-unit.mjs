@@ -18,6 +18,8 @@ assert.deepEqual(visibleNeighborhood(data, {enabledRelations: ['contacts']}).nod
 assert.deepEqual(visibleNeighborhood(data, {enabledRelations: []}).nodes.map(node => node.id), ['root']);
 assert.equal(visibleNeighborhood(data, {search: 'no match'}).matching.size, 0);
 assert.equal(visibleNeighborhood(data, {search: '123456789012345678901234.12'}).matching.has('root'), true);
+assert.deepEqual(visibleNeighborhood(data, {search: 'service systems', searchLabels: node => node.id === 'portal' ? ['Service systems'] : []}).nodes.map(node => node.id),
+    ['root', 'portal'], 'Optional readable aliases are searchable without rewriting source identifiers.');
 assert.equal(valueText('9007199254740993'), '9007199254740993');
 assert.equal(valueText(false), 'false'); assert.equal(valueText(0), '0'); assert.equal(valueText(null), 'NULL');
 assert.equal(JSON.stringify(data), before, 'Filtering never mutates records, exact keys or relationships.');

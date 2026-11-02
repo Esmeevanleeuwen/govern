@@ -2,6 +2,7 @@ import {request} from './api.js';
 import {el, icon, button, badge, loading, empty, errorPanel, notice, number} from './ui.js';
 import {t, hasMessage} from './i18n.js';
 import {recordPositions, visibleNeighborhood, valueText, tableColor, RECORD_WIDTH, RECORD_HEIGHT} from './record-explorer-model.js';
+import {friendlyName, recordLabel, connectedGroups, getExplorerMode, setExplorerMode, connectionDescription, renderExplorerGuide} from './explorer-guide.js';
 import './explorer-messages.js';
 
 let instanceId = 0;
@@ -16,7 +17,7 @@ const short = (text, length) => [...String(text)].length > length ? [...String(t
 
 /** Bounded, catalog-derived record neighborhoods; never a writer connection. */
 export function mountRecordExplorer(root, {database, tables = [], state = {}, initialTable,
-    signal, isLive = () => true, onSelectTable = () => {}} = {}) {
+    signal, isLive = () => true, onSelectTable = () => {}, onExperienceChange = () => {}} = {}) {
     const names = new Set(tables.map(table => table.name));
     const initial = names.has(initialTable) ? initialTable : names.has(state.table) ? state.table : tables[0]?.name || '';
     if (state.scope_key !== database || state.table !== initial) Object.assign(state, {
@@ -26,6 +27,10 @@ export function mountRecordExplorer(root, {database, tables = [], state = {}, in
     state.pan = state.pan && Number.isFinite(state.pan.x) && Number.isFinite(state.pan.y) ? state.pan : {x: 0, y: 0};
     if (!Array.isArray(state.enabledRelations)) state.enabledRelations = null;
     let destroyed = false, busy = false, controller, revision = 0, data = null, visible, graph, bounds, pointer;
+    let experience = getExplorerMode();
+    const guided = () => experience === 'guided';
+    const categoryName = name => guided() ? friendlyName(name) : name;
+    const itemName = node => guided() ? recordLabel(node, node.table || state.table) : node.label;
     const nodeElements = new Map(), edgeElements = new Map(), rows = new Map();
     const markerId = 'explorer-arrow-' + ++instanceId;
     const live = () => !destroyed && !signal?.aborted && isLive();
@@ -36,6 +41,7 @@ export function mountRecordExplorer(root, {database, tables = [], state = {}, in
         maxlength: 200, placeholder: t('app.explorer.filterPlaceholder'), 'aria-label': t('app.explorer.filter')});
     const refresh = button(t('app.explorer.refresh'), () => load(state.table, state.rootKey), {symbol: 'refresh', className: 'button-small'});
     const errorRoot = el('div', {class: 'record-explorer-error'});
+    const guideRoot = el('div', {class: 'record-explorer-guide-root'});
     const summary = el('div', {class: 'record-explorer-summary', role: 'status', 'aria-live': 'polite'});
     const relationRoot = el('fieldset', {class: 'record-explorer-relations'});
     const relationSummary = el('summary', {}, t('app.explorer.relationships'));
@@ -55,11 +61,14 @@ export function mountRecordExplorer(root, {database, tables = [], state = {}, in
     const drawer = el('aside', {id: 'explorer-detail', class: 'record-explorer-detail', 'aria-label': t('app.explorer.detail')});
     const limitsRoot = el('details', {class: 'record-explorer-limits'});
     const field = (label, input) => el('label', {class: 'record-explorer-field'}, el('span', {}, label), input);
+    const tableField = field(t('app.explorer.table'), tableSelect), recordField = field(t('app.explorer.record'), recordSelect), searchField = field(t('app.explorer.filter'), search);
+    const guidedButton = button(t('app.explorerGuide.guided'), () => changeExperience('guided'), {id: 'explorer-mode-guided', 'aria-pressed': String(guided())});
+    const detailedButton = button(t('app.explorerGuide.detailed'), () => changeExperience('detailed'), {id: 'explorer-mode-detailed', 'aria-pressed': String(!guided())});
     const shell = el('section', {class: 'record-explorer', 'data-record-explorer': '', 'aria-busy': 'false'},
         el('div', {class: 'record-explorer-introduction'}, el('div', {}, el('p', {class: 'eyebrow'}, t('app.explorer.eyebrow')),
             el('p', {}, t('app.explorer.introduction'))), badge(t('app.explorer.readOnly'), 'badge-blue')),
-        el('div', {class: 'record-explorer-controls'}, field(t('app.explorer.table'), tableSelect), field(t('app.explorer.record'), recordSelect),
-            field(t('app.explorer.filter'), search), refresh), errorRoot, summary, relationPanel,
+        el('div', {class: 'record-explorer-mode', role: 'group', 'aria-label': t('app.explorerGuide.modeLabel')}, guidedButton, detailedButton),
+        el('div', {class: 'record-explorer-controls'}, tableField, recordField, searchField, refresh), errorRoot, summary, guideRoot, relationPanel,
         el('div', {class: 'record-explorer-layout'}, el('div', {class: 'record-explorer-main'}, graphCard, recordsRoot), drawer), limitsRoot);
     root.replaceChildren(shell); graphRoot.append(loading(t('app.explorer.loading')));
     drawer.append(el('p', {class: 'eyebrow'}, t('app.explorer.detail')), el('p', {class: 'muted'}, t('app.explorer.chooseRecord')));
@@ -70,11 +79,39 @@ export function mountRecordExplorer(root, {database, tables = [], state = {}, in
     });
     search.addEventListener('input', () => { state.search = search.value; draw(); });
     signal?.addEventListener('abort', destroy, {once: true});
+    function updateExperience() {
+        shell.dataset.experience = experience;
+        guidedButton.setAttribute('aria-pressed', String(guided())); detailedButton.setAttribute('aria-pressed', String(!guided()));
+        relationPanel.hidden = guided(); guideRoot.hidden = !guided();
+        for (const [wrapper, input, easy, detailed] of [[tableField, tableSelect, 'category', 'table'], [recordField, recordSelect, 'item', 'record'], [searchField, search, 'search', 'filter']]) {
+            const text = t('app.' + (guided() ? 'explorerGuide.' + easy : 'explorer.' + detailed));
+            wrapper.firstElementChild.textContent = text; input.setAttribute('aria-label', text);
+        }
+        for (const option of tableSelect.options) option.textContent = categoryName(option.value);
+        shell.querySelector('.record-explorer-introduction .eyebrow').hidden = guided();
+        shell.querySelector('.record-explorer-introduction > div > p:last-child').textContent = t(guided() ? 'app.explorerGuide.introduction' : 'app.explorer.introduction');
+        graphCard.querySelector('h3').textContent = t(guided() ? 'app.explorerGuide.graph' : 'app.explorer.graph');
+        graphCard.querySelector('.record-explorer-section-heading p').textContent = t(guided() ? 'app.explorerGuide.graphHelp' : 'app.explorer.graphHelp');
+        if (data) updateCandidates();
+    }
+    function changeExperience(mode) {
+        if (!live() || !['guided', 'detailed'].includes(mode)) return;
+        experience = mode; setExplorerMode(mode); updateExperience();
+        if (data) { draw(); drawLimits(); }
+        onExperienceChange(mode);
+    }
+    function updateCandidates() {
+        const candidates = [...data.candidates], center = data.nodes.find(node => node.id === data.center);
+        if (center && !candidates.some(node => node.id === center.id)) candidates.unshift(center);
+        recordSelect.replaceChildren(...candidates.map(node => el('option', {value: node.id, selected: node.id === data.center}, itemName(node))));
+    }
     function setBusy(value) {
         busy = value; shell.setAttribute('aria-busy', String(value));
         tableSelect.disabled = value || !tables.length; recordSelect.disabled = value || !data?.candidates?.length;
         refresh.disabled = value || !state.table; search.disabled = value || !data;
         for (const input of relationRoot.querySelectorAll('input,button')) input.disabled = value;
+        guideRoot.inert = value;
+        guideRoot.setAttribute('aria-disabled', String(value));
         if (value) summary.replaceChildren(el('span', {}, t('app.explorer.loading')));
     }
     async function load(table, key = null, clear = false, focusCenter = false) {
@@ -91,11 +128,12 @@ export function mountRecordExplorer(root, {database, tables = [], state = {}, in
             if (!data.nodes.some(node => node.id === state.selected)) state.selected = data.center;
             if (!data.edges.some(edge => edge.id === state.selectedEdge)) state.selectedEdge = '';
             tableSelect.value = state.table; search.value = state.search;
-            const candidates = [...data.candidates], center = data.nodes.find(node => node.id === data.center);
-            if (center && !candidates.some(node => node.id === center.id)) candidates.unshift(center);
-            recordSelect.replaceChildren(...candidates.map(node => el('option', {value: node.id, selected: node.id === data.center}, node.label)));
+            updateCandidates();
             drawRelations(); draw(); drawLimits(); onSelectTable(data.table);
-            if (focusCenter) nodeElements.get(data.center)?.focus({preventScroll: true});
+            if (focusCenter) {
+                if (guided()) graphRoot.scrollIntoView({block: 'center'});
+                nodeElements.get(data.center)?.focus({preventScroll: true});
+            }
         } catch (error) {
             if (!live() || current !== revision || error.name === 'AbortError') return;
             tableSelect.value = state.table;
@@ -128,16 +166,68 @@ export function mountRecordExplorer(root, {database, tables = [], state = {}, in
     }
     function draw() {
         if (!data || !live()) return;
-        visible = visibleNeighborhood(data, state);
+        visible = visibleNeighborhood(data, guided() ? {...state, searchLabels: node => [categoryName(node.table), itemName(node)]} : state);
         if (!visible.edges.some(edge => edge.id === state.selectedEdge)) state.selectedEdge = '';
         if (!visible.nodes.some(node => node.id === state.selected)) state.selected = data.center;
-        drawGraph(); drawTable(); updateSelection(); updateSummary();
+        drawGraph(); drawTable(); updateSelection(); updateSummary(); drawGuide();
+    }
+    function drawGuide() {
+        if (!guided() || !data) return;
+        const active = document.activeElement, hadFocus = guideRoot.contains(active);
+        const activeId = active?.id, activeGroup = active?.getAttribute?.('data-guide-group');
+        const previousChoice = guideRoot.querySelector('#explorer-guide-item')?.value;
+        const previousQuestions = guideRoot.querySelector('#explorer-guide-questions');
+        if (previousQuestions) state.guideQuestionsOpen = previousQuestions.open;
+        const resetFilters = () => { state.enabledRelations = null; state.search = ''; search.value = ''; state.selectedEdge = ''; };
+        guideRoot.replaceChildren(renderExplorerGuide(data, {
+            selectedId: previousChoice || state.selected,
+            onShowAll: () => {
+                if (busy || !live()) return;
+                resetFilters(); drawRelations(); draw();
+            },
+            onShowGroup: group => {
+                if (busy || !live()) return;
+                const chosen = connectedGroups(data).find(item => item.table === group.table);
+                if (!chosen) return;
+                resetFilters(); state.enabledRelations = [...chosen.relationIds]; drawRelations(); draw();
+            },
+            onExplain: id => {
+                if (busy || !live()) return;
+                const edge = data.edges.find(item => item.source === id && item.target === data.center || item.target === id && item.source === data.center);
+                if (!edge) return;
+                resetFilters(); drawRelations(); draw(); selectEdge(edge.id, true);
+                drawer.scrollIntoView({block: 'nearest'});
+            },
+            onFollow: id => {
+                if (busy || !live()) return;
+                const node = data.nodes.find(item => item.id === id);
+                if (node) load(node.table, node.key, true, true);
+            },
+        }));
+        const questions = guideRoot.querySelector('#explorer-guide-questions');
+        if (questions) {
+            questions.open = Boolean(state.guideQuestionsOpen);
+            questions.addEventListener('toggle', () => { state.guideQuestionsOpen = questions.open; });
+        }
+        const groups = connectedGroups(data), enabled = state.enabledRelations === null ? null : new Set(state.enabledRelations);
+        for (const control of guideRoot.querySelectorAll('[data-guide-group]')) {
+            const group = groups.find(item => item.table === control.dataset.guideGroup);
+            control.setAttribute('aria-pressed', String(!!enabled && !state.search && enabled.size === group.relationIds.length && group.relationIds.every(id => enabled.has(id))));
+        }
+        guideRoot.querySelector('[data-guide-all]')?.setAttribute('aria-pressed', String(enabled === null && !state.search));
+        guideRoot.inert = busy;
+        if (hadFocus) {
+            const replacement = activeId ? guideRoot.querySelector('#' + CSS.escape(activeId))
+                : activeGroup !== null ? [...guideRoot.querySelectorAll('[data-guide-group]')].find(control => control.dataset.guideGroup === activeGroup) : null;
+            replacement?.focus({preventScroll: true});
+        }
     }
     function updateSummary() {
         if (!data || busy) return;
-        summary.replaceChildren(el('strong', {}, t('app.explorer.recordCount', {shown: number(visible?.nodes.length || 0), loaded: number(data.nodes.length)})),
-            el('span', {}, t('app.explorer.linkCount', {count: number(visible?.edges.length || 0)})),
-            el('span', {class: 'muted'}, t('app.explorer.queryTime', {time: number(Math.round(Number(data.elapsed_ms) || 0))})));
+        const content = [el('strong', {}, t(guided() ? 'app.explorerGuide.visibleItems' : 'app.explorer.recordCount', {shown: number(visible?.nodes.length || 0), loaded: number(data.nodes.length)})),
+            el('span', {}, t(guided() ? 'app.explorerGuide.visibleLinks' : 'app.explorer.linkCount', {count: number(visible?.edges.length || 0)}))];
+        if (!guided()) content.push(el('span', {class: 'muted'}, t('app.explorer.queryTime', {time: number(Math.round(Number(data.elapsed_ms) || 0))})));
+        summary.replaceChildren(...content);
         if (data.partial) summary.append(el('span', {class: 'record-explorer-partial'}, icon('info'), t('app.explorer.partial')));
     }
     function activate(element, callback) {
@@ -150,7 +240,7 @@ export function mountRecordExplorer(root, {database, tables = [], state = {}, in
         nodeElements.clear(); edgeElements.clear(); graph = null;
         if (!visible.nodes.length) {
             const keyless = data.omitted.some(item => item.code === 'keyless' || item.code === 'unsupported_key');
-            graphRoot.replaceChildren(empty(t(keyless ? 'app.explorer.keylessTitle' : 'app.explorer.emptyTitle'), t(keyless ? 'app.explorer.keylessHelp' : 'app.explorer.emptyHelp'))); return;
+            graphRoot.replaceChildren(empty(t(keyless ? guided() ? 'app.explorerGuide.unavailableTitle' : 'app.explorer.keylessTitle' : 'app.explorer.emptyTitle'), t(keyless ? guided() ? 'app.explorerGuide.unavailableHelp' : 'app.explorer.keylessHelp' : 'app.explorer.emptyHelp'))); return;
         }
         const layout = recordPositions(visible.nodes, data.center); bounds = layout.bounds;
         graph = svg('svg', {class: 'record-explorer-graph', tabindex: '0', 'aria-label': t('app.explorer.graph'), preserveAspectRatio: 'xMidYMid meet'});
@@ -169,8 +259,8 @@ export function mountRecordExplorer(root, {database, tables = [], state = {}, in
                 ? `M ${source.x - 40} ${source.y - RECORD_HEIGHT / 2} C ${source.x - 140} ${source.y - 160}, ${source.x + 140} ${source.y - 160}, ${source.x + 40} ${source.y - RECORD_HEIGHT / 2}`
                 : `M ${start.x} ${start.y} Q ${(start.x + end.x) / 2 - dy / length * bend} ${(start.y + end.y) / 2 + dx / length * bend} ${end.x} ${end.y}`;
             const group = svg('g', {class: 'record-explorer-edge', role: 'button', tabindex: '0', 'data-explorer-edge': edge.id,
-                'aria-label': t('app.explorer.inspectConnection', {name: edge.name}), 'aria-pressed': 'false'});
-            group.append(svg('title', {}, edge.name + ': ' + edge.source_table + ' → ' + edge.target_table),
+                'aria-label': guided() ? t('app.explorerGuide.inspectLink', {label: categoryName(edge.source_table) + ' → ' + categoryName(edge.target_table)}) : t('app.explorer.inspectConnection', {name: edge.name}), 'aria-pressed': 'false'});
+            group.append(svg('title', {}, guided() ? categoryName(edge.source_table) + ' → ' + categoryName(edge.target_table) : edge.name + ': ' + edge.source_table + ' → ' + edge.target_table),
                 svg('path', {d: path, class: 'record-explorer-edge-hit'}), svg('path', {d: path, class: 'record-explorer-edge-line', 'marker-end': 'url(#' + markerId + ')'}));
             activate(group, () => selectEdge(edge.id)); edgeLayer.append(group); edgeElements.set(edge.id, group);
         });
@@ -179,10 +269,10 @@ export function mountRecordExplorer(root, {database, tables = [], state = {}, in
             const group = svg('g', {class: 'record-explorer-node', role: 'button', tabindex: '0',
                 transform: `translate(${position.x - RECORD_WIDTH / 2} ${position.y - RECORD_HEIGHT / 2})`, 'data-explorer-node': node.id,
                 'data-color': tableColor(node.table), 'data-focus': String(node.id === data.center), 'data-context': String(visible.context.has(node.id)),
-                'aria-label': t('app.explorer.inspect', {label: node.label}), 'aria-pressed': 'false'});
-            group.append(svg('title', {}, node.label + '\n' + node.table), svg('rect', {width: RECORD_WIDTH, height: RECORD_HEIGHT, rx: 16, class: 'record-explorer-node-surface'}),
-                svg('circle', {cx: 16, cy: 19, r: 4, class: 'record-explorer-node-dot'}), svg('text', {x: 27, y: 23, class: 'record-explorer-node-table'}, short(node.table, 22)),
-                svg('text', {x: 14, y: 49, class: 'record-explorer-node-label'}, short(node.label, 20)));
+                'aria-label': t(guided() ? 'app.explorerGuide.inspectItem' : 'app.explorer.inspect', {label: itemName(node)}), 'aria-pressed': 'false'});
+            group.append(svg('title', {}, itemName(node) + '\n' + categoryName(node.table)), svg('rect', {width: RECORD_WIDTH, height: RECORD_HEIGHT, rx: 16, class: 'record-explorer-node-surface'}),
+                svg('circle', {cx: 16, cy: 19, r: 4, class: 'record-explorer-node-dot'}), svg('text', {x: 27, y: 23, class: 'record-explorer-node-table'}, short(categoryName(node.table), 22)),
+                svg('text', {x: 14, y: 49, class: 'record-explorer-node-label'}, short(itemName(node), 20)));
             activate(group, () => selectNode(node.id)); nodeLayer.append(group); nodeElements.set(node.id, group);
         }
         graph.addEventListener('pointerdown', event => {
@@ -214,18 +304,18 @@ export function mountRecordExplorer(root, {database, tables = [], state = {}, in
     function drawTable() {
         rows.clear();
         const table = el('table', {class: 'data-table record-explorer-table'}, el('caption', {class: 'sr-only'}, t('app.explorer.records')),
-            el('thead', {}, el('tr', {}, [t('app.explorer.recordColumn'), t('app.explorer.tableColumn'), t('app.explorer.linksColumn')].map(label => el('th', {scope: 'col'}, label)))));
+            el('thead', {}, el('tr', {}, [t(guided() ? 'app.explorerGuide.itemColumn' : 'app.explorer.recordColumn'), t(guided() ? 'app.explorerGuide.categoryColumn' : 'app.explorer.tableColumn'), t('app.explorer.linksColumn')].map(label => el('th', {scope: 'col'}, label)))));
         const body = el('tbody');
         for (const node of visible.nodes) {
-            const recordButton = el('button', {type: 'button', class: 'record-explorer-row-button', 'aria-label': t('app.explorer.inspect', {label: node.label}),
+            const recordButton = el('button', {type: 'button', class: 'record-explorer-row-button', 'aria-label': t(guided() ? 'app.explorerGuide.inspectItem' : 'app.explorer.inspect', {label: itemName(node)}),
                 'aria-pressed': 'false', on: {click: () => selectNode(node.id)}}, el('span', {class: 'record-explorer-color-dot', 'data-color': tableColor(node.table)}),
-                el('span', {}, el('strong', {}, node.label), el('small', {class: 'record-explorer-key'}, Object.entries(node.key || {}).map(([key, value]) => key + '=' + valueText(value)).join(' · '))),
-                node.id === data.center ? badge(t('app.explorer.focus')) : null);
-            const row = el('tr', {'data-explorer-row': node.id}, el('td', {}, recordButton), el('td', {class: 'record-explorer-table-name'}, node.table),
+                el('span', {}, el('strong', {}, itemName(node)), guided() ? null : el('small', {class: 'record-explorer-key'}, Object.entries(node.key || {}).map(([key, value]) => key + '=' + valueText(value)).join(' · '))),
+                node.id === data.center ? badge(t(guided() ? 'app.explorerGuide.focus' : 'app.explorer.focus')) : null);
+            const row = el('tr', {'data-explorer-row': node.id}, el('td', {}, recordButton), el('td', {class: 'record-explorer-table-name'}, categoryName(node.table)),
                 el('td', {}, number(visible.edges.filter(edge => edge.source === node.id || edge.target === node.id).length)));
             body.append(row); rows.set(node.id, row);
         }
-        table.append(body); recordsRoot.replaceChildren(el('div', {class: 'record-explorer-section-heading'}, el('h3', {}, t('app.explorer.records'))),
+        table.append(body); recordsRoot.replaceChildren(el('div', {class: 'record-explorer-section-heading'}, el('h3', {}, t(guided() ? 'app.explorerGuide.records' : 'app.explorer.records'))),
             el('div', {class: 'table-scroll', tabindex: '0', 'aria-label': t('app.explorer.records')}, table));
     }
     function selectNode(id, focusDrawer = false) {
@@ -262,26 +352,43 @@ export function mountRecordExplorer(root, {database, tables = [], state = {}, in
         }
         if (selectedEdge) drawEvidence(selectedEdge); else drawRecord(data.nodes.find(node => node.id === state.selected));
     }
-    function valuesList(values) {
+    function valuesList(values, friendly = false) {
         return el('dl', {class: 'record-explorer-values'}, Object.entries(values || {}).map(([name, value]) =>
-            el('div', {}, el('dt', {}, name), el('dd', {class: value === null ? 'null-value' : ''}, valueText(value)))));
+            el('div', {}, el('dt', {}, friendly ? friendlyName(name) : name), el('dd', {class: value === null ? 'null-value' : ''}, valueText(value)))));
+    }
+    function technicalDetails(...children) {
+        const details = el('details', {'data-explorer-technical': '', class: 'record-explorer-technical', ...(state.technicalOpen ? {open: true} : {})},
+            el('summary', {}, t('app.explorerGuide.technicalDetails')), children);
+        details.addEventListener('toggle', () => { if (details.isConnected) state.technicalOpen = details.open; });
+        return details;
     }
     function drawRecord(node) {
-        drawer.replaceChildren(el('p', {class: 'eyebrow'}, t('app.explorer.detail')));
+        drawer.replaceChildren(el('p', {class: 'eyebrow'}, t(guided() ? 'app.explorerGuide.detail' : 'app.explorer.detail')));
         if (!node) { drawer.removeAttribute('data-explorer-selected'); drawer.append(el('p', {class: 'muted'}, t('app.explorer.chooseRecord'))); return; }
         drawer.setAttribute('data-explorer-selected', node.id);
-        drawer.append(el('p', {class: 'record-explorer-detail-table'}, node.table), el('h3', {tabindex: '-1'}, node.label),
-            button(t(node.id === data.center ? 'app.explorer.alreadyFocus' : 'app.explorer.expand'), () => load(node.table, node.key, true, true),
-                {id: 'explorer-expand', symbol: 'network', disabled: busy || node.id === data.center}),
-            el('h4', {}, t('app.explorer.key')), valuesList(node.key), el('h4', {}, t('app.explorer.fields')), valuesList(node.values));
+        drawer.append(el('p', {class: 'record-explorer-detail-table'}, categoryName(node.table)), el('h3', {tabindex: '-1'}, itemName(node)),
+            button(t(node.id === data.center ? guided() ? 'app.explorerGuide.alreadyFocus' : 'app.explorer.alreadyFocus' : guided() ? 'app.explorerGuide.follow' : 'app.explorer.expand'), () => load(node.table, node.key, true, true),
+                {id: 'explorer-expand', symbol: 'network', disabled: busy || node.id === data.center}));
+        if (guided()) {
+            const identifiers = new Set(Object.keys(node.key).filter(name => /(^id$|_id$|^uuid$)/i.test(name)));
+            for (const edge of data.edges) {
+                if (edge.source === node.id) edge.columns.forEach(name => identifiers.add(name));
+                if (edge.target === node.id) edge.referenced_columns.forEach(name => identifiers.add(name));
+            }
+            const values = Object.fromEntries(Object.entries(node.values).filter(([name]) => !identifiers.has(name)));
+            if (Object.keys(values).length) drawer.append(el('h4', {}, t('app.explorerGuide.itemValues')), valuesList(values, true));
+            drawer.append(technicalDetails(el('p', {}, t('app.explorerGuide.originalName')), el('code', {}, node.table),
+                el('h4', {}, t('app.explorer.key')), valuesList(node.key), el('h4', {}, t('app.explorer.fields')), valuesList(node.values)));
+        } else drawer.append(el('h4', {}, t('app.explorer.key')), valuesList(node.key), el('h4', {}, t('app.explorer.fields')), valuesList(node.values));
         if (node.truncated) drawer.append(notice(t('app.explorer.preview')));
         const related = (visible?.edges || []).filter(edge => edge.source === node.id || edge.target === node.id);
-        drawer.append(el('h4', {}, t('app.explorer.recordLinks')));
-        if (!related.length) drawer.append(el('p', {class: 'small muted'}, t('app.explorer.noRelationships')));
+        drawer.append(el('h4', {}, t(guided() ? 'app.explorerGuide.linkedItems' : 'app.explorer.recordLinks')));
+        if (!related.length) drawer.append(el('p', {class: 'small muted'}, t(guided() ? 'app.explorerGuide.noLinks' : 'app.explorer.noRelationships')));
         else drawer.append(el('div', {class: 'record-explorer-record-links'}, related.map(edge => {
             const other = data.nodes.find(item => item.id === (edge.source === node.id ? edge.target : edge.source));
             return el('button', {type: 'button', class: 'record-explorer-record-link', on: {click: () => selectEdge(edge.id, true)}},
-                icon('link'), el('span', {}, el('strong', {}, other?.label || edge.name), el('small', {}, edge.name)));
+                icon('link'), el('span', {}, el('strong', {}, other ? itemName(other) : guided() ? categoryName(edge.target_table) : edge.name),
+                    el('small', {}, guided() ? categoryName(other?.table || edge.target_table) : edge.name)));
         })));
     }
     function drawEvidence(edge) {
@@ -290,13 +397,15 @@ export function mountRecordExplorer(root, {database, tables = [], state = {}, in
         const mapping = edge.columns.map((column, index) => el('tr', {},
             el('td', {}, el('strong', {}, edge.source_table + '.' + column), el('code', {}, valueText(edge.source_values?.[column]))),
             el('td', {}, el('strong', {}, edge.target_table + '.' + edge.referenced_columns[index]), el('code', {}, valueText(edge.target_values?.[edge.referenced_columns[index]])))));
-        drawer.replaceChildren(el('section', {'data-explorer-evidence': edge.id}, el('p', {class: 'eyebrow'}, t('app.explorer.detail')),
-            el('h3', {tabindex: '-1'}, t('app.explorer.connectionTitle')), el('p', {class: 'small muted'}, t('app.explorer.connectionHelp')),
-            el('code', {class: 'record-explorer-constraint'}, edge.name),
-            el('div', {class: 'record-explorer-endpoint'}, el('small', {}, t('app.explorer.source')), el('strong', {}, source?.label || edge.source_table)),
-            el('div', {class: 'record-explorer-endpoint'}, el('small', {}, t('app.explorer.target')), el('strong', {}, target?.label || edge.target_table)),
+        const original = el('div', {}, el('code', {class: 'record-explorer-constraint'}, edge.name),
             el('div', {class: 'table-scroll'}, el('table', {class: 'data-table record-explorer-evidence-table'},
-                el('thead', {}, el('tr', {}, el('th', {}, t('app.explorer.sourceColumn')), el('th', {}, t('app.explorer.targetColumn')))), el('tbody', {}, mapping))),
+                el('thead', {}, el('tr', {}, el('th', {}, t('app.explorer.sourceColumn')), el('th', {}, t('app.explorer.targetColumn')))), el('tbody', {}, mapping))));
+        drawer.replaceChildren(el('section', {'data-explorer-evidence': edge.id}, el('p', {class: 'eyebrow'}, t(guided() ? 'app.explorerGuide.detail' : 'app.explorer.detail')),
+            el('h3', {tabindex: '-1'}, t('app.explorer.connectionTitle')),
+            el('p', {class: 'small muted'}, guided() ? connectionDescription(edge, source, target) : t('app.explorer.connectionHelp')),
+            el('div', {class: 'record-explorer-endpoint'}, el('small', {}, guided() ? categoryName(edge.source_table) : t('app.explorer.source')), el('strong', {}, source ? itemName(source) : categoryName(edge.source_table))),
+            el('div', {class: 'record-explorer-endpoint'}, el('small', {}, guided() ? categoryName(edge.target_table) : t('app.explorer.target')), el('strong', {}, target ? itemName(target) : categoryName(edge.target_table))),
+            guided() ? technicalDetails(original) : original,
             el('div', {class: 'record-explorer-evidence-actions'},
                 source ? button(t('app.explorer.openSource'), () => selectNode(source.id, true), {kind: 'ghost', className: 'button-small'}) : null,
                 target ? button(t('app.explorer.openTarget'), () => selectNode(target.id, true), {kind: 'ghost', className: 'button-small'}) : null)));
@@ -311,5 +420,5 @@ export function mountRecordExplorer(root, {database, tables = [], state = {}, in
     function destroy() { destroyed = true; controller?.abort(); pointer = null; signal?.removeEventListener('abort', destroy); }
     const ready = initial ? load(initial, state.rootKey) : Promise.resolve();
     if (!initial) { graphRoot.replaceChildren(empty(t('app.explorer.emptyTitle'), t('app.explorer.emptyHelp'))); setBusy(false); }
-    updateViewport(); return {destroy, ready};
+    updateExperience(); updateViewport(); return {destroy, ready};
 }

@@ -101,6 +101,29 @@ een ontbrekende lijn bewijst niet dat de hele database geen verbinding bevat.
 Tabellen zonder bruikbare unieke sleutel blijven in de gewone gegevensbrowser
 beschikbaar. Selecteren, zoeken en verder verkennen veranderen geen gegevens.
 
+### Zonder code: Guided / Stap voor stap
+
+Verkennen opent standaard met eenvoudige keuzes. Kies een categorie, kies een
+item en gebruik daarna een vraagknop. Met de voorbeeldgegevens kun je bijvoorbeeld:
+
+1. **Demo organizations** en **Northbridge Council** kiezen.
+2. **Show Demo systems (2)** kiezen om de geladen systemen en het startitem te zien.
+3. **How is another item connected to this one?** openen en **Resident Services Portal** kiezen.
+4. **Explain this connection** gebruiken voor een uitleg van de opgeslagen verwijzing.
+5. Met **Follow this item** verder kijken vanaf dat systeem.
+
+De vraagknoppen gebruiken de werkelijk geladen records en verbindingen. Het zijn
+vaste kijkacties, geen vrije SQL of gegenereerde antwoorden. Aantallen tellen
+verschillende gekoppelde items; meerdere verwijzingen tellen een item niet dubbel.
+De bestaande grenzen van de geladen buurt blijven zichtbaar.
+
+**Technical details / Technische details** toont op verzoek de originele
+databasenaam, volledige sleutel en exacte bronvelden. Leesbare categorienamen
+worden uit de identifiers afgeleid; de database en haar inhoud blijven hetzelfde.
+**Detailed / Details** geeft de oorspronkelijke bediening terug zonder de
+selectie of filters opnieuw in te stellen. De browser bewaart alleen de gekozen
+modus. Records en sleutels worden hiervoor niet in browseropslag bewaard.
+
 ## Database en schema's
 
 `PG_DATABASE` kiest één PostgreSQL-database voor deze verbinding. `PG_SCHEMAS`

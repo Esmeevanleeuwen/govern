@@ -103,6 +103,7 @@ jobs:
           node tests/schema-navigation-unit.mjs
           node tests/selection-content-unit.mjs
           node tests/record-explorer-unit.mjs
+          node tests/explorer-guide-unit.mjs
           npm install --no-save --ignore-scripts --prefix "$RUNNER_TEMP/govern-browser" playwright@1.62.1
           export PLAYWRIGHT_MODULE="$RUNNER_TEMP/govern-browser/node_modules/playwright"
           BROWSER_BIN="$(command -v google-chrome)"
@@ -116,6 +117,7 @@ jobs:
             tests/postgres-cached-api-smoke.mjs \
             tests/postgres-demo-smoke.mjs \
             tests/record-explorer-smoke.mjs \
+            tests/explorer-guide-smoke.mjs \
             tests/database-import-smoke.mjs \
             tests/frontend-smoke.mjs \
             tests/query-builder-smoke.mjs \

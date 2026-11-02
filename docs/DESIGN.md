@@ -95,6 +95,24 @@ language or appearance. A database/schema change owns separate view state and
 invalidates old network callbacks. On compact screens stack graph, records
 and explanation within the viewport; controls retain readable labels and focus.
 
+## Guided record exploration
+
+Explore defaults to **Guided / Stap voor stap** for coworkers who need no code.
+Keep the same graph, records, explanation and read-only API. Label the starting
+controls as category/item choices and offer questions derived from the loaded
+neighborhood: show all loaded links, show a category, explain a real connection,
+or follow a linked item. Counts refer to distinct loaded neighboring records.
+
+Use readable aliases for schema identifiers, with original names, complete keys
+and FK evidence available under **Technical details**. Do not rewrite record
+text or infer business meaning such as ownership or causality from field names.
+The plain explanation describes the actual stored reference.
+
+**Detailed / Details** restores the technical controls without changing the
+root, filters, selected item or database scope. Persist only the mode preference
+in the browser, with an in-memory fallback when storage is unavailable. Guided
+question actions remain keyboard accessible and fit a 320 px viewport.
+
 ## Interactive design reference
 
 Use **EN / NL**, **Settings** and **Edit layout** to explore the design. The interactive reference remains on the Govern Page. Production screens use the real catalog, research service and restore points. Keep these written rules beside a visual reference when designing a new screen.

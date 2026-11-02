@@ -8,6 +8,7 @@ import {getPreferences, updatePreferences, resetAppearance, subscribePreferences
 import {createDashboardLayout} from './dashboard-layout.js';
 import {mountSchemaVisualizer} from './schema-visualizer.js';
 import {mountRecordExplorer} from './record-explorer.js';
+import {friendlyName, getExplorerMode} from './explorer-guide.js';
 import {registerSelection} from './selection-registry.js';
 import {SelectionPointer} from './selection-pointer.js';
 import {createRowEditor} from './row-editor.js';
@@ -266,7 +267,8 @@ function syncWorkspaceNavigation() {
     const expanded = hasContext && state.contextOpen[area];
     workspaceContext.hidden = !hasContext || !isExplorerOpen();
     sidebar.classList.toggle('has-context', expanded);
-    document.getElementById('workspace-context-title').textContent = t({database: 'app.navigation.tables', research: 'app.navigation.saved', experiments: 'app.navigation.snapshots'}[area] || 'app.shell.workspace');
+    document.getElementById('workspace-context-title').textContent = t(area === 'database' && route().name === 'verkennen' && getExplorerMode() === 'guided'
+        ? 'app.explorerGuide.categories' : {database: 'app.navigation.tables', research: 'app.navigation.saved', experiments: 'app.navigation.snapshots'}[area] || 'app.shell.workspace');
     panelToggle.setAttribute('aria-expanded', String(expanded));
     panelToggle.setAttribute('aria-label', t('app.navigation.hide'));
     const workspaceOpener = document.getElementById('workspace-explorer-open');
@@ -947,16 +949,18 @@ function renderSettings() {
 
 function catalog(routeName) {
     const list = el('div', {class: 'catalog-list'});
-    const search = el('input', {id: 'catalog-search', type: 'search', class: 'input', value: state.catalogSearch.database || '', placeholder: t('app.core.catalog.searchPlaceholder'), 'aria-label': t('app.core.catalog.searchLabel'), autocomplete: 'off'});
+    const guided = routeName === 'verkennen' && getExplorerMode() === 'guided';
+    const search = el('input', {id: 'catalog-search', type: 'search', class: 'input', value: state.catalogSearch.database || '', placeholder: t(guided ? 'app.explorerGuide.findCategory' : 'app.core.catalog.searchPlaceholder'), 'aria-label': t(guided ? 'app.explorerGuide.findCategory' : 'app.core.catalog.searchLabel'), autocomplete: 'off'});
     const draw = () => {
         const query = search.value.trim().toLocaleLowerCase();
-        const matching = tables().filter(table => table.name.toLocaleLowerCase().includes(query));
+        const matching = tables().filter(table => table.name.toLocaleLowerCase().includes(query)
+            || workspaceTableName(table.name, routeName).toLocaleLowerCase().includes(query));
         list.replaceChildren(...matching.map(table => registerSelection(el('button', {
             class: 'catalog-item' + (table.name === state.table ? ' active' : ''),
             type: 'button', title: table.name + (table.comment ? ' — ' + table.comment : ''),
             'aria-current': table.name === state.table ? 'true' : null,
             on: {click: () => selectWorkspaceTable(table.name, routeName)},
-        }, icon(table.type === 'view' ? 'layers' : 'table'), el('span', {class: 'catalog-item-name'}, table.name),
+        }, icon(table.type === 'view' ? 'layers' : 'table'), el('span', {class: 'catalog-item-name'}, workspaceTableName(table.name, routeName)),
         el('span', {class: 'catalog-item-count'}, number(table.columns))),
         {kind: 'control', key: 'catalog:' + JSON.stringify(table.name), label: table.name, table: table.name, purpose: 'openTable'})));
         if (!matching.length) list.append(el('p', {class: 'catalog-empty'}, t('app.core.catalog.noMatches')));
@@ -977,6 +981,10 @@ function selectWorkspaceTable(name, view = state.databaseView) {
     contextContent.querySelector('.catalog-item.active')?.focus({preventScroll: true});
 }
 
+function workspaceTableName(name, view = route().name) {
+    return view === 'verkennen' && getExplorerMode() === 'guided' ? friendlyName(name) : name;
+}
+
 function databaseHeading(view) {
     const modeLinks = el('nav', {class: 'database-views', 'aria-label': t('app.navigation.views')}, databaseViews.map(name =>
         registerSelection(el('a', {class: 'database-view' + (name === view ? ' active' : ''), href: databaseHash(name), 'data-database-view': name,
@@ -989,8 +997,8 @@ function databaseHeading(view) {
     return el('header', {class: 'page-heading database-heading'},
         el('div', {class: 'database-heading-main'}, el('h1', {}, t('app.navigation.database')), explorer),
         el('div', {class: 'database-viewbar'}, modeLinks,
-            el('p', {class: 'database-selection'}, el('span', {}, t('app.navigation.selected')),
-                el('code', {class: 'database-selected-table', id: 'database-selected-table'}, state.table || t('app.navigation.emptySelection')))));
+            el('p', {class: 'database-selection'}, el('span', {}, t(view === 'verkennen' && getExplorerMode() === 'guided' ? 'app.explorerGuide.selectedCategory' : 'app.navigation.selected')),
+                el('code', {class: 'database-selected-table', id: 'database-selected-table', title: state.table}, state.table ? workspaceTableName(state.table, view) : t('app.navigation.emptySelection')))));
 }
 
 function databaseContext(view, scope) {
@@ -1270,7 +1278,9 @@ async function renderExplore(scope) {
         if (!scope.live() || !tables().some(table => table.name === name)) return;
         state.table = name;
         history.replaceState(null, '', databaseHash('verkennen'));
-        document.getElementById('database-selected-table').textContent = name;
+        document.getElementById('database-selected-table').textContent = workspaceTableName(name, 'verkennen');
+        document.getElementById('database-selected-table').title = name;
+        document.querySelector('.database-selection > span').textContent = t(getExplorerMode() === 'guided' ? 'app.explorerGuide.selectedCategory' : 'app.navigation.selected');
         document.querySelectorAll('[data-database-view]').forEach(link => { link.href = databaseHash(link.dataset.databaseView); });
         contextContent.replaceChildren(catalog('verkennen'));
         syncWorkspaceNavigation();
@@ -1295,7 +1305,7 @@ async function renderExplore(scope) {
         if (!scope.live()) return;
         const explorer = mountRecordExplorer(workspace, {database: scope.database, tables: tables(),
             initialTable: state.table, state: state.recordExploreView, signal: scope.signal,
-            isLive: scope.live, onSelectTable: selectRootTable});
+            isLive: scope.live, onSelectTable: selectRootTable, onExperienceChange: () => selectRootTable(state.table)});
         scope.cleanup.push(() => explorer.destroy());
     } catch (error) {
         if (error.name !== 'AbortError' && scope.live()) workspace.replaceChildren(errorPanel(error, () => render()));

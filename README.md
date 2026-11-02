@@ -88,6 +88,9 @@ Klik daarna op **Refresh** in Govern en kies de PostgreSQL-verbinding.
 Onder **Database → Explore** kun je een startrecord kiezen en zijn echte
 verbindingen volgen. De grafiek, recordlijst en uitleg selecteren samen hetzelfde
 record. Met **Explore from here** ga je verder; dit blijft volledig alleen lezen.
+De standaardmodus **Guided / Stap voor stap** helpt collega's met categorieën,
+items en vraagknoppen. Je hoeft geen SQL of recordsleutels in te voeren.
+**Detailed / Details** toont dezelfde gegevens met hun technische informatie.
 
 Meer over configuratie, schema's en de volgende bouwfasen:
 [PostgreSQL in Govern](docs/POSTGRESQL.md).

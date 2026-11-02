@@ -13,6 +13,7 @@ const browser = await chromium.launch({headless: true,
     args: process.env.BROWSER_ARGS_JSON ? JSON.parse(process.env.BROWSER_ARGS_JSON) : ['--no-sandbox'],
     ...(process.env.BROWSER_BIN ? {executablePath: process.env.BROWSER_BIN} : {})});
 const context = await authenticatedContext(browser, base, {locale: 'en-GB', viewport: {width: 1440, height: 1000}});
+await context.addInitScript(() => localStorage.setItem('govern.explorer.mode.v1', 'detailed'));
 const page = await context.newPage();
 const errors = [], failedApis = [], mutations = [];
 page.on('pageerror', error => errors.push(error.message));

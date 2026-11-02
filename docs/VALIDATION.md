@@ -1,7 +1,35 @@
 # Validatie
 
-Stand van de controles: **2 november 2026**. Eerdere resultaten hieronder horen
+Stand van de controles: **3 november 2026**. Eerdere resultaten hieronder horen
 bij hun beschreven wijziging en zijn niet automatisch opnieuw uitgevoerd.
+
+## Guided / Stap voor stap voor collega's
+
+De recordverkenner heeft nu een standaard begeleide kijkmodus met categorieën,
+items en vaste vraagknoppen. Dezelfde geladen records en GET-actie blijven de
+bron voor de grafiek, groepen, uitleg en verder verkennen. Detailed bewaart de
+oorspronkelijke bediening zonder het werk opnieuw te laden.
+
+Uitgevoerd in Chromium tegen het afzonderlijke PostgreSQL-/MariaDB-testproject:
+
+- De nieuwe begeleide browsersuite controleert de eerste start, leesbare
+  categorienamen, zoeken op die namen, verschillende itemaantallen, echte
+  verwijzingen, optionele technische details, verder volgen, NL/EN,
+  modusbehoud, schemawisseling, toetsenbordbediening en **320 px**.
+- De bestaande Detailed-browsersuite en gedeelde navigatieproef slagen.
+  Alle dataverzoeken in de kijkproeven blijven GET; er worden geen
+  database- of rechtenwijzigingen uitgevoerd door de nieuwe modus.
+- Helperproeven controleren dubbele verwijzingen, ontbrekende of niet-geladen
+  nodes, exacte bronwaarden, ongewijzigde records en opslag van alleen de modus.
+  Een mislukte opslagopdracht met nog leesbare oude opslag behoudt nu ook
+  de expliciete keuze voor de huidige pagina.
+- De bestaande graph/modelproef, i18n-proef en **1.055** tweetalige berichten
+  slagen. De bestaande **66** Explore-HTTP-controles slagen eveneens.
+
+Desktop en mobiel zijn visueel bekeken. De nieuwe helper- en browsersuite staan
+in CI; de volledige CI-workflow en de gebruikerinstallatie zijn niet opnieuw
+uitgevoerd. Er zijn geen nieuwe afhankelijkheden, AI-aanroepen of wijzigingen
+aan het backendcontract toegevoegd.
 
 ## Alleen-lezen records verkennen
 

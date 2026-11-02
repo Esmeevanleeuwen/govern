@@ -1,5 +1,15 @@
 /* Record exploration reuses Govern's glass, colour and spacing tokens. */
 .record-explorer { min-width: 0; --record-color-0: var(--g-accent); --record-color-1: #8870b2; --record-color-2: #537dba; --record-color-3: #ad8052; --record-color-4: #668a60; --record-color-5: #aa6888; }
+.record-explorer-mode { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 16px; }
+.record-explorer-mode .button { min-height: 40px; }
+.record-explorer-mode [aria-pressed="true"] { color: var(--g-accent-text); background: var(--g-dense-frost); box-shadow: var(--g-control-depth); }
+.record-explorer[data-experience="guided"] .record-explorer-table-name,
+.record-explorer[data-experience="guided"] .record-explorer-detail-table,
+.record-explorer[data-experience="guided"] .record-explorer-values dt { font-family: inherit; font-size: 12px; }
+.record-explorer-technical { margin: 20px 0; padding: 12px; border-radius: 12px; background: var(--g-glass); }
+.record-explorer-technical > summary { cursor: pointer; color: var(--g-accent-text); font-size: 12px; }
+.record-explorer-technical > code { display: block; margin-top: 8px; overflow-wrap: anywhere; }
+.record-explorer-guide-root[aria-disabled="true"] { opacity: .6; }
 .record-explorer [data-color="0"] { --record-color: var(--record-color-0); }
 .record-explorer [data-color="1"] { --record-color: var(--record-color-1); }
 .record-explorer [data-color="2"] { --record-color: var(--record-color-2); }
