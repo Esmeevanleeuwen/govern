@@ -25,9 +25,11 @@ jobs:
           python3 - <<'PY'
           import os
           import secrets
+          password = secrets.token_urlsafe(36)
+          print('::add-mask::' + password)
           with open(os.environ['GITHUB_ENV'], 'a') as environment:
               environment.write('GOVERN_TEST_EMAIL=govern-ci@example.test\n')
-              environment.write('GOVERN_TEST_PASSWORD=' + secrets.token_urlsafe(36) + '\n')
+              environment.write('GOVERN_TEST_PASSWORD=' + password + '\n')
           PY
       - name: Startup gateway reload checks
         run: python3 tests/start-gateway-reload.py
@@ -41,16 +43,16 @@ jobs:
           docker compose exec -T database-manager sh -c 'find /opt/govern/docker/database-manager -name "*.php" -exec php -l {} \;'
       - name: Focused backend checks
         run: |
-          docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" app php /workspace/tests/backend_unit.php
-          docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" app php /workspace/tests/sql_script_unit.php
-          docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" app php /workspace/tests/backup_unit.php
-          docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" app php /workspace/tests/backend_localization.php
-          docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" app php /workspace/tests/ai_unit.php
-          docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" app php /workspace/tests/ai_provider_unit.php
-          docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" app php -d allow_url_fopen=0 -d disable_functions=fsockopen,pfsockopen,stream_socket_client,stream_socket_server,socket_create,socket_connect,curl_exec,exec,shell_exec,system,passthru,popen,proc_open /workspace/tests/local_code_search_unit.php
-          docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" app php /workspace/tests/ai_project_unit.php
-          docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" app php /workspace/tests/database_provisioner_unit.php
-          docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" app php /workspace/tests/auth_unit.php
+          docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/backend_unit.php
+          docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/sql_script_unit.php
+          docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/backup_unit.php
+          docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/backend_localization.php
+          docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/ai_unit.php
+          docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/ai_provider_unit.php
+          docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app -d allow_url_fopen=0 -d disable_functions=fsockopen,pfsockopen,stream_socket_client,stream_socket_server,socket_create,socket_connect,curl_exec,exec,shell_exec,system,passthru,popen,proc_open /workspace/tests/local_code_search_unit.php
+          docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/ai_project_unit.php
+          docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/database_provisioner_unit.php
+          docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/auth_unit.php
       - name: Isolated authentication HTTP integration
         run: |
           if ! command -v php >/dev/null || ! php -r 'exit(extension_loaded("pdo_sqlite") ? 0 : 1);'; then
@@ -60,13 +62,13 @@ jobs:
           python3 tests/auth-integration.py
       - name: Real database integration
         run: |
-          docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" app php /workspace/tests/backend_integration.php --confirm-database=bestuursatlas
-          docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" app php /workspace/tests/free-sql-integration.php --confirm-database=bestuursatlas
-          docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" -e GOVERN_TEST_SECOND_DATABASE app php /workspace/tests/multidatabase-row-integration.php --confirm-database=bestuursatlas --confirm-second-database=govern_multi_test
-          docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" -e GOVERN_TEST_SECOND_DATABASE app php /workspace/tests/ai-integration.php --confirm-database=bestuursatlas
-          docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" app php /workspace/tests/database-provisioning-integration.php --confirm-database=bestuursatlas
+          docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/backend_integration.php --confirm-database=bestuursatlas
+          docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/free-sql-integration.php --confirm-database=bestuursatlas
+          docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" -e GOVERN_TEST_SECOND_DATABASE app /workspace/tests/multidatabase-row-integration.php --confirm-database=bestuursatlas --confirm-second-database=govern_multi_test
+          docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" -e GOVERN_TEST_SECOND_DATABASE app /workspace/tests/ai-integration.php --confirm-database=bestuursatlas
+          docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/database-provisioning-integration.php --confirm-database=bestuursatlas
       - name: Backup and recovery integration
-        run: docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" app php /workspace/tests/backup_integration.php --confirm-database=bestuursatlas
+        run: docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/backup_integration.php --confirm-database=bestuursatlas
       - name: Proxy follows recreated web containers
         run: GOVERN_DOCKER_NETWORK_TEST=1 python3 tests/proxy-restart-smoke.py --confirm-project=govern
       - name: HTTP and phpMyAdmin integration

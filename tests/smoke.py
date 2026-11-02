@@ -57,16 +57,23 @@ def main():
         value = json.loads(body) if "application/json" in content_type else body
         return response.status, value, response.headers
 
+    last_status = None
+    last_warning = "No bootstrap response was received."
     for attempt in range(40):
         try:
             status, result, _ = request("bootstrap")
+            last_status = status
+            if isinstance(result, dict):
+                warning = result.get("data", {}).get("warning") or result.get("error_code")
+                last_warning = str(warning or "No availability warning was returned.").replace("\n", " ")[:300]
             if status == 200 and result.get("data", {}).get("database", {}).get("available"):
                 break
         except (OSError, ValueError):
             pass
         time.sleep(1)
     else:
-        raise RuntimeError("Govern did not become available within40seconds")
+        raise RuntimeError("Govern did not become available within 40 seconds (HTTP "
+                           + str(last_status) + "; " + last_warning + ")")
 
     data = result["data"]
     csrf = data["csrf"]
