@@ -31,7 +31,31 @@ final class Config
             $local = dirname(__DIR__, 2) . '/docker/database/20-govern.sql';
             $schema = is_file($local) ? $local : '/var/www/workbench.sql';
         }
+        $postgres = null;
+        if ($env('PG_ENABLED', '0') === '1') {
+            $pgPort = filter_var($env('PG_PORT', '5432'), FILTER_VALIDATE_INT);
+            $pgName = $env('PG_DATABASE', 'govern_pg');
+            $pgHost = $env('PG_HOST', 'postgres');
+            $pgUser = $env('PG_READ_USER', 'govern_pg_reader');
+            $pgSchemas = array_values(array_unique(array_filter(array_map('trim', explode(',', $env('PG_SCHEMAS', 'public'))), static fn (string $value): bool => $value !== '')));
+            if ($pgPort === false || $pgPort < 1 || $pgPort > 65535 || !preg_match('/^[A-Za-z0-9_]{1,63}$/D', $pgName)
+                || $pgHost === '' || preg_match('/[;\x00-\x20\x7f]/', $pgHost)
+                || !preg_match('/^[A-Za-z0-9_]{1,63}$/D', $pgUser) || $pgSchemas === []) {
+                throw ApiException::fromCode('postgres_config_invalid', 503);
+            }
+            foreach ($pgSchemas as $pgSchema) {
+                if (strlen($pgSchema) > 63 || preg_match('//u', $pgSchema) !== 1
+                    || preg_match('/[\x00-\x1f\x7f]/', $pgSchema) || str_starts_with($pgSchema, 'pg_') || $pgSchema === 'information_schema') {
+                    throw ApiException::fromCode('postgres_config_invalid', 503);
+                }
+            }
+            $postgres = ['engine' => 'postgres', 'host' => $pgHost, 'port' => $pgPort, 'name' => $pgName,
+                'schema' => $pgSchemas[0], 'schemas' => $pgSchemas, 'read_user' => $pgUser,
+                'read_password' => $env('PG_READ_PASSWORD'), 'user' => '', 'password' => '', 'socket' => ''];
+        }
         return [
+            'engine' => 'mariadb',
+            'postgres' => $postgres,
             'host' => $env('DB_HOST', 'database'),
             'port' => $port,
             'name' => $name,

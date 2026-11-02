@@ -109,8 +109,8 @@ export class DatabaseModal {
     }
 
     configure(database, tables, databases = this.databases) {
-        this.databases = databases;
-        this.databaseSelect.replaceChildren(...databases.map(item => el('option', {value: item.name, selected: item.name === database}, item.name)));
+        this.databases = databases.filter(item => item.connection !== 'postgres');
+        this.databaseSelect.replaceChildren(...this.databases.map(item => el('option', {value: item.name, selected: item.name === database}, item.name)));
         this.databaseSelect.setAttribute('aria-label', t('app.databases.choose'));
         this.database = database;
         this.tables = tables;

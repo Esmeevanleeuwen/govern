@@ -55,6 +55,26 @@ visible focus, dialog focus return, sensible reading order, labelled non-colour
 states, and reduced-motion/reduced-transparency fallbacks. No invented users,
 testimonials, live collaboration or adoption statistics belong in this story.
 
+## PostgreSQL in the existing workspace
+
+Use the same table list, record browser, structure details and schema canvas
+for both SQL engines. The database picker identifies PostgreSQL entries with
+their database and schema as well as the engine name, for example
+**govern_pg · public · PostgreSQL**. Keep identical table names in separate
+schemas visually and functionally scoped to their selected entry.
+
+Show a short localized notice that this PostgreSQL version supports browsing
+only. Make unsupported row editing, arbitrary SQL, research, restore points,
+phpMyAdmin/import, context export and AI unavailable rather than opening
+MariaDB tools against the selected PostgreSQL scope. These limits belong next
+to the affected task; keep the existing shared navigation and visual tokens.
+Do not create a separate PostgreSQL-themed UI or duplicate the table screens.
+
+Switching between engines preserves each complete scope's table, search and
+diagram state. Cached data and delayed responses from another scope must never
+replace the visible selection. A configured but unreadable schema uses the
+same honest unavailable state as other connection failures.
+
 ## Interactive design reference
 
 Use **EN / NL**, **Settings** and **Edit layout** to explore the design. The interactive reference remains on the Govern Page. Production screens use the real catalog, research service and restore points. Keep these written rules beside a visual reference when designing a new screen.

@@ -2,8 +2,12 @@ import {request} from './api.js';
 import {t} from './i18n.js';
 import {el, button, errorText} from './ui.js';
 import './database-messages.js';
+import './postgres-messages.js';
 
 const text = (key, params) => t('app.databases.' + key, params);
+const workspaceKey = item => item.scope_key || item.name;
+const workspaceLabel = item => item.label || item.name;
+const canImport = item => item && item.available !== false && item.connection !== 'postgres';
 
 /** Prepare one named database, then use the official phpMyAdmin import flow. */
 export function createDatabaseManager({getDatabase, getDatabases, canCreate, isBusy, onPrepared, onSelect, onImport, onBusy = () => {}}) {
@@ -64,15 +68,16 @@ export function createDatabaseManager({getDatabase, getDatabases, canCreate, isB
     document.body.append(dialog);
 
     function updateControls() {
-        const selected = getDatabases().find(item => item.name === existing.value);
+        const selected = getDatabases().find(item => workspaceKey(item) === existing.value);
         dialog.setAttribute('aria-busy', String(saving));
         existing.disabled = saving || !getDatabases().length;
         name.disabled = saving || !canCreate();
         switchButton.disabled = saving || !selected;
-        importExisting.disabled = saving || !selected || selected.available === false;
+        importExisting.disabled = saving || !canImport(selected);
         createButton.disabled = createImport.disabled = saving || !canCreate() || !name.value.trim();
         close.disabled = cancel.disabled = saving;
         unavailable.hidden = canCreate();
+        unavailable.textContent = getDatabase().startsWith('postgres:') ? t('app.postgres.unavailable') : text('managerUnavailable');
         status.hidden = !saving;
         status.textContent = saving ? text('preparingDatabase') : '';
         error.hidden = !failure && !inputError;
@@ -83,9 +88,9 @@ export function createDatabaseManager({getDatabase, getDatabases, canCreate, isB
     function refreshChoices() {
         const selected = existing.value || getDatabase();
         const items = getDatabases();
-        existing.replaceChildren(...items.map(item => el('option', {value: item.name, selected: item.name === selected},
-            item.available === false ? text('unavailable', {name: item.name}) : item.name)));
-        if (!items.some(item => item.name === selected)) existing.value = getDatabase();
+        existing.replaceChildren(...items.map(item => el('option', {value: workspaceKey(item), selected: workspaceKey(item) === selected},
+            item.available === false ? text('unavailable', {name: workspaceLabel(item)}) : workspaceLabel(item))));
+        if (!items.some(item => workspaceKey(item) === selected)) existing.value = getDatabase();
         updateControls();
     }
 
@@ -115,8 +120,8 @@ export function createDatabaseManager({getDatabase, getDatabases, canCreate, isB
     async function choose(importSql) {
         if (saving || isBusy()) return;
         const database = existing.value;
-        const selected = getDatabases().find(item => item.name === database);
-        if (!selected || importSql && selected.available === false) return;
+        const selected = getDatabases().find(item => workspaceKey(item) === database);
+        if (!selected || importSql && !canImport(selected)) return;
         await transition(() => importSql ? onImport(database) : onSelect(database));
     }
 

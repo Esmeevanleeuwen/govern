@@ -7,6 +7,9 @@ namespace Govern;
 final class Messages
 {
     private const TEXT = [
+        'postgres_config_invalid' => ['nl' => 'Controleer de PostgreSQL-instellingen op de server.', 'en' => 'Check the PostgreSQL settings on the server.'],
+        'postgres_schema_unavailable' => ['nl' => 'Dit PostgreSQL-schema is niet beschikbaar voor het leesaccount.', 'en' => 'This PostgreSQL schema is unavailable to the reader account.'],
+        'postgres_read_only' => ['nl' => 'PostgreSQL ondersteunt nu alleen tabellen, structuur en schema bekijken. Deze handeling is nog niet beschikbaar.', 'en' => 'PostgreSQL currently supports browsing tables, structure and schemas. This action is not available yet.'],
         'auth_required' => ['nl' => 'Log in om deze werkplek te openen.', 'en' => 'Sign in to open this workspace.'],
         'auth_owner_required' => ['nl' => 'Alleen de eigenaar kan toegang goedkeuren.', 'en' => 'Only the owner can approve access.'],
         'auth_unavailable' => ['nl' => 'De lokale accountopslag is niet beschikbaar. Start Govern opnieuw of controleer de toegangsrechten.', 'en' => 'The local account store is unavailable. Restart Govern or check its permissions.'],

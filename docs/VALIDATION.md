@@ -3,6 +3,23 @@
 Stand van de controles: **2 november 2026**. Eerdere resultaten hieronder horen
 bij hun beschreven wijziging en zijn niet automatisch opnieuw uitgevoerd.
 
+## Werkpleklinks en cache na een update
+
+Een externe documentlink naar `workspace.php` reproduceerde lokaal de onjuiste
+503: de algemene cross-sitecontrole blokkeerde ook een gewone GET-navigatie.
+Na de gerichte uitzondering op alleen de HTML-grens slagen **52 account- en
+navigatiecontroles** in `tests/auth-integration.py`. De tests controleren ook
+dat fetches, embeds, POST, API-verzoeken en ongeldige Origin/Host geblokkeerd
+blijven. De backendunitcontroles (15), lokalisatiecontroles (205),
+API-scopesuite en 32 opstartfixtures slagen lokaal.
+
+De Nginx-proef in `tests/auth-gateway.py` controleert assethervalidatie voor de
+hoofdmodule, geimporteerde module en CSS, plus behoud van API/HTML `no-store`.
+Die echte gatewaycontrole en de bestaande Docker-/browsersuites worden in CI
+voor de bijbehorende commit uitgevoerd. Eerder geslaagde PostgreSQL- en
+MariaDB-controles horen bij commit `7d53c17a57f5ef9e19ca15e789481ef5b60dc65a`
+en [deze workflow](https://github.com/Esmeevanleeuwen/govern/actions/runs/41527598865).
+
 ## Startpagina en lokale accounts
 
 Voor deze wijziging zijn in de afzonderlijke native omgeving met PHP 8.3,
