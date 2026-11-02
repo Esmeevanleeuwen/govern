@@ -61,7 +61,7 @@ try {
     const page = await authenticatedPage(browser, base, {locale: 'nl-NL', viewport: {width: 1440, height: 1000}});
     trackErrors(page);
     await page.goto(new URL('/#overzicht', base).href, {waitUntil: 'networkidle'});
-    await page.waitForURL(url => url.pathname === '/workspace.php' && url.hash === '#overzicht');
+    await page.waitForURL(url => url.pathname === '/workspace.php' && url.hash.split('?')[0] === '#overzicht');
     await page.locator('.stats-grid').waitFor();
     const bootstrap = await page.evaluate(async () => (await (await fetch('/api.php?action=bootstrap')).json()).data);
     assert.equal(bootstrap.database.status, 'ready');

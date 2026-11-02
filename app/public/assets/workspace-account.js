@@ -8,6 +8,7 @@ window.addEventListener('govern:languagechange', translateAccount);
 window.addEventListener('govern:authrequired', () => {
     if (document.querySelector('#session-ended-dialog')) return;
     const dialog = document.createElement('dialog');
+    dialog.dataset.selectionUi = '';
     dialog.id = 'session-ended-dialog'; dialog.className = 'account-approve-dialog';
     const title = document.createElement('h2'); title.id = 'session-ended-title'; title.textContent = t('account.expired');
     dialog.setAttribute('aria-labelledby', title.id);

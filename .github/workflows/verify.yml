@@ -90,18 +90,29 @@ jobs:
           export BROWSER_BIN
           export BASE_URL=http://127.0.0.1:8080
           export GOVERN_UI_WRITE_TESTS=1
-          node tests/homepage-auth-smoke.mjs
-          node tests/database-import-smoke.mjs
-          node tests/frontend-smoke.mjs
-          node tests/query-builder-smoke.mjs
-          node tests/ui-settings-smoke.mjs
-          node tests/schema-visualizer-smoke.mjs
-          node tests/workspace-navigation-smoke.mjs
-          node tests/selection-pointer-smoke.mjs
-          node tests/free-sql-smoke.mjs
-          node tests/multidatabase-row-smoke.mjs
-          node tests/ai-workspace-smoke.mjs
-          node tests/ai-project-smoke.mjs
+          failed_suites=()
+          for suite in \
+            tests/homepage-auth-smoke.mjs \
+            tests/database-import-smoke.mjs \
+            tests/frontend-smoke.mjs \
+            tests/query-builder-smoke.mjs \
+            tests/ui-settings-smoke.mjs \
+            tests/schema-visualizer-smoke.mjs \
+            tests/workspace-navigation-smoke.mjs \
+            tests/selection-pointer-smoke.mjs \
+            tests/free-sql-smoke.mjs \
+            tests/multidatabase-row-smoke.mjs \
+            tests/ai-workspace-smoke.mjs \
+            tests/ai-project-smoke.mjs
+          do
+            if ! node "$suite"; then
+              failed_suites+=("$suite")
+            fi
+          done
+          if ((${#failed_suites[@]})); then
+            printf 'Browser suite failed: %s\n' "${failed_suites[@]}"
+            exit 1
+          fi
       - name: Logs on failure
         if: failure()
         run: docker compose logs --tail=100
