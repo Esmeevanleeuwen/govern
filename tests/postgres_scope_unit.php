@@ -38,6 +38,28 @@ try {
     $assert($public['schema'] === 'public' && $archive['schema'] === 'archive', 'Selection stays request-local.');
     $assert($scope->select('scope_unit_pg', 'postgres')['schema'] === 'public', 'Omitted schema selects the configured default.');
     $assert($scope->select('scope_unit_pg', 'postgres', '0')['schema'] === '0', 'The zero schema remains selectable.');
+    $legacy = $scope->selectRequest('postgres:scope_unit_pg:archive');
+    $assert($legacy['engine'] === 'postgres' && $legacy['name'] === 'scope_unit_pg' && $legacy['schema'] === 'archive',
+        'Cached API modules can send the complete workspace key as their database.');
+    $assert($scope->selectRequest('', 'postgres')['scope_key'] === $public['scope_key'], 'Explicit connection defaults remain unchanged.');
+    $assert($scope->selectRequest('scope_unit_pg', 'postgres', 'archive')['scope_key'] === $archive['scope_key'],
+        'Current explicit requests keep the same selected scope.');
+    $assert($scope->selectRequest('postgres:scope_unit_pg:%30')['schema'] === '0', 'Packed identifiers are URL-decoded.');
+    $quotedScope = new ConnectionScope([...$base, 'postgres' => [...$base['postgres'], 'schemas' => ['a:b %'], 'schema' => 'a:b %']]);
+    $assert($quotedScope->selectRequest(ConnectionScope::scopeKey('postgres', 'scope_unit_pg', 'a:b %'))['schema'] === 'a:b %',
+        'Encoded delimiters and spaces keep the exact configured schema.');
+    foreach (['postgres:other:public', 'postgres:scope_unit_pg:missing', 'postgres:scope_unit_pg:pg_catalog',
+        'postgres:scope_unit_pg', 'postgres::public', 'postgres:scope_unit_pg:', 'postgres:scope_unit_pg:archive:extra',
+        'postgres:scope_unit_pg:%ZZ', 'postgres:scope_unit_pg:%00', 'postgres:scope_unit_pg:%0a'] as $key) {
+        $reject(static fn () => $scope->selectRequest($key), 'database_not_available');
+    }
+    foreach (['mariadb', 'postgres', ''] as $connection) {
+        $reject(static fn () => $scope->selectRequest('postgres:scope_unit_pg:public', $connection), 'database_not_available');
+    }
+    foreach (['public', 'archive', ''] as $schema) {
+        $reject(static fn () => $scope->selectRequest('postgres:scope_unit_pg:public', null, $schema), 'database_not_available');
+    }
+    $reject(static fn () => ConnectionScope::requireAction($legacy, 'query'), 'postgres_read_only');
     $assert($public['scope_key'] !== $archive['scope_key'] && $public['backup_dir'] !== $archive['backup_dir'], 'Schemas have distinct cache and storage identities.');
     $assert(ConnectionScope::scopeKey('mariadb', 'existing') === 'existing', 'Existing MariaDB scope keys remain compatible.');
     $assert(ConnectionScope::scopeKey('postgres', 'data:set', 'a b') === 'postgres:data%3Aset:a%20b', 'Workspace keys encode identifier delimiters.');
@@ -68,6 +90,7 @@ try {
     $disabled = Config::fromEnvironment();
     $assert($disabled['postgres'] === null, 'PostgreSQL is absent when disabled.');
     $reject(static fn () => (new ConnectionScope($disabled))->select('scope_unit_pg', 'postgres', 'public'), 'database_not_available');
+    $reject(static fn () => (new ConnectionScope($disabled))->selectRequest('postgres:scope_unit_pg:public'), 'database_not_available');
     putenv('PG_ENABLED=1');
     foreach ([['PG_PORT', '0'], ['PG_PORT', '65536'], ['PG_HOST', 'host;dbname=other'], ['PG_HOST', 'host with space'],
         ['PG_DATABASE', 'invalid;name'], ['PG_READ_USER', 'invalid;role'], ['PG_SCHEMAS', ''],

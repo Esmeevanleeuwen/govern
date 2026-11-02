@@ -36,6 +36,12 @@ Log in op [localhost:8080](http://localhost:8080), open de werkplek en kies
 database is leeg. Deze uitbreiding zet geen MySQL-dumps automatisch om en
 importeert de voorbeeldgegevens van Bestuursatlas niet naar PostgreSQL.
 
+Blijft na een update de melding **Choose a database available to this connection**
+staan? Herlaad de werkplek met **Ctrl+Shift+R** (Mac: **Cmd+Shift+R**) en kies de
+PostgreSQL-verbinding opnieuw. Een oudere browsermodule kan nog in de cache
+staan. De API ondersteunt ook de volledige scopesleutel die deze module stuurt,
+met dezelfde controle op de ingestelde database en schema's.
+
 ## Database en schema's
 
 `PG_DATABASE` kiest één PostgreSQL-database voor deze verbinding. `PG_SCHEMAS`

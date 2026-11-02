@@ -43,10 +43,9 @@ try {
     $scope = new ConnectionScope($baseConfig);
     if ($action === 'databases') Http::json(['databases' => $scope->databases(), 'default_database' => $baseConfig['name'],
         'can_create' => (new DatabaseProvisioner())->isAvailable()]);
-    $connection = Http::text($_GET, 'connection', false) ?: 'mariadb';
-    $selectedDatabase = Http::text($_GET, 'database', false) ?: ($connection === 'postgres'
-        ? ($baseConfig['postgres']['name'] ?? '') : $baseConfig['name']);
-    $config = $scope->select($selectedDatabase, $connection, Http::text($_GET, 'schema', false));
+    $config = $scope->selectRequest(Http::text($_GET, 'database', false),
+        array_key_exists('connection', $_GET) ? Http::text($_GET, 'connection', false) : null,
+        array_key_exists('schema', $_GET) ? Http::text($_GET, 'schema', false) : null);
     ConnectionScope::requireAction($config, $action);
     if ($action === 'prepare-database') {
         $lock = new MaintenanceLock($config['maintenance_dir']);
@@ -98,7 +97,7 @@ try {
         $data = ['csrf' => $csrf, 'databases' => $scope->databases(), 'default_database' => $baseConfig['name'],
             'can_create_database' => $config['engine'] === 'mariadb' && (new DatabaseProvisioner())->isAvailable(),
             'scope_key' => $config['scope_key'], 'capabilities' => ConnectionScope::capabilities($config),
-            'database' => ['name' => $config['name'], 'connection' => $connection, 'engine' => $config['engine'],
+            'database' => ['name' => $config['name'], 'connection' => $config['connection'], 'engine' => $config['engine'],
                 'schema' => $config['schema'] ?? $config['name'], 'scope_key' => $config['scope_key'],
                 'version' => null, 'status' => 'unavailable', 'available' => false],
             'stats' => ['tables' => 0, 'views' => 0, 'rows_estimate' => 0], 'tables' => []];

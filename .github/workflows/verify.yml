@@ -105,6 +105,7 @@ jobs:
           for suite in \
             tests/homepage-auth-smoke.mjs \
             tests/postgres-smoke.mjs \
+            tests/postgres-cached-api-smoke.mjs \
             tests/database-import-smoke.mjs \
             tests/frontend-smoke.mjs \
             tests/query-builder-smoke.mjs \

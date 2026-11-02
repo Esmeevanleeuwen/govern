@@ -3,6 +3,32 @@
 Stand van de controles: **2 november 2026**. Eerdere resultaten hieronder horen
 bij hun beschreven wijziging en zijn niet automatisch opnieuw uitgevoerd.
 
+## PostgreSQL kiezen na een update met een oudere browsermodule
+
+De verbindingsfout is gereproduceerd in Chromium met de echte `api.js` uit
+commit `d213824`. De actuele module stuurde verbinding, database en schema en
+kreeg 200; de oudere module stuurde alleen `database=postgres:govern_pg:public`
+en kreeg 403 `database_not_available`. De API herkent nu deze volledige sleutel
+wanneer de afzonderlijke verbinding- en schemaparameters ontbreken. Dezelfde
+configuratie- en capabilitycontroles blijven gelden.
+
+Uitgevoerd in een afzonderlijk Docker-project met PostgreSQL 18, PHP 8.4 en
+de testfixtures voor `public` en `archive`:
+
+- **88** PostgreSQL-scopecontroles, inclusief ongeldige codering, expliciete
+  parameterconflicten, onbekende scopes en uitgeschakelde PostgreSQL-toegang.
+- **66** geauthenticeerde PostgreSQL-HTTP-controles en **35** echte catalogus-,
+  gegevenstype- en leesrechtencontroles.
+- De bestaande PostgreSQL-browsersuite en de nieuwe
+  `postgres-cached-api-smoke.mjs` met de bevroren oudere module. Deze controleren
+  echte records, schemawisseling, diagram, herladen en teruggaan naar MariaDB.
+- De bestaande **39** MariaDB-/phpMyAdmin-HTTP-controles, **15** backendunits,
+  API-scope-JavaScriptcontroles en tweetalige frontendberichten.
+
+De nieuwe browserproef is opgenomen in de CI-workflow. Deze lokale uitslagen
+bewijzen de gecontroleerde versie en testomgeving; de volledige CI-workflow en
+de installatie op de gebruikercomputer zijn niet opnieuw uitgevoerd.
+
 ## Werkpleklinks en cache na een update
 
 Een externe documentlink naar `workspace.php` reproduceerde lokaal de onjuiste

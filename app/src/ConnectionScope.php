@@ -19,6 +19,28 @@ final class ConnectionScope
         return $connection === 'mariadb' ? $name : 'postgres:' . rawurlencode($name) . ':' . rawurlencode($schema);
     }
 
+    /** Older cached API modules send the workspace key as the database alone. */
+    public function selectRequest(string $name, ?string $connection = null, ?string $schema = null): array
+    {
+        if (str_starts_with($name, 'postgres:')) {
+            $parts = explode(':', $name);
+            if ($connection !== null || $schema !== null || count($parts) !== 3
+                || preg_match('/%(?![0-9a-f]{2})/i', $name)) {
+                throw ApiException::fromCode('database_not_available', 403);
+            }
+            $name = rawurldecode($parts[1]);
+            $schema = rawurldecode($parts[2]);
+            if ($name === '' || $schema === '' || preg_match('/[\x00-\x1f\x7f]/', $name . $schema)) {
+                throw ApiException::fromCode('database_not_available', 403);
+            }
+            $connection = 'postgres';
+        }
+        $connection = $connection ?: 'mariadb';
+        $name = $name !== '' ? $name : ($connection === 'postgres'
+            ? ($this->base['postgres']['name'] ?? '') : $this->base['name']);
+        return $this->select($name, $connection, $schema ?? '');
+    }
+
     public function databases(): array
     {
         if ($this->known !== null) return $this->known;

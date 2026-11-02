@@ -109,6 +109,14 @@ connection's configured defaults. The browser cannot submit a hostname, port,
 role or password. Unknown connections, databases and schemas return 403
 `database_not_available`; selecting a scope does not grant access.
 
+For compatibility with cached API modules from before PostgreSQL support,
+`database` may contain the complete server-issued `postgres:<database>:<schema>`
+workspace key when both `connection` and `schema` parameters are absent. Its
+percent-encoded identifiers pass through the same configured scope validation.
+Malformed keys and packed keys combined with explicit connection/schema
+parameters return 403 `database_not_available`. Normal authentication, CSRF
+and PostgreSQL capability checks still apply.
+
 `GET databases` remains an installation-wide list. Each entry retains
 `name` and `available`, and adds `connection`, `engine`, `schema`, `scope_key`
 and `label`. MariaDB scope keys remain the exact database name. PostgreSQL keys

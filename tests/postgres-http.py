@@ -31,7 +31,8 @@ def main():
         checks += 1
 
     def request(action, payload=None, parameters=None, *, authenticated=True, token=True):
-        query = {"action": action, **scope, **(parameters or {})}
+        query = {key: value for key, value in {"action": action, **scope, **(parameters or {})}.items()
+                 if value is not None}
         headers = {"Accept": "application/json", "Accept-Language": "en"}
         data = None
         if payload is not None:
@@ -54,6 +55,27 @@ def main():
     check(status == 200 and result["ok"], "Authenticated PostgreSQL bootstrap succeeds")
     data = result["data"]
     csrf = data["csrf"]
+    packed = {"database": "postgres:govern_pg:public", "connection": None, "schema": None}
+    status, result = request("bootstrap", parameters=packed)
+    check(status == 200 and result["data"]["scope_key"] == "postgres:govern_pg:public",
+          "A cached API module can bootstrap using the complete workspace key")
+    status, result = request("browse", parameters={**packed, "database": "postgres:govern_pg:archive", "table": "govern_pg_values"})
+    check(status == 200 and result["data"]["rows"] == [{"id": "1", "label": "Archive-only row"}],
+          "Packed keys retain schema isolation when browsing")
+    status, result = request("query", {"sql": "SELECT 1"}, parameters=packed)
+    check(status == 403 and result.get("error_code") == "postgres_read_only",
+          "Compatibility requests retain the PostgreSQL read-only capability boundary")
+    for invalid in ["postgres:other:public", "postgres:govern_pg:pg_catalog", "postgres:govern_pg:missing",
+                    "postgres:govern_pg", "postgres::public", "postgres:govern_pg:",
+                    "postgres:govern_pg:public:extra", "postgres:govern_pg:%ZZ", "postgres:govern_pg:%00"]:
+        status, result = request("bootstrap", parameters={**packed, "database": invalid})
+        check(status == 403 and result.get("error_code") == "database_not_available",
+              "Packed keys cannot select malformed or unconfigured scopes")
+    for metadata in [{"connection": "mariadb"}, {"connection": "postgres"}, {"connection": ""},
+                     {"schema": "archive"}, {"schema": "public"}, {"schema": ""}]:
+        status, result = request("bootstrap", parameters={**packed, **metadata})
+        check(status == 403 and result.get("error_code") == "database_not_available",
+              "Packed keys cannot replace explicit connection or schema parameters")
     check(data["database"]["name"] == "govern_pg" and data["database"]["schema"] == "public"
           and data["database"]["connection"] == "postgres" and data["database"]["available"],
           "Bootstrap reports the actual engine, database and schema")
