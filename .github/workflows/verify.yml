@@ -67,6 +67,8 @@ jobs:
             sudo apt-get install -y --no-install-recommends php-cli php-sqlite3
           fi
           python3 tests/auth-integration.py
+      - name: PostgreSQL catalog and read-only permissions
+        run: docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/postgres-integration.php --confirm-database=govern_pg
       - name: Real database integration
         run: |
           docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/backend_integration.php --confirm-database=bestuursatlas
@@ -76,8 +78,6 @@ jobs:
           docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/database-provisioning-integration.php --confirm-database=bestuursatlas
       - name: Backup and recovery integration
         run: docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/backup_integration.php --confirm-database=bestuursatlas
-      - name: PostgreSQL catalog and read-only permissions
-        run: docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/postgres-integration.php --confirm-database=govern_pg
       - name: Proxy follows recreated web containers
         run: GOVERN_DOCKER_NETWORK_TEST=1 python3 tests/proxy-restart-smoke.py --confirm-project=govern
       - name: HTTP and phpMyAdmin integration

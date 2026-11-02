@@ -76,7 +76,9 @@ final class PostgresCatalog implements CatalogAdapter
             COALESCE(pg_catalog.pg_get_expr(d.adbin, d.adrelid), t.typdefault) AS column_default,
             a.attgenerated, a.attidentity,
             EXISTS (SELECT 1 FROM pg_catalog.pg_index i
-                WHERE i.indrelid = c.oid AND i.indisprimary AND a.attnum = ANY(i.indkey)) AS is_primary,
+                CROSS JOIN LATERAL unnest(i.indkey) WITH ORDINALITY AS key_column(number, position)
+                WHERE i.indrelid = c.oid AND i.indisprimary
+                  AND key_column.position <= i.indnkeyatts AND key_column.number = a.attnum) AS is_primary,
             pg_catalog.col_description(c.oid, a.attnum) AS comment
             FROM pg_catalog.pg_class c
             JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
