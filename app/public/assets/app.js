@@ -7,6 +7,7 @@ import {t, getLanguage, setLanguage} from './i18n.js';
 import {getPreferences, updatePreferences, resetAppearance, subscribePreferences} from './preferences.js';
 import {createDashboardLayout} from './dashboard-layout.js';
 import {mountSchemaVisualizer} from './schema-visualizer.js';
+import {mountRecordMap} from './record-map.js';
 import {registerSelection} from './selection-registry.js';
 import {SelectionPointer} from './selection-pointer.js';
 import {createRowEditor} from './row-editor.js';
@@ -24,6 +25,7 @@ const routes = {
     gegevens: {labelKey: 'app.route.data', icon: 'table'},
     structuur: {labelKey: 'app.route.structure', icon: 'layers'},
     schema: {labelKey: 'app.route.schema', icon: 'network'},
+    verbanden: {labelKey: 'app.route.relationships', icon: 'network'},
     onderzoeken: {labelKey: 'app.route.research', icon: 'search'},
     experimenten: {labelKey: 'app.route.experiments', icon: 'flask'},
     instellingen: {labelKey: 'app.route.settings', icon: 'settings'},
@@ -59,6 +61,8 @@ const state = {
     snapshotError: null,
     schemaData: null,
     schemaView: {},
+    recordMapState: {},
+    selectedRecord: null,
     databaseView: 'gegevens',
     contextOpen: {database: true, research: true, experiments: true},
     structureData: new Map(),
@@ -80,7 +84,7 @@ const navigation = document.getElementById('navigation');
 const workspaceContext = document.getElementById('workspace-context');
 const contextContent = document.getElementById('workspace-context-content');
 const panelToggle = document.getElementById('workspace-panel-toggle');
-const databaseViews = ['gegevens', 'structuur', 'schema'];
+const databaseViews = ['gegevens', 'structuur', 'schema', 'verbanden'];
 const databaseSelect = document.getElementById('database-select');
 const manageDatabases = document.getElementById('manage-databases');
 const aiToggle = document.getElementById('ai-toggle');
@@ -88,17 +92,17 @@ const databaseCache = new Map();
 const databaseStateKeys = ['bootstrap', 'table', 'queryDraft', 'queryName', 'queryNotes', 'queryId', 'queryResult', 'queryRevision',
     'queryDesign', 'builderDraft', 'builderOpen', 'dataViews', 'catalogSearch', 'snapshotLabel', 'savedQueries', 'queryDirty',
     'connectionError', 'queryError', 'querySaveError', 'snapshotError', 'schemaData', 'schemaView', 'databaseView',
-    'contextOpen', 'structureData', 'inspectorExpanded', 'explorerScroll'];
+    'contextOpen', 'structureData', 'inspectorExpanded', 'explorerScroll', 'recordMapState', 'selectedRecord'];
 const emptyDatabaseState = () => ({bootstrap: null, table: '', queryDraft: '', queryName: '', queryNotes: '', queryId: null,
     queryResult: null, queryRevision: 0, queryDesign: null, builderDraft: null, builderOpen: true, dataViews: new Map(),
     catalogSearch: {}, snapshotLabel: '', savedQueries: null, queryDirty: false, connectionError: null, queryError: null,
     querySaveError: null, snapshotError: null, schemaData: null, schemaView: {}, databaseView: 'gegevens',
-    contextOpen: {database: true, research: true, experiments: true}, structureData: new Map(), inspectorExpanded: {}, explorerScroll: {}});
+    contextOpen: {database: true, research: true, experiments: true}, structureData: new Map(), inspectorExpanded: {}, explorerScroll: {}, recordMapState: {}, selectedRecord: null});
 const scopeKey = item => item.scope_key || item.name;
 const schemaName = () => state.bootstrap?.database?.schema || state.bootstrap?.database?.name || '';
 function supports(capability) {
     if (state.bootstrap?.capabilities?.[capability] !== undefined) return state.bootstrap.capabilities[capability] === true;
-    return !getDatabase().startsWith('postgres:') || ['browse', 'structure', 'schema'].includes(capability);
+    return !getDatabase().startsWith('postgres:') || ['browse', 'structure', 'schema', 'record_map'].includes(capability);
 }
 function unavailableFeature() {
     return el('section', {'data-capability-unavailable': ''}, notice(t('app.postgres.unavailable')),
@@ -611,6 +615,10 @@ async function refreshBootstrap(notify = false, {preserveFocus = false, focusFal
         knownDatabases = data.databases || [{name: data.database.name, available: data.database.status !== 'unavailable'}];
         history.replaceState(null, '', routeHash(route().name, Object.fromEntries(route().params)));
         state.bootstrap = data;
+        // An explicit refresh starts a fresh record snapshot; old foreign-key
+        // edges must not remain presented beside newly loaded source values.
+        if (notify) state.recordMapState = state.selectedRecord
+            ? {pendingRecord: {table: state.selectedRecord.table, key: {...state.selectedRecord.key}}} : {};
         if (!supports('ai')) aiWorkspace.close({restoreFocus: false});
         else aiWorkspace.setDatabase(selectedScope);
         databaseManager.refresh();
@@ -698,7 +706,7 @@ function render() {
     renderConnectionNotice();
     page.replaceChildren();
     contextContent.replaceChildren();
-    const views = {overzicht: renderOverview, gegevens: renderData, structuur: renderStructure, schema: renderSchema, onderzoeken: renderResearch, experimenten: renderExperiments, instellingen: renderSettings};
+    const views = {overzicht: renderOverview, gegevens: renderData, structuur: renderStructure, schema: renderSchema, verbanden: renderRecordMap, onderzoeken: renderResearch, experimenten: renderExperiments, instellingen: renderSettings};
     if (location.name === 'onderzoeken' && !supports('query') || location.name === 'experimenten' && !supports('snapshots')) {
         page.append(unavailableFeature());
         return;
@@ -1035,6 +1043,71 @@ function tableHeader(table, tab) {
             ? button(tab === 'structure' ? t('app.core.table.openStructure') : t('app.core.table.openBrowse'), () => databaseModal.open(table.name, tab), {className: 'button-small', symbol: 'database'}) : null));
 }
 
+function openRecordMap(table, key = null) {
+    if (!supports('record_map')) return;
+    state.table = table;
+    if (key) state.recordMapState.pendingRecord = {table, key: {...key}};
+    go('verbanden', {table});
+}
+
+function renderRecordMap(scope) {
+    page.append(databaseHeading('verbanden'));
+    let inspector = databaseContext('verbanden', scope);
+    const drawContext = () => {
+        const table = tables().find(item => item.name === state.table);
+        if (table) drawTableInspector(inspector, table);
+    };
+    drawContext();
+    const root = el('section', {class: 'record-map-workspace'});
+    page.append(root);
+    const pending = state.recordMapState.pendingRecord;
+    delete state.recordMapState.pendingRecord;
+    const map = mountRecordMap(root, {
+        state: state.recordMapState, tables: tables(), scopeKey: scope.database, initialTable: state.table,
+        signal: scope.signal, live: scope.live,
+        onTableChange: table => {
+            if (!scope.live()) return;
+            state.table = table;
+            history.replaceState(null, '', databaseHash('verbanden'));
+            page.querySelector('.database-heading')?.replaceWith(databaseHeading('verbanden'));
+            syncWorkspaceNavigation();
+            contextContent.replaceChildren(); inspector = databaseContext('verbanden', scope); drawContext();
+        },
+        onSelectRecord: node => {
+            if (scope.live()) state.selectedRecord = node ? {table: node.table, key: {...node.key}} : null;
+        },
+        onOpenTable: (table, key) => {
+            if (!scope.live()) return;
+            state.selectedRecord = {table, key: {...key}};
+            state.table = table;
+            go('gegevens', {table});
+        },
+    });
+    scope.cleanup.push(() => map.destroy());
+    if (pending) map.selectRecord(pending);
+}
+
+async function selectedSourceRecord(root, table, scope) {
+    const selected = state.selectedRecord;
+    if (!selected || selected.table !== table || !supports('record_map')) return;
+    const panel = el('section', {class: 'card', id: 'selected-source-record', 'aria-label': t('app.mapEntry.sourceRecord')},
+        el('div', {class: 'card-body'}, el('h3', {}, t('app.mapEntry.sourceRecord')), loading()));
+    root.prepend(panel);
+    try {
+        const data = await request('record-map', {params: {database: scope.database},
+            body: {table, key: selected.key}, signal: scope.signal});
+        if (!scope.live() || state.selectedRecord !== selected || !panel.isConnected) return;
+        const node = data.focus;
+        panel.replaceChildren(el('div', {class: 'card-body'}, el('h3', {}, t('app.mapEntry.sourceRecord')),
+            el('p', {}, el('code', {}, node.table), ' · ', node.label),
+            dataTable(node.columns.map(column => ({key: column.name, label: column.name})), [node.row]),
+            button(t('app.mapEntry.openRecord'), () => openRecordMap(node.table, node.key), {symbol: 'network', className: 'button-small'}),
+            button(t('app.mapEntry.clearSource'), () => { state.selectedRecord = null; panel.remove(); }, {kind: 'ghost', className: 'button-small'})));
+    } catch (error) {
+        if (error.name !== 'AbortError' && scope.live()) panel.replaceChildren(errorPanel(error));
+    }
+}
+
 function noTables() {
     return empty(t('app.core.table.emptyTitle'), t('app.core.table.emptyHelp'),
         supports('phpmyadmin') ? button(t('app.core.table.openDatabase'), () => databaseModal.open('', 'sql'), {kind: 'primary', symbol: 'database'}) : null);
@@ -1054,6 +1127,8 @@ async function renderData(scope) {
     const workspace = el('section', {class: 'table-workspace'});
     const card = registerSelection(el('div', {class: 'card'}, tableHeader(table, 'browse')),
         () => tableSelection(table, state.structureData.get(table.name)));
+    if (supports('record_map')) card.querySelector('.table-heading-actions').append(button(t('app.mapEntry.open'),
+        () => openRecordMap(table.name), {symbol: 'network', className: 'button-small', 'data-open-record-map': table.name}));
     if (supports('write') && table.type !== 'view') card.querySelector('.table-heading-actions').prepend(button(t('app.databases.addRow'), () => rowEditor.open({table: table.name, mode: 'insert'}), {id: 'add-row', kind: 'primary', symbol: 'plus', className: 'button-small'}));
     const search = el('input', {id: 'data-search', type: 'search', class: 'input', value: viewState.search, placeholder: t('app.core.data.searchPlaceholder'), 'aria-label': t('app.core.data.searchLabel'), autocomplete: 'off'});
     const size = el('select', {id: 'data-page-size', class: 'input select', 'aria-label': t('app.core.data.pageSize')},
@@ -1104,7 +1179,9 @@ async function renderData(scope) {
                     button(t('app.databases.edit'), () => rowEditor.open({table: table.name, key, mode: 'edit'}),
                         {id: 'row-edit-' + index, className: 'button-small', 'data-row-action': 'edit', 'aria-label': t('app.databases.editLabel', {table: table.name})}),
                     button(t('app.databases.remove'), () => rowEditor.open({table: table.name, key, mode: 'delete'}),
-                        {id: 'row-delete-' + index, className: 'button-small row-delete', 'data-row-action': 'delete', 'aria-label': t('app.databases.removeLabel', {table: table.name})}));
+                        {id: 'row-delete-' + index, className: 'button-small row-delete', 'data-row-action': 'delete', 'aria-label': t('app.databases.removeLabel', {table: table.name})}),
+                    button(t('app.mapEntry.openRecord'), () => openRecordMap(table.name, key),
+                        {className: 'button-small', symbol: 'network', 'data-row-map': index}));
             }});
             result.replaceChildren(dataTable(columns, data.rows, {
                 emptyMessage: search.value ? t('app.core.data.filteredEmpty') : t('app.core.data.empty'),
@@ -1152,6 +1229,7 @@ async function renderData(scope) {
         el('div', {class: 'table-toolbar-right'}, el('span', {class: 'small muted'}, t('app.core.data.rows')), size)),
         result, pagination);
     workspace.append(card, supports('write') ? el('p', {class: 'table-caption'}, t('app.databases.help')) : null, sql);
+    selectedSourceRecord(workspace, table.name, scope);
     page.append(workspace);
     await load();
 }

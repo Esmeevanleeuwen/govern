@@ -119,9 +119,10 @@ schema parameters, so equal table names in separate schemas stay independent.
 Only names from `PG_DATABASE` and `PG_SCHEMAS` are listed for PostgreSQL;
 configured schemas that cannot be read remain visible with `available:false`.
 
-PostgreSQL supports only authenticated GET actions `bootstrap`, `schema`,
-`structure` and `browse`, alongside the global `databases` action. Normal HTTP
-method and CSRF validation still apply. Every other scoped PostgreSQL action
+PostgreSQL supports authenticated GET actions `bootstrap`, `schema`,
+`structure`, `browse` and `record-map-records`, plus the read-only POST
+`record-map`, alongside the global `databases` action. Normal HTTP method and
+CSRF validation still apply. Every other scoped PostgreSQL action
 returns 403 `postgres_read_only` before the corresponding service is invoked.
 This includes arbitrary SQL, row editing, saved queries, snapshots, import
 inspection/database creation, context export and AI. These controls are also
@@ -129,7 +130,7 @@ unavailable in the UI; the server guard remains authoritative.
 
 Bootstrap adds top-level `scope_key` and `capabilities`, and database fields
 `connection`, `engine`, `schema` and `scope_key`. PostgreSQL capabilities
-`browse`, `structure`, `schema` are true; `write`, `query`, `saved_queries`,
+`browse`, `structure`, `schema`, `record_map` are true; `write`, `query`, `saved_queries`,
 `snapshots`, `phpmyadmin`, `import`, `create_database`, `ai`, `context` are false.
 The normalized catalog/browse response retains the existing table, column and
 relationship fields. PostgreSQL browse returns no editable row identities;
@@ -141,6 +142,52 @@ Structure can leave `create_sql` empty rather than inventing a full table DDL.
 The public `health` action continues to check only the fixed MariaDB startup
 connection. PostgreSQL readiness appears in its authenticated bootstrap data;
 an unavailable optional PostgreSQL connection does not become a health target.
+
+### Record relationship map
+
+Both engines use the same read-only map endpoints. Every request carries the
+ordinary connection/database/schema URL scope and requires an approved account.
+Map operations use the reader connection and the ordinary maintenance lock.
+They accept no SQL, host, credentials or identifier expressions from the browser.
+
+`GET record-map-records` accepts `table`, `q`, `page` and `page_size` and returns
+`{table,nodes,key_columns,supported,reason_code?,page,page_size,has_more,next_page?}`.
+It lists possible starting records from one live catalog table. Unsupported
+views or record identities are explicit; they do not become invented node IDs.
+
+`POST record-map` uses JSON and the normal `X-CSRF-Token` header. Its input is
+`{table:string,key:object,relation?:string,offset?:integer,page_size?:integer}`.
+`key` contains the complete selected primary or suitable non-nullable unique
+key. Every value is an exact string, including large integers. Extra, missing
+or fabricated key fields are rejected, and the selected record is read again.
+An omitted `relation` inspects that record and lists its declared incoming and
+outgoing references. A `relation` ID returned by the live catalog expands one
+reference, with offset pagination and a default page size of 25 (maximum 50).
+
+The result is
+`{focus,nodes,edges,relations,has_more,next_offset,relation?}`. Nodes contain
+`{id,table,key,label,row,columns,truncated}`. `key` and `row` remain JSON objects,
+including when identifiers look numeric. Stable node IDs include connection,
+database, schema, table and the complete canonical key; preview text is never
+the source of identity. Large display values can be shortened explicitly.
+
+Edges contain source/target node IDs, `kind:"foreign_key"`, constraint name,
+source/target table and column names, exact source/target keys, and `evidence`
+with the prepared SQL, parameters, ordered column pairs and schema names.
+Relation descriptors identify incoming/outgoing direction and indicate whether
+the reference can be expanded. Cross-schema references, views and unsupported
+record keys remain labelled unavailable rather than being redirected to a
+same-named table in the current scope. Composite and self-references retain
+their declared identities. A nullable reference without matching values does
+not create a fictional target record.
+
+Only current records matching a declared foreign key create edges. This API
+does not generate semantic similarities, AI inferences or causal claims. Map
+selection and fetched previews stay in per-scope browser memory, not persistent
+browser record storage. Opening a selected source record in Data reads it again
+through `record-map`; it does not rely on a shortened preview or the first page
+of a table. Pagination describes the loaded result, not a claim that the entire
+database has been mapped. See [RECORD_MAP.md](RECORD_MAP.md).
 
 ### Existing MariaDB scope
 

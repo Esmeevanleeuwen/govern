@@ -7,6 +7,12 @@ namespace Govern;
 final class Messages
 {
     private const TEXT = [
+        'record_map_input_invalid' => ['nl' => 'Kies een geldig record en een verbinding uit de kaart.', 'en' => 'Choose a valid record and a connection from the map.'],
+        'record_map_identity_unsupported' => ['nl' => 'Deze tabel heeft geen ondersteunde, volledige unieke recordsleutel voor de kaart.', 'en' => 'This table has no supported complete unique record key for the map.'],
+        'record_map_record_missing' => ['nl' => 'Dit record is niet meer beschikbaar. Vernieuw de recordkeuze.', 'en' => 'This record is no longer available. Refresh the record picker.'],
+        'record_map_relation_missing' => ['nl' => 'Deze databaseverwijzing bestaat niet meer. Vernieuw de kaart.', 'en' => 'This database relationship no longer exists. Refresh the map.'],
+        'record_map_relation_unsupported' => ['nl' => 'Deze verbinding kan niet binnen de gekozen database en het schema worden uitgebreid.', 'en' => 'This connection cannot be expanded within the selected database and schema.'],
+        'record_map_external_relation' => ['nl' => 'Deze verwijzing gaat naar een andere database of een ander schema.', 'en' => 'This relationship points to another database or schema.'],
         'postgres_config_invalid' => ['nl' => 'Controleer de PostgreSQL-instellingen op de server.', 'en' => 'Check the PostgreSQL settings on the server.'],
         'postgres_schema_unavailable' => ['nl' => 'Dit PostgreSQL-schema is niet beschikbaar voor het leesaccount.', 'en' => 'This PostgreSQL schema is unavailable to the reader account.'],
         'postgres_read_only' => ['nl' => 'PostgreSQL ondersteunt nu alleen tabellen, structuur en schema bekijken. Deze handeling is nog niet beschikbaar.', 'en' => 'PostgreSQL currently supports browsing tables, structure and schemas. This action is not available yet.'],

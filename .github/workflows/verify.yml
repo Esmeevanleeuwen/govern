@@ -78,6 +78,15 @@ jobs:
           docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/database-provisioning-integration.php --confirm-database=bestuursatlas
       - name: Backup and recovery integration
         run: docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/backup_integration.php --confirm-database=bestuursatlas
+      - name: Prepare explicitly isolated record-map fixtures
+        id: map-fixtures
+        run: |
+          docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" -e GOVERN_TEST_SECOND_DATABASE app /workspace/tests/record-map-fixture.php --confirm-database=bestuursatlas --confirm-second-database=govern_multi_test
+          docker compose --profile postgres exec -T postgres sh -c 'test "$POSTGRES_DB" = govern_pg && exec psql --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" --set ON_ERROR_STOP=1' < tests/record-map-postgres-fixture.sql
+      - name: Record-map identity, relationships and source evidence
+        run: |
+          docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/record-map-integration.php --engine=mariadb --confirm-database=bestuursatlas
+          docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/record-map-integration.php --engine=postgres --confirm-database=govern_pg
       - name: Proxy follows recreated web containers
         run: GOVERN_DOCKER_NETWORK_TEST=1 python3 tests/proxy-restart-smoke.py --confirm-project=govern
       - name: HTTP and phpMyAdmin integration
@@ -85,10 +94,12 @@ jobs:
           python3 tests/smoke.py --base-url http://127.0.0.1:8080
           python3 tests/auth-gateway.py --base-url http://127.0.0.1:8080
           python3 tests/postgres-http.py --base-url http://127.0.0.1:8080 --confirm-database=govern_pg
+          python3 tests/record-map-http.py --base-url http://127.0.0.1:8080 --confirm-fixtures=record-map-ci
       - name: Browser and visual query builder
         run: |
           node tests/i18n-unit.mjs
           node tests/api-scope-unit.mjs
+          node tests/record-map-model-unit.mjs
           node tests/frontend-messages-unit.mjs
           node tests/preferences-unit.mjs
           node tests/dashboard-layout-unit.mjs
@@ -103,6 +114,7 @@ jobs:
           export GOVERN_UI_WRITE_TESTS=1
           failed_suites=()
           for suite in \
+            tests/record-map-smoke.mjs \
             tests/homepage-auth-smoke.mjs \
             tests/postgres-smoke.mjs \
             tests/database-import-smoke.mjs \
