@@ -58,8 +58,8 @@ De taal- en uiterlijkvoorkeuren blijven bij de browser, zonder accountsynchronis
 ## PostgreSQL gebruiken
 
 PostgreSQL is een optionele tweede verbinding. De bestaande tabelverkenner,
-structuurweergave en het schemadiagram kunnen PostgreSQL-tabellen en relaties
-tonen. Deze eerste versie ondersteunt alleen bekijken en zoeken; wijzigen,
+structuurweergave, het schemadiagram en de recordkaart kunnen PostgreSQL-
+gegevens en relaties tonen. Deze versie ondersteunt alleen lezen en zoeken; wijzigen,
 vrije SQL, import, herstelpunten en AI zijn voor PostgreSQL nog niet beschikbaar.
 phpMyAdmin blijft alleen bij de MariaDB-verbinding horen.
 
@@ -76,6 +76,25 @@ eigen volume. De webapp krijgt alleen het afzonderlijke leesaccount.
 
 Meer over configuratie, schema's en de volgende bouwfasen:
 [PostgreSQL in Govern](docs/POSTGRESQL.md).
+
+## Verbanden tussen records verkennen
+
+Open **Database → Verbanden** om echte records als een netwerk te bekijken.
+Kies een tabel en een beginrecord. Selecteer daarna een punt, bekijk zijn
+gegevens en vouw een inkomende of uitgaande verwijzing uit. Een lijn toont
+welke foreign key en kolomwaarden de twee records verbinden. Vanuit de
+inspecteur kun je het bronrecord opnieuw uitlezen in Gegevens.
+
+Deze leesfunctie werkt voor MariaDB en PostgreSQL binnen de gekozen database
+en het gekozen schema. Filter op tabelsoort, verplaats punten, zoom of pas de
+kaart in het venster. Bij veel verbonden records laad je de volgende pagina
+bewust bij; de kaart geeft aan wanneer nog niet alle resultaten zijn geladen.
+Views en tabellen zonder een ondersteunde volledige recordsleutel krijgen een
+duidelijke melding. De kaart verzint geen AI-verbanden en verandert geen data.
+
+De kaart en selectie blijven tijdens deze browsersessie per verbinding,
+database en schema apart. Recordgegevens worden niet in browseropslag bewaard.
+Zie [de uitleg van de recordkaart](docs/RECORD_MAP.md).
 
 ## Een andere database kiezen of toevoegen
 
@@ -174,6 +193,9 @@ de hierboven beschreven eerste versie met alleen bekijken en zoeken.
   rechtstreeks gegevens te veranderen. Het formulier toont database en tabel;
   verwijderen vraagt bevestiging.
 - **Database → Structuur:** lees velden, sleutels, relaties en de echte tabeldefinitie.
+- **Database → Verbanden:** volg verbindingen tussen echte records, vouw
+  verwijzingen uit en inspecteer de bron achter iedere lijn. Deze leesweergave
+  is ook beschikbaar voor PostgreSQL.
 - **Database → Schema:** bekijk alle tabellen, kolommen en foreign keys in een interactief
   diagram. Scroll boven de tekening om rond je muisaanwijzer te zoomen en sleep
   de achtergrond om te verschuiven. De tabellenlijst blijft zichtbaar wanneer

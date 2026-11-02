@@ -22,6 +22,7 @@ $governUser = \Govern\Web::user();
     <link rel="stylesheet" href="/assets/row-editor.css">
     <link rel="stylesheet" href="/assets/database-manager.css">
     <link rel="stylesheet" href="/assets/ai-workspace.css">
+    <link rel="stylesheet" href="/assets/record-map.css">
     <script type="module" src="/assets/app.js"></script>
     <script type="module" src="/assets/workspace-account.js"></script>
 </head>

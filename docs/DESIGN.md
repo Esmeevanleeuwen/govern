@@ -183,13 +183,15 @@ Keep primary actions visible without hover. Check the layout at 320 px, tablet w
 
 - **Overview / Overzicht:** a personal starting point with data access, research, guidance and restore points. Open it directly, without a second navigation menu repeating Research and Experiments. Counts come from the live database; label row estimates as estimates.
 
-- **Database / Database:** one workspace with **Data / Gegevens**, **Structure / Structuur** and **Schema / Schema** as its views. Keep these view controls beside the workspace rather than repeating them as main navigation areas.
+- **Database / Database:** one workspace with **Data / Gegevens**, **Structure / Structuur**, **Schema / Schema** and **Relationships / Verbanden** as its views. Keep these view controls beside the workspace rather than repeating them as main navigation areas.
 
   - **Data:** table selection, record search, pagination, readable rows and optional SQL explanation. Add rows or use row actions to edit/delete in a focused dialog. Keep the official phpMyAdmin available for unsupported editing and its full toolset.
 
   - **Structure:** columns, keys, relationships and table definitions from the live catalog. Related objects have a clear route back.
 
   - **Schema:** a whole-database diagram for following declared foreign keys. Keep its canvas, table cards and tools when adopting the shared Database explorer.
+
+  - **Relationships:** a record-level map for inspecting and expanding actual foreign-key matches. Keep record selection, table filters, canvas controls and the source inspector inside this view. Every node can open its source record in Data; every edge identifies the constraint and exact values behind it.
 
 - **Research / Onderzoeken:** visual query building, editable SQL, results and saved research. Explain the relationship between a visual design and hand edited SQL.
 
@@ -221,16 +223,16 @@ links to other main areas. A dashboard action may still resume a specific task.
 Database always keeps a searchable table explorer. Selecting a table highlights
 it in the list and updates the workspace; details appear below the list rather
 than replacing it. The next table stays one click away. The same table selection
-and explorer search carry between Data, Structure and Schema. Record search and
+and explorer search carry between Data, Structure, Schema and Relationships. Record search and
 pagination belong to Data and remain separate from explorer search.
 
 ### Predictable placement within Database
 
-Use the same order in Data, Structure and Schema:
+Use the same order in Data, Structure, Schema and Relationships:
 
 1. A compact **Database** heading. The **Tables** opener occupies the same header
    position in every view when the explorer is collapsed or the mobile drawer is closed.
-2. One view row directly beneath it: **Data**, **Structure**, **Schema**, followed
+2. One view row directly beneath it: **Data**, **Structure**, **Schema**, **Relationships**, followed
    by the selected table context. Let that context wrap below the views on narrow screens.
 3. One tool area immediately before the table, structure or canvas it controls.
 4. The main content, followed by a compact summary or optional explanation.
@@ -245,6 +247,30 @@ display; arrangement; zoom, actual size and fit; then refresh and Help. Keep
 those groups together above the canvas, with consistent alignment and wrapping.
 Zoom controls must not cover table fields or move below a large diagram.
 Put table/relationship counts and the PK/FK legend in a compact canvas footer.
+
+### Record relationship map
+
+Start from a table and one actual record. A selected node shows its exact key,
+record preview and available incoming/outgoing references in the source
+inspector. Expanding a reference adds the matching records and their links;
+show further pages through an explicit load-more control. Use stable table
+identity for category colours and pair colour with labels. Filtering hides
+unselected table types without silently deleting the loaded map.
+
+Selecting an edge shows the declared constraint, ordered column pairs, source
+and target values, and optional SQL with parameters. Label these as database
+links. Inferred similarity is not implemented and must never look like a
+recorded relationship. Opening a source in Data displays that exact record
+in a read-only panel, refreshed from the server, while ordinary browsing stays
+available. An empty result, missing record, unsupported key or cross-schema
+boundary has a nearby explanation and a route back.
+
+Reuse Govern's glass surfaces and shared tokens. Keep the canvas dominant on
+desktop and stack its inspector on narrow screens. Pan, zoom, fit and clear
+controls remain keyboard-accessible; selecting nodes and edges must also work
+without dragging. Avoid looping simulation motion and respect reduced motion.
+Do not persist fetched record data in browser storage. See
+[RECORD_MAP.md](RECORD_MAP.md) for the delivered scope.
 Long interaction, relationship and local-layout explanations belong in Help or
 a collapsed explanation below the canvas, keeping the initial workspace concise.
 

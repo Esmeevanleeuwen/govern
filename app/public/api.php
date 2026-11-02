@@ -23,6 +23,7 @@ use Govern\SavedQueries;
 use Govern\AiService;
 use Govern\DatabaseProvisioner;
 use Govern\ImportInspection;
+use Govern\RecordMap;
 
 try {
     $baseConfig = Config::fromEnvironment();
@@ -35,7 +36,7 @@ try {
         Http::json(['status' => 'ok']);
     }
     (new Auth())->requireUser();
-    $posts = ['build-query', 'query', 'save-query', 'delete-query', 'create-snapshot', 'restore-snapshot', 'insert-row', 'update-row', 'delete-row', 'ai-context', 'ai-chat', 'prepare-database'];
+    $posts = ['build-query', 'query', 'save-query', 'delete-query', 'create-snapshot', 'restore-snapshot', 'insert-row', 'update-row', 'delete-row', 'ai-context', 'ai-chat', 'prepare-database', 'record-map'];
     $input = in_array($action, $posts, true) ? Http::post($csrf) : [];
     if (!in_array($action, $posts, true)) {
         Http::get();
@@ -138,6 +139,11 @@ try {
         return $data;
     };
     switch ($action) {
+        case 'record-map-records':
+            Http::json((new RecordMap($database, $catalog, $config))->records(Http::text($_GET, 'table'),
+                Http::integer($_GET, 'page', 1), Http::integer($_GET, 'page_size', 25), Http::text($_GET, 'q', false)));
+        case 'record-map':
+            Http::json((new RecordMap($database, $catalog, $config))->explore($input));
         case 'ai-context':
             Http::json((new AiService($database))->previewContext($input));
         case 'ai-chat':

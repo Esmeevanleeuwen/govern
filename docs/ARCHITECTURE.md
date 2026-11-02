@@ -66,8 +66,9 @@ toegangsregels niet actief achterblijven.
 
 De PostgreSQL-uitbreiding bouwt voort op de startpagina en installatieaccounts
 uit PR #16. Ze voegt een tweede SQL-engine toe aan dezelfde werkplek, zonder
-een tweede tabelverkenner of schemadiagram. De eerste bouwfase is alleen lezen:
-tabellen, kolommen, sleutels, relaties, records en zoeken binnen de gekozen tabel.
+een tweede tabelverkenner of schemadiagram. De leesfuncties omvatten tabellen,
+kolommen, sleutels, relaties, records, zoeken binnen de gekozen tabel en de
+recordkaart.
 
 `Database` blijft de gedeelde facade en kiest `MariaDbAdapter` of
 `PostgresAdapter`. `Catalog` kiest overeenkomstig `MariaDbCatalog` of
@@ -90,7 +91,8 @@ Een wissel annuleert oude leesacties en laat late antwoorden uit de vorige
 scope buiten de huidige weergave.
 
 De capabilityvelden in bootstrap sturen de zichtbare bediening. De API weigert
-voor PostgreSQL alle acties buiten bootstrap, catalogus, structuur en bladeren;
+voor PostgreSQL alle acties buiten bootstrap, catalogus, structuur, bladeren
+en de afzonderlijke leesacties van de recordkaart;
 de writer- en vrije-SQL-verbinding weigeren eveneens. Er wordt geen MariaDB-
 snapshot-, query-, import- of AI-service op een PostgreSQL-scope aangeroepen.
 phpMyAdmin blijft de officiële MariaDB-toepassing en wordt niet als
@@ -355,6 +357,43 @@ verdere uitbreidingen staan in [lokale AI](AI.md). Er wordt geen nieuw agent-
 framework, vectoropslag of training toegevoegd om dit eerste pad mogelijk te
 maken. Een toekomstige leesfunctie krijgt een afzonderlijke, begrensde
 toegangslaag; de vrije SQL-runner is daarvoor geen veilige automatische tool.
+
+## Recordkaart
+
+De route `#verbanden` is een vierde weergave binnen de bestaande Database-
+werkplek. Het schemadiagram toont tabellen; de recordkaart toont geselecteerde
+rijen en de gedeclareerde verwijzingen die werkelijk op die rijen passen.
+Beide gebruiken de bestaande databasekiezer, catalogus en leesrechten.
+
+`RecordMap` bouwt op `Database` en `Catalog` en kent geen vast domeinmodel.
+De service valideert tabel, volledige recordsleutel en relatie aan de actuele
+catalogus, leest het bronrecord opnieuw en gebruikt gebonden waarden met
+engine-specifiek gequote identifiers. Inkomende relaties worden uit dezelfde
+catalogus afgeleid. Er is geen vrije SQL of schrijfverbinding in dit pad.
+Alle delen van samengestelde sleutels en foreign keys behouden hun volgorde.
+
+`record-map-records` levert een gepagineerde keuze van beginrecords.
+`record-map` inspecteert een gekozen record of breidt één gekozen verwijzing
+uit. De reactie bevat punten, lijnen, beschikbare verwijzingen en herkomst:
+constraint, kolomparen, exacte sleutels, SQL en parameters. Pagina's laden
+bewust bij; de kaart doet geen volledige databasescan of automatische
+recursieve expansie. Niet-ondersteunde sleutels, views en externe schema's
+krijgen een herkenbare grens in de interface.
+
+De browsermodule houdt rendering en inspectie bij elkaar; een klein zuiver
+model beheert selectie en de identiteit van punten en lijnen. Zo kunnen
+latere visualisaties dezelfde selectie hergebruiken. Openen in Gegevens toont
+een afzonderlijk, opnieuw uitgelezen bronrecord met zijn sleutel, ook wanneer
+het niet op de eerste tabelpagina staat. De huidige recordkaart voegt geen
+semantisch model, correlatieberekening, 3D-clustering of datakunst toe.
+Er verschijnen alleen uitgelezen databaseverbanden.
+
+Kaarttoestand staat in het bestaande per-scope werkplekgeheugen. De complete
+verbinding/database/schema-identiteit voorkomt vermenging van gelijknamige
+tabellen. Weggaan of wisselen annuleert leeswerk en negeert late antwoorden.
+Recordpreviews worden niet naar `localStorage` of `sessionStorage` geschreven;
+de bestaande per-tab keuze van de database blijft wel bewaard. Zie
+[RECORD_MAP.md](RECORD_MAP.md) voor gebruik en grenzen.
 
 ## Schemavisualisatie
 
