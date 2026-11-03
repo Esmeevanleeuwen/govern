@@ -14,10 +14,12 @@ $db = new Database($config);
 $service = new DatasetImport($db);
 $pdo = $db->writer();
 $name = 'zz_import_' . bin2hex(random_bytes(6));
+$numericName = (string) random_int(100000000, 999999999);
 $file = tempnam(sys_get_temp_dir(), 'govern-reader-test-');
 file_put_contents($file, "id;name\n001;First\n002;Second\n");
 $assert = static function (bool $valid): void {if (!$valid) throw new RuntimeException('Dataset integration assertion failed');};
 try {
+    $pdo->exec('CREATE TABLE ' . Database::identifier($numericName) . ' (id TEXT, name TEXT) ENGINE=InnoDB');
     $parsed = DatasetImport::read(['name' => 'test.csv', 'tmp_name' => $file]);
     $input = ['dataset' => '0', 'table' => $name, 'mode' => 'create', 'confirmation' => $db->name(), 'sha256' => $parsed['sha256']];
     $preview = $service->preview($parsed);
@@ -44,5 +46,6 @@ try {
     echo "Dataset create, readback, append, schema conflict and rollback checks passed.\n";
 } finally {
     $pdo->exec('DROP TABLE IF EXISTS ' . Database::identifier($name));
+    $pdo->exec('DROP TABLE IF EXISTS ' . Database::identifier($numericName));
     unlink($file);
 }

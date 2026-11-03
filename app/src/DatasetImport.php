@@ -57,6 +57,7 @@ final class DatasetImport
         $names = array_column($dataset['columns'], 'name');
         $result = [];
         foreach ($tables as $name => $columns) {
+            $name = (string) $name; // PHP casts numeric table-name keys to integers.
             if (str_starts_with($name, '_govern_') || !in_array($name, $allowed, true)) continue;
             $importable = [];
             $valid = true;
