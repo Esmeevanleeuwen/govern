@@ -207,25 +207,20 @@ bronbibliotheek een tabel en startrecord. Iedere kaart is een echt record;
 de lijnen volgen foreign keys uit de actuele database. Het hoofdtabblad
 **Schema** groepeert tabeldetails en het schemadiagram.
 
-Kaarten, bronbibliotheek en inspecteur werken met dezelfde actieve selectie.
-**Show connections** groepeert gedeclareerde verwijzingen als **References** en
-**Referenced by**. **Show records** leest de eerste pagina en **Show more** leest
-bewust een volgende pagina. **Show all loaded records** herstelt alleen de
-zichtbaarheid van al geladen kaarten, zonder de hele database te lezen.
+Kaarten, bronbibliotheek en inspecteur werken met dezelfde selectie. Vanuit
+het geselecteerde record vouw je inkomende of uitgaande verwijzingen uit.
+Vragen zoals **Show linked …** gebruiken diezelfde verwijzingen. Bij meer
+resultaten kies je bewust een volgende pagina. **Show all loaded records**
+herstelt de zichtbaarheid van geladen kaarten, zonder de hele database te lezen.
 
-Het eerste record blijft passief gemarkeerd als **Starting record**. **Back**
-keert terug naar een eerder geïnspecteerd record zonder de geladen takken te
-verwijderen; **Return to starting record** selecteert het beginpunt opnieuw.
-**View record** leest precies het actieve bronrecord opnieuw uit in Records.
-Sleutels, constraints, kolomparen en gebruikte SQL zijn beschikbaar onder
-technische details.
+Met **Explore from here** ga je verder vanaf een gekozen record. **View row**
+leest precies dat bronrecord opnieuw uit in Records. Sleutels, constraints,
+kolomparen en gebruikte SQL zijn beschikbaar onder technische details.
 
 Sleep kaarten, verschuif het werkvlak of gebruik zoom en passend maken.
 **Orbit** en **Flow** rangschikken kaarten; vastgezette kaarten houden daarbij
-hun positie. Een uitbreiding behoudt de camera en bestaande kaartposities;
-**Show added records** brengt nieuwe records alleen na een expliciete keuze in
-beeld. **Manual** bewaart je eigen indeling. Shift-selectie, Hide en Undo horen
-alleen bij de canvaspresentatie. Zij veranderen geen PostgreSQL-records.
+hun positie. **Manual** bewaart je eigen indeling. Shift-selectie, Hide en Undo
+horen alleen bij de canvaspresentatie. Zij veranderen geen PostgreSQL-records.
 De bibliotheek en inspecteur kunnen bewegen, in breedte veranderen of sluiten;
 op mobiel is één lade tegelijk open.
 
@@ -239,9 +234,8 @@ browseropslag.
 Met de expliciete voorbeelden kun je **Demo organizations** kiezen, daarna
 **Northbridge Council**, en vervolgens een verwijzing naar **Demo systems**
 uitvouwen. De inspecteur laat de echte bronkolommen zien; de werkplek vraagt
-geen SQL of recordsleutel als invoer. Verbindingsacties zijn begrensde
-leesacties en gebruiken geen AI of gegenereerde relaties. Zie
-[Explore](RECORD_MAP.md).
+geen SQL of recordsleutel als invoer. Vragen zijn vaste leesacties en gebruiken
+geen AI of gegenereerde antwoorden. Zie [Explore](RECORD_MAP.md).
 
 ## Database en schema's
 

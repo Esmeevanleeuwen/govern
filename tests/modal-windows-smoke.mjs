@@ -34,13 +34,7 @@ const ready = async () => {
         const first = page.locator('#record-map-records [data-map-record]').first();
         await first.waitFor(); await first.focus(); await first.press('Enter');
     }
-    await page.locator('#explorer-open-window').waitFor({state: 'attached'});
-};
-const openSelectedRecordWindow = async () => {
-    const moreActions = page.locator('#record-map-inspector .record-map-more-actions');
-    await moreActions.waitFor();
-    if (!await moreActions.evaluate(element => element.open)) await moreActions.locator('summary').click();
-    await page.locator('#explorer-open-window').click();
+    await page.locator('#explorer-open-window').waitFor();
 };
 const countWindows = count => page.waitForFunction(count => document.querySelectorAll('dialog.record-window[open]').length === count, count);
 const fitsViewport = locator => locator.evaluate(element => {
@@ -80,7 +74,7 @@ try {
 
     // A single row action opens the next comparison without dismissing a peer.
     phase = 'record comparison';
-    await openSelectedRecordWindow();
+    await page.locator('#explorer-open-window').click();
     await countWindows(1);
     const first = page.locator('dialog.record-window').first();
     await first.getByText('Northbridge Council', {exact: true}).first().waitFor();

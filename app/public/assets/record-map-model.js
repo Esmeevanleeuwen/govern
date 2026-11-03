@@ -3,42 +3,16 @@ const object = value => value !== null && typeof value === 'object' && !Array.is
 const validPoint = value => object(value) && Number.isFinite(value.x) && Number.isFinite(value.y);
 const layouts = new Set(['orbit', 'flow', 'manual']);
 const undoLimit = 25;
-const navigationLimit = 50;
 const overlaps = (point, occupied) => occupied.some(other => Math.abs(other.x - point.x) < 240 && Math.abs(other.y - point.y) < 160);
 const nodeIds = (state, ids) => [...new Set(typeof ids === 'string' ? [ids]
     : ids && typeof ids[Symbol.iterator] === 'function' ? ids : [])].filter(id => typeof id === 'string' && state.nodes.has(id));
-const viewport = value => validPoint(value) && Number.isFinite(value.zoom) && value.zoom > 0
-    ? {x: value.x, y: value.y, zoom: value.zoom} : null;
-const validReference = (value, scopeKey = value?.scope_key) => object(value) && value.scope_key === scopeKey
-    && typeof value.id === 'string' && value.id && typeof value.table === 'string' && value.table
-    && object(value.key) && Object.keys(value.key).length > 0
-    && Object.values(value.key).every(part => typeof part === 'string');
-const recordReference = (state, node) => ({scope_key: state.scope_key, id: node.id, table: node.table,
-    key: Object.fromEntries(Object.entries(node.key))});
-const copyReference = value => ({scope_key: value.scope_key, id: value.id, table: value.table,
-    key: Object.fromEntries(Object.entries(value.key))});
-const copyVisit = value => ({...copyReference(value), viewport: viewport(value.viewport)});
-
-function ensureNavigationState(state) {
-    const source = Array.isArray(state.navigationHistory) ? state.navigationHistory : [];
-    const entries = source.filter(entry => validReference(entry, state.scope_key))
-        .map(entry => ({...copyReference(entry), viewport: viewport(entry.viewport)}));
-    const removed = Math.max(0, entries.length - navigationLimit);
-    state.navigationHistory = removed ? entries.slice(removed) : entries;
-    const proposed = Number.isSafeInteger(state.navigationIndex) ? state.navigationIndex - removed
-        : state.navigationHistory.length - 1;
-    state.navigationIndex = state.navigationHistory.length
-        ? Math.max(0, Math.min(proposed, state.navigationHistory.length - 1)) : -1;
-    return state.navigationHistory;
-}
 
 export function ensureRecordMapState(state = {}, scopeKey = '') {
     if (state.scope_key !== scopeKey) {
         Object.assign(state, {scope_key: scopeKey, nodes: new Map(), edges: new Map(), positions: new Map(),
             details: new Map(), cursors: new Map(), expansions: new Map(), hiddenTables: new Set(), selection: null,
             selectedNodes: new Set(), pinned: new Set(), hiddenNodes: new Set(), hiddenEdges: new Set(), undoStack: [],
-            layout: 'orbit', focusId: '', originId: '', originRecord: null, trail: [], navigationHistory: [], navigationIndex: -1,
-            graphEpoch: 0,
+            layout: 'orbit', focusId: '', trail: [],
             table: '', search: '', page: 1, seedResult: null, viewport: null});
     }
     for (const key of ['nodes', 'edges', 'positions', 'details', 'cursors', 'expansions']) if (!(state[key] instanceof Map)) state[key] = new Map();
@@ -47,11 +21,6 @@ export function ensureRecordMapState(state = {}, scopeKey = '') {
     if (!Array.isArray(state.undoStack)) state.undoStack = [];
     if (!layouts.has(state.layout)) state.layout = 'orbit';
     if (typeof state.focusId !== 'string' || !state.nodes.has(state.focusId)) state.focusId = '';
-    if (typeof state.originId !== 'string') state.originId = '';
-    if (!validReference(state.originRecord, scopeKey)) state.originRecord = null;
-    if (!state.originId && state.originRecord) state.originId = state.originRecord.id;
-    ensureNavigationState(state);
-    if (!Number.isSafeInteger(state.graphEpoch) || state.graphEpoch < 0) state.graphEpoch = 0;
     if (typeof state.table !== 'string') state.table = '';
     if (typeof state.search !== 'string') state.search = '';
     if (!Number.isSafeInteger(state.page) || state.page < 1) state.page = 1;
@@ -124,10 +93,6 @@ export function mergeRecordGraph(state, payload = {}) {
     if (focus) {
         if (!state.nodes.has(focus.id)) added.push(focus.id);
         state.nodes.set(focus.id, focus);
-        if (!state.originId) {
-            state.originId = focus.id;
-            state.originRecord = recordReference(state, focus);
-        } else if (state.originId === focus.id) state.originRecord = recordReference(state, focus);
         if (!state.focusId) state.focusId = focus.id;
         state.details.set(focus.id, {focus, relations: Array.isArray(payload.relations)
             ? payload.relations.filter(object).map(relation => ({...relation})) : []});
@@ -177,67 +142,6 @@ export function selectRecordMapNode(state, id, {toggle = false} = {}) {
 export function selectedRecordMapNodes(state) {
     const selected = state.selectedNodes || new Set();
     return visibleRecordGraph(state).nodes.filter(node => selected.has(node.id));
-}
-
-/**
- * Record a deliberate inspected-record change. Entries contain only an exact scoped reference and a camera,
- * never copied row data, SQL, relationship evidence or cursors. Consecutive visits to the same record update
- * its camera; visiting after Back discards the forward portion just like ordinary navigation history.
- */
-export function recordMapVisit(state, id, currentViewport = state.viewport) {
-    const node = state.nodes?.get(id);
-    if (!node || !validReference(recordReference(state, node), state.scope_key)) return null;
-    const history = ensureNavigationState(state), view = viewport(currentViewport);
-    const current = history[state.navigationIndex];
-    if (current) current.viewport = view;
-    const reference = recordReference(state, node);
-    if (current?.id === id && current.table === node.table && sameRecordKey(current.key, node.key)) {
-        Object.assign(current, reference, {viewport: view});
-        if (!state.originId) { state.originId = id; state.originRecord = copyReference(reference); }
-        return {...copyVisit(current), index: state.navigationIndex};
-    }
-    history.splice(state.navigationIndex + 1);
-    history.push({...reference, viewport: view});
-    if (history.length > navigationLimit) history.splice(0, history.length - navigationLimit);
-    state.navigationIndex = history.length - 1;
-    if (!state.originId) { state.originId = id; state.originRecord = copyReference(reference); }
-    return {...copyVisit(history[state.navigationIndex]), index: state.navigationIndex};
-}
-
-/** Inspect the previous target without moving the history cursor. */
-export function previousRecordMapVisit(state) {
-    const history = ensureNavigationState(state), index = state.navigationIndex - 1;
-    return index >= 0 && history[index] ? {...copyVisit(history[index]), index} : null;
-}
-
-/**
- * Commit a previously inspected target after the controller has established that it can be selected or reread.
- * The current entry receives the camera being left; graph data, filters, pins, layout and Undo remain untouched.
- */
-export function restoreRecordMapVisit(state, index, currentViewport = state.viewport) {
-    const history = ensureNavigationState(state);
-    if (!Number.isSafeInteger(index) || index < 0 || index >= history.length || index === state.navigationIndex) return null;
-    if (history[state.navigationIndex]) history[state.navigationIndex].viewport = viewport(currentViewport);
-    state.navigationIndex = index;
-    return {...copyVisit(history[index]), index};
-}
-
-/** The passive starting record is kept outside the bounded Back list so it remains directly reachable. */
-export function originRecordMapVisit(state) {
-    if (!validReference(state.originRecord, state.scope_key)) return null;
-    const history = ensureNavigationState(state);
-    const index = history.findLastIndex(entry => entry.id === state.originRecord.id && entry.table === state.originRecord.table
-        && sameRecordKey(entry.key, state.originRecord.key));
-    const view = index >= 0 ? history[index].viewport : null;
-    return {...copyReference(state.originRecord), viewport: viewport(view), index};
-}
-
-/** Describe recovery without changing filters or silently revealing a hidden target. */
-export function recordMapVisitState(state, visit) {
-    if (!validReference(visit, state.scope_key)) return 'invalid';
-    const node = state.nodes?.get(visit.id);
-    if (!node || node.table !== visit.table || !sameRecordKey(node.key, visit.key)) return 'unloaded';
-    return state.hiddenNodes?.has(node.id) || state.hiddenTables?.has(node.table) ? 'hidden' : 'visible';
 }
 
 export function setRecordMapPinned(state, ids, pinned = true) {
@@ -437,12 +341,7 @@ export function clearRecordMap(state) {
     state.undoStack = [];
     state.selection = null;
     state.focusId = '';
-    state.originId = '';
-    state.originRecord = null;
     state.trail = [];
-    state.navigationHistory = [];
-    state.navigationIndex = -1;
-    state.graphEpoch = (Number.isSafeInteger(state.graphEpoch) ? state.graphEpoch : 0) + 1;
     state.layout = 'orbit';
     state.viewport = null;
 }
@@ -457,12 +356,7 @@ export function resetRecordMapEvidence(state) {
     state.undoStack = [];
     state.selection = null;
     state.focusId = '';
-    state.originId = '';
-    state.originRecord = null;
     state.trail = [];
-    state.navigationHistory = [];
-    state.navigationIndex = -1;
-    state.graphEpoch = (Number.isSafeInteger(state.graphEpoch) ? state.graphEpoch : 0) + 1;
     delete state.pendingRecord;
     return focus;
 }

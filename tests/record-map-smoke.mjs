@@ -181,16 +181,9 @@ try {
     assert.equal(await page.locator('#record-map-table').inputValue(), 'zz_record_map_projects');
     await ensureSources();
     await page.locator('#record-map-table').selectOption('zz_record_map_people');
-    await page.locator('[data-record-node="' + info.focus.id + '"]').click();
-    await inspection.locator('[data-map-connections-for="' + info.focus.id + '"]').waitFor({state: 'visible'});
-    const refreshSource = () => inspection.locator('[data-map-refresh-record="' + info.focus.id + '"]');
-    const openRefreshSource = async () => {
-        const moreActions = inspection.locator('.record-map-more-actions');
-        await moreActions.waitFor({state: 'visible'});
-        if (!await moreActions.evaluate(element => element.open)) await moreActions.locator('summary').click();
-        await refreshSource().waitFor({state: 'visible'});
-    };
-    await openRefreshSource();
+    await page.locator('[data-record-node="' + info.focus.id + '"]').focus();
+    await page.locator('[data-record-node="' + info.focus.id + '"]').press('Enter');
+    const refreshSource = () => inspection.getByRole('button', {name: 'Read source again', exact: true});
     let reread = mapResponse('mariadb', undefined);
     await refreshSource().click();
     await reread;
@@ -207,7 +200,6 @@ try {
     });
     await page.locator('[data-record-relation="' + incoming.id + '"]').click();
     await bounded(expansionHeld);
-    await openRefreshSource();
     reread = mapResponse('mariadb', undefined);
     await refreshSource().click();
     await reread;
@@ -251,7 +243,6 @@ try {
     await page.locator('#record-map-fit').click();
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'Map, controls and source inspector fit a mobile screen.');
     await page.locator('#record-map-clear').click();
-    await page.locator('dialog.confirm-dialog[open] button[type="submit"]').click();
     await count(graphNodes, 0);
     await count(graphEdges, 0);
     assert.deepEqual(errors, [], 'Map workflows have no browser exceptions.');

@@ -1,11 +1,8 @@
 import {request} from './api.js';
-import {el, button, icon, notice, errorText, number, confirmAction} from './ui.js';
+import {el, button, icon, notice, errorText, number} from './ui.js';
 import {t} from './i18n.js';
 import {ensureRecordMapState, mergeRecordGraph, visibleRecordGraph, selectRecordMapItem,
-    recordMapPositions, clearRecordMap, normalizeRecordNode, sameRecordKey, invalidateRecordMapNode,
-    recordMapCheckpoint, undoRecordMap, selectRecordMapNode, selectedRecordMapNodes, setRecordMapPinned,
-    hideRecordMapNodes, showRecordMapNodes, arrangeRecordMap, moveRecordMapNode, recordMapVisit,
-    previousRecordMapVisit, restoreRecordMapVisit, originRecordMapVisit, recordMapVisitState} from './record-map-model.js';
+    recordMapPositions, clearRecordMap, normalizeRecordNode, sameRecordKey, invalidateRecordMapNode, recordMapCheckpoint, undoRecordMap, selectRecordMapNode, selectedRecordMapNodes, setRecordMapPinned, hideRecordMapNodes, showRecordMapNodes, arrangeRecordMap, moveRecordMapNode} from './record-map-model.js';
 import {friendlyName} from './explorer-guide.js';
 import {openRecordWindow} from './record-window.js';
 import './record-map-messages.js';
@@ -34,9 +31,8 @@ export function mountRecordMap(root, {state = {}, tables = [], scopeKey = '', in
         state.table = initialTable; state.search = ''; state.page = 1; state.seedResult = null;
     }
     if (!available.some(table => table.name === state.table)) state.table = available[0]?.name || '';
-    let destroyed = false, epoch = 0, seedVersion = 0, selectionVersion = 0, navigationVersion = 0, searchTimer, pointer;
-    let seedController, selectionController, seedLoading = false, inspecting = '', selectionError = null;
-    let additionResult = null, historyRecovery = null, focusConnectionsFor = '';
+    let destroyed = false, epoch = 0, seedVersion = 0, selectionVersion = 0, searchTimer, pointer;
+    let seedController, seedLoading = false, inspecting = '', selectionError = null;
     const controllers = new Set();
     const pendingRelations = new Set();
     const sourceVersions = new Map();
@@ -52,12 +48,13 @@ export function mountRecordMap(root, {state = {}, tables = [], scopeKey = '', in
     state.trail = Array.isArray(state.trail) ? state.trail.filter(id => state.nodes.has(id)) : [];
     let layoutVersion = 0, mode = 'select', suppressClick = false;
     let lastOpenPanel = state.panels.inspector.open ? 'inspector' : 'sources';
-    const panelOpeners = {sources: null, inspector: null};
     const nodeElements = new Map();
     const smallButton = (label, handler, attributes = {}) => button(label, handler, {className: 'button-small', ...attributes});
     const summary = el('p', {class: 'record-map-summary'});
     const filterList = el('div', {class: 'record-map-filters', role: 'group', 'aria-label': text('filter')});
     const filters = el('details', {class: 'record-map-popover'}, el('summary', {}, text('filter')), filterList);
+    const questionList = el('div', {class: 'record-map-question-list', id: 'explorer-guide'});
+    const questions = el('details', {class: 'record-map-popover', id: 'record-map-questions'}, el('summary', {}, text('questions')), questionList);
     const status = el('p', {class: 'record-map-status sr-only', role: 'status', 'aria-live': 'polite'});
     const zoomValue = el('output', {'aria-label': text('map')});
     const viewport = el('div', {class: 'record-map-viewport workspace-canvas-viewport', tabindex: '0', 'aria-label': text('map'), 'aria-describedby': 'record-map-help'});
@@ -66,32 +63,23 @@ export function mountRecordMap(root, {state = {}, tables = [], scopeKey = '', in
     const nodesRoot = el('div', {class: 'record-map-nodes'});
     world.append(svg, nodesRoot); viewport.append(world);
     const canvasEmpty = el('div', {class: 'record-map-empty'});
-    const backButton = smallButton(text('back'), navigateBack, {id: 'record-map-back', disabled: true, title: text('backHelp')});
-    const returnButton = smallButton(text('returnToStart'), returnToStart, {id: 'record-map-return-start', disabled: true, title: text('returnToStartHelp')});
-    const navigation = el('nav', {class: 'record-map-navigation', 'aria-label': text('path')}, backButton, returnButton);
-    const sceneHeading = el('div', {class: 'record-map-scene-heading'}, el('h2', {}, text('canvasTitle')), navigation);
-    const tableSearch = el('input', {id: 'record-map-table-search', class: 'input', type: 'search', value: '',
-        placeholder: text('tableSearchPlaceholder'), 'aria-label': text('tableSearch'), autocomplete: 'off'});
+    const trail = el('nav', {class: 'record-map-trail', 'aria-label': text('path')});
+    const sceneHeading = el('div', {class: 'record-map-scene-heading'}, el('h2', {}, text('canvasTitle')), trail);
     const tableSelect = el('select', {id: 'record-map-table', class: 'input select', 'aria-label': text('chooseTable')},
         available.map(table => el('option', {value: table.name, selected: table.name === state.table}, friendlyName(table.name))));
     const search = el('input', {id: 'record-map-search', class: 'input', type: 'search', value: state.search,
-        placeholder: text('searchPlaceholder'), 'aria-label': text('searchInTable', {table: friendlyName(state.table)}), autocomplete: 'off'});
-    const searchScope = el('span', {}, text('searchInTable', {table: friendlyName(state.table)}));
+        placeholder: text('searchPlaceholder'), 'aria-label': text('search'), autocomplete: 'off'});
     const seedList = el('div', {id: 'record-map-records', class: 'record-map-record-list', 'aria-live': 'polite'});
     const seedPagination = el('div', {class: 'record-map-pagination'});
     const pickerBody = el('div', {class: 'record-map-panel-body'},
-        el('p', {class: 'record-map-side-help record-map-source-intro'}, text('sourcePickerIntro')),
-        el('label', {for: 'record-map-table-search'}, text('tableSearch'), tableSearch),
         el('label', {for: 'record-map-table'}, text('chooseTable'), tableSelect),
-        el('label', {for: 'record-map-search'}, searchScope, search,
-            el('small', {class: 'record-map-field-help'}, text('sourceTableHelp', {table: friendlyName(state.table)}))), seedList, seedPagination);
+        el('label', {for: 'record-map-search'}, text('search'), search), seedList, seedPagination);
     const inspectorBody = el('div', {class: 'record-map-panel-body'});
     const picker = panel('sources', 'record-map-sources', text('sources'), pickerBody);
     const inspector = panel('inspector', 'record-map-inspector', text('inspector'), inspectorBody);
     const sourcesToggle = smallButton(text('sources'), toggleSources, {id: 'record-map-sources-toggle', symbol: 'layout', 'aria-expanded': String(state.panels.sources.open)});
     const undoButton = smallButton(text('undo'), undo, {id: 'record-map-undo', disabled: !state.undoStack?.length});
-    const quick = el('div', {class: 'record-map-quick'}, undoButton,
-        smallButton(text('hidePanels'), closePanels, {id: 'record-map-clear-view', symbol: 'expand'}));
+    const quick = el('div', {class: 'record-map-quick'}, undoButton, smallButton(text('clearView'), closePanels, {id: 'record-map-clear-view', symbol: 'expand'}));
     const selectButton = smallButton(text('selectMode'), () => setMode('select'), {id: 'record-map-select', symbol: 'pointer', 'aria-pressed': 'true'});
     const panButton = smallButton(text('panMode'), () => setMode('pan'), {id: 'record-map-pan', 'aria-pressed': 'false'});
     const layout = el('select', {id: 'record-map-layout', class: 'input select', 'aria-label': text('layout')},
@@ -103,27 +91,23 @@ export function mountRecordMap(root, {state = {}, tables = [], scopeKey = '', in
     const selectedName = el('span', {class: 'record-map-selected-name'});
     const pinButton = smallButton(text('pin'), pinSelected, {id: 'record-map-pin'});
     const selectionBar = el('div', {class: 'record-map-selection', hidden: true, 'aria-label': text('selectionActions')}, selectedName,
-        smallButton(text('showConnections'), () => openConnections(), {id: 'record-map-expand-selected'}), pinButton,
-        smallButton(text('hide'), hideSelected, {id: 'record-map-hide'}));
-    const resultBanner = el('div', {class: 'record-map-result', hidden: true});
+        smallButton(text('expand'), openQuestions, {id: 'record-map-expand-selected'}), pinButton,
+        smallButton(text('inspect'), inspectSelected, {id: 'record-map-inspect-selected'}), smallButton(text('hide'), hideSelected, {id: 'record-map-hide'}));
     const minimapSvg = svgElement('svg', {viewBox: '0 0 130 75', 'aria-hidden': 'true'});
     const minimap = el('button', {type: 'button', class: 'record-map-minimap', 'aria-label': text('fit'), on: {click: fit}}, minimapSvg);
     const accessibleNodes = el('div', {id: 'record-map-node-list'}), accessibleEdges = el('div', {class: 'record-map-edge-list'});
     const accessible = el('details', {class: 'record-map-accessible-list'}, el('summary', {}, text('recordList')), accessibleNodes, accessibleEdges);
     const scene = el('section', {class: 'record-map-scene workspace-canvas-scene', 'aria-label': text('map')}, viewport, canvasEmpty, sceneHeading, quick, picker, inspector,
-        resultBanner, selectionBar, dock, minimap, el('div', {class: 'record-map-canvas-caption'}, summary, el('span', {id: 'record-map-help'}, text('canvasHelp'))));
-    const workspaceMore = el('details', {class: 'record-map-popover record-map-workspace-more'}, el('summary', {}, text('moreActions')),
-        el('div', {class: 'record-map-workspace-actions'},
-            companion ? smallButton(t('app.companionLaunch.open'), () => companion.open('compare'), {id: 'explorer-companion-open', symbol: 'monitor'}) : null,
-            companion ? smallButton(t('app.companionLaunch.radar'), () => companion.open('radar'), {id: 'explorer-companion-radar', symbol: 'network'}) : null,
-            smallButton(text('showLoaded'), () => { workspaceMore.open = false; showLoaded(); }, {'data-map-show-loaded': ''})));
+        selectionBar, dock, minimap, el('div', {class: 'record-map-canvas-caption'}, summary, el('span', {id: 'record-map-help'}, text('canvasHelp'))));
     const shell = el('section', {class: 'record-map record-map-canvas', 'data-flexible-explorer': '', 'data-layout': state.layout || 'manual'},
         el('div', {class: 'record-map-toolbar workspace-canvas-toolbar'}, el('p', {class: 'record-map-side-help'}, text('partial')),
-            el('div', {class: 'record-map-tools'}, sourcesToggle, filters, workspaceMore,
+            el('div', {class: 'record-map-tools'}, sourcesToggle, filters, questions,
+                companion ? smallButton(t('app.companionLaunch.open'), () => companion.open('compare'), {id: 'explorer-companion-open', symbol: 'monitor'}) : null,
+                companion ? smallButton(t('app.companionLaunch.radar'), () => companion.open('radar'), {id: 'explorer-companion-radar', symbol: 'network'}) : null,
                 smallButton(text('clear'), clear, {id: 'record-map-clear'}))),
         scene, accessible, status, el('p', {class: 'sr-only'}, text('keyboardHelp')));
     root.append(shell);
-    if (!available.length) tableSearch.disabled = tableSelect.disabled = search.disabled = true;
+    if (!available.length) tableSelect.disabled = search.disabled = true;
     function graphColour(table) {
         let hash = 0;
         for (const letter of table) hash = (hash * 31 + letter.codePointAt(0)) >>> 0;
@@ -144,53 +128,7 @@ export function mountRecordMap(root, {state = {}, tables = [], scopeKey = '', in
     }
     function seedSelection() {
         const selected = state.selection?.kind === 'node' ? state.selection.id : '';
-        for (const item of seedList.querySelectorAll('[data-map-record]')) {
-            const isSelected = item.dataset.mapRecord === selected;
-            const isStarting = item.dataset.mapRecord === state.originId;
-            item.setAttribute('aria-pressed', String(isSelected));
-            item.dataset.selected = String(isSelected);
-            item.dataset.starting = String(isStarting);
-            const badge = item.querySelector('.record-map-record-badge');
-            if (isStarting && !badge) item.append(el('span', {class: 'record-map-record-badge'}, text('startingRecord')));
-            else if (!isStarting) badge?.remove();
-        }
-    }
-
-    function recordPreview(node, limit = 2) {
-        const keyNames = new Set(Object.keys(node.key || {}));
-        const ordered = (node.columns || []).map(column => column?.name).filter(name => typeof name === 'string');
-        const names = [...new Set([...ordered, ...Object.keys(node.row || {})])];
-        const ranked = [...names.filter(name => !/(^id$|_id$|_uuid$)/i.test(name)),
-            ...names.filter(name => /(^id$|_id$|_uuid$)/i.test(name))];
-        const entries = [];
-        for (const name of ranked) {
-            if (keyNames.has(name) || !Object.hasOwn(node.row || {}, name)) continue;
-            const value = node.row[name];
-            if (value === null || value === undefined || value === '' || typeof value === 'object') continue;
-            entries.push([name, short(shown(value), 52)]);
-            if (entries.length >= limit) break;
-        }
-        return entries;
-    }
-
-    function previewText(node) {
-        return recordPreview(node).map(([name, value]) => name + ': ' + value).join(' · ');
-    }
-
-    function keyText(node) {
-        return Object.entries(node.key || {}).map(([key, value]) => key + ': ' + value).join(' · ');
-    }
-
-    function renderTableOptions() {
-        const query = tableSearch.value.trim().toLocaleLowerCase();
-        let options = available.filter(table => !query || table.name.toLocaleLowerCase().includes(query)
-            || friendlyName(table.name).toLocaleLowerCase().includes(query));
-        const current = available.find(table => table.name === state.table);
-        if (current && !options.some(table => table.name === current.name)) options = [current, ...options];
-        tableSelect.replaceChildren(...options.map(table => el('option', {
-            value: table.name, selected: table.name === state.table,
-        }, friendlyName(table.name))));
-        tableSelect.disabled = !available.length;
+        for (const item of seedList.querySelectorAll('[data-map-record]')) item.setAttribute('aria-pressed', String(item.dataset.mapRecord === selected));
     }
 
     function renderSeeds(error) {
@@ -204,14 +142,10 @@ export function mountRecordMap(root, {state = {}, tables = [], scopeKey = '', in
         if (!nodes.length) seedList.append(el('div', {class: 'record-map-picker-empty'},
             el('strong', {}, text('noRecords')), el('p', {}, text('noRecordsHelp'))));
         for (const node of nodes) {
-            const preview = previewText(node);
             seedList.append(el('button', {type: 'button', class: 'record-map-record',
-                'data-map-record': node.id,
-                on: {click: () => selectRecord(node, {setFocus: !state.focusId, checkpoint: true, history: true})}},
-                el('strong', {}, node.label),
-                preview ? el('span', {class: 'record-map-record-preview', 'data-map-record-preview': ''}, preview) : null,
-                el('small', {class: 'record-map-record-key', 'data-map-record-key': ''}, keyText(node)),
-                state.originId === node.id ? el('span', {class: 'record-map-record-badge'}, text('startingRecord')) : null));
+                'data-map-record': node.id, 'aria-label': text('selectRecord', {label: node.label}),
+                on: {click: () => selectRecord(node, {setFocus: !state.focusId, checkpoint: true})}}, el('strong', {}, node.label),
+                el('small', {}, Object.entries(node.key).map(([key, value]) => key + ': ' + value).join(' · '))));
         }
         seedPagination.append(button(text('previous'), () => { state.page--; loadSeeds(); }, {className: 'button-small', disabled: state.page <= 1}),
             el('span', {class: 'small muted'}, text('page', {page: number(state.page)})),
@@ -236,15 +170,11 @@ export function mountRecordMap(root, {state = {}, tables = [], scopeKey = '', in
         } finally { controllers.delete(pending); }
     }
 
-    async function selectRecord(record, {setFocus: focusSelected = true, reveal = true, checkpoint = false,
-        invalidate = true, history = true, navigationToken = null} = {}) {
+    async function selectRecord(record, {setFocus: focusSelected = true, reveal = true, checkpoint = false, invalidate = true} = {}) {
         if (!active() || !record || typeof record.table !== 'string' || !record.key) return null;
-        if (navigationToken === null) { navigationVersion++; historyRecovery = null; }
-        selectionController?.abort();
         const version = ++selectionVersion;
-        const capturedEpoch = epoch, capturedGraphEpoch = state.graphEpoch;
+        const capturedEpoch = epoch;
         const pending = controller();
-        selectionController = pending;
         selectionError = null;
         const existing = [...state.nodes.values()].find(node => node.table === record.table && sameRecordKey(node.key, record.key));
         const readId = existing?.id || record.id;
@@ -253,13 +183,11 @@ export function mountRecordMap(root, {state = {}, tables = [], scopeKey = '', in
             if (invalidate) invalidateRecordMapNode(state, existing.id);
             if (!checkpoint) { selectRecordMapItem(state, 'node', existing.id); state.hiddenTables.delete(existing.table); onSelectRecord?.(existing); }
         }
-        inspecting = existing && !checkpoint ? existing.id : 'pending'; renderGraph(); renderInspector(); seedSelection();
-        if (reveal) { setPanel('sources', false, {restoreFocus: false}); setPanel('inspector', true); }
+        inspecting = existing && !checkpoint ? existing.id : 'pending'; renderGraph(); renderInspector(); seedSelection(); if (reveal) { setPanel('sources', false); setPanel('inspector', true); }
         try {
             const data = await request('record-map', {params: {database: scopeKey},
                 body: {table: record.table, key: record.key}, signal: pending.signal});
-            if (!active() || pending.signal.aborted || capturedEpoch !== epoch || capturedGraphEpoch !== state.graphEpoch || version !== selectionVersion
-                || navigationToken !== null && navigationToken !== navigationVersion) return null;
+            if (!active() || pending.signal.aborted || capturedEpoch !== epoch || version !== selectionVersion) return null;
             if (checkpoint) recordMapCheckpoint(state);
             const {focus} = mergeRecordGraph(state, data);
             if (!focus) throw new Error(text('sourceUnavailable'));
@@ -267,83 +195,59 @@ export function mountRecordMap(root, {state = {}, tables = [], scopeKey = '', in
             showRecordMapNodes(state, [focus.id]); selectRecordMapNode(state, focus.id); if (focusSelected || !state.focusId) setFocus(focus);
             inspecting = ''; recordMapPositions(state, focus.id);
             onSelectRecord?.(focus);
-            if (history) recordMapVisit(state, focus.id, camera());
             renderAll();
-            if (reveal) panelOpeners.inspector = nodesRoot.querySelector('[data-record-node="' + CSS.escape(focus.id) + '"]');
             if (!state.viewport) fit(); else if (reveal) revealSelection();
-            if (history) recordMapVisit(state, focus.id, camera());
             announce(text('selected', {label: focus.label}));
             return focus;
         } catch (error) {
-            if (!active() || error.name === 'AbortError' || version !== selectionVersion || capturedEpoch !== epoch
-                || capturedGraphEpoch !== state.graphEpoch
-                || navigationToken !== null && navigationToken !== navigationVersion) return null;
+            if (!active() || error.name === 'AbortError' || version !== selectionVersion || capturedEpoch !== epoch) return null;
             inspecting = ''; selectionError = error; renderInspector();
             return null;
-        } finally {
-            controllers.delete(pending);
-            if (selectionController === pending) selectionController = null;
-        }
+        } finally { controllers.delete(pending); }
     }
 
     function chooseNode(node, toggle = false) {
         if (!active() || mode === 'pan') return;
-        navigationVersion++; selectionController?.abort(); selectionController = null; historyRecovery = null;
         selectionVersion++;
         inspecting = ''; selectionError = null;
         selectRecordMapNode(state, node.id, {toggle});
         const selected = selectedRecordMapNodes(state); onSelectRecord?.(selected.length === 1 ? selected[0] : null);
-        if (!toggle && selected.length === 1) recordMapVisit(state, node.id, camera());
         renderGraph(); renderInspector(); seedSelection();
         announce(text('selected', {label: node.label}));
-        if (toggle) setPanel('inspector', false);
-        else {
-            setPanel('inspector', true);
-            recordMapVisit(state, node.id, camera());
-            if (!state.details.has(node.id)) selectRecord(node, {setFocus: false, reveal: false, invalidate: false, history: false});
-        }
+        renderQuestions(); if (toggle) setPanel('inspector', false); else { setPanel('inspector', true); if (!state.details.has(node.id)) selectRecord(node, {setFocus: false, invalidate: false}); }
     }
 
     async function expand(node, relation) {
         const id = relationKey(node, relation);
         if (!active() || pendingRelations.has(id) || relation.external || relation.supported === false) return;
         const cursor = state.cursors.get(id);
-        if (cursor) {
-            if (!relationErrors.has(id) && loadedRelation(node, relation).hidden) { showCached(node, relation); return; }
-            if (cursor.has_more !== true) return;
-        }
-        const capturedEpoch = epoch, capturedGraphEpoch = state.graphEpoch, readVersions = new Map(sourceVersions);
+        if (cursor && cursor.has_more !== true) { showCached(node, relation); return; }
+        const capturedEpoch = epoch, readVersions = new Map(sourceVersions);
         const pending = controller();
-        pendingRelations.add(id); relationErrors.delete(id); renderInspector();
+        pendingRelations.add(id); relationErrors.delete(id); renderInspector(); renderQuestions();
         try {
             const data = await request('record-map', {params: {database: scopeKey}, body: {
                 table: node.table, key: node.key, relation: relation.id, offset: cursor?.next_offset || 0, page_size: 25,
             }, signal: pending.signal});
-            if (!active() || pending.signal.aborted || capturedEpoch !== epoch || capturedGraphEpoch !== state.graphEpoch) return;
+            if (!active() || pending.signal.aborted || capturedEpoch !== epoch) return;
             if ([...(data.nodes || []), data.focus].filter(Boolean).some(node => (sourceVersions.get(node.id) || 0) !== (readVersions.get(node.id) || 0))) return;
-            recordMapCheckpoint(state);
-            const before = new Map([...state.positions].map(([id, p]) => [id, {...p}]));
-            const beforeEdges = new Set(state.edges.keys());
+            recordMapCheckpoint(state); const before = new Map([...state.positions].map(([id, p]) => [id, {...p}]));
             const {added} = mergeRecordGraph(state, data); showRecordMapNodes(state, (data.nodes || []).map(node => node.id));
-            const loaded = loadedRelation(node, relation);
             state.cursors.set(id, {has_more: data.has_more === true, next_offset: data.next_offset,
-                count: loaded.matchIds.length});
+                count: (cursor?.count || 0) + (data.edges?.length || 0)});
             recordMapPositions(state, node.id);
-            const addedIds = added.filter(nodeId => nodeId !== node.id);
-            additionResult = {sourceId: node.id, ids: addedIds, added: addedIds.length,
-                edges: [...state.edges.keys()].filter(edgeId => !beforeEdges.has(edgeId)).length,
-                matchCount: loaded.matchIds.length, hasMore: data.has_more === true};
-            renderFilters(); renderGraph(); renderExpansionResult(); animatePositions(before);
-            announce(addedIds.length ? text('loaded', {count: number(addedIds.length)})
+            if (dimensions().width < 600) setPanel('inspector', false);
+            renderFilters(); renderGraph(); renderQuestions(); fit(); focusMobile(node.id); animatePositions(before);
+            announce(added.length ? text('loaded', {count: number(added.length)})
                 : data.edges?.length ? text(data.has_more ? 'moreAvailable' : 'complete') : text('emptyExpansion'));
         } catch (error) {
-            if (!active() || error.name === 'AbortError' || capturedEpoch !== epoch || capturedGraphEpoch !== state.graphEpoch) return;
+            if (!active() || error.name === 'AbortError' || capturedEpoch !== epoch) return;
             relationErrors.set(id, error);
         } finally {
             controllers.delete(pending);
-            if (active() && capturedEpoch === epoch && capturedGraphEpoch === state.graphEpoch) {
+            if (active() && capturedEpoch === epoch) {
                 pendingRelations.delete(id);
-                renderInspector();
+                renderInspector(); renderQuestions();
                 const target = [...inspector.querySelectorAll('[data-record-relation]')].find(item => item.dataset.recordRelation === relation.id);
                 if (document.activeElement === document.body) target?.focus({preventScroll: true});
             }
@@ -351,9 +255,8 @@ export function mountRecordMap(root, {state = {}, tables = [], scopeKey = '', in
     }
 
     function chooseEdge(edge) {
-        navigationVersion++; selectionController?.abort(); selectionController = null; selectionVersion++;
-        inspecting = ''; selectionError = null; historyRecovery = null; selectRecordMapItem(state, 'edge', edge.id); onSelectRecord?.(null);
-        renderGraph(); renderInspector(); seedSelection(); setPanel('inspector', true);
+        selectionVersion++; inspecting = ''; selectionError = null; selectRecordMapItem(state, 'edge', edge.id); onSelectRecord?.(null);
+        renderGraph(); renderInspector(); renderQuestions(); seedSelection(); setPanel('inspector', true);
         announce(text('selectConnection', {name: edge.constraint || edge.id}));
     }
 
@@ -373,7 +276,7 @@ export function mountRecordMap(root, {state = {}, tables = [], scopeKey = '', in
             const field = el('input', {type: 'checkbox', checked: !state.hiddenTables.has(name),
                 'data-map-entity-filter': name, 'aria-label': name, on: {change: () => {
                     recordMapCheckpoint(state); if (field.checked) state.hiddenTables.delete(name); else state.hiddenTables.add(name);
-                    renderGraph();
+                    renderGraph(); renderQuestions();
                 }}});
             const label = el('span', {class: 'record-map-type-label'}, name);
             label.style.setProperty('--map-color', graphColour(name));
@@ -431,59 +334,6 @@ export function mountRecordMap(root, {state = {}, tables = [], scopeKey = '', in
         state.viewport = {...view, x: view.x + clamp(x, box.left + px, box.right - px) - x,
             y: view.y + clamp(y, box.top + py, box.bottom - py) - y}; transform();
     }
-    function recordsInView(ids) {
-        const view = camera(), box = canvasBox();
-        return ids.every(id => {
-            const point = state.positions.get(id); if (!point) return false;
-            const x = point.x * view.zoom + view.x, y = point.y * view.zoom + view.y;
-            return x >= box.left + Math.min(112 * view.zoom, (box.right - box.left) / 2)
-                && x <= box.right - Math.min(112 * view.zoom, (box.right - box.left) / 2)
-                && y >= box.top + 64 * view.zoom && y <= box.bottom - 64 * view.zoom;
-        });
-    }
-    function revealRecords(ids, sourceId) {
-        const restoreFocus = resultBanner.contains(document.activeElement);
-        const points = [...new Set([sourceId, ...ids])].map(id => state.positions.get(id)).filter(Boolean);
-        if (!points.length) return;
-        const box = canvasBox(), view = camera();
-        const left = Math.min(...points.map(point => point.x)) - 126;
-        const right = Math.max(...points.map(point => point.x)) + 126;
-        const top = Math.min(...points.map(point => point.y)) - 72;
-        const bottom = Math.max(...points.map(point => point.y)) + 82;
-        const fitZoom = clamp(Math.min((box.right - box.left) / Math.max(1, right - left),
-            (box.bottom - box.top) / Math.max(1, bottom - top)), .25, 2);
-        const zoom = Math.min(view.zoom, fitZoom);
-        state.viewport = {x: (box.left + box.right) / 2 - (left + right) / 2 * zoom,
-            y: (box.top + box.bottom) / 2 - (top + bottom) / 2 * zoom, zoom};
-        transform(); renderMinimap(); renderExpansionResult();
-        announce(text('addedRecordsVisible', {count: number(ids.length)}));
-        if (restoreFocus) {
-            const targetId = ids.find(id => nodeElements.has(id)) || sourceId;
-            const target = nodesRoot.querySelector('[data-record-node="' + CSS.escape(targetId) + '"]') || viewport;
-            queueMicrotask(() => target?.isConnected && target.focus({preventScroll: true}));
-        }
-    }
-    function renderExpansionResult() {
-        if (!additionResult) {
-            if (!resultBanner.hidden) resultBanner.replaceChildren();
-            resultBanner.hidden = true; delete resultBanner.dataset.resultKey; return;
-        }
-        const additionsVisible = additionResult.added > 0 && recordsInView(additionResult.ids);
-        const message = additionResult.added > 0
-            ? text(additionsVisible ? 'addedRecordsVisible' : 'addedRecords', {count: number(additionResult.added)})
-            : additionResult.matchCount > 0
-                ? text(additionResult.hasMore ? 'loadedMoreAvailable' : 'loadedComplete', {count: number(additionResult.matchCount)})
-                : text('emptyExpansion');
-        const resultKey = JSON.stringify([message, additionsVisible, additionResult.sourceId, additionResult.ids]);
-        if (resultBanner.dataset.resultKey === resultKey) return;
-        resultBanner.dataset.resultKey = resultKey;
-        resultBanner.replaceChildren();
-        resultBanner.append(el('span', {}, message));
-        if (additionResult.added > 0 && !additionsVisible) resultBanner.append(
-            smallButton(text('showAddedRecords'), () => revealRecords(additionResult.ids, additionResult.sourceId),
-                {'data-map-show-added': ''}));
-        resultBanner.hidden = false;
-    }
     function edgePath(edge) {
         const a = state.positions.get(edge.source), b = state.positions.get(edge.target); if (!a || !b) return '';
         if (edge.source === edge.target) return 'M ' + (a.x + 30) + ' ' + (a.y - 48) + ' C ' + (a.x + 150) + ' ' + (a.y - 155) + ' ' + (a.x - 150) + ' ' + (a.y - 155) + ' ' + (a.x - 30) + ' ' + (a.y - 48);
@@ -516,33 +366,24 @@ export function mountRecordMap(root, {state = {}, tables = [], scopeKey = '', in
             let card = nodeElements.get(node.id);
             if (!card) { card = el('article', {class: 'record-map-node', 'data-node-id': node.id}); nodeElements.set(node.id, card); nodesRoot.append(card); }
             const p = state.positions.get(node.id), selected = state.selectedNodes.has(node.id), count = state.details.get(node.id)?.relations?.length;
-            const cardLabel = [text('selectRecord', {label: node.label}), friendlyName(node.table), text('key') + ': ' + keyText(node),
-                state.originId === node.id ? text('startingRecord') : ''].filter(Boolean).join('. ');
             card.style.left = p.x - 102 + 'px'; card.style.top = p.y - 56 + 'px'; card.style.setProperty('--map-color', graphColour(node.table));
-            card.dataset.selected = String(selected); card.dataset.pinned = String(state.pinned.has(node.id));
-            card.dataset.origin = String(state.originId === node.id);
-            card.dataset.added = String(additionResult?.ids?.includes(node.id) === true);
+            card.dataset.selected = String(selected); card.dataset.pinned = String(state.pinned.has(node.id)); card.dataset.root = String(state.focusId === node.id);
             const face = el('button', {type: 'button', class: 'record-map-node-face', 'data-record-node': node.id, 'data-node-table': node.table,
-                'aria-label': cardLabel, 'aria-pressed': String(selected), title: node.label + ' · ' + node.table,
+                'aria-label': text('selectRecord', {label: node.label}), 'aria-pressed': String(selected), title: node.label + ' · ' + node.table,
                 on: {click: event => { if (!suppressClick || event.detail === 0) chooseNode(node, event.shiftKey); }, keydown: event => moveWithKey(event, node)}},
                 el('span', {class: 'record-map-node-type'}, friendlyName(node.table), state.pinned.has(node.id) ? ' · ' + text('pinState') : ''),
                 el('strong', {class: 'record-map-node-label'}, node.label), el('span', {class: 'record-map-node-footer'},
-                    state.originId === node.id ? text('startingRecord') : count === undefined ? text('inspectToExplore') : text('connectionTypes', {count: number(count)})));
-            card.replaceChildren(face, smallButton('+', () => openConnections(node), {className: 'record-map-card-expand',
-                'aria-label': text('connectionsFor', {label: node.label}) + '. ' + friendlyName(node.table) + '. '
-                    + text('key') + ': ' + keyText(node) + (state.originId === node.id ? '. ' + text('startingRecord') : '')}));
+                    state.focusId === node.id ? text('currentFocus') : count === undefined ? text('inspectToExplore') : text('connectionTypes', {count: number(count)})));
+            card.replaceChildren(face, smallButton('+', () => { chooseNode(node); openQuestions(); }, {className: 'record-map-card-expand', 'aria-label': text('expandRecord', {label: node.label})}));
             accessibleNodes.append(el('div', {class: 'record-map-record-actions'},
-                smallButton(node.label + ' · ' + friendlyName(node.table) + ' · ' + keyText(node), () => chooseNode(node),
-                    {'data-map-node-button': node.id, 'aria-label': cardLabel, 'aria-pressed': String(selected)}),
-                smallButton(t('app.recordWindow.openRecord', {label: node.label}), () => openWindow(node), {
-                    'data-explorer-window': node.id, 'aria-label': t('app.recordWindow.openRecord', {label: node.label}) + '. '
-                        + friendlyName(node.table) + '. ' + text('key') + ': ' + keyText(node), symbol: 'external'})));
+                smallButton(node.label + ' · ' + friendlyName(node.table), () => chooseNode(node), {'data-map-node-button': node.id, 'aria-pressed': String(selected)}),
+                smallButton(t('app.recordWindow.openRecord', {label: node.label}), () => openWindow(node), {'data-explorer-window': node.id, symbol: 'external'})));
         }
-        renderEdges(); renderMinimap(); renderNavigation();
+        renderEdges(); renderMinimap(); renderTrail();
         canvasEmpty.hidden = graph.nodes.length > 0; canvasEmpty.replaceChildren(el('strong', {}, text(state.nodes.size ? 'allHidden' : 'chooseRecord')),
             smallButton(text(state.nodes.size ? 'showLoaded' : 'sources'), () => state.nodes.size ? showLoaded() : openSources(), {kind: 'primary'}));
         summary.replaceChildren(el('strong', {}, text('counts', {nodes: number(graph.nodes.length), edges: number(graph.edges.length)})), el('span', {}, text('visible', {visible: number(graph.nodes.length), total: number(state.nodes.size)})));
-        updateSelectionBar(); transform(); renderExpansionResult();
+        updateSelectionBar(); transform();
         if (focused) [...nodesRoot.querySelectorAll('[data-record-node]')].find(node => node.dataset.recordNode === focused)?.focus({preventScroll: true});
     }
     function renderMinimap() {
@@ -563,56 +404,9 @@ export function mountRecordMap(root, {state = {}, tables = [], scopeKey = '', in
         return el('dl', {class: 'record-map-values'}, Object.entries(values || {}).map(([name, value]) =>
             el('div', {}, el('dt', {}, name), el('dd', {}, shown(value)))));
     }
-    function renderRelation(node, relation) {
-        const key = relationKey(node, relation), cursor = state.cursors.get(key);
-        const pending = pendingRelations.has(key), error = relationErrors.get(key);
-        const unavailable = relation.external || relation.supported === false;
-        const complete = cursor && cursor.has_more !== true, cached = loadedRelation(node, relation);
-        const target = relation.direction === 'incoming' ? relation.source_table : relation.target_table;
-        const stateKey = unavailable ? 'connectionUnavailable' : pending ? 'connectionLoading' : error ? 'connectionFailed'
-            : complete ? 'connectionComplete' : cursor ? 'connectionPartial' : 'connectionAvailable';
-        const hidden = Boolean(cursor && cached.hidden);
-        const label = pending ? text('loadingConnections') : error ? text('retryConnection') : hidden ? text('showCached')
-            : cursor?.has_more ? text('showMore') : cursor ? text('expanded') : text('showRecords');
-        const disabled = unavailable || pending || (complete && !hidden && !error);
-        const relationStatus = el('div', {class: 'record-map-relation-status', 'data-map-relation-state': relation.id},
-            el('span', {class: 'record-map-relation-state'}, text(stateKey)));
-        if (cursor) relationStatus.append(el('span', {class: 'record-map-relation-count', 'data-map-relation-count': relation.id},
-            text(cursor.has_more ? 'loadedMoreAvailable' : 'loadedComplete', {count: number(cursor.count || 0)})));
-        const entry = el('article', {class: 'record-map-relation', 'data-map-relation-entry': relation.id,
-            'data-state': stateKey.replace('connection', '').toLocaleLowerCase(),
-            'data-relation-state': stateKey.replace('connection', '').toLocaleLowerCase()},
-            el('div', {class: 'record-map-relation-title'},
-                el('strong', {}, friendlyName(target || relation.constraint)),
-                el('small', {class: 'record-map-key'}, relation.constraint || relation.id)),
-            relationStatus,
-            el('div', {class: 'record-map-relation-actions record-map-connection-actions'}, button(label, () => expand(node, relation), {
-                'data-record-relation': relation.id, 'data-relation-direction': relation.direction,
-                'data-relation-table': target, 'aria-label': text('connectionActionLabel', {
-                    action: label, table: friendlyName(target || relation.constraint), constraint: relation.constraint || relation.id,
-                }), disabled, className: 'button-small', symbol: 'network'})));
-        if (unavailable) entry.append(el('p', {}, text(relation.external ? 'external' : 'unavailableRelation')));
-        if (hidden) entry.append(el('p', {}, text('hiddenConnectionRecords')));
-        if (error) entry.append(el('p', {class: 'record-map-error', role: 'alert'}, errorText(error)));
-        return entry;
-    }
-    function historyRecoveryPanel() {
-        const hidden = historyRecovery?.kind === 'hidden';
-        const panel = el('div', {class: 'record-map-history-recovery', 'data-map-history-recovery': historyRecovery?.kind || ''},
-            el('p', {}, text(hidden ? 'historyHidden' : 'historyUnavailable')));
-        const actions = el('div', {class: 'record-map-history-actions'});
-        if (hidden) actions.append(smallButton(text('revealAndReturn'), revealAndReturn, {'data-map-reveal-return': '', kind: 'primary'}));
-        else actions.append(smallButton(text('skipUnavailable'), skipUnavailableHistory, {'data-map-skip-history': ''}));
-        actions.append(smallButton(text('openSources'), () => {
-            historyRecovery = null; renderInspector(); setPanel('sources', true);
-        }, {'data-map-history-sources': ''}));
-        panel.append(actions);
-        return panel;
-    }
     function renderInspector() {
         const focusedRelation = document.activeElement?.dataset?.recordRelation;
         inspectorBody.replaceChildren();
-        if (historyRecovery) inspectorBody.append(historyRecoveryPanel());
         if (selectionError) showError(selectionError, inspectorBody);
         if (inspecting === 'pending') {
             inspectorBody.append(el('h3', {}, text('inspector')), el('p', {class: 'record-map-side-help'}, text('loadingConnections')));
@@ -626,40 +420,38 @@ export function mountRecordMap(root, {state = {}, tables = [], scopeKey = '', in
         if (selection.kind === 'node') {
             const node = state.nodes.get(selection.id);
             if (!node) return;
-            const preview = recordPreview(node);
-            const heading = el('div', {class: 'record-map-inspector-heading'},
-                el('span', {class: 'record-map-tag'}, node.table),
-                el('h3', {}, node.label),
-                state.originId === node.id ? el('span', {class: 'record-map-origin'}, text('startingRecord')) : null);
-            if (preview.length) heading.append(el('div', {class: 'record-map-preview', 'aria-label': text('recordPreview')},
-                preview.map(([name, value]) => el('span', {}, el('strong', {}, name + ': '), value))));
-            heading.append(el('p', {class: 'record-map-side-help'}, text('exactKeyInDetails')));
+            inspectorBody.append(el('div', {class: 'record-map-inspector-heading'},
+                el('span', {class: 'record-map-tag'}, node.table), el('h3', {}, node.label)),
+
+            el('div', {class: 'record-map-actions'}, smallButton(text('exploreFrom'), () => exploreFrom(node), {'data-map-follow': node.id, kind: 'primary'}),
+                onOpenTable ? button(text('openTable'), () => openTable(node), {'data-map-open-table': node.table, symbol: 'table', className: 'button-small'}) : null,
+                smallButton(t('app.recordWindow.open'), () => openWindow(node), {id: 'explorer-open-window', symbol: 'external', disabled: Boolean(inspecting)}),
+                companion ? smallButton(t('app.companionLaunch.pin'), () => pinComparison(node), {id: 'explorer-companion-pin', symbol: 'pin', disabled: Boolean(inspecting)}) : null,
+                button(text('refreshRecord'), () => refreshNode(node), {symbol: 'refresh', className: 'button-small', disabled: Boolean(inspecting)})));
+            if (inspecting === node.id) inspectorBody.append(el('p', {class: 'record-map-side-help'}, text('loadingConnections')));
             const relations = state.details.get(node.id)?.relations || [];
-            const list = el('section', {id: 'record-map-connections', class: 'record-map-relations', tabindex: '-1',
-                'data-map-connections-for': node.id}, el('h3', {}, text('connections')),
-                el('p', {class: 'record-map-side-help'}, text('connectionsHelp')));
-            if (inspecting === node.id) list.append(el('p', {class: 'record-map-side-help'}, text('loadingConnections')));
+            const list = el('section', {class: 'record-map-relations'}, el('h3', {}, text('connections')));
             if (!relations.length && !inspecting) list.append(el('p', {class: 'record-map-side-help'}, text('noConnections')));
-            for (const direction of ['outgoing', 'incoming']) {
-                const groupRelations = relations.filter(relation => relation.direction === direction);
-                if (!groupRelations.length) continue;
-                const group = el('section', {class: 'record-map-relation-group', 'data-relation-group': direction},
-                    el('h4', {}, text(direction)));
-                for (const relation of groupRelations) group.append(renderRelation(node, relation));
-                list.append(group);
+            for (const relation of relations) {
+                const key = relationKey(node, relation);
+                const cursor = state.cursors.get(key);
+                const pending = pendingRelations.has(key);
+                const unavailable = relation.external || relation.supported === false;
+                const complete = cursor && cursor.has_more !== true, cached = loadedRelation(node, relation);
+                const target = relation.direction === 'incoming' ? relation.source_table : relation.target_table;
+                const entry = el('div', {class: 'record-map-relation', 'data-map-relation-entry': relation.id},
+                    el('div', {class: 'record-map-relation-title'},
+                        el('small', {}, text(relation.direction === 'incoming' ? 'incoming' : 'outgoing')),
+                        el('strong', {}, friendlyName(target || relation.constraint)), el('small', {class: 'record-map-key', hidden: true}, relation.constraint || relation.id)),
+                    el('div', {class: 'record-map-relation-actions'}, button(text(pending ? 'loadingConnections' : complete ? (cached.hidden ? 'showCached' : 'expanded') : cursor ? 'more' : 'expand'),
+                        () => expand(node, relation), {'data-record-relation': relation.id, 'data-relation-direction': relation.direction,
+                            'data-relation-table': target, disabled: unavailable || pending || (complete && !cached.hidden), className: 'button-small', symbol: 'network'})));
+                if (unavailable) entry.append(el('p', {}, text(relation.external ? 'external' : 'unavailableRelation')));
+                else if (cursor) entry.append(el('p', {}, text(cursor.has_more ? 'moreAvailable' : 'complete')));
+                if (relationErrors.has(key)) showError(relationErrors.get(key), entry, () => expand(node, relation));
+                list.append(entry);
             }
-            const viewActions = el('div', {class: 'record-map-actions record-map-primary-actions'},
-                onOpenTable ? button(text('openTable'), () => openTable(node), {'data-map-open-table': node.table,
-                    symbol: 'table', className: 'button-small record-map-primary-action', kind: 'primary', title: text('viewRecordHelp')}) : null);
-            const more = el('details', {class: 'record-map-more-actions'}, el('summary', {}, text('moreActions')),
-                el('div', {class: 'record-map-actions'},
-                    smallButton(t('app.recordWindow.open'), () => openWindow(node), {id: 'explorer-open-window', symbol: 'external', disabled: Boolean(inspecting)}),
-                    companion ? smallButton(t('app.companionLaunch.pin'), () => pinComparison(node), {id: 'explorer-companion-pin', symbol: 'pin', disabled: Boolean(inspecting)}) : null,
-                    button(text('refreshRecord'), () => refreshNode(node), {symbol: 'refresh', className: 'button-small',
-                        'data-map-refresh-record': node.id, disabled: Boolean(inspecting)})));
-            inspectorBody.append(heading, list, viewActions, more,
-                el('details', {class: 'record-map-technical', 'data-map-technical': ''},
-                el('summary', {title: text('technicalSummary')}, text('technical')),
+            inspectorBody.append(list, el('details', {class: 'record-map-technical', 'data-map-technical': ''}, el('summary', {}, text('technical')),
                 el('h4', {}, text('chooseTable')), el('code', {}, node.table), el('h4', {}, text('key')), valuesList(node.key),
                 el('h4', {}, text('values')), valuesList(node.row),
                 node.truncated ? el('p', {class: 'record-map-side-help'}, text('preview')) : null));
@@ -691,38 +483,26 @@ export function mountRecordMap(root, {state = {}, tables = [], scopeKey = '', in
         }
         if (focusedRelation) [...inspectorBody.querySelectorAll('[data-record-relation]')]
             .find(item => item.dataset.recordRelation === focusedRelation)?.focus({preventScroll: true});
-        if (selection?.kind === 'node' && focusConnectionsFor === selection.id) {
-            const connections = inspectorBody.querySelector('#record-map-connections');
-            queueMicrotask(() => connections?.isConnected && connections.focus({preventScroll: true}));
-            if (!inspecting && (state.details.has(selection.id) || selectionError)) focusConnectionsFor = '';
-        }
     }
 
     function cancelGraphRequests() {
-        epoch++; selectionVersion++; navigationVersion++; layoutVersion++;
+        epoch++; selectionVersion++; layoutVersion++;
         for (const pending of controllers) {
             if (pending !== seedController) { pending.abort(); controllers.delete(pending); }
         }
-        selectionController = null;
         pendingRelations.clear(); relationErrors.clear();
     }
     function refreshNode(node) {
         cancelGraphRequests();
         invalidateRecordMapNode(state, node.id);
-        selectRecord(node, {setFocus: false, reveal: false, history: false});
+        selectRecord(node, {setFocus: false});
     }
-    async function clear() {
-        if (state.nodes.size) {
-            const confirmed = await confirmAction({title: text('clearMapTitle'),
-                description: text('clearMapDescription') + ' ' + text('clearMapKeepsSource'),
-                confirmLabel: text('clearMapConfirm'), danger: true});
-            if (!confirmed || !active()) return;
-        }
+    function clear() {
         cancelGraphRequests();
-        inspecting = ''; selectionError = null; additionResult = null; historyRecovery = null; focusConnectionsFor = '';
-        clearRecordMap(state); onSelectRecord?.(null); setPanel('inspector', false); setPanel('sources', true);
+        inspecting = ''; selectionError = null;
+        clearRecordMap(state); state.trail = []; onSelectRecord?.(null); setPanel('inspector', false); setPanel('sources', true);
         renderSeeds(); renderFilters(); renderGraph(); renderInspector();
-        announce(text('mapCleared'));
+        announce(text('chooseRecord'));
     }
 
     function panel(name, id, title, content) {
@@ -752,19 +532,9 @@ export function mountRecordMap(root, {state = {}, tables = [], scopeKey = '', in
         }
         updateSelectionBar();
     }
-    function usableFocusTarget(target) {
-        return target instanceof HTMLElement && target !== document.body && target.isConnected && !target.matches(':disabled')
-            && !target.closest('[hidden]') && target.getClientRects().length > 0;
-    }
-    function setPanel(name, open, {restoreFocus = true} = {}) {
+    function setPanel(name, open) {
         const node = name === 'sources' ? picker : inspector;
-        const hadFocus = node.contains(document.activeElement);
-        if (open) {
-            lastOpenPanel = name;
-            if (!node.contains(document.activeElement) && usableFocusTarget(document.activeElement)) {
-                panelOpeners[name] = document.activeElement;
-            }
-        }
+        if (open) lastOpenPanel = name;
         state.panels[name].open = open; node.hidden = !open;
         if (open && dimensions().width < 900) {
             const other = name === 'sources' ? 'inspector' : 'sources';
@@ -772,27 +542,12 @@ export function mountRecordMap(root, {state = {}, tables = [], scopeKey = '', in
         }
         sourcesToggle.setAttribute('aria-expanded', String(!picker.hidden)); updateSelectionBar();
         if (open) revealSelection();
-        else if (hadFocus && restoreFocus) {
-            const opener = panelOpeners[name];
-            const selected = state.selection?.kind === 'node'
-                ? nodesRoot.querySelector('[data-record-node="' + CSS.escape(state.selection.id) + '"]') : null;
-            const fallback = usableFocusTarget(opener) ? opener : usableFocusTarget(selected) ? selected
-                : name === 'sources' ? sourcesToggle : viewport;
-            queueMicrotask(() => fallback?.focus?.({preventScroll: true}));
-        }
-        renderExpansionResult();
     }
     function openSources() { setPanel('sources', true); }
     function toggleSources() { setPanel('sources', picker.hidden); }
     function closePanels() {
-        const focusedPanel = picker.contains(document.activeElement) ? 'sources' : inspector.contains(document.activeElement) ? 'inspector' : '';
-        const selected = state.selection?.kind === 'node'
-            ? nodesRoot.querySelector('[data-record-node="' + CSS.escape(state.selection.id) + '"]') : null;
-        const opener = focusedPanel ? panelOpeners[focusedPanel] : null;
-        const fallback = usableFocusTarget(opener) ? opener : usableFocusTarget(selected) ? selected : viewport;
         state.panels.sources.open = state.panels.inspector.open = false; picker.hidden = inspector.hidden = true;
-        sourcesToggle.setAttribute('aria-expanded', 'false'); filters.open = workspaceMore.open = false; updateSelectionBar(); renderExpansionResult();
-        if (focusedPanel) queueMicrotask(() => fallback?.focus?.({preventScroll: true}));
+        sourcesToggle.setAttribute('aria-expanded', 'false'); questions.open = filters.open = false; updateSelectionBar();
     }
     function setMode(value) {
         mode = value; shell.dataset.mode = mode;
@@ -802,6 +557,7 @@ export function mountRecordMap(root, {state = {}, tables = [], scopeKey = '', in
         if (!undoRecordMap(state)) return;
         layoutVersion++; const selected = selectedRecordMapNodes(state);
         onSelectRecord?.(selected.length === 1 ? selected[0] : null);
+        state.trail = state.trail.filter(id => state.nodes.has(id) && !state.hiddenNodes.has(id));
         renderAll(); announce(text('undone'));
     }
     function pinSelected() {
@@ -814,76 +570,31 @@ export function mountRecordMap(root, {state = {}, tables = [], scopeKey = '', in
         cancelGraphRequests(); recordMapCheckpoint(state); hideRecordMapNodes(state, selected.map(node => node.id));
         onSelectRecord?.(null); setPanel('inspector', false); renderAll(); announce(text('hidden'));
     }
-    function openConnections(target) {
-        if (target && (state.selection?.kind !== 'node' || state.selection.id !== target.id || state.selectedNodes.size !== 1)) {
-            focusConnectionsFor = target.id;
-            chooseNode(target);
-            panelOpeners.inspector = nodesRoot.querySelector('[data-record-node="' + CSS.escape(target.id) + '"]');
-            return;
-        }
-        const selected = selectedRecordMapNodes(state);
-        if (selected.length !== 1) { announce(text('chooseSingleRecord')); return; }
-        const node = selected[0];
-        focusConnectionsFor = node.id;
+    function inspectSelected() {
+        const node = selectedRecordMapNodes(state)[0]; if (!node) return;
         renderInspector(); setPanel('inspector', true);
-        if (!state.details.has(node.id)) selectRecord(node, {setFocus: false, reveal: false, invalidate: false, history: false});
+        if (!state.details.has(node.id)) selectRecord(node, {setFocus: false, invalidate: false});
     }
-    function setFocus(node) { state.focusId = node.id; }
-    async function navigateToVisit(visit) {
-        if (!visit) { announce(text('noBack')); return; }
-        const navigationToken = ++navigationVersion;
-        selectionController?.abort(); selectionController = null; selectionVersion++;
-        inspecting = ''; selectionError = null; focusConnectionsFor = '';
-        const visitState = recordMapVisitState(state, visit);
-        if (visitState === 'hidden') {
-            historyRecovery = {kind: 'hidden', visit};
-            setPanel('inspector', true); renderInspector();
-            inspector.querySelector('[data-map-reveal-return]')?.focus({preventScroll: true});
-            return;
-        }
-        let node = visitState === 'visible' ? state.nodes.get(visit.id) : null;
-        if (!node && visitState === 'unloaded') {
-            node = await selectRecord(visit, {setFocus: false, reveal: false, checkpoint: false, invalidate: false,
-                history: false, navigationToken});
-        }
-        if (!active() || navigationToken !== navigationVersion) return;
-        if (!node) {
-            historyRecovery = {kind: 'unavailable', visit};
-            selectionError = null; setPanel('inspector', true); renderInspector();
-            inspector.querySelector('[data-map-skip-history]')?.focus({preventScroll: true});
-            return;
-        }
-        historyRecovery = null; selectionError = null;
-        const restored = visit.index >= 0 ? restoreRecordMapVisit(state, visit.index, camera()) : null;
-        if (!restored) recordMapVisit(state, node.id, camera());
-        selectRecordMapNode(state, node.id); onSelectRecord?.(node); renderAll(); setPanel('inspector', true);
-        const saved = restored?.viewport || visit.viewport;
-        if (saved) { state.viewport = {...saved}; transform(); renderMinimap(); }
-        else revealSelection();
-        recordMapVisit(state, node.id, camera()); renderNavigation();
-        announce(text('selected', {label: node.label}));
+    function openQuestions() { questions.open = true; renderQuestions(); questionList.querySelector('button:not(:disabled)')?.focus(); }
+    function setFocus(node) {
+        state.focusId = node.id;
+        if (state.trail.at(-1) !== node.id) state.trail.push(node.id);
+        if (state.trail.length > 30) state.trail.shift();
     }
-    function navigateBack() { navigateToVisit(previousRecordMapVisit(state)); }
-    function returnToStart() { navigateToVisit(originRecordMapVisit(state)); }
-    function revealAndReturn() {
-        const recovery = historyRecovery; if (!recovery?.visit) return;
-        recordMapCheckpoint(state);
-        showRecordMapNodes(state, [recovery.visit.id]);
-        historyRecovery = null; navigateToVisit(recovery.visit);
-    }
-    function skipUnavailableHistory() {
-        const visit = historyRecovery?.visit;
-        if (Number.isSafeInteger(visit?.index) && visit.index >= 0 && visit.index < state.navigationHistory.length) {
-            state.navigationHistory.splice(visit.index, 1);
-            if (visit.index < state.navigationIndex) state.navigationIndex--;
+    function exploreFrom(node) {
+        setFocus(node); selectRecordMapNode(state, node.id); onSelectRecord?.(node);
+        if (state.table !== node.table) {
+            state.table = node.table; state.search = ''; state.page = 1; state.seedResult = null;
+            tableSelect.value = node.table; search.value = ''; onTableChange?.(node.table); loadSeeds();
         }
-        historyRecovery = null; navigateBack();
+        closePanels(); renderAll(); const p = state.positions.get(node.id), box = canvasBox(), view = camera();
+        if (p) { state.viewport = {...view, x: (box.left + box.right) / 2 - p.x * view.zoom, y: (box.top + box.bottom) / 2 - p.y * view.zoom}; transform(); }
+        if (!state.details.has(node.id)) selectRecord(node, {setFocus: false, reveal: false, invalidate: false});
     }
     function loadedRelation(node, relation) {
         const edges = [...(state.expansions.get(relationKey(node, relation)) || [])].map(id => state.edges.get(id)).filter(Boolean);
-        const matchIds = [...new Set(edges.map(edge => relation.direction === 'incoming' ? edge.source : edge.target))];
-        const ids = matchIds.filter(id => id !== node.id);
-        return {edges, ids, matchIds, hidden: matchIds.some(id => state.hiddenNodes.has(id) || state.hiddenTables.has(state.nodes.get(id)?.table))
+        const ids = [...new Set(edges.flatMap(edge => [edge.source, edge.target]).filter(id => id !== node.id))];
+        return {edges, ids, hidden: ids.some(id => state.hiddenNodes.has(id) || state.hiddenTables.has(state.nodes.get(id)?.table))
             || edges.some(edge => state.hiddenEdges?.has(edge.id))};
     }
     function showCached(node, relation) {
@@ -893,7 +604,21 @@ export function mountRecordMap(root, {state = {}, tables = [], scopeKey = '', in
     }
     function showLoaded() {
         recordMapCheckpoint(state); state.hiddenTables.clear(); showRecordMapNodes(state, [...state.nodes.keys()]);
-        state.hiddenEdges?.clear(); renderAll(); fit();
+        state.hiddenEdges?.clear(); renderAll(); questions.open = false; fit();
+    }
+    function renderQuestions() {
+        questionList.replaceChildren(smallButton(text('showLoaded'), showLoaded, {'data-guide-all': ''}));
+        const node = selectedRecordMapNodes(state)[0] || state.nodes.get(state.focusId);
+        if (!node) { questionList.append(el('p', {class: 'record-map-side-help'}, text('chooseRecord'))); return; }
+        questionList.append(el('p', {class: 'record-map-question-context'}, node.label));
+        if (!state.details.has(node.id)) { questionList.append(smallButton(text('readConnections'), () => selectRecord(node, {setFocus: false, invalidate: false}), {'data-map-question': 'read'})); return; }
+        for (const relation of state.details.get(node.id).relations || []) {
+            const target = relation.direction === 'incoming' ? relation.source_table : relation.target_table;
+            const cursor = state.cursors.get(relationKey(node, relation)), complete = cursor && !cursor.has_more;
+            questionList.append(smallButton(text('showLinked', {table: friendlyName(target)}), () => { questions.open = false; expand(node, relation); },
+                {'data-map-question': relation.id, 'data-guide-group': target,
+                    disabled: relation.external || relation.supported === false || pendingRelations.has(relationKey(node, relation)) || (complete && !loadedRelation(node, relation).hidden)}));
+        }
     }
     function updateSelectionBar() {
         const selected = selectedRecordMapNodes(state);
@@ -904,12 +629,15 @@ export function mountRecordMap(root, {state = {}, tables = [], scopeKey = '', in
         shell.querySelector('#record-map-expand-selected').disabled = selected.length !== 1;
         undoButton.disabled = !state.undoStack?.length; layout.value = state.layout || 'manual'; shell.dataset.layout = state.layout || 'manual';
     }
-    function renderNavigation() {
-        backButton.disabled = !previousRecordMapVisit(state);
-        const origin = originRecordMapVisit(state);
-        returnButton.disabled = !origin || state.selection?.kind === 'node' && state.selection.id === origin.id;
+    function renderTrail() {
+        trail.replaceChildren();
+        for (const [index, id] of state.trail.entries()) {
+            const node = state.nodes.get(id); if (!node) continue;
+            if (trail.childElementCount) trail.append(el('span', {'aria-hidden': 'true'}, '›'));
+            trail.append(el('button', {type: 'button', on: {click: () => { state.trail = state.trail.slice(0, index + 1); exploreFrom(node); }}}, node.label));
+        }
     }
-    function renderAll() { renderFilters(); renderGraph(); renderInspector(); seedSelection(); }
+    function renderAll() { renderFilters(); renderGraph(); renderInspector(); renderQuestions(); seedSelection(); }
     function animatePositions(before) {
         const version = ++layoutVersion, targets = new Map([...state.positions].map(([id, point]) => [id, {...point}]));
         if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
@@ -981,24 +709,14 @@ export function mountRecordMap(root, {state = {}, tables = [], scopeKey = '', in
         handle.addEventListener('pointerdown', down); panelCleanups.push(() => handle.removeEventListener('pointerdown', down));
         const resize = new ResizeObserver(() => { if (active() && dimensions().width >= 600 && !node.hidden) state.panels[name].width = node.offsetWidth; }); resize.observe(node); panelCleanups.push(() => resize.disconnect());
     }
-    tableSearch.addEventListener('input', renderTableOptions);
-    tableSelect.addEventListener('change', () => {
-        seedController?.abort(); seedVersion++; clearTimeout(searchTimer);
-        state.table = tableSelect.value; state.search = ''; state.page = 1; state.seedResult = null; search.value = '';
-        searchScope.textContent = text('searchInTable', {table: friendlyName(state.table)});
-        search.setAttribute('aria-label', searchScope.textContent);
-        tableSearch.value = ''; renderTableOptions(); onTableChange?.(state.table); loadSeeds();
-    });
-    search.addEventListener('input', () => {
-        seedController?.abort(); seedVersion++; clearTimeout(searchTimer);
-        state.search = search.value; state.page = 1; seedLoading = true; renderSeeds();
-        searchTimer = setTimeout(loadSeeds, 180);
-    });
+    tableSelect.addEventListener('change', () => { state.table = tableSelect.value; state.search = ''; state.page = 1; state.seedResult = null; search.value = ''; onTableChange?.(state.table); loadSeeds(); });
+    search.addEventListener('input', () => { state.search = search.value; state.page = 1; clearTimeout(searchTimer); searchTimer = setTimeout(loadSeeds, 180); });
     layout.addEventListener('change', () => { const before = new Map([...state.positions].map(([id, p]) => [id, {...p}])); recordMapCheckpoint(state); arrangeRecordMap(state, layout.value, state.focusId); renderGraph(); fit(); focusMobile(); animatePositions(before); announce(text('arranged')); });
     viewport.addEventListener('pointerdown', onPointerDown); viewport.addEventListener('pointermove', onPointerMove); viewport.addEventListener('pointerup', onPointerUp); viewport.addEventListener('pointercancel', onPointerUp); viewport.addEventListener('wheel', onWheel, {passive: false}); shell.addEventListener('keydown', onKey);
     let previousSize = '';
     const observer = new ResizeObserver(() => { if (!active()) return; const size = dimensions(), key = size.width + 'x' + size.height; if (key === previousSize) return; previousSize = key;
-        syncPanelLayout(size); transform(); renderExpansionResult();
+        syncPanelLayout(size);
+        if (state.nodes.size) { fit(); if (size.width < 600 && camera().zoom < .65) { const p = state.positions.get(state.focusId); if (p) { const box = canvasBox(); state.viewport = {x: (box.left + box.right) / 2 - p.x * .65, y: (box.top + box.bottom) / 2 - p.y * .65, zoom: .65}; transform(); } } }
     }); observer.observe(viewport);
     function destroy() {
         if (destroyed) return; destroyed = true; epoch++; layoutVersion++; clearTimeout(searchTimer);
@@ -1007,7 +725,6 @@ export function mountRecordMap(root, {state = {}, tables = [], scopeKey = '', in
     }
     signal?.addEventListener('abort', destroy, {once: true});
     if (!available.length) seedList.append(notice(text('noTablesHelp')));
-    renderTableOptions();
     syncPanelLayout();
     renderAll();
     const restoredSelection = selectedRecordMapNodes(state);

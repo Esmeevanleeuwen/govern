@@ -45,7 +45,7 @@ const ready = async source => {
         const first = source.locator('#record-map-records [data-map-record]').first();
         await first.waitFor(); await first.focus(); await first.press('Enter');
     }
-    await source.locator('#explorer-companion-pin').waitFor({state: 'attached'});
+    await source.locator('#explorer-companion-pin').waitFor();
 };
 /** Wait for the actual restored canvas, including cached selections with no request. */
 const navigateCanvas = async (source, scope, table, selectedId = null) => {
@@ -60,20 +60,9 @@ const navigateCanvas = async (source, scope, table, selectedId = null) => {
         assert.equal(await source.locator('[data-record-node][aria-pressed="true"]').count(), 1,
             'Returning to a cached canvas restores one exact selected record.');
     }
-    await source.locator('#explorer-companion-pin:not([disabled])').waitFor({state: 'attached'});
-};
-const openExploreMore = async source => {
-    const more = source.locator('.record-map-workspace-more');
-    if (!await more.evaluate(element => element.open)) await more.locator('summary').click();
-};
-const pinSelection = async source => {
-    const more = source.locator('#record-map-inspector .record-map-more-actions');
-    await more.waitFor();
-    if (!await more.evaluate(element => element.open)) await more.locator('summary').click();
-    await source.locator('#explorer-companion-pin:not([disabled])').click();
+    await source.locator('#explorer-companion-pin:not([disabled])').waitFor();
 };
 const opened = async source => {
-    await openExploreMore(source);
     const popup = source.waitForEvent('popup');
     await source.locator('#explorer-companion-open').click();
     const result = await popup;
@@ -142,7 +131,6 @@ try {
     const reporter = initial.candidates.find(item => item.label === 'Public Space Reporter');
     assert.ok(portal && reporter, 'Load the optional fictional PostgreSQL sample records.');
     await page.evaluate(() => { window.companionSmokeOpen = window.open; window.open = () => null; });
-    await openExploreMore(page);
     await page.locator('#explorer-companion-open').click();
     await page.locator('#open-companion[data-companion-status="blocked"]').waitFor({state: 'attached'});
     assert.equal(await page.locator('#companion-launch-notice').isVisible(), true, 'Blocked popups have a visible retry path.');
@@ -152,7 +140,7 @@ try {
     assert.ok(await companion.locator('#companion-tab-compare').isVisible());
 
     phase = 'real record comparison';
-    await pinSelection(page);
+    await page.locator('#explorer-companion-pin').click();
     await pinCount(companion, 1); await loadedPins(companion);
     await companion.locator('#companion-differences').check();
     assert.doesNotMatch(await companion.locator('#companion-compare').innerText(), /No proven differences/,
@@ -168,7 +156,7 @@ try {
     };
     await companion.route('**/api.php?*', delayPin);
     await candidate(page, reporter.id);
-    await pinSelection(page);
+    await page.locator('#explorer-companion-pin').click();
     await deadline(pinWaiting, 'The second pin did not start its captured read.');
     assert.doesNotMatch(await companion.locator('#companion-compare').innerText(), /No proven differences/,
         'A pending second record does not become a false no-differences result.');
@@ -194,7 +182,7 @@ try {
     assert.equal(await companion.locator('tr[data-comparison-field="owner_organization_id"]').isVisible(), false);
     assert.equal(await budget.isVisible(), true);
     await companion.locator('#companion-differences').uncheck();
-    await pinSelection(page);
+    await page.locator('#explorer-companion-pin').click();
     await pinCount(companion, 2);
     const pinnedBeforeLanguage = await headers.evaluateAll(nodes => nodes.map(node => node.dataset.companionRecord));
     const readCount = reads.filter(read => read.page === companion).length;
@@ -217,7 +205,7 @@ try {
     phase = 'bounded pin set';
     for (const id of ['2', '3', '4']) {
         await candidate(page, initial.candidates.find(item => item.key.id === id).id);
-        await pinSelection(page);
+        await page.locator('#explorer-companion-pin').click();
         await pinCount(companion, id === '2' ? 3 : 4);
         await loadedPins(companion);
     }
@@ -289,7 +277,7 @@ try {
     await companion.locator('#companion-tab-compare').click();
     assert.equal(await headers.count(), 2, 'Changing main-screen scope retains captured comparison records.');
     assert.ok((await headers.evaluateAll(nodes => nodes.map(node => node.dataset.recordScope))).every(scope => scope === publicKey));
-    await pinSelection(page);
+    await page.locator('#explorer-companion-pin').click();
     await pinCount(companion, 3); await loadedPins(companion);
     assert.equal(await companion.locator('th[data-record-scope="' + archiveKey + '"]').count(), 1);
 
@@ -309,7 +297,7 @@ try {
     const mariaData = await exploreMetadata(page, await mariaRead);
     await ready(page);
     const mariaNode = mariaData.nodes.find(node => node.id === mariaData.center);
-    await pinSelection(page);
+    await page.locator('#explorer-companion-pin').click();
     await pinCount(companion, 3); await loadedPins(companion);
     const mariaPin = companion.locator('th[data-record-scope="bestuursatlas"]');
     assert.deepEqual(JSON.parse(await mariaPin.getAttribute('data-record-key')), mariaNode.key);
@@ -321,7 +309,7 @@ try {
     const exact = exactData.candidates.find(node => node.key.id === '9007199254740993');
     assert.ok(exact, 'The PostgreSQL fixture includes a BIGINT beyond JavaScript safe integers.');
     await candidate(page, exact.id);
-    await pinSelection(page);
+    await page.locator('#explorer-companion-pin').click();
     await pinCount(companion, 4); await loadedPins(companion);
     const exactPin = companion.locator('th[data-record-scope="' + publicKey + '"][data-record-table="govern_pg_values"]');
     assert.equal(JSON.parse(await exactPin.getAttribute('data-record-key')).id, '9007199254740993');
@@ -346,7 +334,7 @@ try {
         return route.fulfill({status: 401, contentType: 'application/json', body: JSON.stringify({ok: false, error: 'Isolated expired-session read failure'})});
     };
     await companion.route('**/api.php?*', failPin);
-    await pinSelection(page);
+    await page.locator('#explorer-companion-pin').click();
     await pinCount(companion, 3);
     const failedPin = companion.locator('th[data-record-scope="' + archiveKey + '"]');
     await failedPin.locator('[data-companion-error]').waitFor();
@@ -416,7 +404,7 @@ try {
     await other.goto(bookmark(publicKey, 'demo_organizations'), {waitUntil: 'networkidle'}); await ready(other);
     const second = await opened(other);
     assert.notEqual(new URL(second.url()).hash, new URL(companion.url()).hash, 'Each main window owns a distinct companion channel.');
-    await pinSelection(other);
+    await other.locator('#explorer-companion-pin').click();
     await pinCount(second, 1); await loadedPins(second);
     await pinCount(companion, 2);
     assert.equal(await second.locator('th[data-record-table="demo_organizations"]').count(), 1);
@@ -429,18 +417,17 @@ try {
     await companion.close();
     companion = await opened(page);
     assert.equal(await companion.locator('th[data-companion-record]').count(), 0, 'Closed companion records were temporary.');
-    await pinSelection(page);
+    await page.locator('#explorer-companion-pin').click();
     await pinCount(companion, 1); await loadedPins(companion);
     assert.equal(await companion.locator('th[data-record-scope="' + archiveKey + '"]').count(), 1);
 
     phase = 'explicit reopen restores a navigated companion';
     await companion.goto(new URL('/', base).href, {waitUntil: 'networkidle'});
-    await openExploreMore(page);
     await page.locator('#explorer-companion-open').click();
     await companion.waitForURL(url => url.pathname === '/companion.php' && url.hash.length > 1);
     await companion.locator('#companion-connection[data-status="connected"]').waitFor();
     assert.equal(await companion.locator('th[data-companion-record]').count(), 0);
-    await pinSelection(page);
+    await page.locator('#explorer-companion-pin').click();
     await pinCount(companion, 1); await loadedPins(companion);
     for (const current of [page, companion]) {
         const stored = await current.evaluate(() => JSON.stringify({...localStorage}));

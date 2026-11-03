@@ -243,7 +243,7 @@ De onderdelen hebben een kleine, duidelijke taak:
 | `dashboard-layout.js` | Blokvolgorde, breedtes, zichtbaarheid en een aparte bewerkingsversie |
 | `query-builder.js` | Het tijdelijke visuele queryontwerp en de toegepaste versie |
 | `schema-model.js` en `schema-visualizer.js` | Live relaties, diagramindeling en interactieve schemaverkenning |
-| `record-map.js`, `record-map.css` en `record-map-messages.js` | Eén Explore-canvas, bronbibliotheek, gedeelde Connections-stroom en inspecteur |
+| `record-map.js`, `record-map.css` en `record-map-messages.js` | Eén Explore-canvas, bronbibliotheek, vragen en inspecteur |
 | `canvas-workspace.css` | Gedeelde canvasachtergrond, puntraster, afmetingen, kaarten en werkbalkmaterialen voor Schema en Explore |
 | `record-map-model.js` | Scoped recordidentiteit, selectie en lokale canvaspresentatie met begrensde Undo |
 | `RecordMap.php` | Alleen-lezen recordkeuze, inspectie en gepagineerde expansie van echte foreign keys |
@@ -494,22 +494,20 @@ recursieve expansie. Niet-ondersteunde sleutels, views en externe schema's
 krijgen een herkenbare grens in de interface.
 
 `record-map.js` verzorgt canvas, bronbibliotheek en inspectie. Het zuivere
-`record-map-model.js` beheert de identiteit van records en lijnen, actieve
-selectie, passief beginrecord, begrensde Terug-navigatie en lokale presentatie.
-De bronbibliotheek kiest tabel en beginrecord; de vaste
+`record-map-model.js` beheert de identiteit van records en lijnen, selectie en
+lokale presentatie. De bronbibliotheek kiest tabel en beginrecord; de vaste
 werkpleknavigatie blijft daarvan los. Een tweede vaste tabelkiezer naast de
 canvasbibliotheek wordt in Explore niet getoond.
 
 Kaarten kunnen worden verplaatst, vastgezet en uit het werkvlak verborgen.
 Orbit en Flow geven de kaart een andere indeling; Manual bewaart zelfgekozen
 posities. Uitbreiden plaatst nieuwe buren zonder bestaande kaarten opnieuw te
-rangschikken. Een uitbreiding behoudt de live camera; nieuwe records worden
-alleen via een expliciete actie in beeld gebracht. Undo hoort alleen bij de canvaspresentatie: het schrijft geen
+rangschikken. Undo hoort alleen bij de canvaspresentatie: het schrijft geen
 gegevens terug en herstelt geen verouderde bronrecords, lijnen of cursors na
 opnieuw uitlezen. De bronbibliotheek en inspecteur kunnen worden verborgen,
 verplaatst en in breedte aangepast; op smalle schermen is één lade tegelijk open.
 
-Eén gedeelde Connections-sectie hoort bij dezelfde selectie, geladen records en relatiebeschrijvingen.
+Vragen horen bij dezelfde selectie, geladen records en relatiebeschrijvingen.
 Leesbare labels veranderen geen identifiers of records. Sleutels, constraint-
 namen en SQL zijn beschikbaar onder technische details. Het scherm maakt geen
 AI-interpretatie of causale uitleg uit alleen een foreign key.
