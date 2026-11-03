@@ -23,6 +23,9 @@ branchehoofden. Hun geschiedenis blijft behouden via mergecommits:
   hetzelfde schema en de exacte recordsleutel.
   De nieuwe vensters gebruiken een onafhankelijke scopeparser, zodat ook een
   browser met het oude gecachete API-bestand de werkplek kan blijven openen.
+- Een geselecteerde SQL-uitkomst blijft herkenbaar bij een taal- of andere
+  presentatiewijziging. Een nieuwe uitvoering met dezelfde waarden houdt een
+  eigen snapshot; oude selecties worden daar niet aan gekoppeld.
 - De homepage en accountcontrole blijven de ingang. De datasetimport werkt
   vanuit het ingelogde werkvenster en verstuurt multipartverzoeken met de
   vastgelegde databasescope en actuele CSRF-token.

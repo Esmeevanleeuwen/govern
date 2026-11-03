@@ -3,6 +3,38 @@
 Stand van de controles: **3 november 2026**. Eerdere resultaten hieronder horen
 bij hun beschreven wijziging en zijn niet automatisch opnieuw uitgevoerd.
 
+## Gezamenlijke feature- en updateversie
+
+De integratie is lokaal gecontroleerd in een afzonderlijk Docker-project met
+PHP 8.4, MariaDB 10.11, PostgreSQL 18, de officiële phpMyAdmin 5.2.3 en Chromium
+via Playwright 1.62.1. De gecontroleerde applicatiecode staat op `0a91550`.
+
+Alle **77 controleonderdelen** hebben een geslaagde laatste uitslag, waaronder
+**22 browserproeven**. Dit resultaat combineert de volledige eerste reeks met
+gerichte heruitvoering na de integratiecorrecties. Het omvat onder meer:
+
+- Opstartlogica, PHP-syntax, account-/sessiegrenzen en vertalingen.
+- Echte MariaDB- en PostgreSQL-catalogi, exacte recordsleutels, scope-isolatie en
+  geweigerde PostgreSQL-mutaties, inclusief beide nieuwe importstromen.
+- Vrije SQL, meerdere databases, rijbewerking, herstelpunten en teruglezen.
+- CSV/TXT/XLSX/JSON-lezers, database-import en het echte upload-/importscherm.
+- Het flexibele canvas, bronbewijs, begeleide vragen, losse recordvensters,
+  vergelijking en de radar op het tweede scherm.
+- De werkplek met een bevroren API-module van vóór de PostgreSQL-uitbreiding,
+  inclusief het openen van een nieuw venster met zijn exacte bronscope.
+- De echte phpMyAdmin-import en -export, querybouwer, Gereedschap, instellingen,
+  taalwisseling, schemaweergave en mobiele bediening.
+- SQL-selecties die bij een presentatiewijziging dezelfde identiteit behouden;
+  een nieuwe uitvoering met gelijke waarden krijgt een afzonderlijke snapshot.
+- De AI-interface en lokale projectzoeker, met begrensde providerfixtures.
+
+De tests gebruikten eigen testdatabases en testaccounts. De Rijksdienst-database
+was geen testdoel. Windows zelf en een gedownload Ollama-taalmodel zijn hier
+niet uitgevoerd; de providerfixtures bewijzen geen modelkwaliteit op de
+gebruikercomputer. De GitHub Actions-uitslag is een afzonderlijke controle bij
+de gepubliceerde commit. Zie [de integratiebeschrijving](INTEGRATION.md) voor
+de samengebrachte branches en aansluitingen.
+
 ## Beweging van de decoratieve glasvorm
 
 De glasvorm in Overzicht zweeft langzaam met een onafhankelijk bewegende
