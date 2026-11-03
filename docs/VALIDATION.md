@@ -3,6 +3,15 @@
 Stand van de controles: **3 november 2026**. Eerdere resultaten hieronder horen
 bij hun beschreven wijziging en zijn niet automatisch opnieuw uitgevoerd.
 
+## Beweging van de decoratieve glasvorm
+
+De glasvorm in Overzicht zweeft langzaam met een onafhankelijk bewegende
+voorste laag. Alleen transforms worden geanimeerd. Een gerichte Chromium-proef
+controleert veranderende transforms van beide lagen, ongewijzigde kaartgeometrie,
+stilstand bij verminderde beweging, 320 px zonder horizontale overloop en
+werkende navigatie vanuit de hero. Geen browserfouten. De volledige CI is voor
+deze kleine CSS-wijziging niet opnieuw uitgevoerd.
+
 ## Compacte bovenbalk en Gereedschap
 
 De bovenbalk toont de databasekiezer, een statusstip, Gereedschap en Database

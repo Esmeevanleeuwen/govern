@@ -233,6 +233,11 @@ Use a shared spacing scale of **4, 8, 12, 16, 24 and 32 px**. Card padding is no
 
 Use small, consistent outline icons with labels for important actions. Decorative artwork carries no essential information. Motion is brief, normally 120 to 180 ms, and limited to meaningful state changes. Disable nonessential motion when reduced motion is requested.
 
+The overview's decorative glass lens uses a slow float and an independent front
+layer rotation. Animate transforms only, preserving its layout and existing
+glass materials. This ambient motion runs only with `prefers-reduced-motion:
+no-preference`; reduced motion keeps the original static shape.
+
 Apple is a reference for material depth and hierarchy; Govern keeps its own identity. See [Apple’s materials guidance](https://developer.apple.com/design/human-interface-guidelines/materials).
 
 ## Language experience
