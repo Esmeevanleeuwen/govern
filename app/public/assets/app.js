@@ -1,5 +1,5 @@
 import {request, setCsrf, endpoint, setDatabase, getDatabase} from './api.js';
-import {el, icon, button, badge, heading, loading, empty, errorPanel, errorText, notice, dataTable, number, fileSize, dateTime, quoteIdentifier, toast, copyText, sqlDisclosure, confirmAction} from './ui.js';
+import {el, icon, button, badge, heading, loading, empty, errorPanel, errorText, notice, dataTable, number, fileSize, dateTime, quoteIdentifier as mariaIdentifier, toast, copyText, sqlDisclosure, confirmAction} from './ui.js';
 import {DatabaseModal} from './database-modal.js';
 import {createDatabaseManager} from './database-manager.js';
 import {QueryBuilder} from './query-builder.js';
@@ -108,6 +108,9 @@ function supports(capability) {
     if (state.bootstrap?.capabilities?.[capability] !== undefined) return state.bootstrap.capabilities[capability] === true;
     return !getDatabase().startsWith('postgres:') || ['browse', 'structure', 'schema', 'explore', 'record_map'].includes(capability);
 }
+function isPostgres() { return getDatabase().startsWith('postgres:'); }
+function quoteIdentifier(value) { return isPostgres() ? '"' + String(value).replaceAll('"', '""') + '"' : mariaIdentifier(value); }
+function sqlTable(value) { return isPostgres() ? quoteIdentifier(schemaName()) + '.' + quoteIdentifier(value) : quoteIdentifier(value); }
 function unavailableFeature() {
     return el('section', {'data-capability-unavailable': ''}, notice(t('app.postgres.unavailable')),
         button(t('app.postgres.browse'), () => go('gegevens'), {symbol: 'table'}));
@@ -168,12 +171,12 @@ const databaseModal = new DatabaseModal(() => {
             databaseModal.configure(getDatabase(), tables(), knownDatabases);
             toast(t('app.databases.busy'), 'error');
             work = Promise.resolve();
-        } else { invalidateCanvasSources({allMaria: true}); work = switchDatabase(databaseModal.database); }
+        } else { invalidateCanvasSources({allScopes: true}); work = switchDatabase(databaseModal.database); }
     } else work = refreshBootstrap(false, {invalidateRecordMap: true, allRecordMaps: true});
     work.then(() => {
         if (!databaseModal.dialog.open && document.activeElement === document.body && !openDatabase.disabled) openDatabase.focus();
     }).catch(error => toast(errorText(error), 'error'));
-});
+}, () => syncDatabasePicker());
 const databaseManager = createDatabaseManager({getDatabase, getDatabases: () => knownDatabases,
     canCreate: () => state.bootstrap?.can_create_database === true,
     isBusy: () => databaseOperationsBusy() || state.switchingDatabase,
@@ -284,7 +287,7 @@ function syncWorkspaceNavigation() {
     const expanded = hasContext && state.contextOpen[area];
     workspaceContext.hidden = !hasContext || !isExplorerOpen();
     sidebar.classList.toggle('has-context', expanded);
-    document.getElementById('workspace-context-title').textContent = t({database: 'app.navigation.tables', research: 'app.navigation.saved', experiments: 'app.navigation.snapshots'}[area] || 'app.shell.workspace');
+    document.getElementById('workspace-context-title').textContent = t({database: 'app.navigation.tables', research: supports('saved_queries') ? 'app.navigation.saved' : 'app.route.research', experiments: 'app.navigation.snapshots'}[area] || 'app.shell.workspace');
     panelToggle.setAttribute('aria-expanded', String(expanded));
     panelToggle.setAttribute('aria-label', t('app.navigation.hide'));
     const workspaceOpener = document.getElementById('workspace-explorer-open');
@@ -576,7 +579,7 @@ function activeTable(params) {
 }
 
 function defaultSql(table = state.table || tables()[0]?.name) {
-    return table ? 'SELECT *\nFROM ' + quoteIdentifier(table) + '\nLIMIT 20;' : 'SELECT VERSION() AS databaseversie;';
+    return table ? 'SELECT *\nFROM ' + sqlTable(table) + '\nLIMIT 20;' : 'SELECT VERSION() AS databaseversie;';
 }
 
 async function openResearch(sql) {
@@ -606,7 +609,7 @@ function renderConnectionNotice() {
     if (state.connectionError && state.bootstrap) globalNotice.append(errorPanel(state.connectionError, () => refreshBootstrap()));
     else if (state.bootstrap?.warning) globalNotice.append(notice(t('app.core.connection.warningRecovery', {warning: localized(state.bootstrap, 'warning')}), 'notice-warning'));
     if (getDatabase().startsWith('postgres:')) {
-        const limits = notice(t(supports('write') ? 'app.postgres.editing' : 'app.postgres.readOnly'));
+        const limits = notice(t(supports('query') ? 'app.postgres.tools' : supports('write') ? 'app.postgres.editing' : 'app.postgres.readOnly'));
         limits.setAttribute(supports('write') ? 'data-postgres-editing' : 'data-postgres-read-only', '');
         globalNotice.append(limits);
     }
@@ -624,11 +627,11 @@ function syncRestoreControls() {
 function syncSnapshotControls() {
     syncDatabasePicker();
     const busy = state.restoring || state.creatingSnapshot;
-    document.querySelectorAll('[data-snapshot-action]').forEach(control => { control.disabled = busy; });
+    document.querySelectorAll('[data-snapshot-action]').forEach(control => { control.disabled = busy || control.dataset.snapshotUnavailable === 'true'; });
 }
 
 /** Invalidate source snapshots after known data changes; geometry never restores records. */
-function invalidateCanvasSources({allMaria = false} = {}) {
+function invalidateCanvasSources({allScopes = false} = {}) {
     const visited = new Set();
     const reset = target => {
         const map = target.recordMapState;
@@ -639,7 +642,7 @@ function invalidateCanvasSources({allMaria = false} = {}) {
         if (record) map.pendingRecord = {table: record.table, key: {...record.key}};
     };
     reset(state);
-    if (allMaria) for (const [key, cached] of databaseCache) if (!key.startsWith('postgres:')) reset(cached);
+    if (allScopes) for (const [key, cached] of databaseCache) if (key.startsWith('postgres:') === isPostgres()) reset(cached);
 }
 
 async function refreshBootstrap(notify = false, {preserveFocus = false, focusFallback, invalidateRecordMap = false, allRecordMaps = false} = {}) {
@@ -655,7 +658,7 @@ async function refreshBootstrap(notify = false, {preserveFocus = false, focusFal
             currentScope?.controller.abort(); currentScope?.cleanup.forEach(cleanup => cleanup());
             currentScope = null;
         }
-        invalidateCanvasSources({allMaria: allRecordMaps});
+        invalidateCanvasSources({allScopes: allRecordMaps});
         if (reloadingCanvas) page.replaceChildren(databaseHeading('verkennen'), loading(t('app.shell.loading')));
     }
     refreshButton.disabled = true;
@@ -675,7 +678,7 @@ async function refreshBootstrap(notify = false, {preserveFocus = false, focusFal
         state.schemaData = null;
         state.structureData.clear();
         setCsrf(data.csrf);
-        if (!databaseModal.dialog.open && supports('phpmyadmin')) databaseModal.configure(data.database.name, data.tables || [], knownDatabases.filter(item => item.connection !== 'postgres'));
+        if (!databaseModal.dialog.open && (supports('phpmyadmin') || supports('import'))) databaseModal.configure(selectedScope, data.tables || [], knownDatabases);
         openDatabase.disabled = !supports('phpmyadmin') || state.restoring;
         syncDatabasePicker();
         const ready = data.database.status !== 'unavailable';
@@ -1036,13 +1039,14 @@ function selectWorkspaceTable(name, view = state.databaseView) {
 }
 
 function databaseTools() {
-    if (!supports('phpmyadmin') && !supports('snapshots')) return null;
+    if (!supports('phpmyadmin') && !supports('snapshots') && !supports('import')) return null;
     const menu = el('details', {class: 'database-tools', id: 'database-tools'});
     const summary = el('summary', {'aria-label': t('app.navigation.tools')}, icon('settings'), t('app.navigation.tools'));
     const actions = el('div', {class: 'database-tools-menu'});
     const native = (tool, label, symbol) => button(t(label), () => { menu.open = false; databaseModal.open('', tool); },
         {className: 'database-tool-action', kind: 'ghost', symbol, 'data-database-tool': tool});
-    if (supports('phpmyadmin')) actions.append(native('import', 'app.navigation.import', 'download'), native('export', 'app.navigation.export', 'external'));
+    if (supports('import')) actions.append(native('import', 'app.navigation.import', 'download'));
+    if (supports('phpmyadmin')) actions.append(native('export', 'app.navigation.export', 'external'));
     if (supports('snapshots')) actions.append(el('a', {class: 'database-tool-action', href: routeHash('experimenten'),
         'data-database-tool': 'backups', on: {click: () => { menu.open = false; }}}, icon('clock'), t('app.navigation.backups')));
     menu.append(summary, actions);
@@ -1355,7 +1359,7 @@ async function renderStructure(scope) {
         const target = foreignKey.referenced_table;
         const targetAvailable = (!foreignKey.referenced_schema || foreignKey.referenced_schema === schemaName()) && tables().some(item => item.name === target);
         const join = foreignKey.columns.map((column, index) => 'a.' + quoteIdentifier(column) + ' = b.' + quoteIdentifier(foreignKey.referenced_columns[index])).join('\n  AND ');
-        const query = 'SELECT a.*, b.*\nFROM ' + quoteIdentifier(table.name) + ' AS a\nJOIN ' + quoteIdentifier(target) + ' AS b\n  ON ' + join + '\nLIMIT 20;';
+        const query = 'SELECT a.*, b.*\nFROM ' + sqlTable(table.name) + ' AS a\nJOIN ' + sqlTable(target) + ' AS b\n  ON ' + join + '\nLIMIT 20;';
         relations.append(registerSelection(el('div', {class: 'relation-card'}, icon('link'),
             el('div', {class: 'relation-content'}, el('p', {}, foreignKey.columns.join(', ') + ' → ' + target + '.' + foreignKey.referenced_columns.join(', ')),
                 el('small', {}, foreignKey.name)),
@@ -1415,8 +1419,8 @@ async function renderSchema(scope) {
 }
 
 async function renderResearch(scope) {
-    page.append(heading(t('app.core.research.eyebrow'), t('app.core.research.title'), t('app.core.research.help'),
-        [button(t('app.core.research.fullEditor'), () => databaseModal.open(state.table, 'sql'), {symbol: 'external'}), databaseTools()]));
+    page.append(heading(t('app.core.research.eyebrow'), t('app.core.research.title'), t(isPostgres() ? 'app.postgres.sqlHelp' : 'app.core.research.help'),
+        [supports('phpmyadmin') ? button(t('app.core.research.fullEditor'), () => databaseModal.open(state.table, 'sql'), {symbol: 'external'}) : null, databaseTools()]));
     if (!state.queryDraft) state.queryDraft = defaultSql();
     const result = el('div', {class: 'query-result'});
     const editor = el('textarea', {id: 'sql-editor', class: 'sql-editor', spellcheck: 'false', autocapitalize: 'off', autocomplete: 'off', 'aria-label': t('app.core.research.sqlLabel')}, state.queryDraft);
@@ -1447,7 +1451,8 @@ async function renderResearch(scope) {
     const saveLabel = el('span', {}, state.queryId ? t('app.core.research.saveChanges') : t('app.core.research.save'));
     const saveButton = el('button', {id: 'save-research', class: 'button button-primary', type: 'submit', disabled: state.savingQuery}, icon('bookmark'), saveLabel);
     const savedList = el('div', {class: 'saved-list'}, loading(t('app.core.research.loadingSaved')));
-    contextContent.append(savedList);
+    if (supports('saved_queries')) contextContent.append(savedList);
+    else contextContent.append(notice(t('app.postgres.savedUnavailable')));
     const saveError = el('div');
     if (state.querySaveError) saveError.append(errorPanel(state.querySaveError));
     const form = el('form', {class: 'save-query-form', novalidate: true},
@@ -1700,7 +1705,7 @@ async function renderResearch(scope) {
             }
         } catch (error) {
             if (error.name !== 'AbortError' && scope.live() && revision === state.queryRevision && editor.value === sql) {
-                if (!body.design) invalidateCanvasSources({allMaria: true});
+                if (!body.design) invalidateCanvasSources({allScopes: true});
                 state.queryError = error;
                 drawResult();
             }
@@ -1748,13 +1753,13 @@ async function renderResearch(scope) {
     };
     const editorCard = el('section', {class: 'card'},
         el('div', {class: 'editor-topbar'}, el('h2', {}, t('app.core.research.editorTitle'))),
-        el('p', {class: 'query-hint query-capabilities'}, t('app.core.research.capabilities')),
+        el('p', {class: 'query-hint query-capabilities'}, t(isPostgres() ? 'app.postgres.sqlCapabilities' : 'app.core.research.capabilities')),
         el('div', {class: 'editor-wrap'}, editor),
         el('div', {class: 'editor-actions'}, el('div', {class: 'editor-action-buttons'}, runButton,
             button(t('app.core.research.new'), newQuery, {kind: 'ghost', symbol: 'plus'}),
             button(t('app.core.research.copy'), () => copyText(editor.value), {kind: 'ghost', symbol: 'copy'})),
             el('span', {class: 'keyboard-hint'}, 'Ctrl / ⌘ + Enter')),
-        el('p', {class: 'query-hint'}, t('app.core.research.limits')), explanation);
+        el('p', {class: 'query-hint'}, t(isPostgres() ? 'app.postgres.sqlLimits' : 'app.core.research.limits')), explanation);
     const help = el('section', {class: 'learning-help'},
         el('h3', {}, icon('book'), t('app.core.research.learnTitle')),
         el('details', {}, el('summary', {}, t('app.core.research.selectQuestion')),
@@ -1774,7 +1779,7 @@ async function renderResearch(scope) {
         el('details', {}, el('summary', {}, t('app.core.research.joinQuestion')),
             el('p', {}, t('app.core.research.joinHelp')),
             button(t('app.core.research.viewStructure'), () => go('structuur', {table: state.table}), {className: 'button-small'})));
-    const builder = new QueryBuilder({
+    const builder = supports('query_builder') ? new QueryBuilder({
         tables: tables(), database: state.bootstrap.database.name, initialTable: state.table,
         draft: state.builderDraft, open: state.builderOpen, scope,
         onDraft: draft => { state.builderDraft = structuredClone(draft); },
@@ -1790,14 +1795,14 @@ async function renderResearch(scope) {
             editor.value = built.sql;
             drawResult(); drawExplanation();
         },
-    });
+    }) : null;
     page.append(el('div', {class: 'research-layout unified-research'},
-        builder.element, editorCard, result,
-        el('section', {class: 'card research-save'}, el('div', {class: 'card-header'}, el('h2', {}, t('app.core.research.save')), icon('bookmark')), form),
+        builder?.element, editorCard, result,
+        supports('saved_queries') ? el('section', {class: 'card research-save'}, el('div', {class: 'card-header'}, el('h2', {}, t('app.core.research.save')), icon('bookmark')), form) : null,
         help));
     drawResult();
     drawExplanation();
-    try { await updateSavedList(); } catch (error) {
+    try { if (supports('saved_queries')) await updateSavedList(); } catch (error) {
         if (error.name !== 'AbortError' && scope.live()) savedList.replaceChildren(errorPanel(error));
     }
 }
@@ -1806,7 +1811,7 @@ async function renderExperiments(scope) {
     const opener = button(t('app.navigation.snapshots'), openWorkspaceContext, {id: 'workspace-explorer-open', symbol: 'clock',
         'aria-label': t('app.navigation.show'), 'aria-controls': 'workspace-context', 'aria-expanded': String(isExplorerOpen())});
     opener.hidden = isExplorerOpen();
-    page.append(heading(t('app.navigation.tools'), t('app.navigation.backups'), t('app.core.experiments.help'),
+    page.append(heading(t('app.navigation.tools'), t('app.navigation.backups'), t(isPostgres() ? 'app.postgres.snapshotsHelp' : 'app.core.experiments.help'),
         [opener, el('a', {class: 'button button-secondary', href: databaseHash(state.databaseView)}, icon('database'), t('app.navigation.database')), databaseTools()]));
     const list = el('div', {class: 'snapshot-list'});
     const snapshotIndex = el('nav', {class: 'snapshot-index', 'aria-label': t('app.navigation.snapshots')});
@@ -1822,7 +1827,7 @@ async function renderExperiments(scope) {
     const create = el('section', {class: 'card snapshot-create'},
         el('div', {class: 'card-header'}, el('h2', {}, t('app.core.experiments.saveState')), icon('shield')),
         el('div', {class: 'card-body'},
-            el('p', {}, t('app.core.experiments.includes', {database: state.bootstrap.database.name})),
+            el('p', {}, t(isPostgres() ? 'app.postgres.snapshotIncludes' : 'app.core.experiments.includes', {database: state.bootstrap.database.name, schema: schemaName()})),
             el('label', {class: 'field-label'}, t('app.core.experiments.recognisableName'), label), createButton, status));
     const load = async () => {
         list.replaceChildren(loading(t('app.core.experiments.loading')));
@@ -1838,14 +1843,15 @@ async function renderExperiments(scope) {
                 snapshotIndex.append(el('p', {class: 'catalog-empty'}, t('app.core.experiments.emptyTitle')));
             }
             snapshots.forEach(snapshot => {
-                const restore = button(t('app.core.experiments.restore'), () => restoreSnapshot(snapshot, restore), {className: 'button-small', symbol: 'refresh', 'data-snapshot-action': 'restore', disabled: state.restoring || state.creatingSnapshot});
+                const restore = button(t('app.core.experiments.restore'), () => restoreSnapshot(snapshot, restore), {className: 'button-small', symbol: 'refresh', 'data-snapshot-action': 'restore', 'data-snapshot-unavailable': snapshot.restore_available === false ? 'true' : null, disabled: state.restoring || state.creatingSnapshot || snapshot.restore_available === false});
                 const snapshotCard = el('article', {class: 'snapshot-card', id: 'snapshot-' + snapshot.id, tabindex: '-1'},
                     el('div', {class: 'snapshot-top'}, el('span', {class: 'snapshot-symbol'}, icon('clock')),
                         el('div', {class: 'snapshot-info'}, el('h3', {}, snapshot.label || t('app.core.experiments.restorePoint')),
-                            el('p', {}, dateTime(snapshot.created_at) + ' · ' + fileSize(snapshot.size_bytes))), badge(t('app.core.experiments.sqlExport'))),
+                            el('p', {}, dateTime(snapshot.created_at) + ' · ' + fileSize(snapshot.size_bytes))), badge(t(isPostgres() ? 'app.postgres.dumpExport' : 'app.core.experiments.sqlExport'))),
                     el('div', {class: 'snapshot-actions'},
                         el('a', {class: 'button button-secondary button-small', href: endpoint('download-snapshot', {database: scope.database, id: snapshot.id})}, icon('download'), t('app.core.experiments.download')),
                         restore, el('code', {title: snapshot.sha256}, (snapshot.sha256 || '').slice(0, 12))));
+                if (isPostgres() && snapshot.restore_available === false) snapshotCard.append(notice(t('app.postgres.restoreUnavailable')));
                 list.append(snapshotCard);
                 snapshotIndex.append(el('button', {type: 'button', class: 'snapshot-index-item', on: {click: () => {
                     closeSidebar(); snapshotCard.focus({preventScroll: true}); snapshotCard.scrollIntoView({block: 'nearest'});
@@ -1886,10 +1892,12 @@ async function renderExperiments(scope) {
     const restoreSnapshot = async (snapshot, restoreButton) => {
         if (state.restoring || state.creatingSnapshot) return;
         const database = state.bootstrap.database.name;
+        const schema = schemaName();
+        const target = isPostgres() ? database + '.' + schema : database;
         const confirmation = await confirmAction({
             title: t('app.core.experiments.restoreTitle'),
-            description: t('app.core.experiments.restoreDescription', {database, label: snapshot.label || t('app.core.experiments.restorePoint')}),
-            requiredText: database, confirmLabel: t('app.core.experiments.restoreConfirm'), danger: true,
+            description: t(isPostgres() ? 'app.postgres.restoreDescription' : 'app.core.experiments.restoreDescription', {database, schema, label: snapshot.label || t('app.core.experiments.restorePoint')}),
+            requiredText: target, confirmLabel: t('app.core.experiments.restoreConfirm'), danger: true,
         });
         if (confirmation === null || state.restoring || state.creatingSnapshot || !scope.live()) return;
         restoreButton.disabled = true;
@@ -1901,7 +1909,7 @@ async function renderExperiments(scope) {
         if (databaseModal.dialog.open) databaseModal.dialog.close();
         status.replaceChildren(notice(t('app.core.experiments.restoring')));
         try {
-            const result = await request('restore-snapshot', {params: {database}, body: {id: snapshot.id, confirmation}});
+            const result = await request('restore-snapshot', {params: {database: scope.database}, body: {id: snapshot.id, confirmation}});
             toast(localized(result, 'message') || t('app.core.experiments.restored'));
             await refreshBootstrap(false, {invalidateRecordMap: true});
         } catch (error) {

@@ -102,16 +102,40 @@ de recordkaart ook de bestaande rijeditoracties. `PostgresRowEditor` gebruikt
 een apart schrijfaccount, gequote schema- en tabelnamen, gebonden waarden en
 PostgreSQL-transacties. De gedeelde dialoog houdt de volledige scope vast;
 `PostgresRowIdentity` levert exacte sleutels los van verkorte browsewaarden.
-Vrije SQL blijft servermatig geweigerd. Er wordt geen MariaDB-
-snapshot-, query-, import- of AI-service op een PostgreSQL-scope aangeroepen.
+`PostgresQueryRunner` en `PostgresSqlScript` voeren PostgreSQL-scripts uit;
+`PostgresNativeImport`, `PostgresImportInspection` en `PostgresDatasetImport`
+gebruiken de bestaande upload- en resultaatcontracten. De visuele querybouwer,
+opgeslagen onderzoeken en AI blijven voor PostgreSQL servermatig geweigerd.
+Er wordt geen MariaDB-query- of importsysteem voor PostgreSQL-dialect gebruikt.
 phpMyAdmin blijft de officiële MariaDB-toepassing en wordt niet als
 PostgreSQL-beheerder gepresenteerd.
 
 Het optionele Compose-profiel `postgres` gebruikt een eigen datavolume en een
-eenmalige rechtenservice. Alleen PostgreSQL en die opstartservice ontvangen
-het bootstrapwachtwoord. De webapp ontvangt aparte lezer- en rijschrijvergegevens;
-de schrijfrechten blijven beperkt tot DML in de ingestelde schema's en USAGE op
-hun sequences.
+eenmalige rechtenservice en een afzonderlijke `postgres-tools`-privéservice.
+De webapp ontvangt aparte lezer-, rijschrijver- en beperkte SQL-credentials.
+Het SQL-account krijgt DML, CREATE in ingestelde schema’s en sequence-USAGE;
+de rijschrijver houdt alleen zijn bestaande DML-rechten. Nieuwe SQL-objecten
+verlenen standaard lees- en rijschrijfrechten. Bestaande eigenaars worden bij
+opstarten niet overgedragen. Het bootstrap- en herstelwachtwoord komen nooit
+in de webapp.
+
+`PostgresBackupService` spreekt via een Unix-socket alleen vaste snapshotacties
+met de worker. De worker gebruikt PostgreSQL 18 `pg_dump`/`pg_restore`, bewaart
+custom-archieven met scope en checksum buiten de webroot en weigert onbekende
+objecten of inkomende schemadependencies. Dumpen gebruikt het leesaccount.
+Na de expliciete herstelbevestiging mag een vaste beheerhandeling de gekozen
+schema-eigenaar tijdelijk aanpassen; de dumpinhoud loopt daarna volledig onder
+een werkelijk aangemeld, beperkt herstelaccount. De schema-inhoud wordt in één
+transactie vervangen zonder database-CREATE-recht; de bestaande schema-eigenaar
+wordt teruggezet, standaardrechten worden hersteld en bij een fout blijft
+de oude inhoud staan. `SET ROLE` op een adminverbinding wordt hiervoor niet
+gebruikt. Zie POSTGRESQL.md voor scope-, ownership- en objectbeperkingen.
+
+SQL en import kunnen andere verleende schema’s raken. Native SQL-import maakt
+daarom vóór uitvoering per bestaand ingesteld schema een herstelpunt onder de
+gedeelde exclusieve onderhoudslock. De kopieën vormen geen algemene rollback.
+De browser houdt voor iedere handeling de database/schema-scope vast; PG-import
+en herstel vragen de exacte bevestiging `database.schema`.
 De startbestanden schakelen het profiel in bij `PG_ENABLED=1` en bewaren
 bestaande wachtwoorden en volumes. Zie [POSTGRESQL.md](POSTGRESQL.md) voor de
 configuratie en de grenzen van deze PostgreSQL-functies.

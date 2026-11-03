@@ -19,6 +19,7 @@ final class QueryRunner
      */
     public function executeScript(string $sql, bool $confirm = false): array
     {
+        if ($this->database->engine() === 'postgres') return (new PostgresQueryRunner($this->database))->executeScript($sql, $confirm);
         $sql = trim($sql);
         if ($sql === '') {
             throw ApiException::fromCode('sql_required');

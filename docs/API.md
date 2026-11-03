@@ -158,21 +158,23 @@ Only names from `PG_DATABASE` and `PG_SCHEMAS` are listed for PostgreSQL;
 configured schemas that cannot be read remain visible with `available:false`.
 
 PostgreSQL supports authenticated GET actions `bootstrap`, `schema`,
-`structure`, `browse`, `explore`, `record-map-records` and `row-editor`, plus
-the read-only POST `record-map` and POST `insert-row`, `update-row`, `delete-row`,
-alongside the global `databases` action. Normal HTTP method
-and CSRF validation still apply. Every other scoped PostgreSQL action
-returns 403 `postgres_read_only` before the corresponding service is invoked.
-This includes arbitrary SQL, saved queries, snapshots, import
-inspection/database creation, context export and AI. These controls are also
-unavailable in the UI; the server guard remains authoritative.
+`structure`, `browse`, `explore`, `record-map-records`, `row-editor`,
+`import-inspection`, `snapshots` and `download-snapshot`; the read-only POST
+`record-map`; and POST `insert-row`, `update-row`, `delete-row`, `query`,
+`native-import-preview`, `native-import-execute`, `dataset-preview`,
+`dataset-import`, `create-snapshot` and `restore-snapshot`. Normal methods,
+sessions and CSRF checks apply. `query` accepts manual SQL only; visual designs
+remain unsupported. Other scoped actions return 403 `postgres_read_only` before
+the corresponding service runs, including saved queries, database creation,
+context export and AI. phpMyAdmin is never a PostgreSQL fallback.
 
-Bootstrap adds top-level `scope_key` and `capabilities`, and database fields
-`connection`, `engine`, `schema` and `scope_key`. PostgreSQL capabilities
-`browse`, `structure`, `schema`, `explore`, `record_map` are true. `write` is true
-when separate writer credentials are configured; database grants remain
-authoritative. `query`, `saved_queries`, `snapshots`, `phpmyadmin`, `import`,
-`create_database`, `ai`, `context` remain false.
+Bootstrap adds `scope_key` and `capabilities`, and database fields
+`connection`, `engine`, `schema` and `scope_key`. Read capabilities are true.
+`write` requires separate row-writer credentials. `query` and `import` require
+SQL credentials; `snapshots` requires the configured tools socket. These flags
+describe configured routes, not a successful live connection; database grants
+and service errors remain authoritative. `query_builder`, `saved_queries`,
+`phpmyadmin`, `create_database`, `ai` and `context` remain false for PostgreSQL.
 The normalized catalog/browse response retains the existing table, column and
 relationship fields. PostgreSQL browse includes exact `row_keys` and
 `key_columns` for supported complete identities, independently of preview
@@ -781,6 +783,74 @@ inheritance parents remain read-only. Unsupported tables and identities return
 a descriptor reason or 422; no phpMyAdmin action is offered for this engine.
 The same per-field/form/body limits apply.
 
+## PostgreSQL SQL, imports and schema snapshots
+
+`POST query` with `{sql:string,confirm?:boolean}` uses `PostgresQueryRunner`
+and `PostgresSqlScript`, retaining the ordinary per-statement/result_sets
+response shape and destructive-confirmation flow below. Each run opens one
+fresh `PG_SQL_USER` session with the selected schema search path, UTC and native
+prepared settings. There is no SQL permission sandbox: qualified SQL, functions
+and search-path changes can touch other granted schemas. No database/schema
+creation, administrative role or transfer of existing object ownership is added.
+Creating a new table in a permitted schema is supported; altering an existing
+object owned by another role can fail with the database permission error.
+
+The PostgreSQL parser supports dollar quotes, E strings, double-quoted
+identifiers and nested block comments. Client backslash commands and COPY over
+STDIN/STDOUT are unsupported; this route is not a general `psql` script or
+plain `pg_dump` import. When a statement can change string-lexing settings,
+the advisory preview reports an unknown statement count rather than evaluating
+it. The actual session setting determines the next parse; an unsupported
+command reached later then fails while earlier committed work can remain. SQL is bounded to 256 KiB, each result to 200
+preview rows, and display byte budgets retain the shared limits. Earlier
+completed results survive a later error. Open transactions are rolled back
+before discarding the session, while already committed work remains. NOTICE
+counts are not collected: statement `warning_count` is 0, `warnings` is empty
+and `notices_available:false` distinguishes this from a verified absence of
+PostgreSQL notices. Catalog refresh preserves SQL, results, focus and caret.
+
+`native-import-preview` and `native-import-execute` keep their existing request
+shapes but bind the token to full PostgreSQL scope, SQL bytes and inspection
+states for all configured existing schemas. Preview adds `schema`, `scope_key`,
+`confirmation:"database.schema"` and `safety_schemas`. Execution requires that
+exact confirmation. Under the global exclusive maintenance lock it first calls
+`PostgresBackupService::createLocked` for every configured existing schema. A
+failed copy aborts before any import SQL. Execution returns the normal before/
+after/result fields plus `safety_snapshots:[{schema,id,restore_available}]`; `safety_snapshot`
+retains the selected schema's `{id,restore_available}` for compatibility. A copy
+can be exported even when incoming dependencies currently block direct restore;
+`restore_available:false` requires an explicit coordinated/manual-recovery notice. Qualified SQL can affect
+several schemas, so these separate copies are not a universal rollback. An
+unavailable post-inspection is reported without inventing exact counts.
+
+`PostgresBackupService` uses a private Unix-socket worker for list/create/
+restore/download, never arbitrary SQL, archive upload or caller paths. Server
+configuration fixes the database, schema allowlist, credentials and backup root.
+Each checkpoint includes scope, format `postgres-custom-v1`, byte size, SHA256
+and creation time. IDs and confined regular files are verified before use;
+symlinks, scope mismatches and altered archives are refused. Download is an
+`application/octet-stream` `.dump` PostgreSQL custom archive, bounded to 512 MiB.
+It is not a SQL text file and is not accepted as a native SQL-import upload.
+
+Restore requires exact `database.schema`. It first creates a safety point when
+the schema exists, refuses unsupported object classes or incoming cross-schema
+dependencies, then atomically replaces the entire chosen schema and removes
+newer objects. Foreign tables, custom aggregates, extension members and unknown
+object classes are conservatively unsupported; database-wide roles/extensions/
+settings and large objects are outside schema snapshots. The read-only account
+must be able to dump complete data; inaccessible/RLS content fails the snapshot
+instead of silently producing a partial checkpoint. Outside dependencies needed
+by the restored objects must still exist. External PostgreSQL sessions do not
+participate in the app maintenance lock.
+
+Archive content runs with an actual non-superuser `PG_RESTORE_USER` login,
+never an admin-authenticated `SET ROLE` session. The worker's fixed admin
+lifecycle operation can transfer only the selected schema ownership for the
+explicit restore, reverting an existing schema owner afterward. Restored objects are
+owned by the restricted restore role; old owners/custom ACLs are intentionally
+not restored. Standard application grants/default grants are reapplied. The
+web app never receives `PG_ADMIN_PASSWORD` or `PG_RESTORE_PASSWORD`.
+
 ## Free SQL scripts
 
 `QueryRunner::executeScript` accepts DML, DDL, diagnostic statements, transactions,
@@ -1038,7 +1108,7 @@ reload an open phpMyAdmin frame: its editor may contain unsaved work. The new
 language applies on the next explicit open, tab/table navigation or reload.
 The embedded application's own interface remains phpMyAdmin's responsibility.
 
-Snapshots are real SQL exports, not container volume snapshots. Restoring overwrites current selected DB contents; user confirmation and automatic safety export required. DDL is not represented as transactionally undoable. No database or phpMyAdmin host port; only proxy bound127.0.0.1:8080. Nothing runs on the user computer until they start this project.
+MariaDB snapshots are SQL exports; PostgreSQL snapshots are native custom schema archives. Neither is a container volume snapshot. Restoring overwrites current selected DB contents; user confirmation and automatic safety export required. DDL is not represented as transactionally undoable. No database or phpMyAdmin host port; only proxy bound127.0.0.1:8080. Nothing runs on the user computer until they start this project.
 
 
 ## Tabular dataset upload
@@ -1046,8 +1116,9 @@ Snapshots are real SQL exports, not container volume snapshots. Restoring overwr
 `POST dataset-preview` and `POST dataset-import` are exceptions to the JSON request
 body convention: they accept multipart FormData with a single `file` upload.
 Both require an approved installation account, the ordinary `X-CSRF-Token`,
-same-origin session and explicit `database` URL scope. They are MariaDB-only;
-PostgreSQL returns 403 `postgres_read_only` before parsing or committing a file.
+same-origin session and explicit URL scope. PostgreSQL additionally carries
+`connection=postgres` and `schema`, or the compatible packed workspace key.
+Both engines reuse the same upload reader.
 They return the usual JSON envelope. The PHP upload limit is
 16 MB (18 MB multipart envelope); ordinary JSON POST remains limited to 1 MB.
 
@@ -1067,6 +1138,17 @@ values are text or NULL; new tables use LONGTEXT columns plus `_govern_id`.
 Append supports compatible InnoDB text tables only; schema drift returns 409.
 Source column names are normalized by the reader, and existing destinations are
 resolved through the catalog. Values always use bound parameters.
+
+PostgreSQL uses `PostgresDatasetImport` and the same dataset profile/preview
+shape, with `type:"TEXT"`, `schema`, `scope_key` and
+`confirmation:"database.schema"`. Both create and append require the exact
+full confirmation. New tables use TEXT columns and a bigint generated-always
+identity `_govern_id`. PostgreSQL DDL and rows commit atomically, without
+overwrite. Append accepts compatible plain PostgreSQL text tables; its version
+binds schema, relation identity, columns and constraints. The table is locked
+and the structure rechecked before appending. PostgreSQL names have a
+63-byte limit; unsupported/generated source targets and stale metadata fail
+explicitly. Source values remain bound strings or NULL.
 
 Stable errors: `dataset_upload`, `dataset_invalid`, `dataset_unavailable`,
 `dataset_name`, `dataset_changed`, `dataset_exists`, plus ordinary CSRF/database

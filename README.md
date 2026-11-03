@@ -42,7 +42,7 @@ je lokale `.env`, die niet in Git wordt opgenomen.
   toegangsverzoeken goedkeuren.
 
 Accounts horen bij één Docker-installatie. Een goedgekeurd account krijgt
-dezelfde toegang tot de toegestane MariaDB-werkdatabases als de eigenaar: bekijken,
+dezelfde toegang tot de toegestane MariaDB- en PostgreSQL-werkdatabases als de eigenaar: bekijken,
 wijzigen, SQL uitvoeren en herstelpunten beheren. Het account maakt geen
 afzonderlijke privéomgeving of eigen database. Keur daarom alleen mensen goed
 die je deze toegang wilt geven. Je kunt ook een eigen Govern-installatie starten.
@@ -64,9 +64,11 @@ De taal- en uiterlijkvoorkeuren blijven bij de browser, zonder accountsynchronis
 PostgreSQL is een optionele tweede verbinding. De bestaande tabelverkenner,
 structuurweergave, het schemadiagram en de recordkaart kunnen PostgreSQL-
 gegevens en relaties tonen. Via **Records** kun je ook rijen toevoegen, bewerken
-en verwijderen. Vrije SQL, import, herstelpunten en AI zijn voor PostgreSQL
-nog niet beschikbaar.
-phpMyAdmin blijft alleen bij de MariaDB-verbinding horen.
+en verwijderen. **Onderzoeken** voert vrije PostgreSQL-SQL uit; via
+**Database → Tools → Importeren** lees je SQL- en tabelbestanden in.
+**Backups** bewaart en herstelt het gekozen PostgreSQL-schema. De visuele
+querybouwer, opgeslagen onderzoeken en AI zijn nog niet beschikbaar voor
+PostgreSQL. phpMyAdmin blijft bij MariaDB horen.
 
 1. Open `.env` in de Govern-map en zet `PG_ENABLED=1`.
 2. Bewaar de standaardwaarden `PG_DATABASE=govern_pg` en `PG_SCHEMAS=public`,
@@ -78,7 +80,9 @@ De startbestanden maken ontbrekende PostgreSQL-wachtwoorden aan en starten
 het optionele Docker-profiel. De nieuwe database is aanvankelijk leeg;
 Govern importeert geen MariaDB-gegevens automatisch. PostgreSQL gebruikt een
 eigen volume. De webapp gebruikt een afzonderlijke lezer en een beperkt
-schrijfaccount voor rijbewerkingen; het bootstrapaccount blijft buiten de webapp.
+schrijfaccount voor rijbewerkingen. Vrije SQL gebruikt een apart beperkt SQL-account.
+Herstellen verloopt via een privéservice met een apart herstelaccount; het
+bootstrapwachtwoord en herstelwachtwoord blijven buiten de webapp.
 
 Wil je meteen tabellen en relaties bekijken? Voer na het starten in PowerShell
 vanuit de Govern-map uit:
@@ -115,8 +119,9 @@ Meer over configuratie, schema's en de volgende bouwfasen:
 Database heeft drie vaste hoofdtaken: **Records**, **Explore** en **Schema**.
 Records is voor gewone tabelrijen en bewerken; Explore is voor verbindingen
 tussen echte records. Schema groepeert tabeldetails en het schemadiagram.
-Onder **Database → Tools** staan import/export via phpMyAdmin en herstelpunten.
-Onderzoeken blijft de plek voor de querybouwer, SQL en opgeslagen onderzoeken.
+Onder **Database → Tools** staan import en herstelpunten; MariaDB biedt daar
+ook de officiële phpMyAdmin-export. Onderzoeken is voor vrije SQL. De visuele
+querybouwer en opgeslagen onderzoeken zijn voorlopig alleen voor MariaDB.
 
 Open **Database → Explore** (`#verkennen`). Oude `#verbanden`-links openen
 hetzelfde werkvlak. Open de bronbibliotheek, kies een tabel en zoek of blader

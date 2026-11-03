@@ -2,6 +2,14 @@ import {registerMessages} from './i18n.js';
 
 registerMessages('imports', {
     nl: {
+        ownManualRecovery: 'Voor {schemas} is direct herstel via Govern geblokkeerd door schema-afhankelijkheden. Bewaar de downloads; gecoördineerd handmatig herstel kan nodig zijn.',
+        inspectionUnavailable: 'De nacontrole is niet beschikbaar. Bekijk het uitvoerresultaat; actuele tabellen en aantallen zijn niet vastgesteld.',
+        noDifferencePostgres: 'Geen aantoonbaar verschil in de controle. Bekijk het uitvoerresultaat hierboven; een import kan bestaande inhoud hebben behouden of mislukt zijn.',
+        noBaselinePostgres: 'Er was geen voorcontrole beschikbaar. Bekijk het uitvoerresultaat hierboven.',
+        ownDescriptionPostgres: "Selecteer een UTF-8 .sql-bestand van maximaal 256 KiB. Controleer het bestand en typ database.schema om te bevestigen. Govern maakt vóór uitvoering herstelpunten van alle beschikbare toegestane schema’s, omdat SQL meerdere schema’s kan raken. Verwijzingen van buiten een schema kunnen direct herstel blokkeren; handmatig herstel kan nodig zijn. Eerder gecommitteerde wijzigingen kunnen blijven staan. psql-opdrachten en COPY via STDIN/STDOUT worden niet ondersteund.",
+        ownConfirmPostgres: "Typ database.schema om te bevestigen",
+        ownTooLargePostgres: "Dit SQL-bestand is groter dan de limiet van 256 KiB.",
+        ownBackups: "Veiligheidskopieën per schema: {ids}.",
         ownTitle: 'Importeren met Govern (eerste versie)',
         ownDescription: 'Selecteer een UTF-8 .sql-bestand van maximaal 256 KiB. Eerst controleren, daarna exact de databasenaam typen. Grote of complexe bestanden kun je nog via phpMyAdmin hieronder importeren. SQL kan bestaande gegevens of andere toegestane databases wijzigen; DDL is niet zomaar terug te draaien.',
         ownChoose: 'SQL-bestand', ownPreview: 'Controleer bestand', ownConfirm: 'Typ de databasenaam om te bevestigen',
@@ -41,6 +49,14 @@ registerMessages('imports', {
         section_evidence: 'Bronnen en wijzigingen',
     },
     en: {
+        ownManualRecovery: 'For {schemas}, direct restore in Govern is blocked by schema dependencies. Keep the downloads; coordinated manual recovery may be needed.',
+        inspectionUnavailable: 'Post-inspection is unavailable. Review the execution result; current tables and counts have not been established.',
+        noDifferencePostgres: 'No detectable difference in the inspection. Review the execution result above; the import may have preserved existing content or failed.',
+        noBaselinePostgres: 'No preflight snapshot was available. Review the execution result above.',
+        ownDescriptionPostgres: "Choose a UTF-8 .sql file up to 256 KiB. Inspect it and type database.schema to confirm. Before execution Govern creates restore points for all available permitted schemas, because SQL can affect multiple schemas. Dependencies from other schemas can block direct restore; manual recovery may be needed. Earlier committed changes may remain. psql commands and COPY via STDIN/STDOUT are unsupported.",
+        ownConfirmPostgres: "Type database.schema to confirm",
+        ownTooLargePostgres: "This SQL file exceeds the 256 KiB limit.",
+        ownBackups: "Safety snapshots by schema: {ids}.",
         ownTitle: 'Import with Govern (initial version)',
         ownDescription: 'Choose a UTF-8 .sql file up to 256 KiB. Inspect it first, then type the exact database name. Larger or complex files can still use phpMyAdmin below. SQL may change existing data or other permitted databases; DDL cannot generally be undone.',
         ownChoose: 'SQL file', ownPreview: 'Inspect file', ownConfirm: 'Type database name to confirm',

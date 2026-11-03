@@ -111,12 +111,12 @@ try {
     await page.locator('#home-setup-dialog[open]').waitFor();
     await page.locator('[data-home-os="windows"]').click();
     assert.match(await page.locator('#home-commands').textContent(), /\.\\start\.cmd$/);
-    assert.match(await page.locator('#home-commands').textContent(), /git clone --branch integrate\/all-govern-updates https:\/\/github\.com\/Esmeevanleeuwen\/govern\.git/);
+    assert.match(await page.locator('#home-commands').textContent(), /git clone --branch main https:\/\/github\.com\/Esmeevanleeuwen\/govern\.git/);
     await page.locator('#home-install-kind').selectOption('existing');
     assert.equal(await page.locator('#home-setup-existing').isVisible(), true);
     assert.match(await page.locator('#home-commands').textContent(), /git fetch origin/);
-    assert.match(await page.locator('#home-commands').textContent(), /git switch integrate\/all-govern-updates/);
-    assert.match(await page.locator('#home-commands').textContent(), /git pull --ff-only origin integrate\/all-govern-updates/);
+    assert.match(await page.locator('#home-commands').textContent(), /git switch main/);
+    assert.match(await page.locator('#home-commands').textContent(), /git pull --ff-only origin main/);
     await page.locator('[data-home-os="unix"]').click();
     assert.match(await page.locator('#home-commands').textContent(), /sh start\.sh$/);
     await page.locator('#home-install-kind').selectOption('new');

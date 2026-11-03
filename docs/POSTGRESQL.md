@@ -3,9 +3,10 @@
 Govern kan naast MariaDB een optionele lokale PostgreSQL-verbinding tonen.
 Dezelfde werkplek laat tabellen, records, kolommen, indexen en relaties zien.
 Je kunt zoeken, bladeren, records verkennen en via **Records** rijen toevoegen,
-bewerken en verwijderen. Vrije SQL, opgeslagen onderzoeken, import, herstelpunten,
-context-export en AI zijn nog niet beschikbaar
-voor PostgreSQL. phpMyAdmin blijft alleen voor MariaDB beschikbaar.
+bewerken en verwijderen. **Onderzoeken** voert vrije SQL uit; via **Tools**
+kun je bestanden importeren en schemaherstelpunten beheren. De visuele
+querybouwer, opgeslagen onderzoeken, context-export en AI zijn nog niet
+beschikbaar voor PostgreSQL. phpMyAdmin blijft alleen voor MariaDB beschikbaar.
 
 ## Inschakelen
 
@@ -19,6 +20,8 @@ PG_DATABASE=govern_pg
 PG_SCHEMAS=public
 PG_READ_USER=govern_pg_reader
 PG_USER=govern_pg_writer
+PG_SQL_USER=govern_pg_sql
+PG_RESTORE_USER=govern_pg_restore
 ```
 
 Start daarna vanuit de Govern-map:
@@ -28,7 +31,8 @@ Start daarna vanuit de Govern-map:
 ```
 
 Op macOS/Linux gebruik je `sh start.sh`. De scripts genereren ontbrekende
-`PG_READ_PASSWORD`, `PG_PASSWORD` en `PG_ADMIN_PASSWORD` in je lokale `.env`.
+`PG_READ_PASSWORD`, `PG_PASSWORD`, `PG_SQL_PASSWORD`, `PG_RESTORE_PASSWORD` en
+`PG_ADMIN_PASSWORD` in je lokale `.env`.
 Ze schakelen het Compose-profiel `postgres` in. Bewaar die wachtwoorden bij een bestaande
 installatie. De database krijgt een eigen volume; starten vervangt geen
 MariaDB-gegevens of bestaande PostgreSQL-tabellen.
@@ -110,6 +114,92 @@ overervingskinderen zijn hier niet wijzigbaar. Een gewone tabel zonder veilige
 rij-identiteit kan wel worden aangevuld; wijzigen en verwijderen vereisen een
 geschikte sleutel. phpMyAdmin is geen PostgreSQL-fallback.
 
+## Vrije SQL uitvoeren
+
+Open **Onderzoeken**. Het voorbeeld gebruikt PostgreSQL-quotes en het gekozen
+schema. Je kunt meerdere opdrachten uitvoeren, tabellen aanmaken, gegevens
+schrijven en transacties of functies met dollarquotes gebruiken. De SQL-sessie
+begint in het gekozen schema; gekwalificeerde SQL en `SET search_path` kunnen
+ook andere toegestane schema’s raken. De databaserechten bepalen wat lukt.
+Bestaande objecten van een andere eigenaar kunnen niet zomaar worden aangepast
+of verwijderd. Opstarten verandert hun eigenaar niet.
+
+Eén uitvoering gebruikt één tijdelijke sessie. Zet `COMMIT` of `ROLLBACK` in
+dezelfde uitvoering. Een onafgemaakte transactie wordt teruggedraaid; eerder
+gecommitteerde opdrachten blijven staan. De bevestiging voor ingrijpende SQL
+is een voorcontrole, geen SQL-sandbox. Bekijk na een fout de eerdere resultaten.
+Maximaal 256 KiB SQL en 200 voorbeeldrijen per resultaat worden verwerkt.
+
+Bij dynamische quote-instellingen kan de voorcontrole geen exacte telling
+geven. Een later gevonden, niet-ondersteunde opdracht stopt de uitvoering;
+eerder gecommitteerd werk kan blijven staan.
+
+Dit is een SQL-editor, geen `psql`-terminal: backslashopdrachten, `\copy`,
+`COPY ... FROM STDIN` en `COPY ... TO STDOUT` worden niet ondersteund. NOTICE-
+meldingen worden niet verzameld. De visuele bouwer en blijvend bewaren van
+onderzoeken zijn voor PostgreSQL nog uitgeschakeld. Je concept blijft tijdelijk
+per database/schema in het open browsertabblad.
+
+## Bestanden importeren
+
+Open **Database → Tools → Importeren**. De PostgreSQL-tabs zijn **Importeren**
+voor UTF-8 `.sql` en **Bestanden importeren** voor CSV/TXT, XLSX, JSON en ZIP-
+bundels. Er wordt geen phpMyAdmin-frame voor PostgreSQL geopend.
+
+Bij SQL controleer je eerst een bestand van maximaal 256 KiB. Govern toont de
+huidige objecten, een opdrachtentelling en gemarkeerde ingrijpende opdrachten.
+Typ vervolgens exact `database.schema`, bijvoorbeeld `govern_pg.public`.
+Vóór uitvoering maakt Govern herstelpunten van alle bestaande, ingestelde
+schema’s. Mislukt één kopie, dan start de SQL-import niet. SQL kan meerdere
+schema’s veranderen; de afzonderlijke kopieën vormen geen algemene rollback.
+Na uitvoering blijven de nacontrole en eventuele gedeeltelijke fout zichtbaar.
+Gewone PostgreSQL-SQL wordt ondersteund; een willekeurige `pg_dump`-tekst met
+`psql`-opdrachten of inline COPY-data kan hier niet worden ingelezen.
+
+Bij tabelbestanden bekijk je eerst het blad, de kolommen, aantallen en voorbeeld-
+rijen. Je maakt een nieuwe tabel of voegt toe aan een passende bestaande tabel.
+Waarden blijven exacte tekst of NULL; nieuwe tabellen krijgen een bigint-
+identitysleutel. Bestanden hebben dezelfde limieten als de bestaande import:
+16 MB, 100.000 rijen en 256 kolommen. Er is geen overwrite of automatische
+ontdubbeling. De bevestiging is ook hier exact `database.schema`.
+
+## Herstelpunten van één schema
+
+Open **Database → Tools → Backups** en geef het punt een herkenbare naam.
+Het punt hoort bij de gekozen database én het schema. De download is een
+PostgreSQL custom-archief (`.dump`), geen `.sql`-tekst en geen Docker-volume.
+Bewaar belangrijke downloads op een andere plek. Deze interface herstelt de
+punten van deze installatie; ze is geen algemene uploadroute voor dumpbestanden.
+
+Herstellen vraagt exact `database.schema`. Govern maakt eerst een veiligheids-
+kopie en vervangt daarna in één PostgreSQL-transactie het hele geselecteerde
+schema, inclusief het verwijderen van later toegevoegde objecten. Bij een
+uitvoerfout wordt die vervanging teruggedraaid. Andere app-acties worden met
+één onderhoudslock uitgesloten; externe PostgreSQL-clients volgen die lock niet.
+Stop zulke externe wijzigingen voordat je een punt maakt of herstelt.
+
+Inkomende verwijzingen vanuit andere schema’s kunnen door een schemaherstel
+verdwijnen. Govern weigert daarom herstel wanneer zulke afhankelijkheden worden
+gevonden. Zo’n kopie kan wel worden gemaakt en gedownload; zij biedt dan geen
+directe herstelknop in Govern en kan gecoördineerd handmatig herstel vereisen.
+Verwijzingen naar buiten het schema moeten bij herstel nog bestaan.
+De controle is bewust beperkt tot ondersteunde PostgreSQL-objecten: gewone en
+gepartitioneerde tabellen, views, materialized views, sequences, functies/
+procedures en gebruikelijke enum-, domein-, composite- en rangetypes. Onder meer
+foreign tables, custom aggregates, extensieobjecten en onbekende objectklassen
+worden geweigerd. Rollen, extensies, databasebrede instellingen en large objects
+horen niet bij een schemaherstelpunt. Een kopie die niet volledig leesbaar is,
+bijvoorbeeld door RLS, wordt niet als geslaagd opgeslagen. De archieflimiet is
+512 MiB.
+
+Na een herstel horen de objecten in het schema bij het beperkte herstelaccount;
+hun oude eigenaar en afwijkende ACL’s worden niet teruggezet. De eigenaar van
+een al bestaand schema blijft behouden. De normale lezer-,
+rijschrijver- en SQL-rechten worden opnieuw verleend. Het herstelproces logt
+werkelijk in als dat beperkte account. Het bootstrapaccount wordt uitsluitend
+voor vaste catalogus- en schemabeheerhandelingen gebruikt en voert nooit de
+inhoud van een dump uit.
+
 ## Records en hun verbindingen verkennen
 
 Open **Database → Explore** (Nederlands: **Verkennen**) en kies via de
@@ -165,10 +255,13 @@ worden niet stil vervangen. Standaardrechten voor nieuwe tabellen en sequences
 gelden voor de bootstrapbeheerder. Objecten van een andere eigenaar vereisen
 passende rechten voor beide applicatieaccounts.
 
-Het bootstrapwachtwoord hoort alleen bij de PostgreSQL-container en de
-afzonderlijke opstartservice voor applicatierechten. Het komt niet in de webapp.
-Lezen gebruikt `PG_READ_USER`/`PG_READ_PASSWORD` in een read-only sessie; directe
-rijbewerkingen gebruiken `PG_USER`/`PG_PASSWORD` in een aparte schrijfsessie.
+Het bootstrapwachtwoord hoort alleen bij PostgreSQL en de privéservices voor
+rechten en vaste herstelhandelingen. Het komt niet in de webapp. Lezen gebruikt
+`PG_READ_USER`/`PG_READ_PASSWORD` in een read-only sessie; rijbewerkingen gebruiken
+`PG_USER`/`PG_PASSWORD`. Vrije SQL en imports gebruiken `PG_SQL_USER`/`PG_SQL_PASSWORD`
+met DML en CREATE binnen de ingestelde schema’s. Nieuwe SQL-objecten krijgen
+standaard passende applicatierechten. `PG_RESTORE_PASSWORD` wordt alleen aan de
+privéherstelservice gegeven; die gebruikt de native PostgreSQL 18-hulpmiddelen.
 Aanmelden bij Govern blijft hetzelfde installatieaccount gebruiken; PostgreSQL creëert geen nieuwe gebruikerstenants.
 
 ## Gedeelde implementatie
@@ -192,9 +285,9 @@ ook als beide dezelfde tabelnaam hebben. Zie [API.md](API.md) voor het contract.
 
 ## Verdere bouwfasen
 
-Een volgende fase kan vrije PostgreSQL-SQL toevoegen. Import/export en herstel
-vragen PostgreSQL-specifieke hulpmiddelen en een echte herstelproef. Totdat die paden
-zijn gebouwd en gecontroleerd, blijven hun controls en API-acties uitgeschakeld.
+Volgende fasen kunnen de visuele querybouwer, opgeslagen onderzoeken, bredere
+dump-import en extra ondersteunde schemaobjecten toevoegen. Die mogelijkheden
+blijven uitgeschakeld zolang hun volledige pad niet is gebouwd en gecontroleerd.
 
 De gerichte controles gebruiken een afzonderlijke testdatabase met twee
 schema's, samengestelde sleutels en verschillende gegevenstypen. Werkelijke

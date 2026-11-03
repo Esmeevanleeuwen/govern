@@ -1,11 +1,13 @@
 import {request} from './api.js';
+import {parseConnectionScope} from './connection-scope.js';
 import {t} from './i18n.js';
-import {el, button} from './ui.js';
+import {el, button, errorText} from './ui.js';
 import './import-messages.js';
 
 /** Inspection surrounds official phpMyAdmin; it never parses or executes uploaded SQL. */
 export class ImportInspectionPanel {
-    constructor() {
+    constructor(onBusy) {
+        this.onBusy = onBusy;
         this.database = '';
         this.version = 0;
         this.before = null;
@@ -23,11 +25,11 @@ export class ImportInspectionPanel {
         this.ownFile = el('input', {id: 'native-import-file', type: 'file', accept: '.sql,text/plain', class: 'input'});
         this.ownFileLabel = el('label', {class: 'field-label', for: 'native-import-file'}, t('imports.ownChoose'));
         this.ownPreviewButton = button(t('imports.ownPreview'), () => this.previewOwn(),
-            {symbol: 'search', className: 'button-small'});
+            {id: 'native-import-preview', symbol: 'search', className: 'button-small'});
         this.ownConfirmLabel = el('label', {class: 'field-label', for: 'native-import-confirm'}, t('imports.ownConfirm'));
         this.ownConfirm = el('input', {id: 'native-import-confirm', type: 'text', autocomplete: 'off', class: 'input'});
         this.ownRunButton = button(t('imports.ownRun'), () => this.executeOwn(),
-            {symbol: 'play', kind: 'primary', className: 'button-small'});
+            {id: 'native-import-run', symbol: 'play', kind: 'primary', className: 'button-small'});
         this.ownStatus = el('p', {role: 'status', 'aria-live': 'polite', class: 'small muted'});
         this.ownError = el('p', {role: 'alert', class: 'notice notice-error', hidden: true});
         this.ownPanel = el('section', {class: 'native-import'},
@@ -41,7 +43,7 @@ export class ImportInspectionPanel {
             this.ownSql = '';
             this.ownPlan = null;
             this.ownConfirm.value = '';
-            this.ownStatus.textContent = '';
+            this.status();
             this.ownError.hidden = true;
             this.ownControls();
         });
@@ -63,17 +65,34 @@ export class ImportInspectionPanel {
     }
 
 
+    status(key = null, params = {}, tail = false) {
+        if (!tail) this.ownStatuses = [];
+        if (key) this.ownStatuses.push({key, params});
+        this.renderStatus();
+    }
+
+    renderStatus() { this.ownStatus.textContent = (this.ownStatuses || []).map(item => t(item.key, item.params)).join(' '); }
+
+    isPostgres() { return this.database.startsWith('postgres:'); }
+
+    target() {
+        if (this.ownPlan?.confirmation) return this.ownPlan.confirmation;
+        const scope = parseConnectionScope(this.database);
+        return scope.connection === 'postgres' ? scope.database + '.' + scope.schema : this.database;
+    }
+
     ownControls() {
         this.ownFile.disabled = this.ownWorking;
         this.ownPreviewButton.disabled = this.ownWorking || !this.ownFile.files?.length;
         this.ownConfirm.disabled = this.ownWorking || !this.ownPlan;
-        this.ownRunButton.disabled = this.ownWorking || !this.ownPlan || this.ownConfirm.value !== this.database;
+        this.ownRunButton.disabled = this.ownWorking || !this.ownPlan || this.ownConfirm.value !== this.target();
     }
 
     ownFailure(error) {
         this.ownError.hidden = false;
-        this.ownError.textContent = error.message || String(error);
-        this.ownStatus.textContent = '';
+        this.ownCurrentError = error;
+        this.ownError.textContent = errorText(error);
+        this.status();
     }
 
     async previewOwn() {
@@ -85,11 +104,11 @@ export class ImportInspectionPanel {
         this.ownSql = '';
         this.ownError.hidden = true;
         if (file.size > 262144) {
-            this.ownFailure(new Error(t('imports.ownTooLarge')));
+            this.ownFailure(new Error(t(this.isPostgres() ? 'imports.ownTooLargePostgres' : 'imports.ownTooLarge')));
             return;
         }
-        this.ownWorking = true;
-        this.ownStatus.textContent = t('imports.ownChecking');
+        this.ownWorking = true; this.onBusy?.(true);
+        this.status('imports.ownChecking');
         this.ownControls();
         try {
             // Reject malformed UTF-8 instead of silently altering the SQL.
@@ -102,7 +121,7 @@ export class ImportInspectionPanel {
             this.before = plan.before;
             this.after = null;
             this.render(plan.before, 'before');
-            this.ownStatus.textContent = t('imports.ownPlanReady', {
+            this.status('imports.ownPlanReady', {
                 bytes: plan.bytes, count: plan.statement_count === null ? '?' : plan.statement_count,
                 risky: plan.destructive.length + (plan.destructive_truncated ? '+' : ''),
             });
@@ -111,7 +130,7 @@ export class ImportInspectionPanel {
             if (epoch === this.ownEpoch && database === this.database) this.ownFailure(error);
         } finally {
             if (epoch === this.ownEpoch && database === this.database) {
-                this.ownWorking = false;
+                this.ownWorking = false; this.onBusy?.(false);
                 this.ownControls();
             }
         }
@@ -119,28 +138,33 @@ export class ImportInspectionPanel {
 
     async executeOwn() {
         const plan = this.ownPlan;
-        if (!plan || this.ownWorking || !this.database || this.ownConfirm.value !== this.database) return;
+        if (!plan || this.ownWorking || !this.database || this.ownConfirm.value !== this.target()) return;
         const epoch = this.ownEpoch;
         const database = this.database;
-        this.ownWorking = true;
+        this.ownWorking = true; this.onBusy?.(true);
         this.ownExecuting = true;
         this.ownError.hidden = true;
-        this.ownStatus.textContent = t('imports.ownRunning');
+        this.status('imports.ownRunning');
         this.ownControls();
         try {
             const result = await request('native-import-execute', {params: {database},
-                body: {sql: this.ownSql, preview_token: plan.preview_token, confirmation: database}});
+                body: {sql: this.ownSql, preview_token: plan.preview_token, confirmation: this.ownConfirm.value}});
             if (epoch !== this.ownEpoch || database !== this.database) return;
             this.ownPlan = null;
             this.ownSql = '';
             this.after = result.after;
+            this.inspectionError = result.inspection_error || '';
             this.render(result.after, 'after');
             const detail = result.failed?.detail || '';
-            this.ownStatus.textContent = t(result.completed ? 'imports.ownSucceeded' : 'imports.ownPartial',
+            this.status(result.completed ? 'imports.ownSucceeded' : 'imports.ownPartial',
                 {count: result.executed, detail: detail || '—'});
-            if (result.safety_snapshot?.id) {
-                this.ownStatus.textContent += ' ' + t('imports.ownBackup', {id: result.safety_snapshot.id});
+            if (result.safety_snapshots?.length) {
+                this.status('imports.ownBackups', {ids: result.safety_snapshots.map(point => point.schema + ': ' + point.id).join(', ')}, true);
+            } else if (result.safety_snapshot?.id) {
+                this.status('imports.ownBackup', {id: result.safety_snapshot.id}, true);
             }
+            const manualSchemas = (result.safety_snapshots || []).filter(point => point.restore_available === false).map(point => point.schema);
+            if (manualSchemas.length) this.status('imports.ownManualRecovery', {schemas: manualSchemas.join(', ')}, true);
             this.ownConfirm.value = '';
         } catch (error) {
             if (epoch === this.ownEpoch && database === this.database) {
@@ -149,7 +173,7 @@ export class ImportInspectionPanel {
             }
         } finally {
             if (epoch === this.ownEpoch && database === this.database) {
-                this.ownWorking = false;
+                this.ownWorking = false; this.onBusy?.(false);
                 this.ownExecuting = false;
                 this.ownControls();
             }
@@ -164,11 +188,14 @@ export class ImportInspectionPanel {
         this.ownPlan = null;
         this.ownFile.value = '';
         this.ownConfirm.value = '';
-        this.ownStatus.textContent = '';
+        this.status();
         this.ownError.hidden = true;
         this.ownControls();
         this.version++;
         this.database = database;
+        this.inspectionError = '';
+        this.translate();
+        this.ownConfirm.placeholder = this.target();
         this.before = null;
         this.after = null;
         this.submitted = false;
@@ -226,6 +253,12 @@ export class ImportInspectionPanel {
     }
 
     render(report, phase) {
+        if (report.inspection_available === false) {
+            this.summary.textContent = t('imports.inspectionUnavailable');
+            this.warnings.replaceChildren(el('p', {class: 'import-inspection-error'}, this.inspectionError || t('imports.checkFailed')));
+            this.contents.replaceChildren();
+            return;
+        }
         const isAfter = phase === 'after';
         const records = report.total_records === null ? t('imports.notAllCounted') : String(report.total_records);
         this.summary.textContent = t(isAfter ? 'imports.afterSummary' : 'imports.beforeSummary', {
@@ -247,8 +280,8 @@ export class ImportInspectionPanel {
                     ? report.total_records - this.before.total_records : null;
                 note('imports.changed', {tables: added, views: addedViews, relations: deltaRelations,
                     records: deltaRows === null ? t('imports.notAllCounted') : deltaRows}, 'info');
-                if (!added && !addedViews && !deltaRelations && deltaRows === 0) note('imports.noDifference');
-            } else note('imports.noBaseline');
+                if (!added && !addedViews && !deltaRelations && deltaRows === 0) note(this.isPostgres() ? 'imports.noDifferencePostgres' : 'imports.noDifference');
+            } else note(this.isPostgres() ? 'imports.noBaselinePostgres' : 'imports.noBaseline');
         }
         if (report.unchecked_rows.length) note('imports.unchecked', {count: report.unchecked_rows.length});
         if (report.template === 'bestuursatlas') {
@@ -280,10 +313,12 @@ export class ImportInspectionPanel {
     }
 
     translate() {
+        this.renderStatus();
+        if (!this.ownError.hidden && this.ownCurrentError) this.ownError.textContent = errorText(this.ownCurrentError);
         this.ownHeading.textContent = t('imports.ownTitle');
-        this.ownDescription.textContent = t('imports.ownDescription');
+        this.ownDescription.textContent = t(this.isPostgres() ? 'imports.ownDescriptionPostgres' : 'imports.ownDescription');
         this.ownFileLabel.textContent = t('imports.ownChoose');
-        this.ownConfirmLabel.textContent = t('imports.ownConfirm');
+        this.ownConfirmLabel.textContent = t(this.isPostgres() ? 'imports.ownConfirmPostgres' : 'imports.ownConfirm');
         this.ownPreviewButton.querySelector('span').textContent = t('imports.ownPreview');
         this.ownRunButton.querySelector('span').textContent = t('imports.ownRun');
         this.title.textContent = t('imports.title');

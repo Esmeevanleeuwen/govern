@@ -81,8 +81,10 @@ final class ConnectionScope
     {
         $maria = ($config['engine'] ?? 'mariadb') !== 'postgres';
         $rows = $maria || (($config['user'] ?? '') !== '' && ($config['password'] ?? '') !== '');
-        return ['browse' => true, 'structure' => true, 'schema' => true, 'explore' => true, 'record_map' => true, 'write' => $rows, 'query' => $maria,
-            'saved_queries' => $maria, 'snapshots' => $maria, 'phpmyadmin' => $maria, 'import' => $maria,
+        $sql = $maria || (($config['sql_user'] ?? '') !== '' && ($config['sql_password'] ?? '') !== '');
+        $snapshots = $maria || (($config['tools_socket'] ?? '') !== '');
+        return ['browse' => true, 'structure' => true, 'schema' => true, 'explore' => true, 'record_map' => true, 'write' => $rows, 'query' => $sql,
+            'query_builder' => $maria, 'saved_queries' => $maria, 'snapshots' => $snapshots, 'phpmyadmin' => $maria, 'import' => $sql,
             'create_database' => $maria, 'ai' => $maria, 'context' => $maria];
     }
 
@@ -90,7 +92,9 @@ final class ConnectionScope
     {
         if (($config['engine'] ?? 'mariadb') === 'postgres'
             && !in_array($action, ['bootstrap', 'schema', 'structure', 'browse', 'explore', 'record-map-records', 'record-map',
-                'row-editor', 'insert-row', 'update-row', 'delete-row'], true)) {
+                'row-editor', 'insert-row', 'update-row', 'delete-row', 'query', 'import-inspection',
+                'native-import-preview', 'native-import-execute', 'dataset-preview', 'dataset-import',
+                'snapshots', 'create-snapshot', 'restore-snapshot', 'download-snapshot'], true)) {
             throw ApiException::fromCode('postgres_read_only', 403);
         }
     }

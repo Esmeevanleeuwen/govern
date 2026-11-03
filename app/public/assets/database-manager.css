@@ -69,3 +69,5 @@
 .native-import .field-label { display: block; }
 .native-import .input { width: 100%; max-width: 100%; }
 .native-import [role="status"]:empty { display: none; }
+
+.database-dialog.postgres-import .import-inspection { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; }

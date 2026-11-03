@@ -49,6 +49,9 @@ final class ImportInspection
 
     public function inspect(): array
     {
+        if ($this->database->engine() === 'postgres') {
+            return (new PostgresImportInspection($this->database, $this->catalog))->inspect();
+        }
         $objects = $this->catalog->tables();
         $schema = $this->catalog->schema();
         $names = array_fill_keys(array_column($objects, 'name'), true);
