@@ -45,6 +45,11 @@ jobs:
       - name: Prepare the explicitly isolated PostgreSQL fixtures
         run: |
           docker compose --profile postgres exec -T postgres sh -c 'test "$POSTGRES_DB" = govern_pg && exec psql --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" --set ON_ERROR_STOP=1' < tests/postgres-fixture.sql
+      - name: Prepare the explicitly isolated PostgreSQL row fixtures
+        run: |
+          docker compose --profile postgres exec -T postgres sh -c 'test "$POSTGRES_DB" = govern_pg && exec psql --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" --set ON_ERROR_STOP=1' < tests/postgres-row-fixture.sql
+      - name: PostgreSQL scoped writer and repeat provisioning
+        run: python3 tests/postgres-provisioning-integration.py --confirm-project=govern --confirm-database=govern_pg
       - name: PostgreSQL sample data and repeat loading
         run: python3 tests/postgres-demo-integration.py --confirm-project=govern --confirm-database=govern_pg
       - name: Dataset readers
@@ -76,6 +81,8 @@ jobs:
           python3 tests/auth-integration.py
       - name: PostgreSQL catalog and read-only permissions
         run: docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/postgres-integration.php --confirm-database=govern_pg
+      - name: PostgreSQL exact row editing and conflict checks
+        run: docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/postgres-row-integration.php --confirm-database=govern_pg
       - name: Read-only record neighborhoods and exact identities
         run: docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/record-explorer-integration.php --confirm-database=bestuursatlas --confirm-postgres=govern_pg
       - name: Real database integration
@@ -105,6 +112,7 @@ jobs:
           python3 tests/smoke.py --base-url http://127.0.0.1:8080
           python3 tests/auth-gateway.py --base-url http://127.0.0.1:8080
           python3 tests/postgres-http.py --base-url http://127.0.0.1:8080 --confirm-database=govern_pg
+          python3 tests/postgres-row-http.py --base-url http://127.0.0.1:8080 --confirm-database=govern_pg
           python3 tests/record-explorer-http.py --base-url http://127.0.0.1:8080 --confirm-database=govern_pg
           python3 tests/record-map-http.py --base-url http://127.0.0.1:8080 --confirm-fixtures=record-map-ci
       - name: Browser and visual query builder
@@ -135,6 +143,7 @@ jobs:
             tests/record-map-smoke.mjs \
             tests/homepage-auth-smoke.mjs \
             tests/postgres-smoke.mjs \
+            tests/postgres-row-smoke.mjs \
             tests/postgres-cached-api-smoke.mjs \
             tests/postgres-demo-smoke.mjs \
             tests/record-explorer-smoke.mjs \

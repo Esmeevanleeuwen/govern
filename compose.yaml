@@ -67,7 +67,7 @@ services:
       retries: 15
     restart: unless-stopped
 
-  # Optional local PostgreSQL reader. Enable with PG_ENABLED=1 and start.cmd/start.sh.
+  # Optional local PostgreSQL workspace. Enable with PG_ENABLED=1 and start.cmd/start.sh.
   postgres:
     image: postgres:18
     profiles: [postgres]
@@ -77,6 +77,8 @@ services:
       POSTGRES_PASSWORD: ${PG_ADMIN_PASSWORD:-}
       PG_READ_USER: ${PG_READ_USER:-govern_pg_reader}
       PG_READ_PASSWORD: ${PG_READ_PASSWORD:-}
+      PG_USER: ${PG_USER:-govern_pg_writer}
+      PG_PASSWORD: ${PG_PASSWORD:-}
       PG_SCHEMAS: ${PG_SCHEMAS:-public}
     volumes:
       # PostgreSQL 18 keeps its versioned PGDATA below this directory.
@@ -101,6 +103,8 @@ services:
       PGPASSWORD: ${PG_ADMIN_PASSWORD:-}
       PG_READ_USER: ${PG_READ_USER:-govern_pg_reader}
       PG_READ_PASSWORD: ${PG_READ_PASSWORD:-}
+      PG_USER: ${PG_USER:-govern_pg_writer}
+      PG_PASSWORD: ${PG_PASSWORD:-}
       PG_SCHEMAS: ${PG_SCHEMAS:-public}
     volumes:
       - ./docker/postgres/enable-postgres.sh:/opt/govern/enable-postgres.sh:ro
@@ -131,6 +135,8 @@ services:
       PG_SCHEMAS: ${PG_SCHEMAS:-public}
       PG_READ_USER: ${PG_READ_USER:-govern_pg_reader}
       PG_READ_PASSWORD: ${PG_READ_PASSWORD:-}
+      PG_USER: ${PG_USER:-govern_pg_writer}
+      PG_PASSWORD: ${PG_PASSWORD:-}
       WORKBENCH_SCHEMA_FILE: /var/www/workbench.sql
       TZ: UTC
       AI_ENABLED: ${AI_ENABLED:-0}

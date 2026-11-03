@@ -36,11 +36,15 @@ final class Config
             $pgPort = filter_var($env('PG_PORT', '5432'), FILTER_VALIDATE_INT);
             $pgName = $env('PG_DATABASE', 'govern_pg');
             $pgHost = $env('PG_HOST', 'postgres');
-            $pgUser = $env('PG_READ_USER', 'govern_pg_reader');
+            $pgReadUser = $env('PG_READ_USER', 'govern_pg_reader');
+            $pgUser = $env('PG_USER', 'govern_pg_writer');
             $pgSchemas = array_values(array_unique(array_filter(array_map('trim', explode(',', $env('PG_SCHEMAS', 'public'))), static fn (string $value): bool => $value !== '')));
             if ($pgPort === false || $pgPort < 1 || $pgPort > 65535 || !preg_match('/^[A-Za-z0-9_]{1,63}$/D', $pgName)
                 || $pgHost === '' || preg_match('/[;\x00-\x20\x7f]/', $pgHost)
-                || !preg_match('/^[A-Za-z0-9_]{1,63}$/D', $pgUser) || $pgSchemas === []) {
+                || !preg_match('/^[A-Za-z0-9_]{1,63}$/D', $pgReadUser)
+                || !preg_match('/^[A-Za-z0-9_]{1,63}$/D', $pgUser) || $pgSchemas === []
+                || $pgReadUser === $pgUser || $pgReadUser === 'postgres' || $pgUser === 'postgres'
+                || str_starts_with($pgReadUser, 'pg_') || str_starts_with($pgUser, 'pg_')) {
                 throw ApiException::fromCode('postgres_config_invalid', 503);
             }
             foreach ($pgSchemas as $pgSchema) {
@@ -50,8 +54,9 @@ final class Config
                 }
             }
             $postgres = ['engine' => 'postgres', 'host' => $pgHost, 'port' => $pgPort, 'name' => $pgName,
-                'schema' => $pgSchemas[0], 'schemas' => $pgSchemas, 'read_user' => $pgUser,
-                'read_password' => $env('PG_READ_PASSWORD'), 'user' => '', 'password' => '', 'socket' => ''];
+                'schema' => $pgSchemas[0], 'schemas' => $pgSchemas, 'read_user' => $pgReadUser,
+                'read_password' => $env('PG_READ_PASSWORD'), 'user' => $pgUser,
+                'password' => $env('PG_PASSWORD'), 'socket' => ''];
         }
         return [
             'engine' => 'mariadb',

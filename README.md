@@ -63,8 +63,9 @@ De taal- en uiterlijkvoorkeuren blijven bij de browser, zonder accountsynchronis
 
 PostgreSQL is een optionele tweede verbinding. De bestaande tabelverkenner,
 structuurweergave, het schemadiagram en de recordkaart kunnen PostgreSQL-
-gegevens en relaties tonen. Deze versie ondersteunt alleen lezen en zoeken; wijzigen,
-vrije SQL, import, herstelpunten en AI zijn voor PostgreSQL nog niet beschikbaar.
+gegevens en relaties tonen. Via **Records** kun je ook rijen toevoegen, bewerken
+en verwijderen. Vrije SQL, import, herstelpunten en AI zijn voor PostgreSQL
+nog niet beschikbaar.
 phpMyAdmin blijft alleen bij de MariaDB-verbinding horen.
 
 1. Open `.env` in de Govern-map en zet `PG_ENABLED=1`.
@@ -76,7 +77,8 @@ phpMyAdmin blijft alleen bij de MariaDB-verbinding horen.
 De startbestanden maken ontbrekende PostgreSQL-wachtwoorden aan en starten
 het optionele Docker-profiel. De nieuwe database is aanvankelijk leeg;
 Govern importeert geen MariaDB-gegevens automatisch. PostgreSQL gebruikt een
-eigen volume. De webapp krijgt alleen het afzonderlijke leesaccount.
+eigen volume. De webapp gebruikt een afzonderlijke lezer en een beperkt
+schrijfaccount voor rijbewerkingen; het bootstrapaccount blijft buiten de webapp.
 
 Wil je meteen tabellen en relaties bekijken? Voer na het starten in PowerShell
 vanuit de Govern-map uit:
@@ -222,8 +224,8 @@ Een database buiten deze Docker-installatie wordt niet automatisch gekoppeld.
 
 ## Wat kun je ermee?
 
-De volledige functies hieronder gelden voor MariaDB. Voor PostgreSQL geldt
-de hierboven beschreven eerste versie met alleen bekijken en zoeken.
+De volledige functies hieronder gelden voor MariaDB. PostgreSQL ondersteunt
+de hierboven beschreven leesfuncties en directe rijbewerking in **Records**.
 
 - **Overzicht:** zie welke tabellen en overzichten je database bevat.
 - **Nederlands of Engels:** verander de taal bovenaan of bij Instellingen. Je

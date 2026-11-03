@@ -79,16 +79,18 @@ final class ConnectionScope
 
     public static function capabilities(array $config): array
     {
-        $write = ($config['engine'] ?? 'mariadb') !== 'postgres';
-        return ['browse' => true, 'structure' => true, 'schema' => true, 'explore' => true, 'record_map' => true, 'write' => $write, 'query' => $write,
-            'saved_queries' => $write, 'snapshots' => $write, 'phpmyadmin' => $write, 'import' => $write,
-            'create_database' => $write, 'ai' => $write, 'context' => $write];
+        $maria = ($config['engine'] ?? 'mariadb') !== 'postgres';
+        $rows = $maria || (($config['user'] ?? '') !== '' && ($config['password'] ?? '') !== '');
+        return ['browse' => true, 'structure' => true, 'schema' => true, 'explore' => true, 'record_map' => true, 'write' => $rows, 'query' => $maria,
+            'saved_queries' => $maria, 'snapshots' => $maria, 'phpmyadmin' => $maria, 'import' => $maria,
+            'create_database' => $maria, 'ai' => $maria, 'context' => $maria];
     }
 
     public static function requireAction(array $config, string $action): void
     {
         if (($config['engine'] ?? 'mariadb') === 'postgres'
-            && !in_array($action, ['bootstrap', 'schema', 'structure', 'browse', 'explore', 'record-map-records', 'record-map'], true)) {
+            && !in_array($action, ['bootstrap', 'schema', 'structure', 'browse', 'explore', 'record-map-records', 'record-map',
+                'row-editor', 'insert-row', 'update-row', 'delete-row'], true)) {
             throw ApiException::fromCode('postgres_read_only', 403);
         }
     }

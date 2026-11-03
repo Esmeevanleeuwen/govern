@@ -87,9 +87,9 @@ def main():
           and data["database"]["connection"] == "postgres" and data["database"]["available"],
           "Bootstrap reports the actual engine, database and schema")
     check(data["scope_key"] == "postgres:govern_pg:public", "Selection carries its stable scoped identity")
-    check(all(data["capabilities"].get(name) is True for name in ["browse", "schema", "structure"]),
+    check(all(data["capabilities"].get(name) is True for name in ["browse", "schema", "structure", "write"]),
           "The first slice advertises its supported read operations")
-    check(all(data["capabilities"].get(name) is False for name in ["write", "query", "saved_queries", "snapshots",
+    check(all(data["capabilities"].get(name) is False for name in ["query", "saved_queries", "snapshots",
           "phpmyadmin", "import", "create_database", "ai", "context"]), "Unsupported capabilities are explicit")
     public_entry = next(item for item in data["databases"] if item.get("scope_key") == "postgres:govern_pg:public")
     archive_entry = next(item for item in data["databases"] if item.get("scope_key") == "postgres:govern_pg:archive")
@@ -114,14 +114,11 @@ def main():
     status, result = request("structure", parameters={"table": "govern_pg_values"})
     check(status == 200 and result["data"]["create_sql"] == "", "Structure does not invent complete PostgreSQL DDL")
 
-    for action in ["queries", "snapshots", "download-snapshot", "context", "import-inspection", "row-editor", "ai-status"]:
+    for action in ["queries", "snapshots", "download-snapshot", "context", "import-inspection", "ai-status"]:
         status, result = request(action, parameters={"table": "govern_pg_values", "id": "unavailable"})
         check(status == 403 and result.get("error_code") == "postgres_read_only", "PostgreSQL rejects unsupported GET " + action)
     for action, payload in [
         ("query", {"sql": "SELECT 1"}), ("build-query", {"design": {}}),
-        ("insert-row", {"table": "govern_pg_values", "values": {}}),
-        ("update-row", {"table": "govern_pg_values", "key": {"id": "1"}, "values": {}}),
-        ("delete-row", {"table": "govern_pg_values", "key": {"id": "1"}}),
         ("save-query", {"name": "unsupported", "sql": "SELECT 1"}), ("delete-query", {"id": 1}),
         ("create-snapshot", {"label": "unsupported"}), ("restore-snapshot", {"id": "unsupported", "confirmation": "govern_pg"}),
         ("prepare-database", {"name": "unsupported"}), ("ai-context", {}), ("ai-chat", {}),

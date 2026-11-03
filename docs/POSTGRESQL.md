@@ -1,9 +1,10 @@
 # PostgreSQL in Govern
 
 Govern kan naast MariaDB een optionele lokale PostgreSQL-verbinding tonen.
-Deze eerste versie laat tabellen, records, kolommen, indexen en relaties zien
-in dezelfde werkplek. Ze ondersteunt zoeken, bladeren en records verkennen, maar nog geen wijzigen,
-vrije SQL, opgeslagen onderzoeken, import, herstelpunten, context-export of AI
+Dezelfde werkplek laat tabellen, records, kolommen, indexen en relaties zien.
+Je kunt zoeken, bladeren, records verkennen en via **Records** rijen toevoegen,
+bewerken en verwijderen. Vrije SQL, opgeslagen onderzoeken, import, herstelpunten,
+context-export en AI zijn nog niet beschikbaar
 voor PostgreSQL. phpMyAdmin blijft alleen voor MariaDB beschikbaar.
 
 ## Inschakelen
@@ -17,6 +18,7 @@ PG_PORT=5432
 PG_DATABASE=govern_pg
 PG_SCHEMAS=public
 PG_READ_USER=govern_pg_reader
+PG_USER=govern_pg_writer
 ```
 
 Start daarna vanuit de Govern-map:
@@ -26,8 +28,8 @@ Start daarna vanuit de Govern-map:
 ```
 
 Op macOS/Linux gebruik je `sh start.sh`. De scripts genereren ontbrekende
-`PG_READ_PASSWORD` en `PG_ADMIN_PASSWORD` in je lokale `.env` en schakelen het
-Compose-profiel `postgres` in. Bewaar die wachtwoorden bij een bestaande
+`PG_READ_PASSWORD`, `PG_PASSWORD` en `PG_ADMIN_PASSWORD` in je lokale `.env`.
+Ze schakelen het Compose-profiel `postgres` in. Bewaar die wachtwoorden bij een bestaande
 installatie. De database krijgt een eigen volume; starten vervangt geen
 MariaDB-gegevens of bestaande PostgreSQL-tabellen.
 
@@ -80,8 +82,33 @@ Onder **Schema** zie je de gekoppelde tabellen.
 Opnieuw laden behoudt bestaande voorbeeldrecords, ook als je die later buiten
 Govern hebt bewerkt. Als er al een ander object met een van deze namen bestaat,
 stopt de eerste import voordat gegevens worden toegevoegd. De import gebruikt
-één transactie en geeft het webaccount alleen leesrechten op de voorbeelden.
+één transactie. De aparte lezer houdt leesrechten; het rijschrijfaccount krijgt
+via de ingestelde standaardrechten toegang tot de nieuwe voorbeeldtabellen.
 Normaal starten laadt de voorbeelden niet automatisch.
+
+## Rijen bewerken
+
+Open **Database → Records**, kies een gewone tabel en gebruik **Rij toevoegen**.
+**Bewerken** en **Verwijderen** staan bij rijen met een ondersteunde, volledige
+primaire sleutel of unieke sleutel zonder NULL-velden. Het formulier noemt de
+vastgelegde database, het schema en de tabel. Verwijderen vraagt bevestiging;
+een geopend formulier blokkeert wisselen naar een andere database of een ander
+schema.
+
+De editor leest de echte rij opnieuw. Verkorte browsewaarden worden nooit
+teruggeschreven. Lege tekst, `NULL` en de databasestandaard blijven verschillende
+keuzes; grote getallen blijven exacte tekst en `bytea` gebruikt hexadecimale
+invoer zonder `0x`. Berekende velden en niet-ondersteunde of te grote velden
+blijven behouden bij wijzigen van andere velden. Defaults en automatisch gevulde
+sleutels worden door PostgreSQL ingevuld.
+
+Een wijziging of verwijdering gebruikt een transactie, rijvergrendeling en een
+versiecontrole die bij deze database, dit schema, deze tabel en deze rij hoort.
+Als de rij intussen gewijzigd is, blijft het formulier staan met de vraag om
+opnieuw te laden. Views, materialized views, foreign tables en tabellen met
+overervingskinderen zijn hier niet wijzigbaar. Een gewone tabel zonder veilige
+rij-identiteit kan wel worden aangevuld; wijzigen en verwijderen vereisen een
+geschikte sleutel. phpMyAdmin is geen PostgreSQL-fallback.
 
 ## Records en hun verbindingen verkennen
 
@@ -126,20 +153,23 @@ geen AI of gegenereerde antwoorden. Zie [Explore](RECORD_MAP.md).
 is een lijst met bestaande schema's, gescheiden door komma's, bijvoorbeeld
 `public,archive`. De opstartservice maakt geen ontbrekende werkschema's of
 tabellen aan. Een ontbrekend schema blijft in de kiezer staan als niet
-beschikbaar. De database- en leesrolnamen gebruiken letters, cijfers en
+beschikbaar. De database- en applicatierolnamen gebruiken letters, cijfers en
 underscores; schema-identifiers blijven afzonderlijk gequote.
 
 De lezer krijgt toegang tot de expliciet ingestelde, bestaande schema's en
-SELECT op hun tabellen. Opstarten controleert die rechten opnieuw; bestaande
-rolwachtwoorden worden niet stil vervangen. Standaardrechten voor nieuwe
-tabellen gelden voor de bootstrapbeheerder. Tabellen die een andere eigenaar
-later toevoegt, vereisen passende SELECT-rechten voor het leesaccount.
+SELECT op hun tabellen. Het afzonderlijke account `PG_USER` krijgt daar SELECT,
+INSERT, UPDATE en DELETE op tabellen en USAGE op sequences voor automatisch
+gevulde sleutels. Het krijgt geen schema-aanmaak of algemene beheerdersrechten.
+Opstarten controleert die rechten opnieuw; bestaande rolwachtwoorden en gegevens
+worden niet stil vervangen. Standaardrechten voor nieuwe tabellen en sequences
+gelden voor de bootstrapbeheerder. Objecten van een andere eigenaar vereisen
+passende rechten voor beide applicatieaccounts.
 
 Het bootstrapwachtwoord hoort alleen bij de PostgreSQL-container en de
-afzonderlijke opstartservice voor leesrechten. Het komt niet in de webapp.
-De webapp verbindt met `PG_READ_USER`/`PG_READ_PASSWORD` en gebruikt een
-read-only sessie. Aanmelden bij Govern blijft hetzelfde installatieaccount
-gebruiken; PostgreSQL creëert geen nieuwe gebruikerstenants.
+afzonderlijke opstartservice voor applicatierechten. Het komt niet in de webapp.
+Lezen gebruikt `PG_READ_USER`/`PG_READ_PASSWORD` in een read-only sessie; directe
+rijbewerkingen gebruiken `PG_USER`/`PG_PASSWORD` in een aparte schrijfsessie.
+Aanmelden bij Govern blijft hetzelfde installatieaccount gebruiken; PostgreSQL creëert geen nieuwe gebruikerstenants.
 
 ## Gedeelde implementatie
 
@@ -162,9 +192,8 @@ ook als beide dezelfde tabelnaam hebben. Zie [API.md](API.md) voor het contract.
 
 ## Verdere bouwfasen
 
-Een volgende fase kan PostgreSQL-SQL en rijbewerking toevoegen met eigen
-rechten, transacties en conflictcontrole. Import/export en herstel vragen
-PostgreSQL-specifieke hulpmiddelen en een echte herstelproef. Totdat die paden
+Een volgende fase kan vrije PostgreSQL-SQL toevoegen. Import/export en herstel
+vragen PostgreSQL-specifieke hulpmiddelen en een echte herstelproef. Totdat die paden
 zijn gebouwd en gecontroleerd, blijven hun controls en API-acties uitgeschakeld.
 
 De gerichte controles gebruiken een afzonderlijke testdatabase met twee

@@ -27,9 +27,10 @@ try {
     await page.goto(bookmark('gegevens', 'demo_systems'), {waitUntil: 'networkidle'});
     await row('Resident Services Portal').waitFor();
     assert.equal(await page.locator('#database-select').inputValue(), key);
-    assert.equal(await page.locator('[data-postgres-read-only]').count(), 1);
+    assert.equal(await page.locator('[data-postgres-editing]').count(), 1);
     assert.equal(await page.locator('#open-database').isDisabled(), true);
-    assert.equal(await page.locator('#add-row, [data-row-action]').count(), 0);
+    assert.equal(await page.locator('#add-row').count(), 1);
+    assert.ok(await page.locator('[data-row-action="edit"]').count() > 0);
 
     await page.goto(bookmark('schema'), {waitUntil: 'networkidle'});
     for (const name of ['demo_organizations', 'demo_systems', 'demo_projects', 'demo_contacts', 'demo_project_participants']) {

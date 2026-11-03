@@ -155,7 +155,8 @@ SELECT (obj_description(to_regclass('public.demo_organizations'), 'pg_class')
       public.demo_contacts, public.demo_project_participants;
 \endif
 
--- The web app retains its separate reader role; no write grants are added.
+-- The reader remains read-only. Tables created here by the bootstrap owner
+-- inherit the separate row writer's scoped default privileges from startup.
 GRANT USAGE ON SCHEMA public TO :"reader";
 GRANT SELECT ON public.demo_organizations, public.demo_systems, public.demo_projects,
     public.demo_contacts, public.demo_project_participants, public.demo_project_overview TO :"reader";
