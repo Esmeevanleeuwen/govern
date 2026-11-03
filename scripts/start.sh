@@ -42,6 +42,7 @@ if [ "$pg_enabled" = 1 ]; then
         mv "$temporary" .env
     }
     ensure_pg_password PG_READ_PASSWORD "${PG_READ_PASSWORD:-}"
+    ensure_pg_password PG_PASSWORD "${PG_PASSWORD:-}"
     ensure_pg_password PG_ADMIN_PASSWORD "${PG_ADMIN_PASSWORD:-}"
     set -- --profile postgres
 fi

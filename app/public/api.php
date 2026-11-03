@@ -19,6 +19,7 @@ use Govern\Messages;
 use Govern\QueryDesigner;
 use Govern\QueryRunner;
 use Govern\RowEditor;
+use Govern\PostgresRowEditor;
 use Govern\SavedQueries;
 use Govern\AiService;
 use Govern\DatabaseProvisioner;
@@ -157,6 +158,8 @@ try {
         if (isset($data['row_keys'])) $data['row_keys'] = array_map(static fn (?array $key): ?object => $key === null ? null : (object) $key, $data['row_keys']);
         return $data;
     };
+    $rowEditor = static fn (): RowEditor|PostgresRowEditor => $database->engine() === 'postgres'
+        ? new PostgresRowEditor($database) : new RowEditor($database);
     switch ($action) {
         case 'explore':
             $keyText = Http::text($_GET, 'key', false);
@@ -190,13 +193,13 @@ try {
                 if (!$decodedKey instanceof \stdClass) throw ApiException::fromCode('row_key_invalid', 422);
                 $key = get_object_vars($decodedKey);
             }
-            Http::json($recordResponse((new RowEditor($database))->describe(Http::text($_GET, 'table'), $key)));
+            Http::json($recordResponse($rowEditor()->describe(Http::text($_GET, 'table'), $key)));
         case 'insert-row':
-            Http::json($recordResponse((new RowEditor($database))->insert($input)), 201);
+            Http::json($recordResponse($rowEditor()->insert($input)), 201);
         case 'update-row':
-            Http::json($recordResponse((new RowEditor($database))->update($input)));
+            Http::json($recordResponse($rowEditor()->update($input)));
         case 'delete-row':
-            Http::json($recordResponse((new RowEditor($database))->delete($input)));
+            Http::json($recordResponse($rowEditor()->delete($input)));
         case 'browse':
             Http::json($recordResponse($catalog->browse(Http::text($_GET, 'table'), Http::integer($_GET, 'page', 1), Http::integer($_GET, 'page_size', 25), Http::text($_GET, 'q', false))));
         case 'structure':

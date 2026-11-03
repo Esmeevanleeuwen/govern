@@ -158,22 +158,25 @@ Only names from `PG_DATABASE` and `PG_SCHEMAS` are listed for PostgreSQL;
 configured schemas that cannot be read remain visible with `available:false`.
 
 PostgreSQL supports authenticated GET actions `bootstrap`, `schema`,
-`structure`, `browse`, `explore` and `record-map-records`, plus the read-only
-POST `record-map`, alongside the global `databases` action. Normal HTTP method
+`structure`, `browse`, `explore`, `record-map-records` and `row-editor`, plus
+the read-only POST `record-map` and POST `insert-row`, `update-row`, `delete-row`,
+alongside the global `databases` action. Normal HTTP method
 and CSRF validation still apply. Every other scoped PostgreSQL action
 returns 403 `postgres_read_only` before the corresponding service is invoked.
-This includes arbitrary SQL, row editing, saved queries, snapshots, import
+This includes arbitrary SQL, saved queries, snapshots, import
 inspection/database creation, context export and AI. These controls are also
 unavailable in the UI; the server guard remains authoritative.
 
 Bootstrap adds top-level `scope_key` and `capabilities`, and database fields
 `connection`, `engine`, `schema` and `scope_key`. PostgreSQL capabilities
-`browse`, `structure`, `schema`, `explore`, `record_map` are true;
-`write`, `query`, `saved_queries`,
-`snapshots`, `phpmyadmin`, `import`, `create_database`, `ai`, `context` are false.
+`browse`, `structure`, `schema`, `explore`, `record_map` are true. `write` is true
+when separate writer credentials are configured; database grants remain
+authoritative. `query`, `saved_queries`, `snapshots`, `phpmyadmin`, `import`,
+`create_database`, `ai`, `context` remain false.
 The normalized catalog/browse response retains the existing table, column and
-relationship fields. PostgreSQL browse returns no editable row identities;
-`row_keys` contain null and `key_columns` is empty. Schema responses use
+relationship fields. PostgreSQL browse includes exact `row_keys` and
+`key_columns` for supported complete identities, independently of preview
+shortening. Unsupported rows keep null keys. Schema responses use
 `database` for the selected schema namespace and `database_name` for the real
 PostgreSQL database, keeping external-schema foreign keys distinguishable.
 Structure can leave `create_sql` empty rather than inventing a full table DDL.
@@ -682,6 +685,12 @@ network boundaries and the next implementation stages.
 
 ## Direct row editing
 
+Both engines use `row-editor`, `insert-row`, `update-row` and `delete-row` with
+the same request shapes. The PostgreSQL route uses `PostgresRowEditor` and
+never invokes the MariaDB editor. Every PostgreSQL URL must retain its explicit
+connection, database and schema scope. The sections below describe the shared
+contract and MariaDB details; PostgreSQL dialect differences follow.
+
 The editor discovers columns and indexes from the current catalog. It prefers
 the complete primary key, otherwise a complete unique index whose columns are
 all non-nullable, non-generated and supported. Prefix/expression indexes are
@@ -708,7 +717,7 @@ Fields above 128 KiB, invalid UTF-8 text and fields outside the editor's 512 KiB
 display budget are read-only; unchanged values remain intact. Submitted values
 also have 128 KiB per-field and 512 KiB combined limits. Larger requests retain
 the ordinary 1 MiB HTTP body limit. Use the official phpMyAdmin for unsupported
-editing tasks.
+MariaDB editing tasks.
 
 Insert may omit fields or use `default` to let MariaDB supply their defaults;
 update changes only submitted fields and uses `DEFAULT(column)` when requested.
@@ -731,6 +740,46 @@ Permissions failures map to 403 `row_permission_denied`; database constraint
 failures retain bounded diagnostic detail in 422 `row_write_failed`. Other
 invalid inputs return their stable localized error codes. No successful write
 is inferred from a closed dialog: the API result drives refresh and feedback.
+
+### PostgreSQL row editing
+
+`PG_USER`/`PG_PASSWORD` select a separate, non-admin row-writer role. The reader
+remains a real read-only session. The writer receives SELECT, INSERT, UPDATE,
+DELETE on configured-schema tables and USAGE on their sequences, without free
+SQL or DDL API access. Missing writer credentials leave `capabilities.write`
+false; connection failures and database permissions are not hidden by the UI.
+
+Schema-qualified identifiers come from the live catalog. The editor chooses a
+complete primary or immediate unique index without NULL columns, expressions
+or a partial predicate. Included index columns are not part of the identity.
+Browse omits row keys whose percent-encoded JSON exceeds 4,096 bytes, keeping
+editor GET URLs within practical request limits.
+Values and keys are cast to text in PostgreSQL before PDO conversion; `bytea`
+uses hexadecimal text and bound `decode(..., 'hex')` expressions. INSERT may
+omit fields or use DEFAULT VALUES; updates use PostgreSQL's `DEFAULT` keyword.
+Generated columns and generated-always identities are read-only and omitted;
+serial and generated-by-default identities can use defaults or explicit values.
+RETURNING reads the resulting exact identity, including server-created defaults.
+
+The opaque version is bound to the database, schema, table, catalog definition
+and complete row. Updates/deletes reread using `FOR UPDATE` and compare the
+version, then guard the SQL mutation atomically with the original identity and
+tuple version. A newer row returns 409 `row_stale` without overwriting it.
+PostgreSQL constraints and triggers remain authoritative. An AFTER trigger that
+changes or removes the returned identity can leave `key`, `row`, `version` null;
+the client refreshes browse rather than inventing a new identity. Inserts into a
+keyless table also return null identity fields.
+
+Editing supports PostgreSQL integer, numeric and float types; bool; text,
+varchar, bpchar and name; date/time/timestamp/interval; UUID; JSON/JSONB; bytea;
+inet/cidr/macaddr/macaddr8; money and enums, including supported base types under
+a domain. Array, composite and other unknown fields are read-only and retained
+when another field changes. A required unsupported field without a default
+makes insertion unavailable. Plain tables without inheritance children and
+partitioned tables can be edited; views, materialized views, foreign tables and
+inheritance parents remain read-only. Unsupported tables and identities return
+a descriptor reason or 422; no phpMyAdmin action is offered for this engine.
+The same per-field/form/body limits apply.
 
 ## Free SQL scripts
 

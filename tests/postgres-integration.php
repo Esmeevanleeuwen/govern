@@ -59,7 +59,7 @@ $assert($row['missing'] === null, 'SQL NULL stays distinct from empty text.');
 $assert(json_decode($row['metadata'], true, 16, JSON_THROW_ON_ERROR)['nested']['value'] === 3, 'JSONB remains valid structured content.');
 $assert($row['payload'] === '0x00ff41', 'Binary data uses the existing hexadecimal preview.');
 $assert($row['display_label'] === 'literal%_value!', 'Generated values are read from PostgreSQL.');
-$assert($page['key_columns'] === [] && $page['row_keys'] === [null], 'Read-only results cannot advertise editable row actions.');
+$assert($page['key_columns'] === ['id'] && $page['row_keys'] === [['id' => '9007199254740993']], 'Browse advertises exact safe row identities.');
 $assert($catalog->browse('govern_pg_values', 2, 1, '')['rows'][0]['missing'] === '', 'Pagination keeps empty text distinct from NULL.');
 $assert($catalog->browse('govern_pg_values', 1, 25, '%_')['total'] === 1, 'Search treats wildcard characters literally.');
 $assert($catalog->browse('govern_pg_values', 1, 25, "' OR 1=1 --")['total'] === 0, 'SQL-looking search text remains a bound value.');
@@ -78,7 +78,8 @@ $publicConfig = $scope->select('govern_pg', 'postgres', 'public');
 $archiveConfig = $scope->select('govern_pg', 'postgres', 'archive');
 $assert($publicConfig['schema'] === 'public' && $archiveConfig['schema'] === 'archive', 'Each request resolves its own connection and schema.');
 $assert(ConnectionScope::scopeKey('postgres', 'govern_pg', 'public') !== ConnectionScope::scopeKey('postgres', 'govern_pg', 'archive'), 'Frontend cache identities distinguish schemas.');
-foreach (['writer', 'scriptConnection'] as $method) {
+$assert($database->writer()->query('SELECT current_user')->fetchColumn() === $config['user'], 'Row writes use the separately configured writer.');
+foreach (['scriptConnection'] as $method) {
     try {
         $database->$method();
         throw new RuntimeException('PostgreSQL writer was exposed.');

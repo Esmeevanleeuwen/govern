@@ -78,7 +78,7 @@ bij de MariaDB-adapter. PostgreSQL gebruikt PDO PostgreSQL, een verbinding met
 één database, expliciet gequote schemanamen en zijn eigen catalogusvragen.
 
 `ConnectionScope` combineert de bestaande `DatabaseScope` met de optionele
-PostgreSQL-configuratie. Alleen de server bepaalt host en leesaccount.
+PostgreSQL-configuratie. Alleen de server bepaalt host, lees- en schrijfaccount.
 Ieder verzoek bevat de verbinding, database en het schema. De PostgreSQL-kiezer
 toont alleen de geconfigureerde database en de schema's uit `PG_SCHEMAS`;
 de werkelijke leesbaarheid wordt met het leesaccount gecontroleerd. Een
@@ -96,20 +96,25 @@ servergestuurde `postgres:<database>:<schema>`-sleutel bevatten. De gedecodeerde
 namen ondergaan dezelfde configuratiecontrole. Een gemengde of ongeldige
 scopesleutel krijgt geen ruimere toegang en wordt geweigerd.
 
-De capabilityvelden in bootstrap sturen de zichtbare bediening. De API weigert
-voor PostgreSQL alle acties buiten bootstrap, catalogus, structuur, bladeren,
-de afzonderlijke leesacties van de recordkaart en het compatibele `GET explore`;
-de writer- en vrije-SQL-verbinding weigeren eveneens. Er wordt geen MariaDB-
+De capabilityvelden in bootstrap sturen de zichtbare bediening. PostgreSQL
+ondersteunt naast bootstrap, catalogus, structuur, bladeren en de leesacties van
+de recordkaart ook de bestaande rijeditoracties. `PostgresRowEditor` gebruikt
+een apart schrijfaccount, gequote schema- en tabelnamen, gebonden waarden en
+PostgreSQL-transacties. De gedeelde dialoog houdt de volledige scope vast;
+`PostgresRowIdentity` levert exacte sleutels los van verkorte browsewaarden.
+Vrije SQL blijft servermatig geweigerd. Er wordt geen MariaDB-
 snapshot-, query-, import- of AI-service op een PostgreSQL-scope aangeroepen.
 phpMyAdmin blijft de officiële MariaDB-toepassing en wordt niet als
 PostgreSQL-beheerder gepresenteerd.
 
 Het optionele Compose-profiel `postgres` gebruikt een eigen datavolume en een
-eenmalige leesrechtenservice. Alleen PostgreSQL en die opstartservice ontvangen
-het bootstrapwachtwoord; de webapp ontvangt uitsluitend de lezergegevens.
+eenmalige rechtenservice. Alleen PostgreSQL en die opstartservice ontvangen
+het bootstrapwachtwoord. De webapp ontvangt aparte lezer- en rijschrijvergegevens;
+de schrijfrechten blijven beperkt tot DML in de ingestelde schema's en USAGE op
+hun sequences.
 De startbestanden schakelen het profiel in bij `PG_ENABLED=1` en bewaren
 bestaande wachtwoorden en volumes. Zie [POSTGRESQL.md](POSTGRESQL.md) voor de
-configuratie en de grens van deze eerste bouwfase.
+configuratie en de grenzen van deze PostgreSQL-functies.
 
 ### Compatibiliteit met de eerdere recordverkenner
 
@@ -134,8 +139,8 @@ index, aparte grafiekdatabase of nieuwe frameworklaag nodig.
 Dit API-contract blijft beschikbaar voor oudere clients. De actuele Explore-
 werkplek gebruikt de gepagineerde `RecordMap`-acties uit de sectie
 **Flexibele Explore-werkplek**. Beide antwoorden en hun node-ID's worden niet
-samengevoegd tot twee parallelle grafieken in één scherm. De PostgreSQL-writer
-blijft ontoegankelijk.
+samengevoegd tot twee parallelle grafieken in één scherm. De verkenner gebruikt
+ook na toevoeging van rijbewerking uitsluitend de PostgreSQL-lezer.
 
 ### Gedeelde vensterlaag
 

@@ -24,6 +24,7 @@ $reject = static function (callable $action, string $code, int $status = 403) us
 };
 $values = ['PG_ENABLED' => '1', 'PG_HOST' => 'never-connect.invalid', 'PG_PORT' => '5432',
     'PG_DATABASE' => 'scope_unit_pg', 'PG_SCHEMAS' => 'public,archive,0,public',
+    'PG_USER' => 'scope_unit_writer', 'PG_PASSWORD' => 'writer-unit-test-value',
     'PG_READ_USER' => 'scope_unit_reader', 'PG_READ_PASSWORD' => 'only-a-unit-test-value'];
 $original = [];
 foreach ($values as $key => $value) { $original[$key] = getenv($key); putenv($key . '=' . $value); }
@@ -31,7 +32,7 @@ try {
     $base = Config::fromEnvironment();
     $assert($base['engine'] === 'mariadb', 'Opting into PostgreSQL preserves the default MariaDB engine.');
     $assert($base['postgres']['schemas'] === ['public', 'archive', '0'], 'Configured schemas deduplicate without dropping the literal zero name.');
-    $assert($base['postgres']['user'] === '' && $base['postgres']['password'] === '', 'PostgreSQL app config contains no writer fallback.');
+    $assert($base['postgres']['user'] === 'scope_unit_writer' && $base['postgres']['password'] === 'writer-unit-test-value', 'PostgreSQL writer credentials are explicitly configured and distinct from the reader.');
     $scope = new ConnectionScope($base);
     $public = $scope->select('scope_unit_pg', 'postgres', 'public');
     $archive = $scope->select('scope_unit_pg', 'postgres', 'archive');
@@ -64,17 +65,17 @@ try {
     $assert(ConnectionScope::scopeKey('mariadb', 'existing') === 'existing', 'Existing MariaDB scope keys remain compatible.');
     $assert(ConnectionScope::scopeKey('postgres', 'data:set', 'a b') === 'postgres:data%3Aset:a%20b', 'Workspace keys encode identifier delimiters.');
     $capabilities = ConnectionScope::capabilities($public);
-    foreach (['browse', 'structure', 'schema', 'explore'] as $capability) $assert($capabilities[$capability] === true, 'Supported read capability: ' . $capability);
-    foreach (['write', 'query', 'saved_queries', 'snapshots', 'phpmyadmin', 'import', 'create_database', 'ai', 'context'] as $capability) {
+    foreach (['browse', 'structure', 'schema', 'explore', 'write'] as $capability) $assert($capabilities[$capability] === true, 'Supported read capability: ' . $capability);
+    foreach (['query', 'saved_queries', 'snapshots', 'phpmyadmin', 'import', 'create_database', 'ai', 'context'] as $capability) {
         $assert($capabilities[$capability] === false, 'Unsupported PostgreSQL capability: ' . $capability);
     }
     $assert(!in_array(false, ConnectionScope::capabilities($base), true), 'MariaDB retains all existing capabilities.');
-    foreach (['bootstrap', 'schema', 'structure', 'browse', 'explore'] as $action) {
+    $assert(!ConnectionScope::capabilities([...$public, 'password' => ''])['write'], 'Missing writer credentials retain read-only controls without reusing reader credentials.');
+    foreach (['bootstrap', 'schema', 'structure', 'browse', 'explore', 'row-editor', 'insert-row', 'update-row', 'delete-row'] as $action) {
         ConnectionScope::requireAction($public, $action);
         $assert(true, 'Supported action allowed without connecting: ' . $action);
     }
-    foreach (['query', 'build-query', 'queries', 'save-query', 'delete-query', 'row-editor', 'insert-row', 'update-row',
-        'delete-row', 'snapshots', 'create-snapshot', 'restore-snapshot', 'download-snapshot', 'prepare-database',
+    foreach (['query', 'build-query', 'queries', 'save-query', 'delete-query', 'snapshots', 'create-snapshot', 'restore-snapshot', 'download-snapshot', 'prepare-database',
         'import-inspection', 'ai-status', 'ai-context', 'ai-chat', 'context', 'unknown-action'] as $action) {
         $reject(static fn () => ConnectionScope::requireAction($public, $action), 'postgres_read_only');
         ConnectionScope::requireAction($base, $action);
@@ -83,8 +84,9 @@ try {
         ['scope_unit_pg', 'postgres', 'missing']] as [$name, $connection, $schema]) {
         $reject(static fn () => $scope->select($name, $connection, $schema), 'database_not_available');
     }
+    $reject(static fn () => (new Database([...$public, 'password' => '']))->writer(), 'credentials_missing', 503);
     $database = new Database($public);
-    foreach (['writer', 'scriptConnection'] as $method) $reject(static fn () => $database->$method(), 'postgres_read_only');
+    foreach (['scriptConnection'] as $method) $reject(static fn () => $database->$method(), 'postgres_read_only');
     $assert($database->quoteIdentifier('a"b') === '"a""b"', 'PostgreSQL identifier quoting retains embedded quotes.');
     putenv('PG_ENABLED=0');
     $disabled = Config::fromEnvironment();
@@ -93,7 +95,8 @@ try {
     $reject(static fn () => (new ConnectionScope($disabled))->selectRequest('postgres:scope_unit_pg:public'), 'database_not_available');
     putenv('PG_ENABLED=1');
     foreach ([['PG_PORT', '0'], ['PG_PORT', '65536'], ['PG_HOST', 'host;dbname=other'], ['PG_HOST', 'host with space'],
-        ['PG_DATABASE', 'invalid;name'], ['PG_READ_USER', 'invalid;role'], ['PG_SCHEMAS', ''],
+        ['PG_DATABASE', 'invalid;name'], ['PG_READ_USER', 'invalid;role'], ['PG_USER', 'postgres'],
+        ['PG_USER', 'scope_unit_reader'], ['PG_READ_USER', 'scope_unit_writer'], ['PG_SCHEMAS', ''],
         ['PG_SCHEMAS', 'pg_catalog'], ['PG_SCHEMAS', 'information_schema'], ['PG_SCHEMAS', "bad\nname"]] as [$key, $value]) {
         putenv($key . '=' . $value);
         $reject(static fn () => Config::fromEnvironment(), 'postgres_config_invalid', 503);

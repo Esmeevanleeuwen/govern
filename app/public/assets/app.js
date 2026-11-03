@@ -605,10 +605,10 @@ function renderConnectionNotice() {
     globalNotice.replaceChildren();
     if (state.connectionError && state.bootstrap) globalNotice.append(errorPanel(state.connectionError, () => refreshBootstrap()));
     else if (state.bootstrap?.warning) globalNotice.append(notice(t('app.core.connection.warningRecovery', {warning: localized(state.bootstrap, 'warning')}), 'notice-warning'));
-    if (!supports('write')) {
-        const readOnly = notice(t('app.postgres.readOnly'));
-        readOnly.setAttribute('data-postgres-read-only', '');
-        globalNotice.append(readOnly);
+    if (getDatabase().startsWith('postgres:')) {
+        const limits = notice(t(supports('write') ? 'app.postgres.editing' : 'app.postgres.readOnly'));
+        limits.setAttribute(supports('write') ? 'data-postgres-editing' : 'data-postgres-read-only', '');
+        globalNotice.append(limits);
     }
 }
 
@@ -1204,7 +1204,7 @@ async function renderData(scope) {
         () => tableSelection(table, state.structureData.get(table.name)));
     if (supports('record_map')) card.querySelector('.table-heading-actions').append(button(t('app.mapEntry.open'),
         () => openRecordMap(table.name), {symbol: 'network', className: 'button-small', 'data-open-record-map': table.name}));
-    if (supports('write') && table.type !== 'view') card.querySelector('.table-heading-actions').prepend(button(t('app.databases.addRow'), () => rowEditor.open({table: table.name, mode: 'insert'}), {id: 'add-row', kind: 'primary', symbol: 'plus', className: 'button-small'}));
+    if (supports('write') && table.type !== 'view' && table.row_editable !== false) card.querySelector('.table-heading-actions').prepend(button(t('app.databases.addRow'), () => rowEditor.open({table: table.name, mode: 'insert'}), {id: 'add-row', kind: 'primary', symbol: 'plus', className: 'button-small'}));
     const search = el('input', {id: 'data-search', type: 'search', class: 'input', value: viewState.search, placeholder: t('app.core.data.searchPlaceholder'), 'aria-label': t('app.core.data.searchLabel'), autocomplete: 'off'});
     const size = el('select', {id: 'data-page-size', class: 'input select', 'aria-label': t('app.core.data.pageSize')},
         [25, 50, 100].map(value => el('option', {value, selected: value === viewState.pageSize}, String(value))));
@@ -1276,6 +1276,8 @@ async function renderData(scope) {
             }));
             if (!editableRows && supports('phpmyadmin')) result.append(notice(t(table.type === 'view' ? 'app.databases.viewFallback' : 'app.databases.fallback')),
                 button(t('app.databases.openEditor'), () => databaseModal.open(table.name, 'browse'), {className: 'button-small', symbol: 'database'}));
+            else if (!editableRows && supports('write')) result.append(notice(t(table.type === 'view' ? 'app.postgres.viewReadOnly'
+                : table.row_editable === false ? 'app.postgres.tableReadOnly' : 'app.postgres.noIdentity')));
             if (localized(data, 'notice')) result.append(notice(localized(data, 'notice')));
             const pages = Math.max(1, Math.ceil(Number(data.total) / Number(data.page_size)));
             currentPage = Number(data.page);
@@ -1304,7 +1306,7 @@ async function renderData(scope) {
         el('div', {class: 'table-toolbar-right'}, el('span', {class: 'small muted'}, t('app.core.data.rows')), size)),
         result, pagination);
     workspace.append(card);
-    if (supports('write')) workspace.append(el('p', {class: 'table-caption'}, t('app.databases.help')));
+    if (supports('write') && table.type !== 'view' && table.row_editable !== false) workspace.append(el('p', {class: 'table-caption'}, t('app.databases.help')));
     workspace.append(sql);
     selectedSourceRecord(workspace, table.name, scope);
     page.append(workspace);

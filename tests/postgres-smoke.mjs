@@ -1,4 +1,4 @@
-/** Read-only PostgreSQL browsing and schema switching against disposable fixtures. */
+/** PostgreSQL browsing and schema switching against disposable fixtures. */
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 import {authenticatedContext} from './auth-session.mjs';
@@ -29,9 +29,10 @@ const loaded = async (key, text) => {
 try {
     await page.goto(bookmark('gegevens', publicKey, 'govern_pg_values'), {waitUntil: 'networkidle'});
     await loaded(publicKey, 'literal%_value');
-    assert.equal(await page.locator('[data-postgres-read-only]').count(), 1);
+    assert.equal(await page.locator('[data-postgres-editing]').count(), 1);
     assert.equal(await page.locator('#open-database').isDisabled(), true);
-    assert.equal(await page.locator('#add-row, [data-row-action]').count(), 0);
+    assert.equal(await page.locator('#add-row').count(), 1);
+    assert.ok(await page.locator('[data-row-action="edit"]').count() > 0);
     assert.equal(await page.locator('#context-export').evaluate(link => link.hidden), true,
         'PostgreSQL disables export independently of whether Tools is open.');
     assert.equal(await page.locator('[data-area="research"]').isVisible(), false);
@@ -96,7 +97,7 @@ try {
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
     assert.deepEqual(errors, [], 'No browser exceptions.');
     assert.deepEqual(failedApis, [], 'The UI never calls unsupported PostgreSQL APIs.');
-    console.log('PASS: PostgreSQL values, schema/search isolation, diagram, readonly controls, mobile and MariaDB switching.');
+    console.log('PASS: PostgreSQL values, schema/search isolation, diagram, capability controls, mobile and MariaDB switching.');
 } finally {
     await context.close();
     await browser.close();

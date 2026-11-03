@@ -23,7 +23,7 @@ final class PostgresCatalog implements CatalogAdapter
             WHERE nspname = :schema AND pg_catalog.has_schema_privilege(current_user, oid, 'USAGE')");
         $schema->execute(['schema' => $this->database->schemaName()]);
         if ($schema->fetchColumn() === false) throw ApiException::fromCode('database_not_available', 403);
-        $rows = $this->metadata("SELECT c.relname AS table_name, c.relkind,
+        $rows = $this->metadata("SELECT c.relname AS table_name, c.relkind, c.relhassubclass,
             pg_catalog.obj_description(c.oid, 'pg_class') AS comment,
             GREATEST(c.reltuples, 0)::bigint AS rows_estimate,
             (SELECT COUNT(*) FROM pg_catalog.pg_attribute a
@@ -38,6 +38,7 @@ final class PostgresCatalog implements CatalogAdapter
             $this->tableCache[$row['table_name']] = [
                 'name' => $row['table_name'], 'schema' => $this->database->schemaName(),
                 'type' => in_array($row['relkind'], ['v', 'm'], true) ? 'view' : 'table',
+                'row_editable' => $row['relkind'] === 'p' || ($row['relkind'] === 'r' && !self::boolean($row['relhassubclass'])),
                 'comment' => $row['comment'] ?? '', 'rows_estimate' => (int) $row['rows_estimate'],
                 'columns' => (int) $row['column_count'],
             ];
@@ -72,6 +73,8 @@ final class PostgresCatalog implements CatalogAdapter
         $rows = $this->metadata("SELECT c.relname AS table_name, a.attname AS column_name,
             pg_catalog.format_type(a.atttypid, a.atttypmod) AS column_type,
             CASE WHEN t.typtype = 'd' THEN bt.typname ELSE t.typname END AS data_type,
+            CASE WHEN t.typtype = 'd' THEN bt.typtype ELSE t.typtype END AS type_kind,
+            (CASE WHEN t.typtype = 'd' THEN bt.typnamespace ELSE t.typnamespace END)::regnamespace::text AS type_schema,
             NOT (a.attnotnull OR t.typnotnull) AS nullable,
             COALESCE(pg_catalog.pg_get_expr(d.adbin, d.adrelid), t.typdefault) AS column_default,
             a.attgenerated, a.attidentity,
@@ -96,6 +99,7 @@ final class PostgresCatalog implements CatalogAdapter
             $identity = $row['attidentity'] !== '';
             $this->columnCache[$row['table_name']][] = [
                 'name' => $row['column_name'], 'type' => $row['column_type'], 'data_type' => $row['data_type'],
+                'type_kind' => $row['type_kind'], 'type_schema' => $row['type_schema'], 'identity' => $row['attidentity'],
                 'nullable' => self::boolean($row['nullable']), 'default' => $generated ? null : $row['column_default'],
                 'generated' => $generated, 'generation_expression' => $generated ? $row['column_default'] : null,
                 'primary' => self::boolean($row['is_primary']),
@@ -150,7 +154,7 @@ final class PostgresCatalog implements CatalogAdapter
         $this->requireTable($table);
         if ($this->indexCache === null) {
             $rows = $this->metadata("SELECT c.relname AS table_name, index_table.relname AS index_name,
-                i.indisunique, i.indisprimary, method.amname AS index_type,
+                i.indisunique, i.indisprimary, i.indimmediate, i.indexprs IS NOT NULL AS has_expression, method.amname AS index_type,
                 attribute.attname AS column_name, pg_catalog.pg_get_indexdef(i.indexrelid, key_position.n, true) AS expression,
                 i.indpred IS NOT NULL AS partial
                 FROM pg_catalog.pg_index i
@@ -169,6 +173,7 @@ final class PostgresCatalog implements CatalogAdapter
                 $name = $row['index_name'];
                 $groups[$row['table_name']][$name] ??= ['name' => $name, 'unique' => self::boolean($row['indisunique']),
                     'primary' => self::boolean($row['indisprimary']), 'columns' => [], 'sub_parts' => [],
+                    'immediate' => self::boolean($row['indimmediate']), 'expression' => self::boolean($row['has_expression']),
                     'type' => $row['index_type'], 'partial' => self::boolean($row['partial'])];
                 $groups[$row['table_name']][$name]['columns'][] = $row['column_name'] ?? $row['expression'];
                 $groups[$row['table_name']][$name]['sub_parts'][] = null;
@@ -182,6 +187,7 @@ final class PostgresCatalog implements CatalogAdapter
     {
         $metadata = $this->requireTable($table);
         return ['table' => $table, 'schema' => $this->database->schemaName(), 'type' => $metadata['type'],
+            'row_editable' => $metadata['row_editable'],
             'columns' => $this->columns($table), 'indexes' => $this->indexes($table),
             'foreign_keys' => $this->foreignKeys($table), 'create_sql' => '', 'create_sql_available' => false];
     }
@@ -189,6 +195,8 @@ final class PostgresCatalog implements CatalogAdapter
     public function browse(string $table, int $page, int $pageSize, string $search): array
     {
         $columns = $this->columns($table);
+        $metadata = $this->requireTable($table);
+        $keyColumns = $metadata['row_editable'] ? PostgresRowIdentity::columns($columns, $this->indexes($table)) : [];
         $page = max(1, $page);
         $pageSize = max(1, min(100, $pageSize));
         if ($page > 10000000) throw ApiException::fromCode('page_too_large');
@@ -198,7 +206,7 @@ final class PostgresCatalog implements CatalogAdapter
         if ($search !== '') {
             $pattern = '%' . str_replace(['=', '%', '_'], ['==', '=%', '=_'], $search) . '%';
             foreach ($columns as $index => $column) {
-                if ($column['data_type'] === 'bytea') continue;
+                if (PostgresRowIdentity::binary($column)) continue;
                 $key = 'search_' . $index;
                 $conditions[] = 'CAST(' . $this->quote($column['name']) . " AS text) ILIKE :$key ESCAPE '='";
                 $params[$key] = $pattern;
@@ -217,11 +225,7 @@ final class PostgresCatalog implements CatalogAdapter
         $projection = [];
         foreach ($columns as $column) {
             $quoted = $this->quote($column['name']);
-            $projection[] = match ($column['data_type']) {
-                'bytea' => "('0x' || pg_catalog.encode($quoted, 'hex')) AS $quoted",
-                'bool' => "CASE WHEN $quoted IS NULL THEN NULL WHEN $quoted THEN 'true' ELSE 'false' END AS $quoted",
-                default => $quoted,
-            };
+            $projection[] = PostgresRowIdentity::expression($this->database, $column) . ' AS ' . $quoted;
         }
         // PostgreSQL permits zero-column tables; SELECT * also represents their rows.
         $sql = 'SELECT ' . ($projection === [] ? '*' : implode(', ', $projection)) . ' FROM ' . $qualified . $where . $orderSql
@@ -230,11 +234,16 @@ final class PostgresCatalog implements CatalogAdapter
         $statement = $pdo->prepare($sql);
         foreach ($parameters as $name => $value) $statement->bindValue(':' . $name, $value, is_int($value) ? PDO::PARAM_INT : PDO::PARAM_STR);
         $rows = [];
+        $rowKeys = [];
         $bytes = 0;
         $shortened = false;
         try {
             $statement->execute();
             while (($row = $statement->fetch(PDO::FETCH_ASSOC)) !== false) {
+                $rowKeys[] = PostgresRowIdentity::key($row, $keyColumns);
+                foreach ($columns as $column) {
+                    if (PostgresRowIdentity::binary($column) && $row[$column['name']] !== null) $row[$column['name']] = '0x' . $row[$column['name']];
+                }
                 $row = Preview::row($row, $shortened);
                 $bytes += Preview::bytes($row);
                 $rows[] = $row;
@@ -245,7 +254,7 @@ final class PostgresCatalog implements CatalogAdapter
         }
         return ['table' => $table, 'schema' => $this->database->schemaName(), 'columns' => $columns, 'rows' => $rows,
             'page' => $page, 'page_size' => $pageSize, 'total' => $total, 'sql' => $sql, 'params' => $parameters,
-            'key_columns' => [], 'row_keys' => array_fill(0, count($rows), null), 'read_only' => true,
+            'key_columns' => $keyColumns, 'row_keys' => $rowKeys, 'read_only' => !$metadata['row_editable'],
             'truncated' => $shortened, 'notice' => $shortened ? Messages::text('browse_shortened') : null,
             'notice_i18n' => $shortened ? Messages::translations('browse_shortened') : null];
     }
