@@ -447,7 +447,11 @@ class Tools:
                 success = True
             finally:
                 if control_changed and original_owner is not None:
-                    self.sql("ALTER SCHEMA " + identifier(schema) + " OWNER TO " + identifier(original_owner) + ";", error="postgres_restore_owner_failed")
+                    # OWNER changes rewrite ACLs; retain explicit scoped access
+                    # for later restores that reference this schema from another.
+                    self.sql("BEGIN;\nALTER SCHEMA " + identifier(schema) + " OWNER TO " + identifier(original_owner) + ";\n"
+                             + "GRANT USAGE,CREATE ON SCHEMA " + identifier(schema) + " TO " + identifier(self.restore_user) + ";\nCOMMIT;",
+                             error="postgres_restore_owner_failed")
                 elif control_changed and not success:
                     self.sql("DROP SCHEMA " + identifier(schema) + " RESTRICT;", error="postgres_restore_owner_failed")
             return {"restored": snapshot, "safety_snapshot": safety, "database": self.database,

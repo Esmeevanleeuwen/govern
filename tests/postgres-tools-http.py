@@ -35,7 +35,7 @@ def main():
     def check(condition, message):
         nonlocal checks
         if not condition:
-            raise AssertionError(message)
+            raise AssertionError(f'Check {checks + 1}: {message}')
         checks += 1
 
     def request(action, payload=None, parameters=None, *, token=True, guest=False, binary=False):
@@ -55,12 +55,22 @@ def main():
             response = error
         with response:
             raw = response.read()
-            value = raw if binary and response.status < 400 else json.loads(raw)
-            return response.status, value, dict(response.headers)
+            if binary and response.status < 400:
+                value = raw
+            else:
+                try:
+                    value = json.loads(raw)
+                except json.JSONDecodeError as error:
+                    raise AssertionError(
+                        f'{action}: HTTP {response.status} returned non-JSON '
+                        f'({response.headers.get("Content-Type", "unknown content type")})'
+                    ) from error
+            return response.status, value, response.headers
 
     def api(action, payload=None, parameters=None):
         status, result, _ = request(action, payload, parameters)
-        check(200 <= status < 300 and result.get('ok') is True, action + ': ' + json.dumps(result, ensure_ascii=False))
+        check(200 <= status < 300 and result.get('ok') is True,
+              f'{action}: HTTP {status}: ' + json.dumps(result, ensure_ascii=False))
         return result['data']
 
     def sql(text, *, confirm=False):

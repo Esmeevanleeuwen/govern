@@ -57,6 +57,11 @@ try {
     $assert($pdo->query("SELECT to_regclass('archive.govern_backup_extra')")->fetchColumn() === null, 'Newer objects disappear on restore.');
     $assert($pdo->query('SELECT label FROM archive.govern_backup_view WHERE id=1')->fetchColumn() === 'original', 'View relationships are restored.');
     $assert($owner() === $originalOwner, 'Original schema owner is preserved.');
+    $restoreRole = $pdo->quote($config['restore_user'] ?? 'govern_pg_restore');
+    $schemaRights = $pdo->query("SELECT pg_catalog.has_schema_privilege($restoreRole,'archive','USAGE')::text AS can_use,
+        pg_catalog.has_schema_privilege($restoreRole,'archive','CREATE')::text AS can_create")->fetch();
+    $assert($schemaRights['can_use'] === 'true' && $schemaRights['can_create'] === 'true',
+        'Restoring the original owner retains both scoped restore privileges for later foreign-key restores.');
     $id = $pdo->query("INSERT INTO archive.govern_backup_probe(amount,label) VALUES(2,'after restore') RETURNING id::text")->fetchColumn();
     $assert($id === '2', 'Identity sequence retains its next value.');
     $reader = (new Database($config))->reader();
@@ -95,6 +100,10 @@ try {
     $assert($pdo->query('SELECT label FROM archive.govern_backup_probe WHERE id=1')->fetchColumn() === 'must survive rollback', 'A failed restore rolls back earlier drops and data changes.');
     $assert($pdo->query('SELECT count(*)::text FROM archive.govern_backup_guard')->fetchColumn() === '1', 'Failed restore preserves original schema objects.');
     $assert($owner() === $originalOwner, 'Failure restores original schema ownership.');
+    $schemaRights = $pdo->query("SELECT pg_catalog.has_schema_privilege($restoreRole,'archive','USAGE')::text AS can_use,
+        pg_catalog.has_schema_privilege($restoreRole,'archive','CREATE')::text AS can_create")->fetch();
+    $assert($schemaRights['can_use'] === 'true' && $schemaRights['can_create'] === 'true',
+        'Failed restoration also retains both scoped restore privileges.');
     $publicConfig = (new ConnectionScope($base))->select('govern_pg','postgres','public');
     $reject(static fn () => (new PostgresBackupService($publicConfig))->restore($snapshot['id'],'govern_pg.public'), 'snapshot_missing');
 } finally {
