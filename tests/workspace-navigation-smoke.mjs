@@ -31,6 +31,10 @@ const waitForTable = async (page, name) => {
     assert.equal(await page.locator('.table-heading h2').innerText(), name);
 };
 const mode = async (page, name) => {
+    if (name === 'structuur' && !await page.locator('[data-database-view="structuur"]').count()) {
+        await page.locator('[data-database-view="schema"]').click();
+        await page.locator('#schema-viewport').waitFor();
+    }
     await page.locator('[data-database-view="' + name + '"]').click();
     await page.waitForFunction(expected => location.hash.slice(1).split('?')[0] === expected, name);
 };
@@ -77,17 +81,28 @@ try {
     }
     const tableCount = bootstrap.tables.length;
     assert.deepEqual(await page.locator('#navigation [data-area]').evaluateAll(links => links.map(link => link.dataset.area)),
-        ['overview', 'database', 'research', 'experiments']);
+        ['overview', 'database', 'research']);
     assert.equal(await page.locator('#workspace-context').isVisible(), false,
         'Overview opens directly, without another menu of the main areas.');
     assert.equal(await page.locator('#navigation [data-area="research"]').count(), 1);
-    assert.equal(await page.locator('#navigation [data-area="experiments"]').count(), 1);
+    assert.equal(await page.locator('#navigation [data-area="experiments"]').count(), 0,
+        'Backups belong to Database tools rather than a separate competing work area.');
     await shot(page, 'overview');
 
     // Direct links remain valid and populate the same persistent explorer.
     await page.goto(new URL('/workspace.php#gegevens?table=organizations', base).href, {waitUntil: 'networkidle'});
     await waitForTable(page, 'organizations');
     await databasePlacement(page);
+    assert.deepEqual(await page.locator('.database-views [data-database-view]').evaluateAll(links => links.map(link => link.dataset.databaseView)),
+        ['gegevens', 'verkennen', 'schema'], 'Database tasks have one stable Records, Explore, Schema order.');
+    const backups = page.locator('[data-database-tool="backups"]');
+    await backups.locator('xpath=ancestor::details[1]').locator('summary').click();
+    assert.match(await backups.getAttribute('href'), /^#experimenten/);
+    await backups.click();
+    await page.locator('#snapshot-label').waitFor();
+    assert.equal(await page.locator('#navigation [data-area="database"]').getAttribute('aria-current'), 'page');
+    await page.locator('#navigation [data-area="database"]').click();
+    await waitForTable(page, 'organizations');
     assert.equal(await page.locator('#workspace-context .catalog-item').count(), tableCount);
     const tableButton = name => page.locator('#workspace-context .catalog-item').filter({
         has: page.locator('.catalog-item-name', {hasText: exactText(name)}),

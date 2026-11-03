@@ -1,0 +1,80 @@
+/** Graph identity, evidence and selection must survive filters and scope changes. */
+import assert from 'node:assert/strict';
+import {ensureRecordMapState, sameRecordKey, normalizeRecordNode, mergeRecordGraph,
+    visibleRecordGraph, selectRecordMapItem, recordMapPositions, clearRecordMap} from '../app/public/assets/record-map-model.js';
+
+const node = (id, table = 'people', key = {id: '9007199254740993'}) => ({id, table, key,
+    label: '<img src=x onerror=alert(1)>', row: {id: key.id, amount: '123456789012345678901234.12'}, columns: [], truncated: false});
+const state = ensureRecordMapState({}, 'mariadb:example');
+assert.equal(state.scope_key, 'mariadb:example');
+assert.equal(sameRecordKey({tenant: '7', id: '9007199254740993'}, {id: '9007199254740993', tenant: '7'}), true);
+assert.equal(sameRecordKey({id: '9007199254740993'}, {id: '9007199254740992'}), false, 'Adjacent large IDs never compare through Number.');
+assert.equal(sameRecordKey({id: '01'}, {id: '1'}), false, 'Canonical exact-key text is not silently coerced.');
+assert.equal(sameRecordKey({id: 1}, {id: '1'}), false);
+assert.equal(normalizeRecordNode(node('bad', 'people', {id: 9007199254740993})), null, 'Lossy numeric JSON identities are rejected.');
+assert.equal(normalizeRecordNode(node('empty', 'people', {})), null);
+assert.equal(normalizeRecordNode({...node('bad'), key: ['1']}), null);
+const prototypeKey = JSON.parse('{"__proto__":"record key","constructor":"identifier"}');
+assert.equal(Object.hasOwn(normalizeRecordNode(node('odd', 'people', prototypeKey)).key, '__proto__'), true);
+
+const root = node('root'), project = node('project', 'projects', {tenant_id: '7', id: '11'});
+const evidence = {sql: 'SELECT * FROM projects WHERE lead_id=:value', params: {value: '9007199254740993'},
+    column_pairs: [{source: 'lead_id', target: 'id'}]};
+const edge = {id: 'edge', source: project.id, target: root.id, kind: 'foreign_key', constraint: 'project_lead', evidence};
+mergeRecordGraph(state, {focus: root, nodes: [root, project], relations: [{id: 'relation', supported: true}], edges: [edge,
+    {...edge, id: 'invented', kind: 'similarity'}, {...edge, id: 'missing', target: 'not-loaded'}]});
+assert.equal(state.nodes.size, 2);
+assert.equal(state.edges.size, 1, 'Only a known declared relationship between loaded records is merged.');
+assert.deepEqual(state.edges.get('edge').evidence, evidence, 'Source SQL, values and column pairs are retained.');
+assert.equal(state.nodes.get('root').label, '<img src=x onerror=alert(1)>', 'Data is stored as literal text for the renderer.');
+assert.equal(state.nodes.get('root').row.amount, '123456789012345678901234.12');
+mergeRecordGraph(state, {nodes: [root, project], edges: [edge]});
+assert.equal(state.nodes.size, 2, 'Repeated relation pages do not duplicate a shared record.');
+assert.equal(state.edges.size, 1, 'Repeated evidence pages do not duplicate an edge.');
+assert.equal(selectRecordMapItem(state, 'edge', 'edge'), state.edges.get('edge'));
+assert.deepEqual(state.selection, {kind: 'edge', id: 'edge'});
+assert.equal(selectRecordMapItem(state, 'node', 'root'), state.nodes.get('root'));
+assert.equal(selectRecordMapItem(state, 'edge', 'not-loaded'), null);
+assert.deepEqual(state.selection, {kind: 'node', id: 'root'}, 'A fabricated selection cannot overwrite the actual selection.');
+state.hiddenTables.add('projects');
+assert.deepEqual(visibleRecordGraph(state).nodes.map(item => item.id), ['root']);
+assert.equal(visibleRecordGraph(state).edges.length, 0, 'Filtering a type also hides its dangling visual connections.');
+assert.equal(state.nodes.size, 2, 'Filtering does not discard source records.');
+state.hiddenTables.clear();
+assert.equal(visibleRecordGraph(state).edges.length, 1);
+recordMapPositions(state, 'root');
+assert.deepEqual(state.positions.get('root'), {x: 0, y: 0});
+state.positions.set('project', {x: 123, y: 456});
+mergeRecordGraph(state, {nodes: [node('task', 'tasks', {id: '1'})]});
+recordMapPositions(state, 'project');
+assert.deepEqual(state.positions.get('project'), {x: 123, y: 456}, 'Expanding another record preserves dragged locations.');
+assert.ok(Number.isFinite(state.positions.get('task').x) && Number.isFinite(state.positions.get('task').y));
+assert.equal(ensureRecordMapState(state, 'mariadb:example'), state, 'Same-scope remount preserves working state.');
+assert.equal(state.nodes.size, 3);
+ensureRecordMapState(state, 'postgres:example:archive');
+assert.equal(state.nodes.size, 0, 'Different connection/database/schema never inherits the previous record graph.');
+assert.equal(state.edges.size, 0);
+assert.equal(state.selection, null);
+mergeRecordGraph(state, {nodes: [root]});
+state.hiddenTables.add('people');
+state.cursors.set('page', 25);
+clearRecordMap(state);
+assert.equal(state.nodes.size + state.edges.size + state.positions.size + state.details.size + state.cursors.size + state.hiddenTables.size, 0);
+assert.equal(state.scope_key, 'postgres:example:archive', 'Clearing presentation state never changes request scope.');
+const changed = ensureRecordMapState({}, 'mariadb:changed');
+const before = {...node('owner'), row: {id: '9007199254740993', manager_id: 'old'}};
+const oldTarget = node('old-target', 'people', {id: 'old'});
+const oldEdge = {id: 'old-edge', source: before.id, target: oldTarget.id, kind: 'foreign_key', constraint: 'manager'};
+mergeRecordGraph(changed, {focus: before, nodes: [before, oldTarget], edges: [oldEdge], relation: 'manager-out', offset: 0});
+changed.cursors.set(JSON.stringify([before.id, 'manager-out']), {has_more: false});
+mergeRecordGraph(changed, {focus: {...before, row: {...before.row, manager_id: 'new'}}, nodes: [], edges: [], relations: []});
+assert.equal(changed.edges.size, 0, 'Re-reading a changed source cannot leave its old relationship visible as current evidence.');
+assert.equal(changed.cursors.size, 0, 'Changed sources invalidate their old expansion cursors.');
+const current = {...before, row: {...before.row, manager_id: 'new'}};
+const newTarget = node('new-target', 'people', {id: 'new'});
+const newEdge = {...oldEdge, id: 'new-edge', target: newTarget.id};
+mergeRecordGraph(changed, {focus: current, nodes: [current, newTarget], edges: [newEdge], relation: 'manager-out', offset: 0});
+assert.equal(changed.edges.size, 1);
+mergeRecordGraph(changed, {focus: current, nodes: [current], edges: [], relation: 'manager-out', offset: 0});
+assert.equal(changed.edges.size, 0, 'An empty reloaded relation page removes the formerly loaded evidence for that group.');
+console.log('PASS: record-map exact identity, declared evidence, deduplication, shared selection, type filters, layout and scope isolation.');

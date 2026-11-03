@@ -58,8 +58,8 @@ De taal- en uiterlijkvoorkeuren blijven bij de browser, zonder accountsynchronis
 ## PostgreSQL gebruiken
 
 PostgreSQL is een optionele tweede verbinding. De bestaande tabelverkenner,
-structuurweergave en het schemadiagram kunnen PostgreSQL-tabellen en relaties
-tonen. Deze eerste versie ondersteunt alleen bekijken en zoeken; wijzigen,
+structuurweergave, het schemadiagram en de recordkaart kunnen PostgreSQL-
+gegevens en relaties tonen. Deze versie ondersteunt alleen lezen en zoeken; wijzigen,
 vrije SQL, import, herstelpunten en AI zijn voor PostgreSQL nog niet beschikbaar.
 phpMyAdmin blijft alleen bij de MariaDB-verbinding horen.
 
@@ -85,15 +85,48 @@ Op macOS/Linux gebruik je `sh load-postgres-demo.sh`. Dit voegt vijf gekoppelde
 voorbeeldtabellen met 39 fictieve records en één overzichtsview toe aan `public`.
 Klik daarna op **Refresh** in Govern en kies de PostgreSQL-verbinding.
 
-Onder **Database → Explore** kun je een startrecord kiezen en zijn echte
-verbindingen volgen. De grafiek, recordlijst en uitleg selecteren samen hetzelfde
-record. Met **Explore from here** ga je verder; dit blijft volledig alleen lezen.
-De standaardmodus **Guided / Stap voor stap** helpt collega's met categorieën,
-items en vraagknoppen. Je hoeft geen SQL of recordsleutels in te voeren.
-**Detailed / Details** toont dezelfde gegevens met hun technische informatie.
+Onder **Database → Explore** kies je een startrecord en volg je echte
+verbindingen op een flexibel canvas. De bronbibliotheek, kaart en inspecteur
+werken met dezelfde selectie. Vragen bij een geselecteerd record helpen om een
+verbonden tabel te bekijken; technische sleutels en SQL blijven onder Details.
+Dit blijft volledig alleen lezen.
 
 Meer over configuratie, schema's en de volgende bouwfasen:
 [PostgreSQL in Govern](docs/POSTGRESQL.md).
+
+## Records en verbanden verkennen
+
+Database heeft drie vaste hoofdtaken: **Records**, **Explore** en **Schema**.
+Records is voor gewone tabelrijen en bewerken; Explore is voor verbindingen
+tussen echte records. Schema groepeert tabeldetails en het schemadiagram.
+Onder **Database → Tools** staan import/export via phpMyAdmin en herstelpunten.
+Onderzoeken blijft de plek voor de querybouwer, SQL en opgeslagen onderzoeken.
+
+Open **Database → Explore** (`#verkennen`). Oude `#verbanden`-links openen
+hetzelfde werkvlak. Open de bronbibliotheek, kies een tabel en zoek of blader
+naar een beginrecord. Vanuit de inspecteur vouw je inkomende of uitgaande
+verwijzingen uit; bij meer resultaten laad je bewust de volgende pagina.
+
+- Sleep recordkaarten of verschuif de achtergrond. Gebruik zoom en passend maken
+  om je werk te bekijken.
+- Kies **Orbit**, **Flow** of **Manual** voor de indeling. Vastgezette kaarten
+  houden bij opnieuw indelen hun positie. Uitbreiden verplaatst bestaande
+  kaarten niet.
+- Gebruik **Shift + klik** voor meerdere kaarten. Verbergen, vastzetten en Undo
+  veranderen alleen je canvas; **Clear map** begint een nieuwe geladen kaart.
+- Open, verplaats, verbreed of verberg de bronbibliotheek en inspecteur. Op mobiel
+  is steeds één lade open. Vragen en technische details horen bij je selectie.
+- **View row** leest precies het geselecteerde bronrecord opnieuw uit in Records.
+  Een lijn laat de foreign key, kolomparen, sleutels en gebruikte SQL zien.
+
+Dezelfde Explore-werkplek werkt met MariaDB en PostgreSQL binnen de gekozen
+scope. Views of tabellen zonder ondersteunde sleutel krijgen een duidelijke
+melding. Een lege database blijft leeg totdat je zelf gegevens toevoegt of de
+expliciete voorbeeldlader uitvoert; de werkplek verzint geen records of relaties.
+
+Kaart, selectie en indeling blijven tijdens deze browsersessie per verbinding,
+database en schema apart. Recordgegevens gaan niet naar browseropslag. Zie
+[de uitleg van Explore](docs/RECORD_MAP.md).
 
 ## Een andere database kiezen of toevoegen
 
@@ -183,20 +216,25 @@ de hierboven beschreven eerste versie met alleen bekijken en zoeken.
   beschikbaarheid wordt gecontroleerd bij je eigen Ollama-server. Kies
   **Projectcode** om de lokale implementatie met bronpassages en regelnummers
   te doorzoeken; de zoekactie werkt ook zonder AI.
-- **Eén menu:** kies Overzicht, Database, Onderzoeken of Experimenten in de
-  hoofdbalk. Instellingen staat onderaan. Het aansluitende paneel toont alleen
-  de tabellen, opgeslagen onderzoeken of herstelpunten die bij dat gebied horen.
-  Overzicht en Instellingen openen direct, zonder herhaalde navigatielijst.
-- **Database → Gegevens:** bekijk records, zoek, blader en bekijk de gebruikte SQL.
+- **Eén menu:** kies Overzicht, Database of Onderzoeken in de hoofdbalk.
+  Instellingen staat onderaan. Database houdt de volgorde Records, Explore,
+  Schema aan. Explore gebruikt één zwevende bronbibliotheek; de andere
+  databaseweergaven gebruiken de bestaande tabellenlijst. Onderzoeken toont
+  opgeslagen onderzoeken in zijn contextpaneel.
+- **Database → Records:** bekijk records, zoek, blader en bekijk de gebruikte SQL.
   Gebruik **Rij toevoegen**, of **Bewerken** en **Verwijderen** bij een rij om
   rechtstreeks gegevens te veranderen. Het formulier toont database en tabel;
   verwijderen vraagt bevestiging.
-- **Database → Structuur:** lees velden, sleutels, relaties en de echte tabeldefinitie.
-- **Database → Schema:** bekijk alle tabellen, kolommen en foreign keys in een interactief
+- **Database → Schema → Table details:** lees velden, sleutels, relaties en de echte tabeldefinitie.
+- **Database → Explore:** volg verbindingen tussen echte records, vouw
+  verwijzingen uit en inspecteer de bron achter iedere lijn. Verplaats of pin
+  kaarten, kies een indeling en gebruik vragen bij je selectie. Deze leesweergave
+  is ook beschikbaar voor PostgreSQL.
+- **Database → Schema → Diagram:** bekijk alle tabellen, kolommen en foreign keys in een interactief
   diagram. Scroll boven de tekening om rond je muisaanwijzer te zoomen en sleep
   de achtergrond om te verschuiven. De tabellenlijst blijft zichtbaar wanneer
   je een tabel kiest; de details staan eronder. Wissel direct naar een andere
-  tabel of naar Gegevens en Structuur. Zoeken filtert alleen deze lijst; gebruik
+  tabel of naar Records en Table details. Zoeken filtert alleen deze lijst; gebruik
   de aparte verbindingsfilter om het diagram te beperken. Schematools staan
   gegroepeerd boven het werkvlak: weergave, indeling, zoom en hulp. Ze blijven
   bereikbaar als je het paneel inklapt. **Help**
@@ -209,7 +247,7 @@ de hierboven beschreven eerste versie met alleen bekijken en zoeken.
 - **Visueel samenstellen:** kies een tabel, kolommen, filters en een sorteervolgorde.
   Voeg eventueel een bestaande verwijzing naar een tweede tabel toe. Govern maakt
   de SQL zichtbaar; je kunt die daarna zelf aanpassen.
-- **Experimenten:** maak een herstelpunt, download het als SQL en zet het terug.
+- **Database → Tools → Backups:** maak een herstelpunt, download het als SQL en zet het terug.
 - **Databasevenster:** open de echte phpMyAdmin in een groot venster met de tabs
   **Browse**, **Structure**, **SQL** en **Import**. Hier kun je ook invoegen, aanpassen,
   verwijderen, tabellen ontwerpen, importeren en exporteren.
@@ -289,12 +327,12 @@ De gewone werkplek blijft werken met `AI_ENABLED=0`, de standaardinstelling.
 
 ## Eerste oefening
 
-1. Open **Database → Gegevens** en kies `digital_systems`.
+1. Open **Database → Records** en kies `digital_systems`.
 2. Bekijk de beschrijving van een systeem en de SQL achter het overzicht.
-3. Open **Structuur** binnen Database en zoek de verwijzing `evidence_id`.
+3. Open **Schema → Table details** binnen Database en zoek de verwijzing `evidence_id`.
 4. Volg de onderbouwing in `evidence` en de bronkoppeling in `evidence_sources`.
-5. Maak bij **Experimenten** een herstelpunt voordat je iets verandert.
-6. Ga naar **Gegevens**, kies **Bewerken** bij een rij en pas een beschrijving
+5. Maak bij **Database → Tools → Backups** een herstelpunt voordat je iets verandert.
+6. Ga naar **Records**, kies **Bewerken** bij een rij en pas een beschrijving
    aan. Na bewaren zie je dezelfde wijziging ook in **Databasevenster → Browse**.
 
 Zo leer je met echte gegevens wat een tabel, een verwijzing en een query doen.
