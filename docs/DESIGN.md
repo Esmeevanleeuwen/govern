@@ -120,41 +120,93 @@ Explore is for following actual record connections; Schema groups table details
 and the table diagram. Keep these tasks in the fixed order **Records, Explore,
 Schema**. The old `#verbanden` hash is an alias of `#verkennen`.
 
-Let the canvas dominate Explore. Use readable record cards, a floating source
-library and a selected-record inspector rather than a second fixed table list.
-The library owns table choice, record search and paginated starting records.
-The inspector owns the selected record's references, source actions and evidence.
-Cards, questions and inspector share one exact selection and the same reader API.
+Let the canvas dominate Explore. Use readable record cards, the floating
+**Sources / Bronnen** library and one selected-record inspector. Sources owns a
+table-name filter, the table choice, search within that table, pagination and
+bounded results independently of the graph. Each result combines a readable
+label with at most two useful non-key preview values and the full exact key.
+Changing the source table or query leaves the loaded graph, active selection and
+camera intact. Selecting a result rereads the exact key, adds or reveals that
+record and makes it the active selected record.
 
-Provide Select/Pan, zoom and Fit; Shift-selection; Pin/Unpin; Hide; and bounded
-Undo for canvas presentation. Orbit and Flow arrange unpinned cards; Manual
-keeps the user's positions. Expanding a reference adds nearby records without
-rearranging existing cards. Show explicit loading and further-page actions.
-Hide and filters change visibility only. Undo may restore presentation or hide
-newly expanded cards, but must never restore stale record/edge evidence or
-relationship cursors. Clear map starts a fresh loaded graph and is not undone.
+Expose one active record context at a time. It drives the inspector and
+**Show connections / Verbindingen tonen**. The first record added to an empty
+map receives the passive **Starting record / Beginrecord** marker and remains the
+origin while other records are inspected. It is not a second selection. Shift
+selection supports the shared Pin and Hide presentation actions, but connection
+loading requires exactly one selected record. A selected edge reuses the same
+inspector for its evidence.
 
-The source library and inspector can move, resize in width, close and reopen.
-Keep main navigation fixed. On narrow screens use one drawer at a time, with
-readable controls and focus return. Keyboard and touch alternatives accompany
-dragging. Avoid continuous simulation motion and respect reduced motion.
+The plus action on a card, the selected-record action and the inspector all open
+the same Connections section and move focus to it. Group declared relationships
+as **References / Verwijst naar** when the selected row holds the foreign-key
+values and **Referenced by / Verwezen door** when other rows point to it. Show
+the readable peer table, exact constraint, actual state and the actions Show
+records, Show more or Show loaded. Initial and subsequent pages use the same
+exact record, server relation ID, captured scope and server cursor. Prevent
+duplicate reads for the same record-relation pair and reject obsolete results.
 
-Questions stay near the current selection: show the linked records for a real
-reference, or show all records already loaded in this canvas. They are fixed
-read actions, not generated answers or free SQL. Loaded counts never imply a
-complete database graph. Unsupported identities, external references, missing
-records and truncated previews have explicit states and a route back.
+Provide Select/Pan, zoom and deliberate Fit; Shift-selection; Pin/Unpin; Hide;
+and Orbit, Flow and Manual layouts. An expansion places genuinely new cards near
+their source while preserving the live camera, zoom and every existing card
+position. Do not automatically select a returned neighbour or fit after each
+read. Feedback distinguishes newly added records from already loaded matches.
+When additions are outside the current view, **Show added records / Toegevoegde
+records tonen** explicitly reveals the source and additions. Hide and table
+filters change visibility only; Show all loaded records reveals cached content
+without reading a wider database set.
 
-Keep names readable while preserving exact identifiers, complete keys, FK
-column pairs and SQL/parameters under **Technical details**. Do not infer
-ownership or causality from a field name. Opening **View row** reads the exact
-selected source again in Records. Technical detail is a disclosure inside the
-same workspace, not a separate Guided/Detailed navigation mode.
+Keep inspected-record navigation separate from presentation Undo. **Back /
+Terug** retains at most 50 exact scoped record references and departing
+viewpoints, without copies of rows, SQL, relationship evidence or cursors. It
+restores the prior inspected context while leaving loaded branches, filters,
+pins and layout intact. A hidden target offers **Reveal and return / Tonen en
+teruggaan** instead of silently changing filters. An unloaded target is reread
+by exact key; an unavailable target explains the failure and offers an earlier
+available history item or Sources. **Return to starting record / Terug naar
+beginrecord** uses the same resolution rules and keeps the passive origin
+directly reachable outside the bounded Back list.
 
-Keep complete scope identity and cancellation checks on every read. Language,
-appearance and panel changes preserve temporary work. Each connection,
-database and schema owns its own selection, filters, loaded records and canvas
-presentation. Never persist fetched records or evidence in browser storage.
+**Undo / Ongedaan** retains at most 25 presentation checkpoints. It may restore
+supported visibility, positions, table filters, selection, pins, layout and
+camera, or hide cards added by a recent expansion. It never restores historical
+rows, SQL, relationship details or pagination cursors. Back is inspected-context
+navigation and Undo is canvas presentation; neither is a database rollback.
+
+The source library and inspector can move, resize in width, close and reopen on
+a sufficiently wide canvas. **Hide panels / Panelen verbergen** closes both
+supporting surfaces and open popovers while preserving graph, selection, source
+browsing and camera. **Clear map / Kaart wissen** asks for confirmation when the
+map contains records. Confirming cancels graph reads, invalidates late results
+and clears graph, origin, selection, camera, Back and Undo, then reopens Sources
+with its table and query retained. Cancelling preserves the entire workspace;
+clearing never changes database records and cannot be reversed through Undo.
+
+Show exact presentation counts: visible records and connections plus visible
+versus total loaded records. Per relationship, show unique loaded matches and
+whether more are available or the loaded set is complete. Never present these
+as a full table or database count. Unsupported identities, external references,
+missing records, empty matches and truncated previews have explicit states. Keep
+complete keys, source values, ordered FK column pairs, constraints and supplied
+SQL with bound parameters under **Technical details**. **View record / Bekijk
+record** rereads the exact selected source in Records. Declared foreign keys show
+provenance; names and layout do not imply ownership, similarity or causality.
+
+Keep complete connection, database, schema, table and key scope plus cancellation
+checks on every read. Language, appearance and panel changes preserve temporary
+work. Each complete scope owns its own source browsing, selection, panels,
+loaded graph and canvas presentation within the browser tab. Never persist
+fetched records, SQL or relationship evidence in browser storage.
+
+Responsive behavior follows actual canvas width. At 900 px and above both peer
+panels may remain open. Below 900 px keep one; if resizing forces a close, retain
+the panel containing keyboard focus, then fall back to the most recently opened.
+Below 600 px use one lower drawer and disable panel drag/resize. Preserve focus
+across graph rerenders and return it to a relevant opener, selected card or the
+canvas when a panel closes. Provide keyboard and touch alternatives, live status
+announcements, non-colour selection and origin markers, visible focus, suitable
+coarse-pointer targets and reduced-motion, reduced-transparency and forced-colour
+behavior.
 
 ### Explore and Records continuity
 
@@ -173,8 +225,9 @@ Explore panels keep their close controls outside their scrolling content.
 Sources keeps table choice, search and pagination reachable while its record
 list scrolls. Compact panel placement follows the actual canvas width, not the
 browser window: below 600 px use the compact drawer layout; below 900 px allow
-only one open context panel, including after resizing. Retain the most recently
-opened panel. Desktop panels remain movable and resizable.
+only one open context panel, including after resizing. Retain the panel that
+contains keyboard focus; when neither does, retain the most recently opened.
+Desktop panels remain movable and resizable.
 
 ## Shared windows
 
@@ -360,8 +413,9 @@ Keep primary actions visible without hover. Check the layout at 320 px, tablet w
     SQL explanation. Add rows or edit/delete through focused row dialogs. Keep
     official phpMyAdmin available for unsupported editing and its full toolset.
   - **Explore:** one flexible record canvas, source library, selection and
-    inspector. Contextual questions expand declared references. Every card can
-    open its source row; every line exposes its exact database evidence.
+    inspector. One selected record drives the shared Connections view, grouped
+    as References and Referenced by. Every card can open its exact source row;
+    every line exposes scoped database evidence.
   - **Schema:** secondary **Table details / Tabeldetails** and **Diagram** views.
     Table details show columns, keys, relationships and definitions. Diagram
     shows the live whole-database table/foreign-key structure.
@@ -439,16 +493,26 @@ explorer; its table positions, selected table and navigation remain intact.
 
 ### Record canvas
 
-Use the unified Explore behaviour above. Start from one actual record and
-expand declared incoming/outgoing references deliberately. Composite and self
-links retain their identity; table colour remains stable and paired with text.
-Selecting an edge exposes its ordered column pairs, complete keys and optional
-prepared SQL. The graph never implies inferred similarity or causal influence.
+Use the unified Explore behaviour above. Start from one exact record, mark it
+passively as Starting record and let one active selected record drive the
+Connections inspector. Expand declared References or Referenced by groups
+deliberately. Composite and self links retain their identity; table colour
+remains stable and paired with text. Selecting an edge exposes its direction,
+constraint, ordered column pairs, complete values and supplied SQL with bound
+parameters. The graph never implies inferred similarity or causal influence.
 
-Keep the empty, unsupported, missing-record, cross-schema and partial-result
-states close to the relevant action. Show loaded records rather than claiming
-a full database scan. A source row can be inspected even if it is outside the
-first Records page. See [RECORD_MAP.md](RECORD_MAP.md) for controls and limits.
+Expansion preserves the live camera and existing coordinates. Place new cards
+near their source and offer Show added records when they are outside the current
+view. Keep Back's 50 exact record/viewpoint entries separate from Undo's 25
+presentation checkpoints. Hidden or missing history targets get an explicit
+recovery route, and Return to starting record resolves the same passive origin.
+
+Keep empty, unsupported, missing-record, cross-schema, empty-match and partial
+result states close to the relevant action. Counts distinguish visible and
+loaded content and state whether a relation has more available; they never claim
+a full database scan. A source row can be inspected by exact key even if it is
+outside the first Records page. See [RECORD_MAP.md](RECORD_MAP.md) for controls,
+scope, evidence and limits.
 
 The Database rail entry returns to the last Database view in the current
 session. Preserve direct links and existing hashes: `#gegevens`, `#structuur`,

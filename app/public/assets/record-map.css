@@ -153,3 +153,298 @@
 
 .record-map-panel-head .record-map-panel-grip { display: inline-flex; align-items: center; justify-content: center; padding: 0; width: 18px; min-width: 18px; height: 24px; border: 0; background: transparent; cursor: move; color: var(--g-muted); }
 .record-map[data-narrow=true] .record-map-panel-head .record-map-panel-grip { display: none; }
+
+/* Systematic Explore flow: origin, source recognition and one connection chooser. */
+.record-map-node-origin,
+.record-map-origin {
+    position: absolute;
+    z-index: 3;
+    top: -10px;
+    left: 14px;
+    max-width: calc(100% - 28px);
+    padding: 4px 8px;
+    border-radius: 999px;
+    background: var(--g-accent);
+    color: var(--g-ink);
+    box-shadow: var(--g-control-depth);
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    pointer-events: none;
+}
+.record-map-node[data-origin=true] .record-map-node-face,
+.record-map-node[data-root=true] .record-map-node-face {
+    background: color-mix(in srgb, var(--g-panel) 84%, var(--g-accent));
+}
+.record-map-node[data-added=true] .record-map-node-face {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--g-accent-text) 38%, transparent), inset 0 2px 0 var(--g-accent-text);
+}
+.record-map-node[data-selected=true][data-added=true] .record-map-node-face {
+    box-shadow: 0 0 0 3px var(--g-accent-text), inset 0 2px 0 var(--g-accent-text);
+}
+.record-map-source-intro,
+.record-map-source-help {
+    margin: 0 0 12px;
+    color: var(--g-muted);
+    font-size: 11px;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+}
+.record-map-source-intro { color: var(--g-ink); }
+.record-map-field-help { display: block; margin-top: 5px; color: var(--g-muted); font-size: 10px; line-height: 1.4; }
+.record-map-source-preview,
+.record-map-preview,
+.record-map-record-preview {
+    display: grid;
+    gap: 5px;
+    min-width: 0;
+    margin-top: 5px;
+}
+.record-map-record-preview { color: var(--g-muted); font-size: 11px; line-height: 1.45; overflow-wrap: anywhere; }
+.record-map-source-preview-fields {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 8px;
+    min-width: 0;
+    color: var(--g-muted);
+    font-size: 11px;
+}
+.record-map-source-preview-field {
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+.record-map-source-preview-field + .record-map-source-preview-field::before { content: '·'; margin-right: 8px; }
+.record-map-source-key,
+.record-map-record-key { display: block; margin-top: 4px; color: var(--g-muted); font: 10px/1.4 var(--mono); overflow-wrap: anywhere; }
+#record-map-table-search { min-width: 0; width: 100%; }
+.record-map-record[data-starting=true] { background: color-mix(in srgb, var(--g-soft) 78%, var(--g-accent)); }
+.record-map-record[data-selected=true],
+.record-map-record[aria-current=true] { background: var(--g-soft); box-shadow: inset 3px 0 0 var(--g-accent-text); }
+.record-map-record-badge {
+    display: inline-flex;
+    width: fit-content;
+    margin-top: 6px;
+    padding: 3px 7px;
+    border-radius: 999px;
+    background: var(--g-glass);
+    color: var(--g-accent-text);
+    font-size: 10px;
+    line-height: 1.2;
+}
+
+/* The inspector always reads identity, connections, record action, more actions, details. */
+.record-map-inspector-identity { display: grid; gap: 7px; margin: 5px 0 16px; min-width: 0; }
+.record-map-inspector-heading .record-map-origin {
+    position: static;
+    width: fit-content;
+    max-width: 100%;
+    margin-top: 2px;
+    pointer-events: auto;
+}
+.record-map-inspector-eyebrow { margin: 0; color: var(--g-muted); font-size: 10px; font-weight: 600; letter-spacing: .045em; text-transform: uppercase; }
+.record-map-inspector-section { display: grid; gap: 10px; min-width: 0; margin-top: 18px; }
+.record-map-inspector-section > h3 { margin: 0; font-size: 13px; font-weight: 600; }
+.record-map-inspector-section > p { margin: 0; color: var(--g-muted); font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; }
+.record-map-primary-action,
+.record-map-actions .record-map-primary-action {
+    color: var(--g-accent-text);
+    background: var(--g-accent);
+    box-shadow: var(--g-control-depth);
+    font-weight: 600;
+}
+.record-map-secondary-actions,
+.record-map-history-actions,
+.record-map-recovery-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 7px;
+}
+.record-map-more-actions { margin-top: 14px; color: var(--g-muted); font-size: 12px; }
+.record-map-more-actions > summary,
+.record-map-technical > summary { min-height: 34px; display: flex; align-items: center; cursor: pointer; overflow-wrap: anywhere; }
+.record-map-more-actions[open] > summary,
+.record-map-technical[open] > summary { color: var(--g-ink); }
+.record-map-more-actions > div { display: flex; flex-wrap: wrap; gap: 7px; padding-top: 8px; }
+
+.record-map-connections,
+#record-map-connections,
+.record-map-connection-chooser { display: grid; gap: 16px; min-width: 0; }
+[data-map-connections-for] { min-width: 0; overflow-wrap: anywhere; }
+.record-map-connection-group,
+.record-map-relation-group { display: grid; gap: 8px; min-width: 0; }
+.record-map-connection-group-heading {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 10px;
+    margin: 0;
+    color: var(--g-muted);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .025em;
+}
+.record-map-connection-list { display: grid; gap: 8px; min-width: 0; }
+.record-map-connection,
+.record-map-relation {
+    min-width: 0;
+    padding: 11px;
+    border-radius: 11px;
+    background: var(--g-row);
+    box-shadow: inset 0 1px 0 color-mix(in srgb, var(--g-ink) 5%, transparent);
+}
+.record-map-connection { display: grid; gap: 9px; }
+.record-map-connection-heading { display: grid; gap: 4px; min-width: 0; }
+.record-map-connection-heading strong { font-size: 12px; font-weight: 600; overflow-wrap: anywhere; }
+.record-map-connection-heading small { color: var(--g-muted); font-size: 11px; overflow-wrap: anywhere; }
+.record-map-connection-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 5px 8px; min-width: 0; }
+.record-map-relation-meta,
+.record-map-relation-status { display: flex; flex-wrap: wrap; align-items: center; gap: 5px 8px; min-width: 0; }
+.record-map-connection-state,
+.record-map-connection-count,
+.record-map-relation-state,
+.record-map-relation-count {
+    color: var(--g-muted);
+    font-size: 10px;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+}
+.record-map-connection-state,
+.record-map-relation-state { display: inline-flex; align-items: center; gap: 6px; }
+.record-map-connection-state::before,
+.record-map-relation-state::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    flex: none;
+    border-radius: 50%;
+    background: currentColor;
+}
+.record-map-connection[data-state=available] .record-map-connection-state { color: var(--g-accent-text); }
+.record-map-relation[data-state=available] .record-map-relation-state { color: var(--g-accent-text); }
+.record-map-connection[data-state=loading] .record-map-connection-state { color: var(--g-muted); }
+.record-map-relation[data-state=loading] .record-map-relation-state { color: var(--g-muted); }
+.record-map-connection[data-state=partial] .record-map-connection-state { color: var(--g-accent-text); }
+.record-map-relation[data-state=partial] .record-map-relation-state { color: var(--g-accent-text); }
+.record-map-connection[data-state=complete] .record-map-connection-state { color: var(--success, var(--g-accent-text)); }
+.record-map-relation[data-state=complete] .record-map-relation-state { color: var(--success, var(--g-accent-text)); }
+.record-map-connection[data-state=failed] { background: var(--danger-soft); }
+.record-map-relation[data-state=failed] { background: var(--danger-soft); }
+.record-map-connection[data-state=failed] .record-map-connection-state { color: var(--danger); }
+.record-map-relation[data-state=failed] .record-map-relation-state { color: var(--danger); }
+.record-map-connection[data-state=unavailable] { opacity: .78; }
+.record-map-relation[data-state=unavailable] { opacity: .78; }
+.record-map-connection-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; }
+.record-map-connection-actions .button { min-width: 0; padding: 7px 10px; font-size: 11px; white-space: normal; }
+.record-map-inline-status { margin: 0; color: var(--g-muted); font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; }
+
+/* Expansion feedback moves the camera only after its explicit reveal action. */
+.record-map-expansion-result,
+.record-map-result {
+    position: absolute;
+    z-index: 10;
+    left: 50%;
+    bottom: 132px;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    width: max-content;
+    max-width: calc(100% - 32px);
+    padding: 8px 9px 8px 12px;
+    border-radius: 13px;
+    background: var(--g-panel);
+    box-shadow: var(--g-elevation);
+    color: var(--g-ink);
+    font-size: 11px;
+}
+.record-map-expansion-result > span,
+.record-map-result > span { min-width: 0; overflow-wrap: anywhere; }
+.record-map-expansion-result .button,
+.record-map-result .button,
+[data-map-show-added] { flex: none; min-height: 30px; padding: 6px 8px; box-shadow: none; font-size: 11px; }
+.record-map-history-recovery,
+[data-map-history-recovery] {
+    display: grid;
+    gap: 10px;
+    margin: 12px 0;
+    padding: 11px;
+    border-radius: 11px;
+    background: var(--g-soft);
+    color: var(--g-ink);
+    font-size: 11px;
+    line-height: 1.5;
+}
+.record-map-history-recovery p,
+[data-map-history-recovery] p { margin: 0; overflow-wrap: anywhere; }
+[data-map-reveal-return] { width: fit-content; }
+#record-map-back,
+#record-map-return-start { min-width: 0; }
+.record-map-navigation { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; pointer-events: auto; }
+.record-map-navigation .button { min-height: 28px; padding: 5px 8px; background: var(--g-panel); box-shadow: var(--g-control-depth); font-size: 10px; }
+.record-map-workspace-more { color: var(--g-muted); font-size: 12px; }
+.record-map-workspace-more > summary { min-height: 34px; display: flex; align-items: center; cursor: pointer; }
+
+.record-map :is(#record-map-back, #record-map-return-start, .record-map-back, .record-map-return-start, .record-map-open-connections, .record-map-connection-actions .button):focus-visible,
+.record-map-expansion-result .button:focus-visible,
+.record-map-result .button:focus-visible {
+    outline: 3px solid var(--g-accent-text);
+    outline-offset: 3px;
+}
+
+/* Actual canvas-width states are set by record-map.js; they also cover 200% zoom. */
+.record-map[data-constrained=true] :is(.record-map-expansion-result, .record-map-result) { bottom: 190px; }
+.record-map[data-constrained=true] .record-map-history-actions { gap: 5px; }
+.record-map[data-narrow=true] .record-map-panel-body { padding-bottom: 20px; }
+.record-map[data-narrow=true] .record-map-source-intro,
+.record-map[data-narrow=true] .record-map-source-help { font-size: 12px; }
+.record-map[data-narrow=true] .record-map-connection-actions .button,
+.record-map[data-narrow=true] .record-map-primary-action { width: 100%; justify-content: center; }
+.record-map[data-narrow=true] :is(.record-map-expansion-result, .record-map-result) {
+    left: 12px;
+    right: 12px;
+    bottom: 120px;
+    transform: none;
+    width: auto;
+    max-width: none;
+    justify-content: space-between;
+}
+.record-map[data-narrow=true][data-panel-open=true] :is(.record-map-expansion-result, .record-map-result) {
+    top: 76px;
+    bottom: auto;
+    display: flex;
+}
+@media (pointer: coarse) {
+    .record-map .record-map-card-expand,
+    .record-map .record-map-panel-head .button,
+    .record-map-connection-actions .button,
+    .record-map-history-actions .button,
+    .record-map-expansion-result .button,
+    .record-map-result .button,
+    [data-map-reveal-return] { min-width: 44px; min-height: 44px; }
+}
+@media (prefers-contrast: more) {
+    .record-map-node-origin,
+    .record-map-record-badge,
+    .record-map-connection-state { font-weight: 700; }
+    .record-map-connection,
+    .record-map-history-recovery,
+    [data-map-history-recovery] { box-shadow: inset 0 0 0 1px currentColor; }
+}
+@media (forced-colors: active) {
+    .record-map-node-origin,
+    .record-map-record-badge,
+    .record-map-connection,
+    .record-map-history-recovery,
+    [data-map-history-recovery],
+    .record-map-expansion-result,
+    .record-map-result { outline: 1px solid CanvasText; }
+    .record-map-connection-state::before { forced-color-adjust: none; }
+}

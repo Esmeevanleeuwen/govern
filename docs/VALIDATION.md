@@ -1,5 +1,40 @@
 # Validatie
 
+## Systematische Explore-navigatie en verbindingen — 3 november 2026
+
+De vernieuwde Explore-werkplek is tegen een afzonderlijke, ingelogde
+PHP/MariaDB-installatie met de echte record-mapfixtures gecontroleerd. De
+browserproef doorloopt Bronnen met herkenningsvelden en exacte sleutels, de drie
+ingangen naar dezelfde sectie Verbindingen, de passieve markering van het
+beginrecord, relatiegroepen en eerlijke geladen tellingen. Een vertraagde
+uitbreiding behoudt de camera die de gebruiker tijdens het wachten verplaatst;
+alleen **Toegevoegde records tonen** brengt een nieuwe tak bewust in beeld. Een
+andere brontabel behoudt kaart, selectie en camera.
+
+Dezelfde proef controleert Terug met het opgeslagen gezichtspunt, herstel van
+een verborgen geschiedenisdoel, Terug naar beginrecord, Clear map met annuleren
+en bevestigen, behoud van brontabel en zoekterm en het negeren van een laat
+uitbreidingsantwoord na wissen. Een extra onderschepte detaillezing bewijst dat
+een laat recordantwoord Terug niet kan overschrijven. De plusknop start daarbij
+precies één leesactie, focus blijft op Verbindingen na de geaccepteerde reactie
+en sluiten keert terug naar de zichtbare geselecteerde kaart. Werkelijke
+canvasbreedtes sturen de één-paneel- en mobiele ladetoestand.
+
+`tests/workspace-navigation-smoke.mjs` en `tests/homepage-auth-smoke.mjs` slagen
+tegen dezelfde installatie. De vijftien relevante Node-suites voor i18n,
+API-scope, record-map/canvasmodellen, frontendteksten, voorkeuren, dashboard,
+schema, selectie-inhoud, recordverkenning, gids, venstergeometrie en companion-
+model/kanaal slagen. JavaScript-syntaxis en `git diff --check` zijn eveneens
+gecontroleerd. De actuele desktop-, compacte en Records-afbeeldingen zijn na de
+laatste assetkopie opnieuw gemaakt en visueel bekeken.
+
+De gerichte stack bevat geen PostgreSQL-, Nginx- of phpMyAdmin-service. Daarom
+zijn de PostgreSQL-afhankelijke volledige record-map-, gids- en companion-
+browserstromen hier niet voltooid; de companion-proef bereikt in deze stack de
+ontbrekende PostgreSQL-voorbeeldtabel niet. API- en opslagcontracten zijn niet
+gewijzigd. PostgreSQL blijft door de bestaande model-, scope- en CI-proeven
+gedekt en moet in de volledige projectstack opnieuw worden uitgevoerd.
+
 ## Explore-panelen en ruimte tussen Records-kaarten — 3 november 2026
 
 Deze wijziging is gebaseerd op de actuele `main` met de geïntegreerde

@@ -243,6 +243,7 @@ try {
     await page.locator('#record-map-fit').click();
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'Map, controls and source inspector fit a mobile screen.');
     await page.locator('#record-map-clear').click();
+    await page.locator('dialog.confirm-dialog[open] button[type="submit"]').click();
     await count(graphNodes, 0);
     await count(graphEdges, 0);
     assert.deepEqual(errors, [], 'Map workflows have no browser exceptions.');

@@ -62,7 +62,12 @@ const navigateCanvas = async (source, scope, table, selectedId = null) => {
     }
     await source.locator('#explorer-companion-pin:not([disabled])').waitFor();
 };
+const openExploreMore = async source => {
+    const more = source.locator('.record-map-workspace-more');
+    if (!await more.evaluate(element => element.open)) await more.locator('summary').click();
+};
 const opened = async source => {
+    await openExploreMore(source);
     const popup = source.waitForEvent('popup');
     await source.locator('#explorer-companion-open').click();
     const result = await popup;
@@ -131,6 +136,7 @@ try {
     const reporter = initial.candidates.find(item => item.label === 'Public Space Reporter');
     assert.ok(portal && reporter, 'Load the optional fictional PostgreSQL sample records.');
     await page.evaluate(() => { window.companionSmokeOpen = window.open; window.open = () => null; });
+    await openExploreMore(page);
     await page.locator('#explorer-companion-open').click();
     await page.locator('#open-companion[data-companion-status="blocked"]').waitFor({state: 'attached'});
     assert.equal(await page.locator('#companion-launch-notice').isVisible(), true, 'Blocked popups have a visible retry path.');
@@ -423,6 +429,7 @@ try {
 
     phase = 'explicit reopen restores a navigated companion';
     await companion.goto(new URL('/', base).href, {waitUntil: 'networkidle'});
+    await openExploreMore(page);
     await page.locator('#explorer-companion-open').click();
     await companion.waitForURL(url => url.pathname === '/companion.php' && url.hash.length > 1);
     await companion.locator('#companion-connection[data-status="connected"]').waitFor();

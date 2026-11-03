@@ -97,8 +97,9 @@ Klik daarna op **Refresh** in Govern en kies de PostgreSQL-verbinding.
 
 Onder **Database → Explore** kies je een startrecord en volg je echte
 verbindingen op een flexibel canvas. De bronbibliotheek, kaart en inspecteur
-werken met dezelfde selectie. Vragen bij een geselecteerd record helpen om een
-verbonden tabel te bekijken; technische sleutels en SQL blijven onder Details.
+werken met dezelfde selectie. **Verbindingen tonen** groepeert de gedeclareerde
+verwijzingen van één geselecteerd record; technische sleutels en SQL blijven
+onder Details.
 Dit blijft volledig alleen lezen.
 
 Met **Open in venster / Open in window** kun je meerdere records naast elkaar
@@ -134,10 +135,11 @@ verwijzingen uit; bij meer resultaten laad je bewust de volgende pagina.
   houden bij opnieuw indelen hun positie. Uitbreiden verplaatst bestaande
   kaarten niet.
 - Gebruik **Shift + klik** voor meerdere kaarten. Verbergen, vastzetten en Undo
-  veranderen alleen je canvas; **Clear map** begint een nieuwe geladen kaart.
+  veranderen alleen je canvas. **Back** keert terug naar een eerder geïnspecteerd
+  record; **Clear map** vraagt bevestiging voordat de tijdelijke kaart verdwijnt.
 - Open, verplaats, verbreed of verberg de bronbibliotheek en inspecteur. Op mobiel
-  is steeds één lade open. Vragen en technische details horen bij je selectie.
-- **View row** leest precies het geselecteerde bronrecord opnieuw uit in Records.
+  is steeds één lade open. Verbindingen en technische details horen bij je selectie.
+- **View record** leest precies het geselecteerde bronrecord opnieuw uit in Records.
   Een lijn laat de foreign key, kolomparen, sleutels en gebruikte SQL zien.
 
 Dezelfde Explore-werkplek werkt met MariaDB en PostgreSQL binnen de gekozen
@@ -271,7 +273,7 @@ de hierboven beschreven leesfuncties en directe rijbewerking in **Records**.
 - **Database → Schema → Table details:** lees velden, sleutels, relaties en de echte tabeldefinitie.
 - **Database → Explore:** volg verbindingen tussen echte records, vouw
   verwijzingen uit en inspecteer de bron achter iedere lijn. Verplaats of pin
-  kaarten, kies een indeling en gebruik vragen bij je selectie. Deze leesweergave
+  kaarten, kies een indeling en open Verbindingen voor één selectie. Deze leesweergave
   is ook beschikbaar voor PostgreSQL.
 - **Database → Schema → Diagram:** bekijk alle tabellen, kolommen en foreign keys in een interactief
   diagram. Scroll boven de tekening om rond je muisaanwijzer te zoomen en sleep

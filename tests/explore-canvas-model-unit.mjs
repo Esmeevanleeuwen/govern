@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import {ensureRecordMapState, mergeRecordGraph, visibleRecordGraph, recordMapPositions,
     selectRecordMapItem, selectRecordMapNode, selectedRecordMapNodes, setRecordMapPinned,
     hideRecordMapNodes, showRecordMapNodes, moveRecordMapNode, recordMapCheckpoint,
-    undoRecordMap, arrangeRecordMap, clearRecordMap, resetRecordMapEvidence} from '../app/public/assets/record-map-model.js';
+    undoRecordMap, arrangeRecordMap, clearRecordMap, resetRecordMapEvidence, recordMapVisit,
+    previousRecordMapVisit, restoreRecordMapVisit, originRecordMapVisit,
+    recordMapVisitState} from '../app/public/assets/record-map-model.js';
 
 const node = (id, table = 'people', value = 'SOURCE_VALUE_MUST_NOT_ENTER_UNDO') => ({id, table,
     key: {id: '9007199254740993-' + id}, label: id, row: {id: '9007199254740993-' + id, value}, columns: [], truncated: false});
@@ -166,6 +168,54 @@ assert.equal(undoRecordMap(path), true);
 assert.equal(path.focusId, 'root');
 assert.deepEqual(path.trail, ['root'], 'Undo restores a path consistent with its restored focus, using only scoped IDs.');
 
+const navigation = create();
+assert.equal(navigation.originId, 'root', 'The first exact focus remains a passive starting-record marker.');
+assert.deepEqual(originRecordMapVisit(navigation), {scope_key: 'mariadb:canvas', id: 'root', table: 'people',
+    key: {id: '9007199254740993-root'}, viewport: null, index: -1});
+recordMapVisit(navigation, 'root', {x: 1, y: 2, zoom: .8});
+recordMapVisit(navigation, 'root', {x: 3, y: 4, zoom: .9});
+assert.equal(navigation.navigationHistory.length, 1, 'Repeated inspection of one record updates its viewpoint.');
+selectRecordMapNode(navigation, 'incoming');
+recordMapVisit(navigation, 'incoming', {x: 10, y: 20, zoom: 1.1});
+selectRecordMapNode(navigation, 'outgoing');
+recordMapVisit(navigation, 'outgoing', {x: 30, y: 40, zoom: 1.2});
+const previous = previousRecordMapVisit(navigation);
+assert.deepEqual(previous, {scope_key: 'mariadb:canvas', id: 'incoming', table: 'projects',
+    key: {id: '9007199254740993-incoming'}, viewport: {x: 30, y: 40, zoom: 1.2}, index: 1});
+assert.equal(navigation.navigationIndex, 2, 'Reading the Back target does not move history before recovery succeeds.');
+setRecordMapPinned(navigation, 'root'); navigation.hiddenTables.add('sources');
+const graphBeforeBack = {nodes: navigation.nodes.size, edges: navigation.edges.size, undo: navigation.undoStack.length};
+const restored = restoreRecordMapVisit(navigation, previous.index, {x: 50, y: 60, zoom: 1.3});
+assert.equal(restored.id, 'incoming');
+assert.equal(navigation.navigationIndex, 1);
+assert.deepEqual({nodes: navigation.nodes.size, edges: navigation.edges.size, undo: navigation.undoStack.length}, graphBeforeBack,
+    'Back history cannot unload branches or consume presentation Undo.');
+assert.equal(navigation.pinned.has('root'), true); assert.equal(navigation.hiddenTables.has('sources'), true);
+recordMapVisit(navigation, 'root', {x: 70, y: 80, zoom: 1.4});
+assert.deepEqual(navigation.navigationHistory.map(entry => entry.id), ['root', 'incoming', 'root'],
+    'A deliberate visit after Back discards the obsolete forward entry.');
+const serializedNavigation = JSON.stringify(navigation.navigationHistory);
+for (const secret of ['SOURCE_VALUE', 'SOURCE_SQL', 'SOURCE_PARAMETER']) {
+    assert.equal(serializedNavigation.includes(secret), false, 'Navigation stores references and viewpoints only: ' + secret);
+}
+const incomingVisit = navigation.navigationHistory[1];
+assert.equal(recordMapVisitState(navigation, incomingVisit), 'visible');
+hideRecordMapNodes(navigation, 'incoming');
+assert.equal(recordMapVisitState(navigation, incomingVisit), 'hidden', 'Back can request explicit reveal without changing filters.');
+navigation.nodes.delete('incoming');
+assert.equal(recordMapVisitState(navigation, incomingVisit), 'unloaded', 'An absent target remains a reread reference, not copied row data.');
+assert.equal(recordMapVisitState(navigation, {...incomingVisit, scope_key: 'postgres:other:public'}), 'invalid');
+
+const boundedNavigation = create();
+recordMapVisit(boundedNavigation, 'root', {x: 0, y: 0, zoom: 1});
+const manyNodes = Array.from({length: 55}, (_, index) => node('visit-' + index, 'visits'));
+mergeRecordGraph(boundedNavigation, {nodes: manyNodes});
+for (const [index, item] of manyNodes.entries()) recordMapVisit(boundedNavigation, item.id, {x: index, y: index, zoom: 1});
+assert.equal(boundedNavigation.navigationHistory.length, 50, 'Record navigation has its own bounded 50-entry history.');
+assert.equal(boundedNavigation.navigationHistory[0].id, 'visit-5');
+assert.equal(originRecordMapVisit(boundedNavigation).id, 'root', 'The starting record stays directly reachable after history trims.');
+assert.equal(originRecordMapVisit(boundedNavigation).index, -1);
+
 const history = create();
 for (let index = 0; index < 40; index++) {
     recordMapCheckpoint(history); moveRecordMapNode(history, 'root', {x: index + 1, y: index + 1});
@@ -192,9 +242,16 @@ scope.viewport = {x: 0, y: 0, zoom: -1};
 ensureRecordMapState(scope, 'postgres:canvas:archive');
 assert.equal(scope.viewport, null);
 mergeRecordGraph(scope, {focus: node('root')});
-recordMapCheckpoint(scope); setRecordMapPinned(scope, 'root'); clearRecordMap(scope);
+scope.table = 'people'; scope.search = 'retained source'; scope.page = 4;
+recordMapVisit(scope, 'root', {x: 1, y: 2, zoom: 1});
+recordMapCheckpoint(scope); setRecordMapPinned(scope, 'root');
+const epochBeforeClear = scope.graphEpoch; clearRecordMap(scope);
 assert.equal(scope.nodes.size + scope.pinned.size + scope.hiddenNodes.size + scope.hiddenEdges.size + scope.selectedNodes.size + scope.undoStack.length, 0);
 assert.equal(scope.scope_key, 'postgres:canvas:archive', 'Clear never changes the request scope.');
+assert.equal(scope.table, 'people'); assert.equal(scope.search, 'retained source'); assert.equal(scope.page, 4);
+assert.equal(scope.originId, ''); assert.equal(scope.originRecord, null);
+assert.equal(scope.navigationHistory.length, 0); assert.equal(scope.navigationIndex, -1);
+assert.equal(scope.graphEpoch, epochBeforeClear + 1, 'Clear advances the generation used to reject late graph replies.');
 
 const refreshed = create();
 moveRecordMapNode(refreshed, 'root', {x: 45, y: -21});
@@ -210,11 +267,15 @@ refreshed.cursors.set('old-cursor', {has_more: false});
 refreshed.expansions.set('old-relation', new Set(['in']));
 refreshed.hiddenNodes.add('outgoing'); refreshed.hiddenEdges.add('out');
 recordMapCheckpoint(refreshed);
-const beforeRefresh = points(refreshed), oldScope = refreshed.scope_key;
+recordMapVisit(refreshed, 'root', {x: 4, y: 5, zoom: .75});
+const beforeRefresh = points(refreshed), oldScope = refreshed.scope_key, epochBeforeRefresh = refreshed.graphEpoch;
 assert.deepEqual(resetRecordMapEvidence(refreshed), {table: 'people', key: {id: '9007199254740993-root'}});
 for (const name of ['nodes', 'edges', 'details', 'cursors', 'expansions', 'hiddenNodes', 'hiddenEdges', 'selectedNodes']) assert.equal(refreshed[name].size, 0);
 assert.equal(refreshed.seedResult, null); assert.equal(refreshed.undoStack.length, 0);
 assert.equal(refreshed.selection, null); assert.equal(refreshed.focusId, '');
+assert.equal(refreshed.originId, ''); assert.equal(refreshed.originRecord, null);
+assert.equal(refreshed.navigationHistory.length, 0); assert.equal(refreshed.navigationIndex, -1);
+assert.equal(refreshed.graphEpoch, epochBeforeRefresh + 1);
 assert.deepEqual(refreshed.trail, []);
 assert.deepEqual(points(refreshed), beforeRefresh);
 assert.deepEqual([...refreshed.pinned], ['root', 'incoming']);
