@@ -66,6 +66,15 @@ final class BackupService
         });
     }
 
+    /**
+     * Only call this while holding the exclusive shared maintenance file lock.
+     * Keeps an automatic pre-import snapshot within the same protected operation.
+     */
+    public function createUnderExclusiveLock(string $label): array
+    {
+        return $this->createUnlocked($label);
+    }
+
     public function restore(string $id, string $confirmation): array
     {
         if (!hash_equals((string) $this->config['name'], $confirmation)) {

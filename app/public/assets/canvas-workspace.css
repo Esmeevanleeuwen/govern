@@ -1,0 +1,130 @@
+/* One canvas material and control language for Schema and Explore. */
+:root {
+    --g-canvas-surface: radial-gradient(ellipse at 45% 47%, var(--g-glow), transparent 65%),
+        radial-gradient(ellipse at 95% 9%, var(--g-ambient-violet), transparent 55%), var(--g-glass);
+    --g-canvas-grid: radial-gradient(color-mix(in srgb, var(--g-muted) 20%, transparent) 1px, transparent 1px);
+    --g-canvas-height: 660px;
+    --g-canvas-radius: 22px;
+    --g-canvas-card-radius: 15px;
+    --g-canvas-card-surface: var(--g-panel);
+}
+
+.workspace-canvas-scene {
+    position: relative;
+    height: var(--g-canvas-height);
+    min-width: 0;
+    overflow: hidden;
+    isolation: isolate;
+    border-radius: var(--g-canvas-radius);
+    background: var(--g-canvas-surface);
+    box-shadow: var(--g-elevation);
+}
+.workspace-canvas-viewport {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+    border-radius: inherit;
+    background-color: transparent;
+    background-image: var(--g-canvas-grid);
+    background-size: 22px 22px;
+    box-shadow: none;
+    touch-action: none;
+    cursor: grab;
+}
+.workspace-canvas-viewport:is(.is-panning,.is-dragging) { cursor: grabbing; }
+
+.workspace-canvas-toolbar {
+    position: relative;
+    z-index: 4;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px 18px;
+    min-height: 54px;
+    margin: 0 0 14px;
+    padding: 8px 12px;
+    border-radius: 16px;
+    background: var(--g-panel);
+    box-shadow: var(--g-control-depth);
+}
+.workspace-canvas-toolbar :is(.button,.record-map-popover > summary) {
+    display: inline-flex;
+    align-items: center;
+    min-height: 36px;
+    padding: 8px 10px;
+    border-radius: 10px;
+    color: var(--g-ink);
+    background: transparent;
+    box-shadow: none;
+    font-size: 12px;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+}
+.workspace-canvas-toolbar :is(.button,.record-map-popover > summary):hover:not(:disabled),
+.workspace-canvas-toolbar .record-map-popover[open] > summary {
+    color: var(--g-accent-text);
+    background: var(--g-soft);
+}
+.workspace-canvas-toolbar .button[aria-pressed="true"] {
+    color: var(--g-accent-text);
+    background: var(--g-soft);
+}
+.workspace-canvas-toolbar .icon-button { width: 36px; height: 36px; padding: 8px; }
+.workspace-canvas-toolbar > .record-map-side-help { font-size: 12px; }
+.schema-workspace #schema-columns-toggle[aria-pressed="true"] { color: var(--g-accent-text); background: var(--g-soft); }
+
+/* Tables retain their column geometry, with the same opaque cards as records. */
+.schema-node,
+.record-map-node-face {
+    border-radius: var(--g-canvas-card-radius);
+    background: var(--g-canvas-card-surface);
+}
+.schema-node {
+    box-shadow: 0 12px 30px var(--g-shadow);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+}
+.schema-node-header {
+    background: transparent;
+    border-radius: var(--g-canvas-card-radius) var(--g-canvas-card-radius) 0 0;
+}
+.schema-node:has(.schema-columns[hidden]) .schema-node-header { border-radius: var(--g-canvas-card-radius); }
+.schema-node.is-selected {
+    background: var(--g-canvas-card-surface);
+    box-shadow: 0 0 0 2px var(--g-accent-text), 0 12px 30px var(--g-shadow);
+}
+.schema-node.is-related { box-shadow: 0 12px 30px var(--g-shadow), 0 3px 14px var(--g-glow); }
+.schema-edge { stroke: var(--g-muted); stroke-width: 1.3; opacity: .5; }
+.schema-edge.is-highlighted { stroke: var(--g-accent-text); stroke-width: 2; opacity: 1; }
+.schema-canvas-footer { color: var(--g-muted); padding-top: 12px; }
+.schema-scene .empty-state { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.schema-scene .schema-no-matches { background: transparent; }
+
+@media (max-width: 600px) {
+    :root { --g-canvas-height: 630px; --g-canvas-radius: 17px; }
+    .workspace-canvas-toolbar { padding: 8px; gap: 8px; }
+    .workspace-canvas-toolbar .record-map-tools { gap: 4px; }
+}
+@media (pointer: coarse) {
+    .workspace-canvas-toolbar :is(.button,.record-map-popover > summary,.schema-filter) { min-height: 44px; }
+    .workspace-canvas-toolbar .icon-button { width: 44px; height: 44px; }
+}
+@media (prefers-reduced-transparency: reduce) {
+    .workspace-canvas-scene { background: var(--g-panel); }
+}
+:root[data-reduce-transparency="true"] .workspace-canvas-scene { background: var(--g-panel); }
+:root[data-reduce-transparency="true"] .workspace-canvas-viewport { background-color: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; }
+@supports not (backdrop-filter: blur(1px)) { .workspace-canvas-scene { background: var(--g-panel); } }
+@media (forced-colors: active) {
+    .workspace-canvas-scene,
+    .workspace-canvas-toolbar { background: Canvas; box-shadow: none; }
+    .workspace-canvas-viewport { background: transparent; box-shadow: none; }
+    .schema-node { background: Canvas; color: CanvasText; box-shadow: none; outline: 1px solid CanvasText; }
+    .schema-node.is-selected { box-shadow: none; outline: 3px solid Highlight; }
+    .schema-node.is-related { box-shadow: none; }
+    .schema-edge,.schema-edge.is-highlighted { stroke: CanvasText; opacity: 1; }
+}

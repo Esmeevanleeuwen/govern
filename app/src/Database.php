@@ -5,107 +5,46 @@ namespace Govern;
 
 use PDO;
 
+/** Shared facade; the selected connection decides the SQL engine. */
 final class Database
 {
-    private ?PDO $read = null;
-    private ?PDO $write = null;
+    private DatabaseAdapter $adapter;
     public const SQL_MODE = 'STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,ONLY_FULL_GROUP_BY';
 
-    public function __construct(private readonly array $config) {}
+    public function __construct(private readonly array $config)
+    {
+        $this->adapter = match ($this->engine()) {
+            'mariadb' => new MariaDbAdapter($config),
+            'postgres' => new PostgresAdapter($config),
+            default => throw ApiException::fromCode('database_not_available', 403),
+        };
+    }
 
-    /** Only names obtained from the live catalog may be used for user-selected objects. */
+    /** Existing MariaDB services use this static identifier helper. */
     public static function identifier(string $name): string
     {
-        if ($name === '' || str_contains($name, "\0")) {
-            throw ApiException::fromCode('identifier_invalid');
-        }
+        if ($name === '' || str_contains($name, "\0")) throw ApiException::fromCode('identifier_invalid');
         return '`' . str_replace('`', '``', $name) . '`';
     }
 
-    public function name(): string
+    public function quoteIdentifier(string $name): string
     {
-        return $this->config['name'];
+        if ($this->engine() !== 'postgres') return self::identifier($name);
+        if ($name === '' || str_contains($name, "\0")) throw ApiException::fromCode('identifier_invalid');
+        return '"' . str_replace('"', '""', $name) . '"';
     }
 
-    public function reader(): PDO
-    {
-        if ($this->read === null) {
-            if ($this->config['read_user'] === $this->config['user'] || strtolower($this->config['read_user']) === 'root') {
-                throw ApiException::fromCode('reader_required', 503);
-            }
-            $connection = $this->connect($this->config['read_user'], $this->config['read_password']);
-            // SELECT on a DEFINER view can invoke a writing stored function.
-            // Read-only transactions stop those side effects, even with elevated
-            // privileges inside the stored object. Grants remain the other layer.
-            $connection->exec('SET SESSION TRANSACTION READ ONLY');
-            $this->read = $connection;
-        }
-        return $this->read;
-    }
+    public function engine(): string { return $this->config['engine'] ?? 'mariadb'; }
+    public function name(): string { return $this->config['name']; }
+    public function schemaName(): string { return $this->engine() === 'postgres' ? ($this->config['schema'] ?? 'public') : $this->name(); }
+    public function reader(): PDO { return $this->adapter->reader(); }
+    public function writer(): PDO { return $this->adapter->writer(); }
+    public function scriptConnection(): PDO { return $this->adapter->scriptConnection(); }
+    public function discardReader(): void { $this->adapter->discardReader(); }
+    public function databaseNames(): array { return $this->adapter->databaseNames(); }
 
-    public function writer(): PDO
+    public function schemaNames(): array
     {
-        return $this->write ??= $this->connect($this->config['user'], $this->config['password']);
-    }
-
-    /** A fresh writer session for free SQL; the caller drops it after one request. */
-    public function scriptConnection(): PDO
-    {
-        return $this->connect($this->config['user'], $this->config['password'], [
-            // Text protocol, so statements such as USE or LOCK TABLES also run.
-            PDO::ATTR_EMULATE_PREPARES => true,
-            PDO::MYSQL_ATTR_USE_BUFFERED_QUERY => false,
-        ]);
-    }
-
-    public function discardReader(): void
-    {
-        // An investigation may change session settings. Never reuse that session.
-        $this->read = null;
-    }
-
-    /** List schemas both application roles can see without selecting a schema. */
-    public function databaseNames(): array
-    {
-        if ($this->config['read_user'] === $this->config['user'] || strtolower($this->config['read_user']) === 'root') {
-            throw ApiException::fromCode('reader_required', 503);
-        }
-        $writer = $this->connect($this->config['user'], $this->config['password'], [], false);
-        $reader = $this->connect($this->config['read_user'], $this->config['read_password'], [], false);
-        $reader->exec('SET SESSION TRANSACTION READ ONLY');
-        $visible = $writer->query('SHOW DATABASES')->fetchAll(PDO::FETCH_COLUMN);
-        $readable = $reader->query('SHOW DATABASES')->fetchAll(PDO::FETCH_COLUMN);
-        return array_values(array_intersect($visible, $readable));
-    }
-
-    private function connect(string $user, #[\SensitiveParameter] string $password, array $options = [], bool $selectDatabase = true): PDO
-    {
-        if ($user === '' || $password === '') {
-            throw ApiException::fromCode('credentials_missing', 503);
-        }
-        $socket = $this->config['socket'];
-        $address = $socket !== ''
-            ? 'unix_socket=' . $socket
-            : 'host=' . $this->config['host'] . ';port=' . $this->config['port'];
-        $pdo = PDO::connect('mysql:' . $address . ';charset=utf8mb4', $user, $password, array_replace([
-            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-            PDO::ATTR_EMULATE_PREPARES => false,
-            PDO::ATTR_STRINGIFY_FETCHES => true,
-            PDO::ATTR_PERSISTENT => false,
-            PDO::ATTR_TIMEOUT => 5,
-            PDO::MYSQL_ATTR_MULTI_STATEMENTS => false,
-            PDO::MYSQL_ATTR_LOCAL_INFILE => false,
-        ], $options));
-        if ($selectDatabase) $pdo->exec('USE ' . self::identifier($this->name()));
-        $pdo->exec("SET time_zone = '+00:00'");
-        $pdo->exec("SET SESSION sql_mode = '" . self::SQL_MODE . "'");
-        $pdo->exec('SET SESSION lock_wait_timeout = 5');
-        $pdo->exec('SET SESSION innodb_lock_wait_timeout = 5');
-        $version = (string) $pdo->getAttribute(PDO::ATTR_SERVER_VERSION);
-        $pdo->exec(stripos($version, 'MariaDB') !== false
-            ? 'SET SESSION max_statement_time = 5'
-            : 'SET SESSION max_execution_time = 5000');
-        return $pdo;
+        return $this->adapter instanceof PostgresAdapter ? $this->adapter->schemaNames() : [$this->name()];
     }
 }

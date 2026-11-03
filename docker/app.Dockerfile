@@ -1,8 +1,8 @@
 FROM php:8.4-apache-bookworm
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends mariadb-client \
-    && docker-php-ext-install pdo_mysql \
+    && apt-get install -y --no-install-recommends mariadb-client libsqlite3-dev libpq-dev python3 \
+    && docker-php-ext-install pdo_mysql pdo_sqlite pdo_pgsql \
     && rm -rf /var/lib/apt/lists/* \
     && sed -ri 's!/var/www/html!/var/www/public!g' /etc/apache2/sites-available/*.conf \
     && printf '\nServerName localhost\n' >> /etc/apache2/apache2.conf

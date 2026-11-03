@@ -8,7 +8,7 @@ final class MaintenanceLock
 {
     private mixed $handle;
 
-    public function __construct(string $directory)
+    public function __construct(string $directory, bool $exclusive = false)
     {
         if (!is_dir($directory) && !@mkdir($directory, 0700, true) && !is_dir($directory)) {
             throw ApiException::fromCode('backup_directory_unwritable', 503);
@@ -17,7 +17,7 @@ final class MaintenanceLock
         if ($this->handle === false) {
             throw ApiException::fromCode('maintenance_lock_unavailable', 503);
         }
-        if (!flock($this->handle, LOCK_SH | LOCK_NB)) {
+        if (!flock($this->handle, ($exclusive ? LOCK_EX : LOCK_SH) | LOCK_NB)) {
             fclose($this->handle);
             $this->handle = null;
             throw ApiException::fromCode('maintenance_busy', 423);

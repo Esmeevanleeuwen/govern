@@ -1,6 +1,399 @@
 # Validatie
 
-Stand van de controles: **29 oktober 2026**.
+Stand van de controles: **3 november 2026**. Eerdere resultaten hieronder horen
+bij hun beschreven wijziging en zijn niet automatisch opnieuw uitgevoerd.
+
+## Gelijke canvasvormgeving voor Schema en Explore
+
+De echte frontendmodules zijn met vaste, geïsoleerde voorbeeldmetadata en
+records in Chromium gecontroleerd. De berekende achtergrond, puntraster,
+afmetingen, afronding, schaduw en werkbalkmaterialen zijn tussen beide
+weergaven gelijk in Nederlands/Engels, licht/donker en op 1440, 768 en 320 px.
+Geselecteerde kaarten houden een zichtbare accentmarkering. Het raster volgt
+het verschuiven van de tekening.
+
+Tabelkeuze, zoeken, verbindingsfilter, kolommen, zoomknoppen, wielzoom,
+toetsenbordverschuiving, passend maken, Help met focusherstel, verversen en de
+Explore-selectie/panelen slagen. Ook minder transparantie, systeemcontrast,
+aanraakdoelen van 44 px en een leeg schema zijn gecontroleerd. Geen
+JavaScriptfouten of private databaseverzoeken. De bestaande schema-browserproef
+bevat nu een controle van de gedeelde vormgeving bij het wisselen van weergave.
+
+De schemamodel- en navigatieproeven (**26** en **21** controles), recordkaart-
+en canvasmodelproeven, JavaScript-syntax, vertalingen en `git diff --check`
+slagen. De lokale browsercontrole gebruikt de echte modules met fixtures;
+de PHP/databasekoppeling is hierbij niet lokaal opnieuw uitgevoerd. De
+volledige CI-uitslag hoort bij de betreffende commit.
+
+## Vernieuwde vormgeving van de startpagina
+
+De publieke HTML en echte modules zijn in Chromium nagekeken in Nederlands en
+Engels op 1440, 1024, 768, 375 en 320 px. De controle omvat de zwevende navigatie,
+de voorbeeldwerkplek, gekoppelde voorbeeldrecords, Gereedschap, de uitklapbare
+functie-uitleg en vragen, en de installatiehulp. De bestaande publieke stappen
+uit `homepage-auth-smoke.mjs` zijn uitgebreid voor de demoknop en het openen van
+de functie-uitleg via een directe gidslink.
+
+Gerichte controles behandelen toetsenbordbediening, focus na Escape, leesbare
+gekozen tabs, scrollen binnen het schema/de tabellen, geen horizontale
+pagina-overloop en minder beweging/transparantie. De schermen zijn visueel
+nagekeken. JavaScript-syntax, i18n, alle **1.438** tweetalige berichten en
+`git diff --check` slagen. De voorbeelden vragen geen private database-API's op.
+
+Dit zijn publieke browsercontroles via een lokale statische server. De
+accountbackend, databasehandelingen, Windows zelf en andere browserengines zijn
+bij deze vormgevingswijziging niet lokaal opnieuw uitgevoerd. De volledige
+CI-uitslag hoort bij de betreffende commit.
+
+## Startpagina met uitleg over de gezamenlijke werkplek
+
+De publieke pagina is met de echte HTML, CSS en JavaScriptmodules in Chromium
+gecontroleerd via een afzonderlijke lokale statische server. De publieke stappen
+uit `homepage-auth-smoke.mjs` slagen: Records, Tabeldetails, Schema en de nieuwe
+recordverkenning met bijpassende voorbeeldsleutels en zichtbaar bronbewijs,
+het voorbeeldmenu Gereedschap, uitleg en vragen, en de installatiehulp voor
+nieuwe en bestaande checkouts op Windows en macOS/Linux.
+
+Nederlands en Engels zijn gecontroleerd op 1440, 768 en 320 px, inclusief
+toetsenbordbediening, focus na Escape, mobiele menupositie en behoud van de
+voorbeeldselectie en installatiemodus bij taalwisseling. Er zijn geen
+JavaScriptfouten of verzoeken naar private database-API's waargenomen. De
+schermen zijn visueel nagekeken. JavaScript-syntax, i18n en alle **1.422**
+tweetalige berichten slagen; `git diff --check` eveneens.
+
+Deze controle oefent de publieke leervoorbeelden, geen PHP-accountbackend of
+echte databasehandelingen. De bestaande accountstappen van de browsersuite
+blijven behouden voor de volledige CI. Windows PowerShell zelf is niet lokaal
+uitgevoerd; de installatiehulp toont opdrachten en voert ze niet uit.
+
+## Gezamenlijke feature- en updateversie
+
+De integratie is lokaal gecontroleerd in een afzonderlijk Docker-project met
+PHP 8.4, MariaDB 10.11, PostgreSQL 18, de officiële phpMyAdmin 5.2.3 en Chromium
+via Playwright 1.62.1. De gecontroleerde applicatiecode staat op `0a91550`.
+
+Alle **77 controleonderdelen** hebben een geslaagde laatste uitslag, waaronder
+**22 browserproeven**. Dit resultaat combineert de volledige eerste reeks met
+gerichte heruitvoering na de integratiecorrecties. Het omvat onder meer:
+
+- Opstartlogica, PHP-syntax, account-/sessiegrenzen en vertalingen.
+- Echte MariaDB- en PostgreSQL-catalogi, exacte recordsleutels, scope-isolatie en
+  geweigerde PostgreSQL-mutaties, inclusief beide nieuwe importstromen.
+- Vrije SQL, meerdere databases, rijbewerking, herstelpunten en teruglezen.
+- CSV/TXT/XLSX/JSON-lezers, database-import en het echte upload-/importscherm.
+- Het flexibele canvas, bronbewijs, begeleide vragen, losse recordvensters,
+  vergelijking en de radar op het tweede scherm.
+- De werkplek met een bevroren API-module van vóór de PostgreSQL-uitbreiding,
+  inclusief het openen van een nieuw venster met zijn exacte bronscope.
+- De echte phpMyAdmin-import en -export, querybouwer, Gereedschap, instellingen,
+  taalwisseling, schemaweergave en mobiele bediening.
+- SQL-selecties die bij een presentatiewijziging dezelfde identiteit behouden;
+  een nieuwe uitvoering met gelijke waarden krijgt een afzonderlijke snapshot.
+- De AI-interface en lokale projectzoeker, met begrensde providerfixtures.
+
+De tests gebruikten eigen testdatabases en testaccounts. De Rijksdienst-database
+was geen testdoel. Windows zelf en een gedownload Ollama-taalmodel zijn hier
+niet uitgevoerd; de providerfixtures bewijzen geen modelkwaliteit op de
+gebruikercomputer. De GitHub Actions-uitslag is een afzonderlijke controle bij
+de gepubliceerde commit. Zie [de integratiebeschrijving](INTEGRATION.md) voor
+de samengebrachte branches en aansluitingen.
+
+## Beweging van de decoratieve glasvorm
+
+De glasvorm in Overzicht zweeft langzaam met een onafhankelijk bewegende
+voorste laag. Alleen transforms worden geanimeerd. Een gerichte Chromium-proef
+controleert veranderende transforms van beide lagen, ongewijzigde kaartgeometrie,
+stilstand bij verminderde beweging, 320 px zonder horizontale overloop en
+werkende navigatie vanuit de hero. Geen browserfouten. De volledige CI is voor
+deze kleine CSS-wijziging niet opnieuw uitgevoerd.
+
+## Compacte bovenbalk en Gereedschap
+
+De bovenbalk toont de databasekiezer, een statusstip, Gereedschap en Database
+openen. De bestaande secundaire bediening staat met volledige labels in een
+gegroepeerde popover. De oorspronkelijke elementen, handlers en rechten blijven
+behouden. De selectieaanwijzer heeft een zichtbare focusroute via Gereedschap.
+
+Uitgevoerd in Chromium tegen het afzonderlijke PostgreSQL-/MariaDB-testproject:
+
+- De nieuwe Tools-proef controleert openen/sluiten met pointer en toetsenbord,
+  Tab, buitenklik/Escape, focus bij manager/AI, behoud van een AI-concept,
+  selectiebediening, taalwisseling in het open menu, een echt companion-popup
+  en PostgreSQL-onderdelen die ook bij een open menu verborgen blijven.
+- Visueel gecontroleerd op 1440, 1024, 768, 375 en 320 px: één bovenbalkrij,
+  72 px op desktop en 64–68 px op compacte schermen. Ook 44 px touchdoelen,
+  menu-scrollen op een kort scherm, NL/EN, donker en verminderde transparantie
+  zijn gecontroleerd zonder horizontale pagina-overloop.
+- De bestaande proeven voor de frontend, tweede scherm, instellingen,
+  Guided/Detailed, AI-werkplek/projectbronnen, PostgreSQL, schema en selectie
+  slagen. De importproef heeft opnieuw
+  een echt SQL-bestand via officiële phpMyAdmin geïmporteerd en de tabellen,
+  relaties en exacte records gelezen. De vrije-SQL-proef slaagt eveneens.
+- Syntax, i18n en **1.190** tweetalige berichten slagen. Een bronreview vond
+  geen resterende blokkerende defecten. Een lege optionele schrijfcaption wordt
+  in de alleen-lezen dataweergave niet meer letterlijk als `null` afgedrukt.
+
+De browserproeven gebruiken de nieuwe zichtbare Tools-stroom. Er zijn geen
+API-contracten of databaserechten gewijzigd. De volledige CI-workflow en andere
+browserengines zijn niet lokaal opnieuw uitgevoerd. De aangepaste
+multidatabase-rijproef is in deze wijziging niet opnieuw uitgevoerd.
+
+## Vergelijkingsdesk en relatieradar op het tweede scherm
+
+De nieuwe begeleidende pagina gebruikt dezelfde inloggrens en alleen-lezen
+Explore-actie. Tijdelijke vensterparen wisselen alleen broncoördinaten uit;
+vergelijkingspins en radar hebben hun eigen vastgehouden bron en annuleringspad.
+
+Uitgevoerd tegen het afzonderlijke PostgreSQL-/MariaDB-testproject:
+
+- De modelproef controleert exacte samengestelde en grote sleutels, verschillende
+  schema's, de serverlimiet voor sleutelgrootte, ontbrekend/NULL/leeg, onzekere
+  previews, echte gedeelde verwijzingen en weigeren van een verkeerd antwoord.
+- De kanaalproef controleert afzonderlijke vensterparen, pinnen tijdens laden,
+  deduplicatie, berichtvolgorde, hervatten na pauze, BFCache, sluiten/herladen,
+  geblokkeerde pop-ups en expliciet herstel van een weggestuurd venster.
+- De nieuwe browserproef slaagt met een echt popupvenster en BroadcastChannel:
+  vier pins, verschillen, Guided-details, volgen/vastzetten, lokale radarstappen,
+  openen op het hoofdscherm, afzonderlijke vensterparen, MariaDB en PostgreSQL.
+  BIGINT `9007199254740993`, NUMERIC `123456789012345678901234.12`, NULL en
+  ontbrekende velden blijven exact onderscheiden. Ook retries na een 401,
+  achterhaalde antwoorden, pop-upherstel, BFCache, NL/EN en 320 px in donkere
+  weergave zijn gecontroleerd. Deze proef doet geen database-POSTs en controleert
+  dat recordinhoud en sleutels niet in browservoorkeuren worden opgeslagen.
+- Guided, Detailed, de bestaande vensterproef, werkpleknavigatie en algemene
+  frontendproef slagen. De vensterproef wacht nu op de asynchrone ResizeObserver
+  vóór de bestaande controle van de begrensde positie na een viewportwissel.
+- JavaScript-/PHP-syntax, i18n en **1.181** tweetalige berichten slagen.
+  Een anoniem verzoek naar `companion.php` verwijst naar de inlogpagina.
+
+Er zijn geen backendcontracten of databaserechten aangepast. De volledige CI,
+een fysieke tweede monitor en een Windows-browser zijn niet lokaal uitgevoerd;
+de browsercontroles gebruiken afzonderlijke Chromium-vensters.
+
+## Navigatie en herbruikbare vensters
+
+De werkplek heeft een compactere scrollbar in de zijbalk, een verborgen
+document-scrollbar met behoud van scrollen, een bijgewerkte databasekiezer en
+een gedeelde vensterlaag. Explore opent onafhankelijke alleen-lezen
+recordvensters; bestaande native dialogen behouden hun annuleringscontroles.
+
+Uitgevoerd tegen het afzonderlijke PostgreSQL-/MariaDB-testproject:
+
+- De navigatieproef slaagt. Visueel gecontroleerd op 1440, 1024, 768, 375 en
+  320 px, met werkende PageDown, donkere weergave en verminderde transparantie.
+- De bestaande browserproeven voor Guided, Detailed, werkplek, selectie,
+  schemahulp, AI en homepage/accounts slagen.
+- De nieuwe vensterproef slaagt met echte records: meerdere vensters, focus en
+  stapeling, slepen en Alt+pijltoetsen, buitenklik/Escape, 320 px, terugkeer van
+  focus, behoud van de oorspronkelijke scope, weigeren van een verkeerd
+  schema-antwoord, annuleren van late antwoorden en de bevestiging bij
+  onopgeslagen rijwijzigingen. Laad-/foutteksten en de werkende retryknop
+  vertalen zonder opnieuw te laden. Deze proef doet geen database-POSTs.
+- De importproef heeft een echt SQL-bestand via officiële phpMyAdmin geïmporteerd
+  en de ontstane tabellen, verwijzing en exacte records opnieuw gelezen. Ook
+  lopende databaseaanmaak en het behoud van een actief importformulier bij
+  taalwisseling zijn gecontroleerd.
+- De nieuwe geometrieproef en de bestaande record-/guide-modelproeven slagen,
+  evenals i18n, **1.072** tweetalige berichten en JavaScript-/PHP-syntaxcontroles
+  voor de gewijzigde componenten. Een onafhankelijke bronreview vond geen
+  blokkerende defecten; laad-, fout- en retryteksten vertalen nu ook ter plekke.
+
+Deze wijziging raakt geen backendcontract of databaserechten. De volledige
+CI-workflow en een echte Windows-browser zijn niet lokaal opnieuw uitgevoerd.
+De actuele bediening staat in [Explore](RECORD_MAP.md): één flexibel canvas
+met de gepagineerde record-map-acties. De hieronder bewaarde controles van
+Guided/Detailed en de eerdere GET-verkenner beschrijven hun eigen voorganger,
+niet een tweede actuele interface. Het `GET explore`-contract blijft beschikbaar
+voor bestaande clients.
+
+## Guided / Stap voor stap voor collega's
+
+De recordverkenner heeft nu een standaard begeleide kijkmodus met categorieën,
+items en vaste vraagknoppen. Dezelfde geladen records en GET-actie blijven de
+bron voor de grafiek, groepen, uitleg en verder verkennen. Detailed bewaart de
+oorspronkelijke bediening zonder het werk opnieuw te laden.
+
+Uitgevoerd in Chromium tegen het afzonderlijke PostgreSQL-/MariaDB-testproject:
+
+- De nieuwe begeleide browsersuite controleert de eerste start, leesbare
+  categorienamen, zoeken op die namen, verschillende itemaantallen, echte
+  verwijzingen, optionele technische details, verder volgen, NL/EN,
+  modusbehoud, schemawisseling, toetsenbordbediening en **320 px**.
+- De bestaande Detailed-browsersuite en gedeelde navigatieproef slagen.
+  Alle dataverzoeken in de kijkproeven blijven GET; er worden geen
+  database- of rechtenwijzigingen uitgevoerd door de nieuwe modus.
+- Helperproeven controleren dubbele verwijzingen, ontbrekende of niet-geladen
+  nodes, exacte bronwaarden, ongewijzigde records en opslag van alleen de modus.
+  Een mislukte opslagopdracht met nog leesbare oude opslag behoudt nu ook
+  de expliciete keuze voor de huidige pagina.
+- De bestaande graph/modelproef, i18n-proef en **1.055** tweetalige berichten
+  slagen. De bestaande **66** Explore-HTTP-controles slagen eveneens.
+
+Desktop en mobiel zijn visueel bekeken. De nieuwe helper- en browsersuite staan
+in CI; de volledige CI-workflow en de gebruikerinstallatie zijn niet opnieuw
+uitgevoerd. Er zijn geen nieuwe afhankelijkheden, AI-aanroepen of wijzigingen
+aan het backendcontract toegevoegd.
+
+## Alleen-lezen records verkennen
+
+De nieuwe Database-weergave **Explore / Verkennen** toont echte records, hun
+gedeclareerde foreign keys, een gekoppelde recordlijst en uitleg met exacte
+bron- en doelwaarden. De eerste versie haalt één begrensde buurt per vraag op.
+
+Uitgevoerd op het afzonderlijke Docker-project met PostgreSQL 18 en MariaDB 10.11:
+
+- **68** backend-integratiecontroles voor echte relaties, stabiele scopes en
+  identiteit, samengestelde/unieke sleutels, exacte grote getallen, NULL en
+  binaire previews, zelfverwijzingen, parallelle relaties, grote buurten en
+  verkorte velden. De proef toonde PDO-afronding van aangrenzende DOUBLE-sleutels;
+  serverconversie naar tekst behoudt nu beide records en hun herselectie.
+- **90** PostgreSQL-scopecontroles en **207** backend-lokalisatiecontroles.
+- **66** geauthenticeerde Explore-HTTP-controles voor gast-/methodebeveiliging,
+  echte catalogusbewijzen, exacte sleutels, schema-afbakening, ontbrekende
+  records, keyless views en behoud van de PostgreSQL-schrijfbeperking.
+- De Explore-browsersuite controleert grafiek-/lijstselectie, zichtbaarheid
+  van de geselecteerde rij, toetsenbordbediening, bronwaarden, filters, verder
+  verkennen, NL/EN, bewaarde focus, een vertraagd antwoord over een schemawissel,
+  MariaDB en een mobiele breedte van **320 px**. Alle dataverzoeken blijven GET.
+- De modelproef controleert filters, onveranderde bronwaarden, stabiele kleuren
+  en een niet-overlappende indeling voor **60** records. De bestaande
+  JavaScript-unitsuites, **1.002** tweetalige berichten, PostgreSQL-browsersuite
+  en gedeelde navigatieproef slagen eveneens.
+- De bestaande **66** PostgreSQL-HTTP- en **39** MariaDB-/phpMyAdmin-controles
+  slagen na toevoeging van de nieuwe leesactie.
+
+Desktop en mobiel zijn visueel bekeken. De nieuwe proeven staan in CI; de
+volledige CI-workflow en de installatie op de gebruikercomputer zijn niet
+opnieuw uitgevoerd. Er zijn geen nieuwe afhankelijkheden of schrijfbevoegdheden
+voor de webapp toegevoegd.
+
+## Optionele PostgreSQL-voorbeeldgegevens
+
+De nieuwe `load-postgres-demo.cmd` en `load-postgres-demo.sh` laden vijf
+gekoppelde tabellen met 39 fictieve records en de view `demo_project_overview`.
+Normaal starten blijft ongewijzigd; laden is een expliciete gebruikershandeling.
+
+Uitgevoerd met het afzonderlijke Docker-testproject en PostgreSQL 18:
+
+- **30** loaderfixtures voor de shellopdracht, ingesteld doel, SQL-invoer,
+  foutstatussen en behoud van `.env`.
+- **31** echte databasecontroles voor de schema- en leesrolvoorwaarden, een
+  bestaande naam met ongewijzigde gegevens, ontbreken van gedeeltelijke imports,
+  rijaantallen, zes foreign keys, de view, echte leesrechten en geweigerde writes.
+  Opnieuw laden behoudt een bewerkte voorbeeldrij; bestaande niet-demotabellen
+  blijven ongewijzigd.
+- Chromium leest voorbeeldrecords, toont alle vijf tabellen en zes verbindingen
+  in het diagram, leest de samengevoegde view en behoudt de selectie na herladen.
+- De echte shellloader en de bestaande **66** PostgreSQL-HTTP-controles slagen
+  ook met de voorbeelden aanwezig. De API-scope-JavaScriptcontrole slaagt.
+
+De loaderfixtures, databaseproef en browsersuite zijn opgenomen in CI. De
+Windows-loader is beoordeeld maar niet op Windows uitgevoerd; de volledige
+CI-workflow en de gebruikerinstallatie zijn niet opnieuw uitgevoerd.
+
+## PostgreSQL kiezen na een update met een oudere browsermodule
+
+De verbindingsfout is gereproduceerd in Chromium met de echte `api.js` uit
+commit `d213824`. De actuele module stuurde verbinding, database en schema en
+kreeg 200; de oudere module stuurde alleen `database=postgres:govern_pg:public`
+en kreeg 403 `database_not_available`. De API herkent nu deze volledige sleutel
+wanneer de afzonderlijke verbinding- en schemaparameters ontbreken. Dezelfde
+configuratie- en capabilitycontroles blijven gelden.
+
+Uitgevoerd in een afzonderlijk Docker-project met PostgreSQL 18, PHP 8.4 en
+de testfixtures voor `public` en `archive`:
+
+- **88** PostgreSQL-scopecontroles, inclusief ongeldige codering, expliciete
+  parameterconflicten, onbekende scopes en uitgeschakelde PostgreSQL-toegang.
+- **66** geauthenticeerde PostgreSQL-HTTP-controles en **35** echte catalogus-,
+  gegevenstype- en leesrechtencontroles.
+- De bestaande PostgreSQL-browsersuite en de nieuwe
+  `postgres-cached-api-smoke.mjs` met de bevroren oudere module. Deze controleren
+  echte records, schemawisseling, diagram, herladen en teruggaan naar MariaDB.
+- De bestaande **39** MariaDB-/phpMyAdmin-HTTP-controles, **15** backendunits,
+  API-scope-JavaScriptcontroles en tweetalige frontendberichten.
+
+De nieuwe browserproef is opgenomen in de CI-workflow. Deze lokale uitslagen
+bewijzen de gecontroleerde versie en testomgeving; de volledige CI-workflow en
+de installatie op de gebruikercomputer zijn niet opnieuw uitgevoerd.
+
+## Werkpleklinks en cache na een update
+
+Een externe documentlink naar `workspace.php` reproduceerde lokaal de onjuiste
+503: de algemene cross-sitecontrole blokkeerde ook een gewone GET-navigatie.
+Na de gerichte uitzondering op alleen de HTML-grens slagen **52 account- en
+navigatiecontroles** in `tests/auth-integration.py`. De tests controleren ook
+dat fetches, embeds, POST, API-verzoeken en ongeldige Origin/Host geblokkeerd
+blijven. De backendunitcontroles (15), lokalisatiecontroles (205),
+API-scopesuite en 32 opstartfixtures slagen lokaal.
+
+De Nginx-proef in `tests/auth-gateway.py` controleert assethervalidatie voor de
+hoofdmodule, geimporteerde module en CSS, plus behoud van API/HTML `no-store`.
+Die echte gatewaycontrole en de bestaande Docker-/browsersuites worden in CI
+voor de bijbehorende commit uitgevoerd. Eerder geslaagde PostgreSQL- en
+MariaDB-controles horen bij commit `7d53c17a57f5ef9e19ca15e789481ef5b60dc65a`
+en [deze workflow](https://github.com/Esmeevanleeuwen/govern/actions/runs/41527598865).
+
+## Startpagina en lokale accounts
+
+Voor deze wijziging zijn in de afzonderlijke native omgeving met PHP 8.3,
+PDO SQLite en tijdelijke opslag uitgevoerd:
+
+- `php tests/auth_unit.php`: **42 controles geslaagd**, waaronder Argon2id zonder
+  bcrypt-afkapping, sessie-/CSRF-vernieuwing, verlopen sessies, status/rol opnieuw
+  uitlezen, blijvende pogingenlimieten, eigenaar-goedkeuring en twee gelijktijdige
+  registratieprocessen die samen precies één eigenaar opleveren.
+- `python3 tests/auth-integration.py`: **33 HTTP-controles geslaagd** tegen een
+  afzonderlijke PHP-testserver. Deze gebruiken echte sessiecookies en endpoints
+  voor registreren, pending/approve, inloggen en uitloggen, ongeldige CSRF/origin,
+  gasttoegang tot gegevensroutes, en de directe `auth-check.php`-grens.
+- PHP-syntaxis: **56 bestanden zonder fouten** op het moment van die controle.
+- De **zeven bestaande Node-unitsuites** zijn geslaagd: `i18n-unit.mjs`,
+  `frontend-messages-unit.mjs` (928 tweetalige sleutels), `preferences-unit.mjs`,
+  `dashboard-layout-unit.mjs`, `schema-model-unit.mjs`, `schema-navigation-unit.mjs`
+  en `selection-content-unit.mjs`. De gewijzigde browser-/Docker-suites bevatten
+  accountfixtures; het aanpassen van die fixtures betekent niet dat die
+  volledige suites lokaal zijn uitgevoerd.
+- `python3 tests/start-gateway-reload.py`: **24 fixturecontroles geslaagd** voor
+  de Unix-startvolgorde, configuratiecontrole vóór reload, stoppen van alleen de
+  gateway bij drie afzonderlijke foutpaden, en behoud van volumes. Deze proef
+  gebruikt een Docker-commandofixture, geen echte containers. `sh -n` slaagde.
+- `git diff --check` en Python-syntaxiscontrole van de auth-HTTP-proef slaagden.
+
+De rootcontrole van homepage en accountvormgeving gebruikt een statische
+browserpreview van de markup. Daarmee is de vormgeving bekeken; het is geen
+volledige browser → PHP → databaseproef van de bestaande werkplek. Een blijvende
+PHP-previewserver is in deze browseromgeving niet ondersteund. De auth-HTTP-
+proef voert de echte backend wel afzonderlijk in tijdelijke opslag uit.
+
+Docker is in deze werkomgeving niet beschikbaar. De echte Nginx `auth_request`
+naar `auth-check.php`, de officiële phpMyAdmin en de volledige Compose-stack
+zijn daarom lokaal niet als geheel uitgevoerd. De stacksmokecontrole/CI moet
+rechtstreeks phpMyAdmin vóór login blokkeren met een echte redirect, na login
+toelaten en na logout opnieuw blokkeren. Alleen een geslaagde directe
+`auth-check.php`-proef bewijst die proxygrens niet.
+
+Beide startbestanden testen en herladen na een geslaagde Compose-start de
+gatewayconfiguratie. Mislukt de start of het toepassen van de nieuwe regels,
+dan stoppen ze alleen de gateway en behouden ze de volumes. Windows-
+batchuitvoering en een echte Docker-herlaadactie blijven omgevingscontroles.
+
+Accounts zijn installatiebreed, geen tenants. De pogingenlimieten, sessies en
+eigenaar-goedkeuring bewijzen geen geschiktheid voor openbare hosting. Mail-
+verificatie, wachtwoordreset, herstelmail en privéschema's per gebruiker zijn
+niet geïmplementeerd. De configuratie blijft uitsluitend op loopback bereikbaar.
+## Eerste eigen import: nieuwe controles
+
+`tests/native_import_unit.php` controleert de bestandsgrens, UTF-8,
+lege invoer en binding van database, bestand en catalogus aan de voorcontrole-token.
+De bestaande browserproef `tests/database-import-smoke.mjs` controleert aanvullend
+een echte eigen import in een afzonderlijke testdatabase, herstel van de actieve
+database en nacontrole op inhoud. De bestaande phpMyAdmin-import blijft apart
+getest. Ook de CSRF-beveiliging en bevestiging blijven onderdeel van deze route.
+
+Er is hier geen lokale Docker-stack uitgevoerd; CI moet de volledige nieuwe
+integratietest nog bevestigen. Een geslaagde SQL-uitvoer bewijst niet dat alle
+records of verwijzingen van een externe dataset inhoudelijk compleet zijn.
 
 ## Databases toevoegen en echte SQL-import
 
@@ -436,3 +829,26 @@ Een lopende SQL-opdracht in een afzonderlijk phpMyAdmin-venster wordt daarmee
 niet stilgezet. Rond zulke opdrachten af voordat je een herstelpunt maakt of
 terugzet. Een volledige databaseherstelactie bestaat uit meerdere stappen;
 een gewone SQL-transactie kan die niet als geheel ongedaan maken.
+
+
+## Tabelbestanden importeren — 3 november 2026
+
+Lokaal uitgevoerd: negen Python-lezerproeven (CSV met quotes/regeleinden/UTF-8,
+exacte JSON-getallen en NULL, dubbele rijen, ongeldige vormen, groottelimieten,
+ZIP zonder extractie en XLSX met datums, ontbrekende cellen en formulecache).
+Het aangeleverde media-Excelbestand is gelezen als één werkblad met 46 rijen,
+vijf kolommen en nul volledig dubbele rijen. De inhoud is niet in Git opgenomen.
+JavaScript-syntaxis en de tweetalige berichtencontrole slagen lokaal.
+
+PHP en Docker zijn in de bewerkingsomgeving niet beschikbaar. PHP-syntaxis,
+MariaDB-transacties en het echte browserpad zijn daar niet uitgevoerd.
+`tests/dataset-import-integration.php` en `tests/dataset-import-smoke.mjs` zijn
+voor dat pad toegevoegd aan de geïsoleerde GitHub Actions-workflow; hun uitslag
+moet bij de PR worden gecontroleerd. De backendproef controleert nieuw aanmaken,
+exact teruglezen, overwrite-afwijzing, append, schemaconflict en transactieherstel
+bij een te lange waarde. De browserproef controleert upload, preview, taalwissel
+met conceptbehoud, import, API-teruglezing, ontbrekende CSRF en afsluiten.
+
+Herhalen: `python3 tests/dataset-readers.py`; voer de PHP-proef uitsluitend uit
+in een geïsoleerde testdatabase met `--confirm-database=<naam>` en de browserproef
+uitsluitend met `GOVERN_UI_WRITE_TESTS=1`. Productiedata worden niet gebruikt.

@@ -2,6 +2,16 @@ import {registerMessages} from './i18n.js';
 
 registerMessages('imports', {
     nl: {
+        ownTitle: 'Importeren met Govern (eerste versie)',
+        ownDescription: 'Selecteer een UTF-8 .sql-bestand van maximaal 256 KiB. Eerst controleren, daarna exact de databasenaam typen. Grote of complexe bestanden kun je nog via phpMyAdmin hieronder importeren. SQL kan bestaande gegevens of andere toegestane databases wijzigen; DDL is niet zomaar terug te draaien.',
+        ownChoose: 'SQL-bestand', ownPreview: 'Controleer bestand', ownConfirm: 'Typ de databasenaam om te bevestigen',
+        ownRun: 'Import uitvoeren', ownChecking: 'Bestand en huidige database controleren…',
+        ownRunning: 'SQL-import wordt uitgevoerd… sluit het venster niet.',
+        ownPlanReady: 'Voorcontrole: {bytes} bytes, {count} opdrachten (of onbekend), {risky} gemarkeerde risico’s. Maak zo nodig eerst een herstelpunt. Dit is geen volledige SQL-veiligheidsanalyse.',
+        ownTooLarge: 'Bestand groter dan 256 KiB. Gebruik voorlopig de phpMyAdmin-import hieronder.',
+        ownSucceeded: 'Import afgerond: {count} opdrachten uitgevoerd. Bekijk de nacontrole; die bewijst niet automatisch inhoudelijke volledigheid.',
+        ownPartial: 'Import niet volledig afgerond na {count} opdrachten. Fout: {detail}. Eerdere wijzigingen kunnen zijn blijven staan.',
+        ownBackup: 'Veiligheidskopie: {id}.',
         title: 'Importcontrole', refresh: 'Opnieuw controleren', details: 'Tabellen en inhoudelijke volledigheid',
         checking: 'Structuur en records controleren…', uploading: 'SQL-import uitvoeren in phpMyAdmin…',
         checkFailed: 'De controle kon niet worden voltooid.',
@@ -31,6 +41,16 @@ registerMessages('imports', {
         section_evidence: 'Bronnen en wijzigingen',
     },
     en: {
+        ownTitle: 'Import with Govern (initial version)',
+        ownDescription: 'Choose a UTF-8 .sql file up to 256 KiB. Inspect it first, then type the exact database name. Larger or complex files can still use phpMyAdmin below. SQL may change existing data or other permitted databases; DDL cannot generally be undone.',
+        ownChoose: 'SQL file', ownPreview: 'Inspect file', ownConfirm: 'Type database name to confirm',
+        ownRun: 'Run import', ownChecking: 'Inspecting file and current database…',
+        ownRunning: 'Executing SQL import… do not close this window.',
+        ownPlanReady: 'Preflight: {bytes} bytes, {count} statements (or unknown), {risky} flagged risks. Create a restore point when needed. This is not a complete SQL safety analysis.',
+        ownTooLarge: 'File is larger than 256 KiB. Use the phpMyAdmin import below for now.',
+        ownSucceeded: 'Import finished: {count} statements executed. Review post-check; it does not prove full semantic completeness.',
+        ownPartial: 'Import incomplete after {count} statements. Error: {detail}. Earlier changes may remain.',
+        ownBackup: 'Safety snapshot: {id}.',
         title: 'Import inspection', refresh: 'Check again', details: 'Tables and content completeness',
         checking: 'Checking schema and rows…', uploading: 'Running SQL import in phpMyAdmin…',
         checkFailed: 'The inspection could not be completed.',

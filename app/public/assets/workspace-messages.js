@@ -2,11 +2,16 @@ import {registerMessages} from './i18n.js';
 
 const entries = {
     'route.overview': ['Overzicht', 'Overview'],
-    'route.data': ['Gegevens', 'Data'],
+    'route.data': ['Records', 'Records'],
     'route.structure': ['Structuur', 'Structure'],
     'route.schema': ['Schema', 'Schema'],
+    'route.relationships': ['Verbanden', 'Relationships'],
+    'mapEntry.open': ['Records verkennen', 'Explore records'],
+    'mapEntry.openRecord': ['Verken dit record', 'Explore this record'],
+    'mapEntry.sourceRecord': ['Geselecteerd bronrecord', 'Selected source record'],
+    'mapEntry.clearSource': ['Recordselectie wissen', 'Clear record selection'],
     'route.research': ['Onderzoeken', 'Research'],
-    'route.experiments': ['Experimenten', 'Experiments'],
+    'route.experiments': ['Back-ups', 'Backups'],
     'route.settings': ['Instellingen', 'Settings'],
     'shell.skip': ['Ga naar de inhoud', 'Skip to content'],
     'shell.navigation': ['Hoofdnavigatie', 'Main navigation'],

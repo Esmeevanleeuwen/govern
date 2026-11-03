@@ -1,4 +1,6 @@
+import {clickWorkspaceTool, selectWorkspaceLanguage} from './workspace-tools.mjs';
 /** Real multi-database navigation and row writes in a disposable local stack. */
+import {authenticatedContext} from './auth-session.mjs';
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 import {mkdir} from 'node:fs/promises';
@@ -14,7 +16,7 @@ assert.ok(['127.0.0.1', 'localhost', '[::1]'].includes(base.hostname), 'Use a di
 const args = process.env.BROWSER_ARGS_JSON ? JSON.parse(process.env.BROWSER_ARGS_JSON) : ['--no-sandbox'];
 const browser = await chromium.launch({headless: true, args,
     ...(process.env.BROWSER_BIN ? {executablePath: process.env.BROWSER_BIN} : {})});
-const context = await browser.newContext({locale: 'nl-NL', viewport: {width: 1440, height: 1100}});
+const context = await authenticatedContext(browser, base, {locale: 'nl-NL', viewport: {width: 1440, height: 1100}});
 const page = await context.newPage();
 const errors = [];
 const track = page => page.on('pageerror', error => errors.push(error.message));
@@ -74,7 +76,7 @@ const waitTable = async (database, current = page) => {
     }, {database, name});
 };
 const openTable = async (database, current = page) => {
-    await current.goto(new URL('/#gegevens?' + new URLSearchParams({database, table: name}), base).href, {waitUntil: 'networkidle'});
+    await current.goto(new URL('/workspace.php#gegevens?' + new URLSearchParams({database, table: name}), base).href, {waitUntil: 'networkidle'});
     await waitTable(database, current);
 };
 const switchDatabase = async (database, current = page) => {
@@ -109,7 +111,7 @@ const shot = async name => {
 };
 
 try {
-    await page.goto(base.href, {waitUntil: 'networkidle'});
+    await page.goto(new URL('/workspace.php', base).href, {waitUntil: 'networkidle'});
     const bootstrap = data(await api('bootstrap'));
     first = bootstrap.database.name;
     csrf = bootstrap.csrf;
@@ -278,8 +280,8 @@ INSERT INTO ${table} (id,label,amount) VALUES (1,'${marker} seed',10.10);`);
     // legitimately change the shared language preference.
     const languagePage = await context.newPage();
     track(languagePage);
-    await languagePage.goto(new URL('/#instellingen', base).href, {waitUntil: 'networkidle'});
-    await languagePage.locator('#language-select').selectOption('en');
+    await languagePage.goto(new URL('/workspace.php#instellingen', base).href, {waitUntil: 'networkidle'});
+    await selectWorkspaceLanguage(languagePage, 'en');
     await page.waitForFunction(() => document.documentElement.lang === 'en');
     assert.equal(await field('label').inputValue(), 'B editor draft', 'Changing language leaves row input intact.');
     assert.equal((await dialog.innerText()).includes('app.'), false);
@@ -298,14 +300,15 @@ INSERT INTO ${table} (id,label,amount) VALUES (1,'${marker} seed',10.10);`);
     await page.locator('#schema-actual').click();
     await page.locator('#schema-zoom-in').click();
     const bZoom = await page.locator('#schema-zoom-value').innerText();
-    await page.locator('#selection-pointer-toggle').click();
+    await clickWorkspaceTool(page, '#selection-pointer-toggle');
     await page.locator('[data-schema-header=' + JSON.stringify(name) + ']').click();
-    await page.locator('#selection-pointer-toggle').click();
+    await clickWorkspaceTool(page, '#selection-pointer-toggle');
     await switchDatabase(first);
     await waitTable(first);
     assert.equal(await page.locator('[data-database-view="gegevens"]').getAttribute('aria-current'), 'page',
         'The picker restores the database’s own previous data view.');
-    assert.equal(await page.locator('#selection-pointer-count').isVisible(), false, 'Database switching clears data-object selection from the previous schema.');
+    assert.equal(await page.locator('#selection-pointer-count').evaluate(button => button.hidden), true,
+        'Database switching clears the selection count itself, independently of the closed Tools menu.');
     await page.locator('[data-database-view="schema"]').click();
     await page.locator('#schema-viewport').waitFor();
     await page.locator('#schema-actual').click();

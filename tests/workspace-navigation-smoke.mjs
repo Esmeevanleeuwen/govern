@@ -1,7 +1,9 @@
+import {selectWorkspaceLanguage} from './workspace-tools.mjs';
 /**
  * Follow the unified navigation with real catalog data on a disposable local
  * stack. This test does not write database records or create restore points.
  */
+import {authenticatedContext} from './auth-session.mjs';
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 import {mkdir} from 'node:fs/promises';
@@ -30,6 +32,10 @@ const waitForTable = async (page, name) => {
     assert.equal(await page.locator('.table-heading h2').innerText(), name);
 };
 const mode = async (page, name) => {
+    if (name === 'structuur' && !await page.locator('[data-database-view="structuur"]').count()) {
+        await page.locator('[data-database-view="schema"]').click();
+        await page.locator('#schema-viewport').waitFor();
+    }
     await page.locator('[data-database-view="' + name + '"]').click();
     await page.waitForFunction(expected => location.hash.slice(1).split('?')[0] === expected, name);
 };
@@ -65,10 +71,10 @@ const databasePlacement = async (page, schema = false) => {
 };
 
 try {
-    const context = await browser.newContext({locale: 'nl-NL', viewport: {width: 1440, height: 1100}});
+    const context = await authenticatedContext(browser, base, {locale: 'nl-NL', viewport: {width: 1440, height: 1100}});
     const page = await context.newPage();
     track(page);
-    await page.goto(new URL('/#overzicht', base).href, {waitUntil: 'networkidle'});
+    await page.goto(new URL('/workspace.php#overzicht', base).href, {waitUntil: 'networkidle'});
     await page.locator('.stats-grid').waitFor();
     const bootstrap = await page.evaluate(async () => (await (await fetch('/api.php?action=bootstrap')).json()).data);
     for (const name of ['organizations', 'digital_systems', 'sources']) {
@@ -76,17 +82,28 @@ try {
     }
     const tableCount = bootstrap.tables.length;
     assert.deepEqual(await page.locator('#navigation [data-area]').evaluateAll(links => links.map(link => link.dataset.area)),
-        ['overview', 'database', 'research', 'experiments']);
+        ['overview', 'database', 'research']);
     assert.equal(await page.locator('#workspace-context').isVisible(), false,
         'Overview opens directly, without another menu of the main areas.');
     assert.equal(await page.locator('#navigation [data-area="research"]').count(), 1);
-    assert.equal(await page.locator('#navigation [data-area="experiments"]').count(), 1);
+    assert.equal(await page.locator('#navigation [data-area="experiments"]').count(), 0,
+        'Backups belong to Database tools rather than a separate competing work area.');
     await shot(page, 'overview');
 
     // Direct links remain valid and populate the same persistent explorer.
-    await page.goto(new URL('/#gegevens?table=organizations', base).href, {waitUntil: 'networkidle'});
+    await page.goto(new URL('/workspace.php#gegevens?table=organizations', base).href, {waitUntil: 'networkidle'});
     await waitForTable(page, 'organizations');
     await databasePlacement(page);
+    assert.deepEqual(await page.locator('.database-views [data-database-view]').evaluateAll(links => links.map(link => link.dataset.databaseView)),
+        ['gegevens', 'verkennen', 'schema'], 'Database tasks have one stable Records, Explore, Schema order.');
+    const backups = page.locator('[data-database-tool="backups"]');
+    await backups.locator('xpath=ancestor::details[1]').locator('summary').click();
+    assert.match(await backups.getAttribute('href'), /^#experimenten/);
+    await backups.click();
+    await page.locator('#snapshot-label').waitFor();
+    assert.equal(await page.locator('#navigation [data-area="database"]').getAttribute('aria-current'), 'page');
+    await page.locator('#navigation [data-area="database"]').click();
+    await waitForTable(page, 'organizations');
     assert.equal(await page.locator('#workspace-context .catalog-item').count(), tableCount);
     const tableButton = name => page.locator('#workspace-context .catalog-item').filter({
         has: page.locator('.catalog-item-name', {hasText: exactText(name)}),
@@ -201,7 +218,7 @@ try {
     const explorerBounds = await page.locator('#workspace-context').boundingBox();
     const canvasBounds = await page.locator('#schema-viewport').boundingBox();
     assert.ok(explorerBounds.x > canvasBounds.x, 'The unified explorer follows the saved right-side preference.');
-    await page.locator('#language-select').selectOption('en');
+    await selectWorkspaceLanguage(page, 'en');
     await page.waitForFunction(() => document.documentElement.lang === 'en');
     await page.locator('#schema-viewport').waitFor();
     assert.match(await page.locator('#schema-selected').innerText(), /sources/);
@@ -226,7 +243,7 @@ try {
         ];
         await route.fulfill({response, json: payload});
     });
-    await boundary.goto(new URL('/#gegevens?table=organizations', base).href, {waitUntil: 'networkidle'});
+    await boundary.goto(new URL('/workspace.php#gegevens?table=organizations', base).href, {waitUntil: 'networkidle'});
     await waitForTable(boundary, 'organizations');
     await boundary.locator('#workspace-selected .workspace-detail').nth(1).locator('summary').click();
     const externalTarget = boundary.locator('#workspace-selected .workspace-related').filter({
@@ -241,10 +258,10 @@ try {
 
     // The mobile menu is one drawer. Table selection updates its workspace
     // without closing the table list; Escape gives the workspace its full width.
-    const mobileContext = await browser.newContext({locale: 'nl-NL', viewport: {width: 390, height: 900}});
+    const mobileContext = await authenticatedContext(browser, base, {locale: 'nl-NL', viewport: {width: 390, height: 900}});
     const mobile = await mobileContext.newPage();
     track(mobile);
-    await mobile.goto(new URL('/#schema', base).href, {waitUntil: 'networkidle'});
+    await mobile.goto(new URL('/workspace.php#schema', base).href, {waitUntil: 'networkidle'});
     await mobile.locator('#schema-viewport').waitFor();
     assert.equal(await mobile.locator('#sidebar').getAttribute('aria-hidden'), 'true');
     await mobile.locator('#workspace-explorer-open').click();

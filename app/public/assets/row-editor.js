@@ -1,6 +1,8 @@
 import {request} from './api.js';
+import {parseConnectionScope} from './connection-scope.js';
 import {t, getLanguage} from './i18n.js';
 import {el, button, icon, errorText, confirmAction} from './ui.js';
+import {attachDialog} from './modal-shell.js';
 import './row-editor-messages.js';
 
 const message = (key, params) => t('app.rowEditor.' + key, params);
@@ -75,6 +77,7 @@ export function createRowEditor({getDatabase, onBusy = () => {}, onSaved = () =>
         current = null;
         if (state.dialog.open) state.dialog.close();
         state.dialog.remove();
+        state.shell?.destroy();
         onBusy(false);
         const opener = state.opener?.isConnected ? state.opener : document.getElementById(state.openerId);
         if (opener && !opener.disabled) opener.focus({preventScroll: true});
@@ -165,7 +168,8 @@ export function createRowEditor({getDatabase, onBusy = () => {}, onSaved = () =>
             if (column.encoding === 'hex') hint.append(text(state, 'span', 'hex', {class: 'small muted'}));
         } else {
             wrapper.append(input);
-            hint.append(text(state, 'span', column.large ? 'large' : column.generated ? 'generated' : 'readOnly', {class: 'small muted'}));
+            hint.append(text(state, 'span', column.large ? (state.scope.connection === 'postgres' ? 'largePostgres' : 'large')
+                : column.generated ? 'generated' : column.auto_increment ? 'autoHelp' : 'readOnly', {class: 'small muted'}));
             if (value === null && !column.large) {
                 state.labels.push(() => { input.placeholder = message('null'); });
             }
@@ -184,10 +188,10 @@ export function createRowEditor({getDatabase, onBusy = () => {}, onSaved = () =>
         // Remove old field translation callbacks while retaining the dialog labels.
         state.labels.splice(state.baseLabelCount);
         state.content.replaceChildren();
-        state.fallback.hidden = state.supported;
+        state.fallback.hidden = state.supported || state.scope.connection === 'postgres';
         if (!state.supported) {
             const reason = el('div', {class: 'notice notice-warning'});
-            state.labels.push(() => { reason.textContent = data.reason_i18n?.[getLanguage()] || data.reason || message('unsupported'); });
+            state.labels.push(() => { reason.textContent = data.reason_i18n?.[getLanguage()] || data.reason || message(state.scope.connection === 'postgres' ? 'unsupportedPostgres' : 'unsupported'); });
             state.content.append(reason);
             return;
         }
@@ -252,7 +256,8 @@ export function createRowEditor({getDatabase, onBusy = () => {}, onSaved = () =>
             try {
                 confirmed = await confirmAction({
                     title: message('deleteTitle'),
-                    description: message('deleteDescription', {database: state.database, table: state.table,
+                    description: message('deleteDescription', {database: state.scope.connection === 'postgres'
+                        ? state.scope.database + '.' + state.scope.schema : state.database, table: state.table,
                         key: JSON.stringify(state.data.key)}),
                     confirmLabel: message('delete'), danger: true,
                 });
@@ -289,12 +294,14 @@ export function createRowEditor({getDatabase, onBusy = () => {}, onSaved = () =>
             loading: true, saving: false, confirming: false, supported: false,
             error: null, conflict: false,
         };
+        state.scope = parseConnectionScope(state.database);
         const dialog = el('dialog', {id: 'row-editor-dialog', class: 'row-editor-dialog',
             'aria-labelledby': 'row-editor-title', 'aria-describedby': 'row-editor-intro', 'data-selection-ui': ''});
         state.dialog = dialog;
         const title = text(state, 'h2', mode === 'insert' ? 'titleInsert' : mode === 'delete' ? 'titleDelete' : 'titleEdit', {id: 'row-editor-title', tabindex: '-1'});
         state.close = action(state, 'close', close, {className: 'icon-button row-editor-close', symbol: 'close'});
-        const context = text(state, 'p', 'context', {class: 'row-editor-context'}, {database: state.database, table: state.table});
+        const context = text(state, 'p', state.scope.connection === 'postgres' ? 'contextPostgres' : 'context',
+            {class: 'row-editor-context'}, {database: state.scope.database || state.database, schema: state.scope.schema, table: state.table});
         const intro = text(state, 'p', mode === 'insert' ? 'introInsert' : mode === 'delete' ? 'introDelete' : 'introEdit', {id: 'row-editor-intro', class: 'small muted'});
         const header = el('header', {class: 'row-editor-header'}, el('div', {}, title, context), state.close);
         state.status = text(state, 'p', 'loading', {id: 'row-editor-status', class: 'notice', role: 'status'});
@@ -324,6 +331,7 @@ export function createRowEditor({getDatabase, onBusy = () => {}, onSaved = () =>
         });
         current = state;
         document.body.append(dialog);
+        state.shell = attachDialog(dialog, {handle: header});
         onBusy(true);
         translate(state);
         dialog.showModal();

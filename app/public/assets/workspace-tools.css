@@ -1,0 +1,103 @@
+/* Keep the source and primary action visible; secondary controls share one panel. */
+.workspace-page.workspace-tools-ready .topbar { min-height: 72px; flex-wrap: nowrap; gap: 16px; padding: 12px 28px; }
+.workspace-tools-ready .topbar-location { flex: 0 1 440px; max-width: 55%; min-width: 0; flex-wrap: nowrap; gap: 12px; }
+.workspace-tools-ready .topbar-brand { flex: none; font-size: 21px; letter-spacing: -.7px; }
+.workspace-tools-ready .topbar-project { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
+.workspace-tools-ready .topbar-project .database-picker-group { flex: 1; min-width: 0; padding: 3px; border-radius: 14px; }
+.workspace-tools-ready .topbar-project .database-picker-group .database-picker { flex: 1; width: 100%; max-width: none; min-width: 0; min-height: 34px; padding: 1px 6px 1px 3px; gap: 8px; }
+.workspace-tools-ready .topbar-project .database-picker-group .database-picker select { min-width: 0; width: 100%; max-width: none; min-height: 32px; font-size: 13px; }
+.workspace-tools-ready .topbar-project #database-picker-icon { width: 26px; height: 26px; border-radius: 8px; }
+.workspace-tools-ready .topbar-project .connection-card { flex: none; display: inline-flex; width: 8px; min-width: 8px; height: 20px; margin: 0; gap: 0; }
+.workspace-tools-ready .connection-card > span:not(.status-dot) { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.workspace-tools-ready .connection-card .status-dot { width: 7px; height: 7px; flex: none; }
+.workspace-tools-ready .topbar-actions { flex: none; flex-wrap: nowrap; gap: 8px; min-width: 0; }
+.workspace-tools-ready .topbar-actions > .button { min-height: 40px; padding: 9px 13px; border-radius: 12px; font-size: 13px; }
+.workspace-tools-ready .topbar-actions > .button .icon { display: block; width: 18px; height: 18px; flex: none; }
+#workspace-tools-toggle { position: relative; gap: 8px; }
+#workspace-tools-toggle[aria-expanded="true"] { background: var(--g-dense-frost); color: var(--g-accent-text); }
+#workspace-tools-toggle[data-active="true"]::after { content: ""; position: absolute; top: 6px; right: 6px; width: 6px; height: 6px; border-radius: 50%; background: var(--g-accent); }
+
+/* Original controls retain their handlers, disabled states and native input UX. */
+#workspace-tools {
+    position: fixed; inset: auto; z-index: 1250; width: min(340px, calc(100vw - 24px)); max-width: calc(100vw - 24px);
+    max-height: min(650px, calc(100dvh - 88px)); margin: 0; padding: 16px; overflow: auto; overscroll-behavior: contain;
+    scrollbar-width: thin; color: var(--ink); border: 0; border-radius: 21px;
+    background: linear-gradient(140deg, var(--g-shine), transparent 70%), var(--g-dense-frost);
+    box-shadow: var(--g-elevation), 0 24px 70px var(--g-shadow);
+    backdrop-filter: blur(32px) saturate(145%); -webkit-backdrop-filter: blur(32px) saturate(145%);
+}
+#workspace-tools[popover]:not(:popover-open), #workspace-tools[hidden] { display: none !important; }
+#workspace-tools::backdrop { background: transparent; }
+#workspace-tools :is(.workspace-tools-header, .workspace-tools-heading) { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 14px; }
+#workspace-tools-title { margin: 0; padding: 0 8px; font-size: 15px; font-weight: 600; line-height: 1.5; }
+#workspace-tools .workspace-tools-section { margin-top: 14px; min-width: 0; }
+#workspace-tools .workspace-tools-section:first-of-type { margin-top: 0; }
+#workspace-tools .workspace-tools-section > h3 { margin: 0 8px 6px; color: var(--muted); font-size: 11px; line-height: 1.5; font-weight: 500; letter-spacing: .06em; text-transform: uppercase; }
+#workspace-tools [hidden] { display: none !important; }
+#workspace-tools :is(#workspace-tools-explore, #workspace-tools-data, #workspace-tools-preferences) { display: grid; gap: 3px; min-width: 0; }
+#workspace-tools :is(#workspace-tools-explore, #workspace-tools-data, #workspace-tools-preferences) > :is(.button, .icon-button, a),
+#workspace-tools #selection-pointer-toggle {
+    display: flex; align-items: center; justify-content: flex-start; gap: 11px; width: 100%; min-width: 0; min-height: 44px;
+    height: auto; padding: 10px; margin: 0; border: 0; border-radius: 12px; background: transparent; color: var(--ink);
+    box-shadow: none; font-size: 13px; line-height: 1.45; font-weight: 500; text-align: left; text-decoration: none; white-space: normal;
+}
+#workspace-tools :is(.button, .icon-button, a) .icon { flex: none; width: 18px; height: 18px; margin: 0; color: var(--g-accent-text); }
+#workspace-tools :is(.button, .icon-button) > span { min-width: 0; }
+#workspace-tools :is(#workspace-tools-explore, #workspace-tools-data, #workspace-tools-preferences) > :is(.button, .icon-button, a):hover:not(:disabled),
+#workspace-tools #selection-pointer-toggle:hover:not(:disabled) { background: var(--g-row); }
+#workspace-tools :is(button, a, select):focus-visible { outline: 2px solid var(--g-accent); outline-offset: -2px; }
+#workspace-tools #selection-pointer-toggle[aria-pressed="true"], #workspace-tools #ai-toggle[aria-expanded="true"] { background: var(--g-soft); color: var(--g-accent-text); }
+#workspace-tools .selection-pointer-controls { display: grid; grid-template-columns: minmax(0, 1fr) 44px; width: 100%; max-width: none; gap: 4px; }
+#workspace-tools #selection-pointer-toggle { grid-column: 1 / -1; }
+#workspace-tools #selection-pointer-count { justify-content: center; min-height: 40px; margin: 0 0 4px 10px; font-size: 12px; background: var(--g-row); box-shadow: none; }
+#workspace-tools #selection-pointer-clear { width: 40px; height: 40px; padding: 9px; margin-bottom: 4px; background: var(--g-row); box-shadow: none; }
+#workspace-tools .selection-pointer-controls > [hidden] { display: none; }
+#workspace-tools #selection-pointer-keyboard { position: absolute; }
+#workspace-tools #ai-toggle .ai-toggle-label { display: inline; }
+#workspace-tools #open-companion > span, #workspace-tools :is(#context-export, #refresh-app, #manage-databases) > .sr-only { position: static; display: inline; width: auto; height: auto; margin: 0; overflow: visible; clip: auto; clip-path: none; white-space: normal; }
+#workspace-tools #open-companion .icon { display: block; }
+#workspace-tools #open-companion { min-width: 0; min-height: 44px; padding: 10px; }
+#workspace-tools .language-picker { display: flex; align-items: center; gap: 11px; width: 100%; min-height: 46px; padding: 5px 10px; border-radius: 12px; background: var(--g-row); box-shadow: none; font-size: 13px; }
+#workspace-tools .language-picker .icon { width: 18px; height: 18px; color: var(--g-accent-text); flex: none; }
+#workspace-tools .language-picker select { min-width: 78px; min-height: 34px; margin-left: auto; padding: 5px 7px; color: var(--ink); background: transparent; border: 0; border-radius: 7px; font-size: 13px; }
+
+@media (max-width: 1100px) {
+    .workspace-tools-ready .topbar-location { flex: 1; max-width: none; }
+    .workspace-tools-ready #open-database { min-width: 40px; padding: 10px; }
+    .workspace-tools-ready #open-database > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+}
+@media (max-width: 820px) {
+    .workspace-page.workspace-tools-ready .topbar { min-height: 68px; padding: 12px 16px; gap: 10px; }
+    .workspace-tools-ready .topbar-brand { display: none; }
+    .workspace-page.workspace-tools-ready .topbar-location { flex: 1; max-width: none; flex-wrap: nowrap; gap: 8px; }
+    .workspace-tools-ready .topbar-project { flex: 1; min-width: 0; gap: 6px; }
+    .workspace-tools-ready .topbar-project .database-picker-group .database-picker { min-height: 38px; }
+    .workspace-tools-ready .topbar-project .database-picker-group .database-picker select { min-height: 36px; font-size: 16px; }
+    .workspace-tools-ready #menu-toggle { flex: none; width: 40px; height: 40px; }
+    #workspace-tools .language-picker select { font-size: 16px; }
+}
+@media (max-width: 480px) {
+    .workspace-page.workspace-tools-ready .topbar { min-height: 64px; padding: 10px; gap: 6px; }
+    .workspace-page.workspace-tools-ready .topbar-location { gap: 4px; }
+    .workspace-tools-ready .topbar-project { gap: 4px; }
+    .workspace-tools-ready .topbar-project #database-picker-icon { display: none; }
+    .workspace-tools-ready .topbar-project .database-picker-group .database-picker { padding-left: 5px; gap: 0; }
+    .workspace-tools-ready .topbar-actions { gap: 6px; }
+    .workspace-tools-ready .topbar-actions > .button, .workspace-tools-ready #menu-toggle { width: 40px; min-width: 40px; height: 40px; min-height: 40px; padding: 10px; }
+    #workspace-tools-toggle > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+    #workspace-tools { padding: 13px; border-radius: 18px; }
+}
+@media (pointer: coarse) {
+    .workspace-tools-ready .topbar-actions > .button, .workspace-tools-ready #menu-toggle { min-width: 44px; min-height: 44px; }
+    .workspace-tools-ready .topbar-project .database-picker-group { padding: 2px; }
+    .workspace-tools-ready .topbar-project .database-picker-group .database-picker { min-height: 44px; padding-top: 0; padding-bottom: 0; }
+    .workspace-tools-ready .topbar-project .database-picker-group .database-picker select { min-height: 44px; }
+    #workspace-tools #selection-pointer-count, #workspace-tools #selection-pointer-clear { min-width: 44px; min-height: 44px; }
+}
+:root[data-reduce-transparency="true"] #workspace-tools { background: var(--g-panel); backdrop-filter: none; -webkit-backdrop-filter: none; }
+@supports not (backdrop-filter: blur(1px)) { #workspace-tools { background: var(--g-panel); } }
+@media (forced-colors: active) {
+    #workspace-tools { background: Canvas; color: CanvasText; outline: 1px solid CanvasText; box-shadow: none; }
+    #workspace-tools-toggle[aria-expanded="true"], #workspace-tools #selection-pointer-toggle[aria-pressed="true"] { outline: 1px solid Highlight; }
+    #workspace-tools-toggle[data-active="true"]::after { background: Highlight; }
+}

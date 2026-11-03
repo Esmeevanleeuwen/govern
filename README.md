@@ -1,7 +1,11 @@
 # Govern
 
 Je persoonlijke werkplek om databases te bekijken, begrijpen en veranderen.
-Bestuursatlas is het eerste oefenproject. Je werkt lokaal in één browservenster.
+Bestuursatlas is het eerste oefenproject. Je werkt lokaal in je browser,
+eventueel met een begeleidend venster op een tweede scherm.
+
+Deze versie verenigt de losse feature- en updatebranches. Zie de
+[integratiebeschrijving](docs/INTEGRATION.md) voor de opgenomen functies en controles.
 
 ## Beginnen
 
@@ -14,30 +18,159 @@ De eerste start haalt de onderdelen op, maakt lokale wachtwoorden aan en vult
 een nieuwe database met de Bestuursatlas. Open daarna
 [http://localhost:8080](http://localhost:8080).
 
-Je hoeft PHP, Node, Composer of MariaDB niet zelf te installeren. Docker Compose
+De startpagina laat zien wat Govern doet. Kies **Create account** om een account
+voor deze installatie te maken. Het eerste account wordt de eigenaar en opent
+meteen de werkplek. Volgende accounts wachten op goedkeuring; de eigenaar regelt
+dat via **Account → Access requests**. Daarna kun je inloggen, de werkplek openen
+en via Account weer uitloggen. De startpagina, accountschermen en werkplek
+ondersteunen Nederlands en Engels.
+
+Je hoeft PHP, Node, Composer, MariaDB of PostgreSQL niet zelf te installeren. Docker Compose
 moet de optie `--wait` ondersteunen; een actuele Docker Desktop bevat die. Je bestaande
 database buiten Docker wordt niet aangeraakt. De wachtwoorden staan alleen in
 je lokale `.env`, die niet in Git wordt opgenomen.
 
+## Startpagina en lokale accounts
+
+- `/`: de publieke startpagina met een duidelijk gemarkeerde voorbeeldwerkplek
+  en Docker-startinstructies. De voorbeelden voeren geen SQL uit.
+- `/workspace.php`: de bestaande databasewerkplek, na inloggen. Bestaande
+  `/#gegevens`, `/#schema`, `/#onderzoeken` en andere werkpleklinks blijven hun
+  route en databaseparameter behouden.
+- `/auth.php?mode=register` en `/auth.php?mode=login`: account maken en inloggen.
+- `/account.php`: accountgegevens, uitloggen en voor de eigenaar openstaande
+  toegangsverzoeken goedkeuren.
+
+Accounts horen bij één Docker-installatie. Een goedgekeurd account krijgt
+dezelfde toegang tot de toegestane MariaDB-werkdatabases als de eigenaar: bekijken,
+wijzigen, SQL uitvoeren en herstelpunten beheren. Het account maakt geen
+afzonderlijke privéomgeving of eigen database. Keur daarom alleen mensen goed
+die je deze toegang wilt geven. Je kunt ook een eigen Govern-installatie starten.
+
+Wachtwoorden worden met Argon2id gehasht. De accounts staan in het afzonderlijke
+Docker-volume `account_data`, buiten de webroot en buiten SQL-herstelpunten van
+werkdatabases. Bewaar dat volume als je accounts wilt behouden. Bestaande
+databasevolumes, SQL, onderzoeken en herstelpunten worden door deze uitbreiding
+niet vervangen.
+
+Een sessie duurt maximaal twaalf uur en eindigt ook bij uitloggen of verlies van
+de browsersessie. Inloggen en registreren hebben een tijdelijke pogingenlimiet.
+E-mail is een inlognaam; deze versie verstuurt geen verificatie- of herstelmail
+en heeft geen wachtwoordherstel. Bewaar het wachtwoord van het eigenaarsaccount.
+De taal- en uiterlijkvoorkeuren blijven bij de browser, zonder accountsynchronisatie.
+
+## PostgreSQL gebruiken
+
+PostgreSQL is een optionele tweede verbinding. De bestaande tabelverkenner,
+structuurweergave, het schemadiagram en de recordkaart kunnen PostgreSQL-
+gegevens en relaties tonen. Via **Records** kun je ook rijen toevoegen, bewerken
+en verwijderen. Vrije SQL, import, herstelpunten en AI zijn voor PostgreSQL
+nog niet beschikbaar.
+phpMyAdmin blijft alleen bij de MariaDB-verbinding horen.
+
+1. Open `.env` in de Govern-map en zet `PG_ENABLED=1`.
+2. Bewaar de standaardwaarden `PG_DATABASE=govern_pg` en `PG_SCHEMAS=public`,
+   of kies de bestaande schema's die je wilt tonen, gescheiden door komma's.
+3. Start opnieuw met `.\start.cmd` in PowerShell, of `sh start.sh` op macOS/Linux.
+4. Log in en kies bovenaan de vermelding **govern_pg · public · PostgreSQL**.
+
+De startbestanden maken ontbrekende PostgreSQL-wachtwoorden aan en starten
+het optionele Docker-profiel. De nieuwe database is aanvankelijk leeg;
+Govern importeert geen MariaDB-gegevens automatisch. PostgreSQL gebruikt een
+eigen volume. De webapp gebruikt een afzonderlijke lezer en een beperkt
+schrijfaccount voor rijbewerkingen; het bootstrapaccount blijft buiten de webapp.
+
+Wil je meteen tabellen en relaties bekijken? Voer na het starten in PowerShell
+vanuit de Govern-map uit:
+
+```powershell
+.\load-postgres-demo.cmd
+```
+
+Op macOS/Linux gebruik je `sh load-postgres-demo.sh`. Dit voegt vijf gekoppelde
+voorbeeldtabellen met 39 fictieve records en één overzichtsview toe aan `public`.
+Klik daarna op **Refresh** in Govern en kies de PostgreSQL-verbinding.
+
+Onder **Database → Explore** kies je een startrecord en volg je echte
+verbindingen op een flexibel canvas. De bronbibliotheek, kaart en inspecteur
+werken met dezelfde selectie. Vragen bij een geselecteerd record helpen om een
+verbonden tabel te bekijken; technische sleutels en SQL blijven onder Details.
+Dit blijft volledig alleen lezen.
+
+Met **Open in venster / Open in window** kun je meerdere records naast elkaar
+bekijken. Sleep de titelbalk om ze te verplaatsen. Elk venster houdt zijn eigen
+database en record vast. De [gedeelde vensterlaag](docs/MODALS.md) houdt bediening,
+inhoud en gegevens ophalen apart voor nieuwe uitbreidingen.
+
+Met **Tweede scherm / Second screen** open je een apart browservenster voor
+je monitor. Zet maximaal vier records vast op de **Comparison desk** of laat
+de **Relationship radar** je hoofdselectie volgen. Vastgezette bronnen blijven
+staan als je verder navigeert. Zie [Een tweede scherm voor Govern](docs/COMPANION.md).
+
+Meer over configuratie, schema's en de volgende bouwfasen:
+[PostgreSQL in Govern](docs/POSTGRESQL.md).
+
+## Records en verbanden verkennen
+
+Database heeft drie vaste hoofdtaken: **Records**, **Explore** en **Schema**.
+Records is voor gewone tabelrijen en bewerken; Explore is voor verbindingen
+tussen echte records. Schema groepeert tabeldetails en het schemadiagram.
+Onder **Database → Tools** staan import/export via phpMyAdmin en herstelpunten.
+Onderzoeken blijft de plek voor de querybouwer, SQL en opgeslagen onderzoeken.
+
+Open **Database → Explore** (`#verkennen`). Oude `#verbanden`-links openen
+hetzelfde werkvlak. Open de bronbibliotheek, kies een tabel en zoek of blader
+naar een beginrecord. Vanuit de inspecteur vouw je inkomende of uitgaande
+verwijzingen uit; bij meer resultaten laad je bewust de volgende pagina.
+
+- Sleep recordkaarten of verschuif de achtergrond. Gebruik zoom en passend maken
+  om je werk te bekijken.
+- Kies **Orbit**, **Flow** of **Manual** voor de indeling. Vastgezette kaarten
+  houden bij opnieuw indelen hun positie. Uitbreiden verplaatst bestaande
+  kaarten niet.
+- Gebruik **Shift + klik** voor meerdere kaarten. Verbergen, vastzetten en Undo
+  veranderen alleen je canvas; **Clear map** begint een nieuwe geladen kaart.
+- Open, verplaats, verbreed of verberg de bronbibliotheek en inspecteur. Op mobiel
+  is steeds één lade open. Vragen en technische details horen bij je selectie.
+- **View row** leest precies het geselecteerde bronrecord opnieuw uit in Records.
+  Een lijn laat de foreign key, kolomparen, sleutels en gebruikte SQL zien.
+
+Dezelfde Explore-werkplek werkt met MariaDB en PostgreSQL binnen de gekozen
+scope. Views of tabellen zonder ondersteunde sleutel krijgen een duidelijke
+melding. Een lege database blijft leeg totdat je zelf gegevens toevoegt of de
+expliciete voorbeeldlader uitvoert; de werkplek verzint geen records of relaties.
+
+Kaart, selectie en indeling blijven tijdens deze browsersessie per verbinding,
+database en schema apart. Recordgegevens gaan niet naar browseropslag. Zie
+[de uitleg van Explore](docs/RECORD_MAP.md).
+
 ## Een andere database kiezen of toevoegen
+
+De compacte bovenbalk houdt de databasekiezer en **Database openen / Open
+database** zichtbaar. Onder **Gereedschap / Tools** staan de selectieaanwijzer,
+het tweede scherm, de AI-assistent, verversen, context exporteren, databases
+toevoegen/importeren, taal en Account. Klik buiten het menu of druk op Escape
+om het te sluiten. De verbindingsstatus staat als stip bij de databasekiezer;
+de volledige status blijft beschikbaar via de tooltip en schermlezer.
 
 Kies bovenaan je database. De tabelverkenner, schemaweergave, onderzoeken,
 context-export en herstelpunten volgen die keuze. Je onderzoeksconcept en
 tabelkeuze blijven tijdens deze browsersessie per database behouden; de keuze
 geldt alleen voor dit browsertabblad.
 
-Gebruik **Database toevoegen of importeren** naast de databasekiezer. Je hoeft
+Gebruik **Gereedschap → Database toevoegen of importeren**. Je hoeft
 daarvoor `.env` niet aan te passen:
 
 1. Vul een databasenaam in, bijvoorbeeld `onderzoek`.
 2. Kies **Database aanmaken** of **Aanmaken en SQL importeren**.
 3. Govern maakt een ontbrekende database leeg aan en kiest die database. Bij
-   importeren opent de echte phpMyAdmin direct op zijn importscherm.
-4. Kies daar je SQL-bestand en voer de import uit. Sluit het databasevenster om
-   de geïmporteerde tabellen en relaties in Govern te verversen.
+   importeren opent de importcontrole met een **eigen Govern-import** boven het bestaande phpMyAdmin-venster.
+4. Kies voor een UTF-8 `.sql`-bestand tot 256 KiB **Controleer bestand**, lees de risico's,
+   typ de exacte databasenaam en kies **Import uitvoeren**. Bekijk daarna de nacontrole.
+   Gebruik voor grotere of complexe dumps de officiële phpMyAdmin-import eronder.
 
 De tab **Import** toont vóór het uploaden hoeveel tabellen, views, relaties en records al
-bestaan. Na een native SQL-upload vergelijkt Govern de actuele structuur en
+bestaan. Na een SQL-import vergelijkt Govern de actuele structuur en
 rijaantallen met de voorcontrole. Onder **Tabellen en inhoudelijke volledigheid**
 zie je bij Bestuursatlas ook welke onderdelen ontbreken of nog leeg zijn.
 Foutmeldingen uit phpMyAdmin en de leescontrole worden zichtbaar gemaakt; het
@@ -48,8 +181,14 @@ Dit is geen garantie dat een import veilig of volledig is.
 In hetzelfde venster kun je een bestaande database kiezen of de import voor de
 geselecteerde database openen. Een bestaande naam toevoegen vervangt geen
 gegevens; de expliciete import kan dat wel doen, afhankelijk van het SQL-bestand.
-Import is geen herstelpunt en heeft geen algemene undo. De bestaande
-phpMyAdmin-importgrens is 128 MB, met maximaal 300 seconden uitvoeringstijd.
+De eigen Govern-import maakt vooraf een herstelpunt als er al tabellen
+of views bestaan (ook interne Govern-tabellen). Het herstelpunt is geen algemene undo en de controle garandeert
+geen inhoudelijke volledigheid. Tijdens de eigen import worden overige
+Govern-bewerkingen vergrendeld; open phpMyAdmin-verzoeken volgen die lock niet.
+SQL heeft de rechten van het schrijvende databaseaccount en kan ook een andere
+reeds toegestane database wijzigen, bijvoorbeeld via `USE`. Importeer daarom alleen
+vertrouwde SQL-bestanden. De eigen begrenzing is voorlopig 256 KiB.
+De officiële phpMyAdmin-import blijft beschikbaar tot 128 MB en maximaal 300 seconden.
 
 Namen gebruiken letters, cijfers en underscores. Systeemdatabases kunnen niet
 worden toegevoegd. De bijbehorende rechten blijven in het databasevolume bewaard,
@@ -85,6 +224,9 @@ Een database buiten deze Docker-installatie wordt niet automatisch gekoppeld.
 
 ## Wat kun je ermee?
 
+De volledige functies hieronder gelden voor MariaDB. PostgreSQL ondersteunt
+de hierboven beschreven leesfuncties en directe rijbewerking in **Records**.
+
 - **Overzicht:** zie welke tabellen en overzichten je database bevat.
 - **Nederlands of Engels:** verander de taal bovenaan of bij Instellingen. Je
   tabellen, records, SQL en notities houden hun oorspronkelijke tekst.
@@ -104,20 +246,25 @@ Een database buiten deze Docker-installatie wordt niet automatisch gekoppeld.
   beschikbaarheid wordt gecontroleerd bij je eigen Ollama-server. Kies
   **Projectcode** om de lokale implementatie met bronpassages en regelnummers
   te doorzoeken; de zoekactie werkt ook zonder AI.
-- **Eén menu:** kies Overzicht, Database, Onderzoeken of Experimenten in de
-  hoofdbalk. Instellingen staat onderaan. Het aansluitende paneel toont alleen
-  de tabellen, opgeslagen onderzoeken of herstelpunten die bij dat gebied horen.
-  Overzicht en Instellingen openen direct, zonder herhaalde navigatielijst.
-- **Database → Gegevens:** bekijk records, zoek, blader en bekijk de gebruikte SQL.
+- **Eén menu:** kies Overzicht, Database of Onderzoeken in de hoofdbalk.
+  Instellingen staat onderaan. Database houdt de volgorde Records, Explore,
+  Schema aan. Explore gebruikt één zwevende bronbibliotheek; de andere
+  databaseweergaven gebruiken de bestaande tabellenlijst. Onderzoeken toont
+  opgeslagen onderzoeken in zijn contextpaneel.
+- **Database → Records:** bekijk records, zoek, blader en bekijk de gebruikte SQL.
   Gebruik **Rij toevoegen**, of **Bewerken** en **Verwijderen** bij een rij om
   rechtstreeks gegevens te veranderen. Het formulier toont database en tabel;
   verwijderen vraagt bevestiging.
-- **Database → Structuur:** lees velden, sleutels, relaties en de echte tabeldefinitie.
-- **Database → Schema:** bekijk alle tabellen, kolommen en foreign keys in een interactief
+- **Database → Schema → Table details:** lees velden, sleutels, relaties en de echte tabeldefinitie.
+- **Database → Explore:** volg verbindingen tussen echte records, vouw
+  verwijzingen uit en inspecteer de bron achter iedere lijn. Verplaats of pin
+  kaarten, kies een indeling en gebruik vragen bij je selectie. Deze leesweergave
+  is ook beschikbaar voor PostgreSQL.
+- **Database → Schema → Diagram:** bekijk alle tabellen, kolommen en foreign keys in een interactief
   diagram. Scroll boven de tekening om rond je muisaanwijzer te zoomen en sleep
   de achtergrond om te verschuiven. De tabellenlijst blijft zichtbaar wanneer
   je een tabel kiest; de details staan eronder. Wissel direct naar een andere
-  tabel of naar Gegevens en Structuur. Zoeken filtert alleen deze lijst; gebruik
+  tabel of naar Records en Table details. Zoeken filtert alleen deze lijst; gebruik
   de aparte verbindingsfilter om het diagram te beperken. Schematools staan
   gegroepeerd boven het werkvlak: weergave, indeling, zoom en hulp. Ze blijven
   bereikbaar als je het paneel inklapt. **Help**
@@ -130,7 +277,7 @@ Een database buiten deze Docker-installatie wordt niet automatisch gekoppeld.
 - **Visueel samenstellen:** kies een tabel, kolommen, filters en een sorteervolgorde.
   Voeg eventueel een bestaande verwijzing naar een tweede tabel toe. Govern maakt
   de SQL zichtbaar; je kunt die daarna zelf aanpassen.
-- **Experimenten:** maak een herstelpunt, download het als SQL en zet het terug.
+- **Database → Tools → Backups:** maak een herstelpunt, download het als SQL en zet het terug.
 - **Databasevenster:** open de echte phpMyAdmin in een groot venster met de tabs
   **Browse**, **Structure**, **SQL** en **Import**. Hier kun je ook invoegen, aanpassen,
   verwijderen, tabellen ontwerpen, importeren en exporteren.
@@ -210,12 +357,12 @@ De gewone werkplek blijft werken met `AI_ENABLED=0`, de standaardinstelling.
 
 ## Eerste oefening
 
-1. Open **Database → Gegevens** en kies `digital_systems`.
+1. Open **Database → Records** en kies `digital_systems`.
 2. Bekijk de beschrijving van een systeem en de SQL achter het overzicht.
-3. Open **Structuur** binnen Database en zoek de verwijzing `evidence_id`.
+3. Open **Schema → Table details** binnen Database en zoek de verwijzing `evidence_id`.
 4. Volg de onderbouwing in `evidence` en de bronkoppeling in `evidence_sources`.
-5. Maak bij **Experimenten** een herstelpunt voordat je iets verandert.
-6. Ga naar **Gegevens**, kies **Bewerken** bij een rij en pas een beschrijving
+5. Maak bij **Database → Tools → Backups** een herstelpunt voordat je iets verandert.
+6. Ga naar **Records**, kies **Bewerken** bij een rij en pas een beschrijving
    aan. Na bewaren zie je dezelfde wijziging ook in **Databasevenster → Browse**.
 
 Zo leer je met echte gegevens wat een tabel, een verwijzing en een query doen.
@@ -339,9 +486,12 @@ Werk je al met Git, dan kun je vanuit deze map `git pull --ff-only` gebruiken en
 daarna hetzelfde startbestand uitvoeren. Heb je zelf code aangepast, bewaar of
 combineer die wijzigingen voordat je projectbestanden vervangt.
 
-Werk je bij vanaf een versie zonder dynamische proxy-adressen? Voer na het
-starten eenmalig `docker compose restart gateway` uit om de nieuwe
-Nginx-instellingen te laden. Dit verwijdert geen databases of volumes.
+Gebruik bij deze update het startbestand. Na een geslaagde Compose-start test
+het startbestand de Nginx-configuratie en herlaadt het ook een al bestaande
+gateway. Zo gelden de nieuwe sessiecontroles ook voor phpMyAdmin. Mislukt de
+start, configuratiecontrole of herlaadactie, dan stopt het script alleen de
+gateway en geeft het een fout. De volumes blijven behouden. Los de gemelde fout
+op en voer het startbestand opnieuw uit.
 
 ## Samen verder bouwen
 
@@ -363,9 +513,11 @@ of een verzameling aparte services per onderwerp.
 
 ## Toegang
 
-De ingang is alleen aan `127.0.0.1` gekoppeld. Dit is een persoonlijke lokale
-werkplek zonder bezoekersaccounts. Iedereen die jouw lokale ingang kan gebruiken,
-kan werkdatabases toevoegen en de toegestane werkdatabases beheren. De phpMyAdmin-verbinding heeft rechten
+De ingang is alleen aan `127.0.0.1` gekoppeld. De startpagina en accountformulieren
+zijn zonder sessie bereikbaar. Een goedgekeurd account is nodig voor de werkplek,
+alle gegevens-API's en de officiële phpMyAdmin, ook bij rechtstreeks openen.
+Een goedgekeurde gebruiker kan werkdatabases toevoegen en de toegestane
+werkdatabases beheren. De phpMyAdmin-verbinding heeft rechten
 voor de expliciet ingeschakelde databases en eventueel eerder verleende rechten;
 Govern voegt geen globale serverrechten toe. Verwijderen uit `DB_DATABASES`
 trekt bestaande rechten niet automatisch in.
@@ -375,6 +527,39 @@ Vrije SQL in **Onderzoeken** en het databasevenster gebruiken het schrijfaccount
 voor de toegestane databases. Vrije SQL vraagt bevestiging voor ingrijpende opdrachten;
 eerdere opdrachten in een script kunnen al zijn uitgevoerd als een latere faalt.
 
-De interface en configuratie zijn niet bedoeld om rechtstreeks openbaar op
-internet te zetten. Voor delen of publiceren hoort eerst authenticatie en een
-passende toegangsconfiguratie te worden toegevoegd.
+De accountfunctie maakt deze lokale configuratie niet geschikt voor rechtstreeks
+publiceren op internet. Daarvoor zijn onder meer een afzonderlijke beoordeling
+van hosting, HTTPS, toegang en accountherstel nodig. De geleverde configuratie
+houdt de loopbackbinding en bestaande databasegrenzen aan.
+## Excel, CSV, TXT en JSON rechtstreeks importeren
+
+Open **Database openen → Bestanden importeren**. Kies een `.xlsx`, `.csv`, `.tsv`,
+`.txt`, `.json` of een ZIP met zulke bestanden en klik **Importvoorbeeld bekijken**.
+Selecteer het werkblad, controleer de kolomnamen en kies een nieuwe tabelnaam.
+Typ de getoonde databasenaam en klik **Importeren**. Sluit het venster om de
+vernieuwde tabel in de gewone Govern-verkenner te bekijken.
+
+Het voorbeeld toont de eerste twintig rijen, een verdeling van die voorbeeldrijen,
+lege velden, mogelijke unieke sleutels en dubbele rijen uit het hele bestand.
+Deze meldingen maken geen foreign keys en verwijderen geen dubbelen. Alle rijen
+worden geïmporteerd. Een passende bestaande InnoDB-tabel met dezelfde kolomnamen
+in dezelfde volgorde en tekstvelden kan ook als bestemming worden gekozen.
+Toevoegen vervangt geen bestaande records. Controleer bij een verbindingsfout eerst
+de doeltabel voordat je opnieuw importeert: een verloren antwoord kan ná opslaan ontstaan.
+
+De eerste rij bevat kolomnamen. CSV/TXT gebruikt UTF-8 en herkent komma, puntkomma,
+tab of pipe. JSON bevat een lijst met objecten. Kolomnamen worden geschikt gemaakt
+voor SQL; dubbele namen krijgen een achtervoegsel. Waarden blijven tekst zodat
+voorloopnullen en historische jaaraanduidingen behouden blijven. XLSX-datums worden
+leesbare datumteksten. Formules worden nooit uitgevoerd: alleen bestaande uitkomsten
+worden gelezen; ontbrekende uitkomsten en foutcellen worden afgewezen. Uitkomsten
+kunnen verouderd zijn. Nieuwe tabellen krijgen een eigen `_govern_id` als primaire sleutel.
+
+Deze eerste versie ondersteunt 16 MB per bestand, maximaal 100.000 records en 256
+kolommen, maximaal 32 tabellen/werkbladen en 64 MB uitgepakte inhoud per archief.
+XLS, GeoPackage, GeoJSON-kaarten en QGIS-projecten volgen niet automatisch uit deze
+functie. Geografische lezers en kaartweergaven zijn een volgende uitbreiding.
+SQL-bestanden gebruiken de eigen SQL-import met voorcontrole (tot 256 KiB) of de officiële phpMyAdmin-import.
+
+Werk voor deze uitbreiding de broncode bij en voer `start.cmd` of `sh start.sh`
+uit zodat de app-image met de lokale Python-bestandslezer wordt opgebouwd.

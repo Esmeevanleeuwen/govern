@@ -1,5 +1,6 @@
 import {t, getLocale, getLanguage, hasMessage} from './i18n.js';
 import {registerSelection} from './selection-registry.js';
+import {attachDialog} from './modal-shell.js';
 import './ui-messages.js';
 
 export function el(tag, attributes = {}, ...children) {
@@ -35,6 +36,8 @@ const iconPaths = {
     down: ['m6 9 6 6 6-6'],
     download: ['M12 3v12', 'm7 10 5 5 5-5', 'M5 16v5h14v-5'],
     external: ['M14 3h7v7', 'm21 3-11 11', 'M10 3H3v18h18v-7'],
+    monitor: ['M3 4h18v13H3z', 'M8 21h8', 'M12 17v4'],
+    pin: ['m16 3 5 5-4 1-3 5-1 4-7-7 4-1 5-3Z', 'm9 15-6 6'],
     close: ['m6 6 12 12', 'M18 6 6 18'],
     refresh: ['M20 7v5h-5', 'M4 17v-5h5', 'M6 6a8 8 0 0 1 13 2l1 4', 'M18 18a8 8 0 0 1-13-2l-1-4'],
     plus: ['M12 5v14', 'M5 12h14'],
@@ -205,11 +208,13 @@ export function sqlDisclosure(sql, params) {
     return details;
 }
 
+let confirmationId = 0;
 export function confirmAction({title, description, requiredText, confirmLabel = t('ui.confirm'), danger = false}) {
     return new Promise(resolve => {
         const opener = document.activeElement;
         const openerId = opener?.id;
-        const dialog = el('dialog', {class: 'confirm-dialog', 'aria-labelledby': 'confirmation-title'});
+        const titleId = 'confirmation-title-' + ++confirmationId;
+        const dialog = el('dialog', {class: 'confirm-dialog', 'aria-labelledby': titleId});
         const form = el('form', {method: 'dialog'});
         const submit = el('button', {class: 'button button-' + (danger ? 'danger' : 'primary'), type: 'submit'}, confirmLabel);
         const field = requiredText !== undefined
@@ -217,7 +222,7 @@ export function confirmAction({title, description, requiredText, confirmLabel = 
             : null;
         let confirmed = false;
         form.append(el('div', {class: 'confirm-symbol ' + (danger ? 'danger-text' : '')}, icon(danger ? 'refresh' : 'info')),
-            el('h2', {id: 'confirmation-title'}, title), el('p', {}, description));
+            el('h2', {id: titleId}, title), el('p', {}, description));
         if (field) {
             submit.disabled = true;
             form.append(el('label', {class: 'field-label'}, t('ui.confirmLabel', {value: requiredText}), field));
@@ -239,6 +244,8 @@ export function confirmAction({title, description, requiredText, confirmLabel = 
         }, {once: true});
         dialog.append(form);
         document.body.append(dialog);
+        const shell = attachDialog(dialog, {handle: form.querySelector('h2')});
+        dialog.addEventListener('close', () => shell.destroy(), {once: true});
         dialog.showModal();
         (field || form.querySelector('button')).focus();
     });

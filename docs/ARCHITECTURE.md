@@ -1,6 +1,174 @@
 # Architectuur
 
+## Startpagina en installatieaccounts
+
+`app/public/index.php` toont de publieke, responsive startpagina uit
+`homepage.php`. `homepage.js` verzorgt vertalingen, de expliciet als voorbeeld
+gemarkeerde databaseweergaven en de Docker-installatiedialoog. De voorbeelden
+zijn gewone lokale schermgegevens; ze maken geen databaseverbinding en voeren
+geen SQL uit. Oude werkplekhashes en hun queryparameters worden naar
+`workspace.php` doorgestuurd, zodat bestaande links hun betekenis behouden.
+
+`workspace.php` bevat de bestaande applicatieshell en vraagt vóór uitvoer
+`Web::user()` om een goedgekeurde gebruiker. `Web.php` gebruikt dezelfde
+`Http::start()`- en `Auth`-grens als de API. Zonder sessie volgt een redirect naar
+inloggen; bij onbeschikbare accountopslag blijft de werkplek gesloten.
+`auth.php` toont inloggen en registreren; `account.php` toont het lokale account,
+uitloggen en alleen voor de eigenaar de openstaande toegangsverzoeken.
+
+`Auth.php` bewaart accounts en pogingenlimieten met PDO SQLite in
+`AUTH_DIR/accounts.sqlite`, standaard `/var/lib/govern/auth`, in het afzonderlijke
+`account_data`-volume. De map is alleen toegankelijk voor de webservergebruiker;
+de bestanden worden privé aangemaakt. Deze opslag staat buiten de webroot,
+werkdatabases, schema-exports en SQL-herstelpunten. PHP's sessiecookie blijft
+HttpOnly en SameSite Strict, met Secure bij HTTPS. Aanmelden en afmelden
+vernieuwen sessie-ID en CSRF-token. De sessie heeft een absolute bovengrens van
+twaalf uur; elke toegangscontrole leest actuele rol en status uit de accountopslag.
+
+De eerste registratie wordt onder een `BEGIN IMMEDIATE`-transactie eigenaar.
+Een gedeeltelijke unieke index staat slechts één eigenaar toe. Elke latere
+registratie is `pending`, zonder toegang, totdat de eigenaar die aanvraag
+goedkeurt. De database bewaart uitsluitend Argon2id-wachtwoordhashes. Login en
+registratie verbruiken blijvende, begrensde pogingenvakken; ruwe inlognamen en
+IP-adressen worden niet in de throttle-sleutels bewaard. Dubbele registratie
+krijgt dezelfde openbare uitkomst als een wachtende aanvraag.
+
+Dit is installatiebrede toegang, geen gebruikersspecifieke databasescheiding.
+Elke goedgekeurde gebruiker krijgt dezelfde bestaande databasefuncties en
+MariaDB-rechten. Er is geen mailverificatie, herstelmail, wachtwoordreset of
+account-/apparaatsynchronisatie. De loopbackbinding blijft gelden; deze
+authenticatie is geen claim dat het platform klaar is voor openbare hosting.
+
+`auth-api.php` biedt het kleine accountcontract. `api.php` behandelt alleen de
+vaste, minimale database-readinesscontrole zonder login; alle andere routes
+vergen een goedgekeurde gebruiker vóór databasescope en gegevenswerk. De health-
+route negeert een opgegeven database en gebruikt de vaste startconfiguratie.
+Nginx controleert ieder `/phpmyadmin/`-verzoek met een interne `auth_request`
+naar `auth-check.php`. Dat geldt ook voor uploads, downloads en AJAX-verzoeken;
+een nog geldige native phpMyAdmin-cookie geeft zonder Govern-sessie geen toegang.
+
+Alleen de HTML-paginagrens staat een cross-site GET voor een documentnavigatie
+toe. Daardoor opent een werkpleklink vanuit een andere website zonder onjuiste
+503. De API houdt zijn afzonderlijke cross-sitegrens en Origin/CSRF-controles.
+`Web` logt de stabiele foutcode en bewaart de HTTP-status van een `ApiException`.
+Nginx laat assets bij ieder gebruik hervalideren; API/HTML-cachebeleid blijft
+afkomstig van de bestaande PHP-antwoorden.
+
+Beide startbestanden voeren na `docker compose up --wait` eerst `nginx -t` en
+daarna `nginx -s reload` in de gateway uit. Een gewijzigd bind-mounted bestand
+zou bestaande workers anders niet bijwerken. Bij start-/configuratie-/reloadfouten
+stoppen de scripts de gateway, zonder volumes te verwijderen, zodat oudere
+toegangsregels niet actief achterblijven.
+
 ## Actuele databases, herbruikbare schermen
+
+### Optionele PostgreSQL-verbinding
+
+De PostgreSQL-uitbreiding bouwt voort op de startpagina en installatieaccounts
+uit PR #16. Ze voegt een tweede SQL-engine toe aan dezelfde werkplek, zonder
+een tweede tabelverkenner of schemadiagram. De leesfuncties omvatten tabellen,
+kolommen, sleutels, relaties, records, zoeken binnen de gekozen tabel en de
+recordkaart.
+
+`Database` blijft de gedeelde facade en kiest `MariaDbAdapter` of
+`PostgresAdapter`. `Catalog` kiest overeenkomstig `MariaDbCatalog` of
+`PostgresCatalog`; beide geven dezelfde metadata aan de bestaande schermen.
+MySQL-DSN's, sessie-instellingen, identifierquoting en catalogusvragen blijven
+bij de MariaDB-adapter. PostgreSQL gebruikt PDO PostgreSQL, een verbinding met
+één database, expliciet gequote schemanamen en zijn eigen catalogusvragen.
+
+`ConnectionScope` combineert de bestaande `DatabaseScope` met de optionele
+PostgreSQL-configuratie. Alleen de server bepaalt host, lees- en schrijfaccount.
+Ieder verzoek bevat de verbinding, database en het schema. De PostgreSQL-kiezer
+toont alleen de geconfigureerde database en de schema's uit `PG_SCHEMAS`;
+de werkelijke leesbaarheid wordt met het leesaccount gecontroleerd. Een
+ontbrekend of ontoegankelijk schema blijft herkenbaar als niet beschikbaar.
+
+De browser bewaart voor PostgreSQL een volledige `scope_key` met database én
+schema. Daardoor delen gelijknamige tabellen geen cache, selectie, concept of
+diagramindeling. MariaDB houdt zijn bestaande databasesleutel en oude links.
+Een wissel annuleert oude leesacties en laat late antwoorden uit de vorige
+scope buiten de huidige weergave.
+
+`ConnectionScope::selectRequest` blijft oude gecachete API-modules ondersteunen:
+alleen wanneer `connection` en `schema` ontbreken mag `database` de volledige
+servergestuurde `postgres:<database>:<schema>`-sleutel bevatten. De gedecodeerde
+namen ondergaan dezelfde configuratiecontrole. Een gemengde of ongeldige
+scopesleutel krijgt geen ruimere toegang en wordt geweigerd.
+
+De capabilityvelden in bootstrap sturen de zichtbare bediening. PostgreSQL
+ondersteunt naast bootstrap, catalogus, structuur, bladeren en de leesacties van
+de recordkaart ook de bestaande rijeditoracties. `PostgresRowEditor` gebruikt
+een apart schrijfaccount, gequote schema- en tabelnamen, gebonden waarden en
+PostgreSQL-transacties. De gedeelde dialoog houdt de volledige scope vast;
+`PostgresRowIdentity` levert exacte sleutels los van verkorte browsewaarden.
+Vrije SQL blijft servermatig geweigerd. Er wordt geen MariaDB-
+snapshot-, query-, import- of AI-service op een PostgreSQL-scope aangeroepen.
+phpMyAdmin blijft de officiële MariaDB-toepassing en wordt niet als
+PostgreSQL-beheerder gepresenteerd.
+
+Het optionele Compose-profiel `postgres` gebruikt een eigen datavolume en een
+eenmalige rechtenservice. Alleen PostgreSQL en die opstartservice ontvangen
+het bootstrapwachtwoord. De webapp ontvangt aparte lezer- en rijschrijvergegevens;
+de schrijfrechten blijven beperkt tot DML in de ingestelde schema's en USAGE op
+hun sequences.
+De startbestanden schakelen het profiel in bij `PG_ENABLED=1` en bewaren
+bestaande wachtwoorden en volumes. Zie [POSTGRESQL.md](POSTGRESQL.md) voor de
+configuratie en de grenzen van deze PostgreSQL-functies.
+
+### Compatibiliteit met de eerdere recordverkenner
+
+`RecordExplorer.php` leest dezelfde genormaliseerde catalogus als de bestaande
+schermen. De bestaande GET-actie `explore` bouwt een begrensde buurt rond één echt
+record met een primaire of volledige, niet-nullbare unieke sleutel. Alle
+recordvragen lopen via de reader van de gekozen adapter. Kolomnamen en relaties
+komen uit de actuele catalogus; waarden worden gebonden en tabellen zijn binnen
+het geselecteerde schema gekwalificeerd.
+
+Het antwoord scheidt exacte identiteit en foreign-keywaarden van verkorte
+weergavevelden. Een stabiele node-ID bevat verbinding, database, schema, tabel
+en volledige sleutel. Een edge bevat de echte bron- en doelvelden en waarden.
+Er worden geen relaties afgeleid uit gelijkende namen en er wordt niet buiten
+de geselecteerde scope gezocht. Tabellen zonder bruikbare sleutel en externe
+verwijzingen blijven herkenbaar overgeslagen.
+
+Vaste aantals-, preview- en tijdgrenzen begrenzen iedere vraag. Het antwoord
+beschrijft alleen de geladen buurt en haar beperkingen. Er is geen blijvende
+index, aparte grafiekdatabase of nieuwe frameworklaag nodig.
+
+Dit API-contract blijft beschikbaar voor oudere clients. De actuele Explore-
+werkplek gebruikt de gepagineerde `RecordMap`-acties uit de sectie
+**Flexibele Explore-werkplek**. Beide antwoorden en hun node-ID's worden niet
+samengevoegd tot twee parallelle grafieken in één scherm. De verkenner gebruikt
+ook na toevoeging van rijbewerking uitsluitend de PostgreSQL-lezer.
+
+### Gedeelde vensterlaag
+
+`modal-shell.js` beheert stapeling, slepen, focus, buitenklik en annulering los
+van inhoud en gegevensbronnen. `attachDialog` vult native dialogen aan met
+behoud van cancel- en opslagcontroles. `createModal` maakt ook meerdere niet
+blokkerende vensters met bevroren context, eigen AbortSignal en opruiming per
+laadcyclus. `record-window.js` koppelt die laag aan de bestaande Explore-GET en
+valideert scope, tabel en exacte sleutel. Zie [Vensters en modalinhoud](MODALS.md).
+
+### Begeleidend tweede scherm
+
+`companion.php` gebruikt dezelfde HTML-inloggrens en biedt een apart venster
+met een vergelijkingsdesk en relatieradar. `companion-channel.js` koppelt één
+werkplektab aan één begeleidend venster via een willekeurig tijdelijk kanaal.
+Alleen gevalideerde broncoördinaten gaan over dit kanaal; recordgegevens worden
+apart via de bestaande alleen-lezen Explore-GET geladen. Er zijn geen nieuwe
+API-acties, SQL-rechten of blijvende recordopslag.
+
+`companion-model.js` controleert scope, tabel en volledige tekstsleutel van elk
+antwoord. Identiteit bevat ook database en schema. De desk houdt maximaal vier
+bronnen vast met een eigen annuleringssignaal en revisie per record. De radar
+heeft onafhankelijk volgen/vastzetten en annuleert achterhaalde antwoorden.
+Vergelijking onderscheidt ontbrekende velden, NULL, lege tekst en onzekere
+previews; gedeelde verbindingen matchen alleen exacte geladen recordidentiteiten.
+Zie [Een tweede scherm voor Govern](COMPANION.md) voor bediening en lifecycle.
+
+### Bestaande MariaDB-werkplek
 
 De geselecteerde werkdatabase is de bron voor zowel Govern als phpMyAdmin.
 Govern vraagt de catalogus op en bouwt daar zijn verkenner uit. Een nieuwe tabel verschijnt na
@@ -31,6 +199,10 @@ een backupservice maakt en
 herstelt SQL-exports. Het HTTP-bestand behandelt sessie, CSRF, foutstatus en JSON.
 Deze verdeling volgt verantwoordelijkheden, niet afzonderlijke overheidsdomeinen.
 
+Het native importscherm is onderdeel van `import-inspection.js`, naast
+de bestaande phpMyAdmin-import. Er is geen tweede SQL-parser of extra
+backendservice; de import werkt alleen op expliciet geselecteerde bestanden.
+
 De browser gebruikt herbruikbare onderdelen voor tabellen, meldingen, dialoog-
 vensters, SQL-blokken en API-verzoeken. Tabnamen uit de database zijn gegevens,
 geen uitvoerbare JavaScript of HTML.
@@ -47,6 +219,11 @@ De onderdelen hebben een kleine, duidelijke taak:
 | `dashboard-layout.js` | Blokvolgorde, breedtes, zichtbaarheid en een aparte bewerkingsversie |
 | `query-builder.js` | Het tijdelijke visuele queryontwerp en de toegepaste versie |
 | `schema-model.js` en `schema-visualizer.js` | Live relaties, diagramindeling en interactieve schemaverkenning |
+| `record-map.js`, `record-map.css` en `record-map-messages.js` | Eén Explore-canvas, bronbibliotheek, vragen en inspecteur |
+| `canvas-workspace.css` | Gedeelde canvasachtergrond, puntraster, afmetingen, kaarten en werkbalkmaterialen voor Schema en Explore |
+| `record-map-model.js` | Scoped recordidentiteit, selectie en lokale canvaspresentatie met begrensde Undo |
+| `RecordMap.php` | Alleen-lezen recordkeuze, inspectie en gepagineerde expansie van echte foreign keys |
+| `RecordExplorer.php` | Het behouden `GET explore`-contract voor bestaande clients |
 | `schema-navigation.js` | Alleen binnen het diagram genormaliseerde, muisgerichte scrollzoom |
 | `schema-help.js` | Een vertaalde schemagids in een native dialoog met focusbeheer en opruimen |
 | `selection-pointer.js` | Globale selectiepijl, Shift-selectie, vertraagde naamkaartjes en de uitlegdialoog |
@@ -97,7 +274,7 @@ De gedeelde phpMyAdmin-opslag blijft in de oorspronkelijke `DB_NAME`-database.
 
 ## Database toevoegen en SQL importeren
 
-De knop naast de databasekiezer opent een eigen, kleine dialoog. Een bestaande
+De actie in Gereedschap opent een eigen, kleine dialoog. Een bestaande
 database kiezen gebruikt de normale wisselstroom. Een naam voorbereiden gebruikt
 `POST prepare-database` met CSRF en de expliciete huidige databasescope. Het
 antwoord bevat de voorbereide naam, of die nieuw was, en de opnieuw uitgelezen
@@ -119,7 +296,20 @@ of vervangt niets. Herhalen is geschikt om een gedeeltelijk voltooide aanmaak of
 grantstap af te maken. De echte grants blijven in het MariaDB-volume bewaard en
 maken de nieuwe database bij een volgende start opnieuw zichtbaar.
 
-Voor importeren gebruikt Govern de echte phpMyAdmin. De extra snelkeuze
+Voor SQL-bestanden tot 256 KiB heeft Govern ook een beperkte eerste-partij import
+in de Import-tab. `NativeImport` hergebruikt `SqlScript`, `QueryRunner` en
+`ImportInspection`: eerst voorcontrole zonder uitvoering, daarna bevestiging
+van exact de databasenaam, vergelijking van de voorcontrole-token, exclusieve
+onderhoudslock en uitvoer met nacontrole. Bij een bestaande database met
+tabellen of views (ook verborgen interne applicatietabellen) wordt onder de exclusieve lock een herstelpunt
+gemaakt vóór uitvoering. De controle van structuur en rijen is best effort; bij
+grotere tabellen zijn aantallen expliciet onbekend. De SQL zelf is niet beperkt
+tot de geselecteerde database: het schrijvende account heeft ook rechten op
+andere geselecteerde databases. SQL kan daarom met `USE` of gekwalificeerde
+namen andere toegestane databases raken. De UI waarschuwt daarvoor en voert
+geen SQL uit zonder afzonderlijke bevestiging. Er is geen algemene undo.
+
+Voor grotere of complexe SQL-bestanden gebruikt Govern de echte phpMyAdmin. De extra snelkeuze
 **Import** opent de officiële database- of tabelimport met dezelfde context als
 de overige tabs. De gebruiker kiest zijn SQL-bestand en start de import daar;
 Govern leest of herschrijft het bestand niet met een eigen parser. Bij sluiten
@@ -253,13 +443,79 @@ framework, vectoropslag of training toegevoegd om dit eerste pad mogelijk te
 maken. Een toekomstige leesfunctie krijgt een afzonderlijke, begrensde
 toegangslaag; de vrije SQL-runner is daarvoor geen veilige automatische tool.
 
+## Flexibele Explore-werkplek
+
+De route `#verkennen` voegt de eerdere verkenner en recordkaart samen in één
+Database-weergave. `#verbanden` blijft een alias voor bestaande bookmarks.
+Het schemadiagram toont tabellen; Explore toont geselecteerde rijen en de
+verwijzingen die werkelijk op die rijen passen. Beide gebruiken de bestaande
+databasekiezer, catalogus en leesrechten.
+
+`RecordMap` bouwt op `Database` en `Catalog` en kent geen vast domeinmodel.
+De service valideert tabel, volledige recordsleutel en relatie aan de actuele
+catalogus, leest het bronrecord opnieuw en gebruikt gebonden waarden met
+engine-specifiek gequote identifiers. Inkomende relaties worden uit dezelfde
+catalogus afgeleid. Er is geen vrije SQL of schrijfverbinding in dit pad.
+Alle delen van samengestelde sleutels en foreign keys behouden hun volgorde.
+Sleutel- en relatiekolommen worden vóór PDO-conversie als engine-tekst gelezen.
+Daardoor komt identiteit niet uit afgeronde numerieke previews. Edges leveren
+volledige bron- en doelwaarden apart van eventueel verkorte recordvelden.
+
+`record-map-records` levert een gepagineerde keuze van beginrecords.
+`record-map` inspecteert een gekozen record of breidt één gekozen verwijzing
+uit. De reactie bevat punten, lijnen, beschikbare verwijzingen en herkomst:
+constraint, kolomparen, exacte sleutels, SQL en parameters. Pagina's laden
+bewust bij; de kaart doet geen volledige databasescan of automatische
+recursieve expansie. Niet-ondersteunde sleutels, views en externe schema's
+krijgen een herkenbare grens in de interface.
+
+`record-map.js` verzorgt canvas, bronbibliotheek en inspectie. Het zuivere
+`record-map-model.js` beheert de identiteit van records en lijnen, selectie en
+lokale presentatie. De bronbibliotheek kiest tabel en beginrecord; de vaste
+werkpleknavigatie blijft daarvan los. Een tweede vaste tabelkiezer naast de
+canvasbibliotheek wordt in Explore niet getoond.
+
+Kaarten kunnen worden verplaatst, vastgezet en uit het werkvlak verborgen.
+Orbit en Flow geven de kaart een andere indeling; Manual bewaart zelfgekozen
+posities. Uitbreiden plaatst nieuwe buren zonder bestaande kaarten opnieuw te
+rangschikken. Undo hoort alleen bij de canvaspresentatie: het schrijft geen
+gegevens terug en herstelt geen verouderde bronrecords, lijnen of cursors na
+opnieuw uitlezen. De bronbibliotheek en inspecteur kunnen worden verborgen,
+verplaatst en in breedte aangepast; op smalle schermen is één lade tegelijk open.
+
+Vragen horen bij dezelfde selectie, geladen records en relatiebeschrijvingen.
+Leesbare labels veranderen geen identifiers of records. Sleutels, constraint-
+namen en SQL zijn beschikbaar onder technische details. Het scherm maakt geen
+AI-interpretatie of causale uitleg uit alleen een foreign key.
+
+Openen in Records toont een afzonderlijk, opnieuw uitgelezen bronrecord met zijn sleutel, ook wanneer
+het niet op de eerste tabelpagina staat. De huidige Explore-werkplek voegt geen
+semantisch model, correlatieberekening, 3D-clustering of datakunst toe.
+Er verschijnen alleen uitgelezen databaseverbanden.
+
+Kaarttoestand staat in het bestaande per-scope werkplekgeheugen. De complete
+verbinding/database/schema-identiteit voorkomt vermenging van gelijknamige
+tabellen. Weggaan of wisselen annuleert leeswerk en negeert late antwoorden.
+Recordpreviews worden niet naar `localStorage` of `sessionStorage` geschreven;
+de bestaande per-tab keuze van de database blijft wel bewaard. Zie
+[RECORD_MAP.md](RECORD_MAP.md) voor gebruik en grenzen.
+
 ## Schemavisualisatie
 
-De route `#schema` biedt een afzonderlijk werkvlak om de hele database te
-verkennen. Vanuit Structuur kan de huidige tabel direct in het diagram worden
-geselecteerd. Vanuit het diagram blijven Gegevens en Structuur bereikbaar voor
-de gekozen tabel. De visualizer gebruikt dezelfde glasmaterialen, vertaalsleutels
+Schema groepeert tabeldetails (`#structuur`) en het diagram (`#schema`) onder
+één primaire Database-taak. Vanuit tabeldetails kan de huidige tabel direct in
+het diagram worden geselecteerd. Vanuit het diagram blijven Records en
+tabeldetails bereikbaar voor de gekozen tabel. De visualizer gebruikt dezelfde glasmaterialen, vertaalsleutels
 en instellingen als de andere schermen.
+
+Schema plaatst het diagram in een afzonderlijke `schema-scene`, zodat de
+achtergrondgloed losstaat van het verschuivende puntraster. Schema en Explore
+gebruiken dezelfde `workspace-canvas-scene`, `workspace-canvas-viewport` en
+`workspace-canvas-toolbar`-stijlen uit `canvas-workspace.css`. Dat bestand wordt
+na de afzonderlijke componentstijlen geladen. Dezelfde tokens regelen hoogte,
+afronding, schaduw en kleur in licht/donker en met minder transparantie. De
+transformatie van de schemaviewport werkt ook de rasterpositie bij. Dit wijzigt
+geen catalogusvragen, recordsleutels, opgeslagen posities of databasegegevens.
 
 `GET schema` haalt de metadata in drie gebonden catalogusqueries op via de
 leesverbinding. Alleen gedeclareerde foreign keys leveren verbindingen op;
@@ -295,6 +551,16 @@ verwijdert ook de scrollhandler. De bestaande zoomknoppen en toetsen blijven
 beschikbaar.
 
 ## Vormgeving
+
+`workspace-tools.js` verplaatst de bestaande werkplekbediening naar één
+gegroepeerde popover. IDs, handlers, rechten, disabled/hidden-toestand en
+actieve hulpmiddelen blijven bij de oorspronkelijke DOM-elementen. De
+databasekiezer en primaire phpMyAdmin-knop blijven in de bovenbalk. De
+non-modale popover gebruikt native focus en buitenklik, met een fallback voor
+browsers zonder Popover API. Sluiten vóór een handeling geeft nieuwe dialogen
+een zichtbare opener; de selectieaanwijzer gebruikt dezelfde Tools-knop als
+focusroute wanneer zijn eigen bediening verborgen is. Er is geen extra
+voorkeurenopslag, databaseactie of wijziging van de rechten.
 
 Govern gebruikt een open g als merk, systeemlettertypen en glasvlakken met brede,
 zachte schaduwen. Het standaardaccent is Lagoon; de gebruiker kan een ander
@@ -523,3 +789,43 @@ Werk de ontwerpdocumentatie en het API-contract in dezelfde wijziging bij.
 - [MariaDB SQL-exports](https://mariadb.com/docs/server/clients-and-utilities/backup-restore-and-import-clients/mariadb-dump)
 - [Ollama chat-API](https://docs.ollama.com/api/chat)
 - [Ollama-modelstatus](https://docs.ollama.com/api/tags)
+
+
+## Gedeelde import voor tabelbestanden
+
+De taak begint in Database openen → Bestanden importeren: lokaal bestand kiezen,
+voorvertonen, werkblad en bestemming controleren, expliciet bevestigen, importeren
+naar de zichtbare database en terugkeren naar de gewone live tabelverkenner.
+`DatasetImportPanel` bewaart tijdelijke bestands- en formulierconcepten per database.
+Taalwisselen behoudt het concept. Tijdens een verzoek blokkeren sluiten, tabwisselen
+en databasewisselen. Verzoeken houden hun oorspronkelijke database vast.
+
+`tabular.py` leest XLSX via de standaard ZIP/XML-lezer, CSV/TSV/TXT via `csv` en JSON
+via `json`/`decimal`. Geen netwerk, macro's, formule-evaluatie of uitgepakte paden.
+Elke lezer levert dezelfde beschrijving met kolommen, exacte tekstwaarden, NULL,
+rijaantallen en kwaliteitskenmerken. Een nieuwe lezer kan dat contract hergebruiken.
+Python draait als afzonderlijk lokaal proces zonder databasecredentials als argumenten.
+De procesomgeving is geërfd, maar de lezer gebruikt geen configuratie of netwerk.
+Bestandsgrootte, archiefinhoud, kolommen, rijen, CPU en procesgeheugen zijn begrensd.
+
+`DatasetImport` controleert de upload en voert alleen de door de gebruiker gekozen
+schrijfhandeling uit. Voorbeeld en import lezen het bestand onafhankelijk opnieuw.
+De SHA-256 uit het voorbeeld moet gelijk blijven. Beide routes controleren de gewone
+host-, origin-, sessie-, CSRF- en databasescopegrens. De lezer loopt vóór het nemen
+van de gedeelde onderhoudslock. Import zelf deelt de lock met andere appverzoeken.
+
+Nieuwe tabelnamen gebruiken een begrensde ASCII-regel. De tabel wordt eerst onder
+een willekeurige interne naam gevuld en pas daarna zonder overwrite hernoemd.
+Een fout ruimt alleen deze stagingtabel op. Bij een procescrash kan een interne
+stagingtabel achterblijven. Bestaande tabellen komen uit de catalogus en moeten
+InnoDB gebruiken, passende tekstkolommen hebben en hetzelfde structuurfingerprint
+houden. Een metadata-lock houdt hun structuur vast tijdens het transactionele
+invoegen. Een rijfout draait de volledige append terug. Externe SQL kan daarnaast
+actief blijven. Er is geen algemene undo of automatische deduplicatie; ook een
+expliciete tweede append voegt opnieuw toe. Een verloren HTTP-antwoord moet de
+gebruiker eerst via de tabel controleren.
+
+De voorbeeldgrafiek gebruikt alleen twintig voorbeeldrijen en zegt dat zichtbaar.
+Deze fase maakt geen relaties op grond van kolomnamen, geen blijvende grafieken en
+geen geografische weergave. De bestaande catalogus toont geïmporteerde tabellen na
+sluiten van het databasevenster. SQL blijft bij officiële phpMyAdmin.

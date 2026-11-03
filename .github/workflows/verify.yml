@@ -14,71 +14,167 @@ concurrency:
 jobs:
   compose:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 40
     env:
       DB_DATABASES: bestuursatlas,govern_multi_test
       GOVERN_TEST_SECOND_DATABASE: govern_multi_test
+      PG_ENABLED: "1"
+      PG_DATABASE: govern_pg
+      PG_SCHEMAS: public,archive
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Prepare isolated test account credentials
+        run: |
+          python3 - <<'PY'
+          import os
+          import secrets
+          password = secrets.token_urlsafe(36)
+          print('::add-mask::' + password)
+          with open(os.environ['GITHUB_ENV'], 'a') as environment:
+              environment.write('GOVERN_TEST_EMAIL=govern-ci@example.test\n')
+              environment.write('GOVERN_TEST_PASSWORD=' + password + '\n')
+          PY
+      - name: Startup gateway reload checks
+        run: |
+          python3 tests/start-gateway-reload.py
+          python3 tests/postgres-demo-loader-unit.py
       - name: Start an isolated Docker stack
         run: sh start.sh
+      - name: Initialize the test installation owner through registration
+        run: python3 tests/auth_http.py --initialize
+      - name: Prepare the explicitly isolated PostgreSQL fixtures
+        run: |
+          docker compose --profile postgres exec -T postgres sh -c 'test "$POSTGRES_DB" = govern_pg && exec psql --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" --set ON_ERROR_STOP=1' < tests/postgres-fixture.sql
+      - name: Prepare the explicitly isolated PostgreSQL row fixtures
+        run: |
+          docker compose --profile postgres exec -T postgres sh -c 'test "$POSTGRES_DB" = govern_pg && exec psql --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" --set ON_ERROR_STOP=1' < tests/postgres-row-fixture.sql
+      - name: PostgreSQL scoped writer and repeat provisioning
+        run: python3 tests/postgres-provisioning-integration.py --confirm-project=govern --confirm-database=govern_pg
+      - name: PostgreSQL sample data and repeat loading
+        run: python3 tests/postgres-demo-integration.py --confirm-project=govern --confirm-database=govern_pg
+      - name: Dataset readers
+        run: python3 tests/dataset-readers.py
       - name: PHP syntax
         run: |
           docker compose exec -T app sh -c 'find /var/www/src /var/www/public -name "*.php" -exec php -l {} \;'
           docker compose exec -T database-manager sh -c 'find /opt/govern/docker/database-manager -name "*.php" -exec php -l {} \;'
       - name: Focused backend checks
         run: |
-          docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" app php /workspace/tests/backend_unit.php
-          docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" app php /workspace/tests/sql_script_unit.php
-          docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" app php /workspace/tests/backup_unit.php
-          docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" app php /workspace/tests/backend_localization.php
-          docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" app php /workspace/tests/ai_unit.php
-          docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" app php /workspace/tests/ai_provider_unit.php
-          docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" app php -d allow_url_fopen=0 -d disable_functions=fsockopen,pfsockopen,stream_socket_client,stream_socket_server,socket_create,socket_connect,curl_exec,exec,shell_exec,system,passthru,popen,proc_open /workspace/tests/local_code_search_unit.php
-          docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" app php /workspace/tests/ai_project_unit.php
-          docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" app php /workspace/tests/database_provisioner_unit.php
+          docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/backend_unit.php
+          docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/postgres_scope_unit.php
+          docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/sql_script_unit.php
+          docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/native_import_unit.php
+          docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/backup_unit.php
+          docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/backend_localization.php
+          docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/ai_unit.php
+          docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/ai_provider_unit.php
+          docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app -d allow_url_fopen=0 -d disable_functions=fsockopen,pfsockopen,stream_socket_client,stream_socket_server,socket_create,socket_connect,curl_exec,exec,shell_exec,system,passthru,popen,proc_open /workspace/tests/local_code_search_unit.php
+          docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/ai_project_unit.php
+          docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/database_provisioner_unit.php
+          docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/auth_unit.php
+      - name: Isolated authentication HTTP integration
+        run: |
+          if ! command -v php >/dev/null || ! php -r 'exit(extension_loaded("pdo_sqlite") ? 0 : 1);'; then
+            sudo apt-get update -qq
+            sudo apt-get install -y --no-install-recommends php-cli php-sqlite3
+          fi
+          python3 tests/auth-integration.py
+      - name: PostgreSQL catalog and read-only permissions
+        run: docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/postgres-integration.php --confirm-database=govern_pg
+      - name: PostgreSQL exact row editing and conflict checks
+        run: docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/postgres-row-integration.php --confirm-database=govern_pg
+      - name: Read-only record neighborhoods and exact identities
+        run: docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/record-explorer-integration.php --confirm-database=bestuursatlas --confirm-postgres=govern_pg
       - name: Real database integration
         run: |
-          docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" app php /workspace/tests/backend_integration.php --confirm-database=bestuursatlas
-          docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" app php /workspace/tests/free-sql-integration.php --confirm-database=bestuursatlas
-          docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" -e GOVERN_TEST_SECOND_DATABASE app php /workspace/tests/multidatabase-row-integration.php --confirm-database=bestuursatlas --confirm-second-database=govern_multi_test
-          docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" -e GOVERN_TEST_SECOND_DATABASE app php /workspace/tests/ai-integration.php --confirm-database=bestuursatlas
-          docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" app php /workspace/tests/database-provisioning-integration.php --confirm-database=bestuursatlas
+          docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/backend_integration.php --confirm-database=bestuursatlas
+          docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/free-sql-integration.php --confirm-database=bestuursatlas
+          docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" -e GOVERN_TEST_SECOND_DATABASE app /workspace/tests/multidatabase-row-integration.php --confirm-database=bestuursatlas --confirm-second-database=govern_multi_test
+          docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" -e GOVERN_TEST_SECOND_DATABASE app /workspace/tests/ai-integration.php --confirm-database=bestuursatlas
+          docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/database-provisioning-integration.php --confirm-database=bestuursatlas
+      - name: Tabular dataset integration
+        run: docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/dataset-import-integration.php --confirm-database=bestuursatlas
       - name: Backup and recovery integration
-        run: docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" app php /workspace/tests/backup_integration.php --confirm-database=bestuursatlas
+        run: docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/backup_integration.php --confirm-database=bestuursatlas
+      - name: Prepare explicitly isolated record-map fixtures
+        id: map-fixtures
+        run: |
+          docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" -e GOVERN_TEST_SECOND_DATABASE app /workspace/tests/record-map-fixture.php --confirm-database=bestuursatlas --confirm-second-database=govern_multi_test
+          docker compose --profile postgres exec -T postgres sh -c 'test "$POSTGRES_DB" = govern_pg && exec psql --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" --set ON_ERROR_STOP=1' < tests/record-map-postgres-fixture.sql
+      - name: Record-map identity, relationships and source evidence
+        run: |
+          docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/record-map-integration.php --engine=mariadb --confirm-database=bestuursatlas
+          docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/record-map-integration.php --engine=postgres --confirm-database=govern_pg
       - name: Proxy follows recreated web containers
         run: GOVERN_DOCKER_NETWORK_TEST=1 python3 tests/proxy-restart-smoke.py --confirm-project=govern
       - name: HTTP and phpMyAdmin integration
-        run: python3 tests/smoke.py --base-url http://127.0.0.1:8080
+        run: |
+          python3 tests/smoke.py --base-url http://127.0.0.1:8080
+          python3 tests/auth-gateway.py --base-url http://127.0.0.1:8080
+          python3 tests/postgres-http.py --base-url http://127.0.0.1:8080 --confirm-database=govern_pg
+          python3 tests/postgres-row-http.py --base-url http://127.0.0.1:8080 --confirm-database=govern_pg
+          python3 tests/record-explorer-http.py --base-url http://127.0.0.1:8080 --confirm-database=govern_pg
+          python3 tests/record-map-http.py --base-url http://127.0.0.1:8080 --confirm-fixtures=record-map-ci
       - name: Browser and visual query builder
         run: |
           node tests/i18n-unit.mjs
+          node tests/api-scope-unit.mjs
+          node tests/record-map-model-unit.mjs
+          node tests/explore-canvas-model-unit.mjs
           node tests/frontend-messages-unit.mjs
           node tests/preferences-unit.mjs
           node tests/dashboard-layout-unit.mjs
           node tests/schema-model-unit.mjs
           node tests/schema-navigation-unit.mjs
           node tests/selection-content-unit.mjs
+          node tests/record-explorer-unit.mjs
+          node tests/explorer-guide-unit.mjs
+          node tests/modal-geometry-unit.mjs
+          node tests/companion-model-unit.mjs
+          node tests/companion-channel-unit.mjs
           npm install --no-save --ignore-scripts --prefix "$RUNNER_TEMP/govern-browser" playwright@1.62.1
           export PLAYWRIGHT_MODULE="$RUNNER_TEMP/govern-browser/node_modules/playwright"
           BROWSER_BIN="$(command -v google-chrome)"
           export BROWSER_BIN
           export BASE_URL=http://127.0.0.1:8080
           export GOVERN_UI_WRITE_TESTS=1
-          node tests/database-import-smoke.mjs
-          node tests/frontend-smoke.mjs
-          node tests/query-builder-smoke.mjs
-          node tests/ui-settings-smoke.mjs
-          node tests/schema-visualizer-smoke.mjs
-          node tests/workspace-navigation-smoke.mjs
-          node tests/selection-pointer-smoke.mjs
-          node tests/free-sql-smoke.mjs
-          node tests/multidatabase-row-smoke.mjs
-          node tests/ai-workspace-smoke.mjs
-          node tests/ai-project-smoke.mjs
+          failed_suites=()
+          for suite in \
+            tests/record-map-smoke.mjs \
+            tests/homepage-auth-smoke.mjs \
+            tests/postgres-smoke.mjs \
+            tests/postgres-row-smoke.mjs \
+            tests/postgres-cached-api-smoke.mjs \
+            tests/postgres-demo-smoke.mjs \
+            tests/record-explorer-smoke.mjs \
+            tests/explorer-guide-smoke.mjs \
+            tests/modal-windows-smoke.mjs \
+            tests/companion-smoke.mjs \
+            tests/dataset-import-smoke.mjs \
+            tests/database-import-smoke.mjs \
+            tests/frontend-smoke.mjs \
+            tests/query-builder-smoke.mjs \
+            tests/ui-settings-smoke.mjs \
+            tests/schema-visualizer-smoke.mjs \
+            tests/workspace-navigation-smoke.mjs \
+            tests/workspace-tools-smoke.mjs \
+            tests/selection-pointer-smoke.mjs \
+            tests/free-sql-smoke.mjs \
+            tests/multidatabase-row-smoke.mjs \
+            tests/ai-workspace-smoke.mjs \
+            tests/ai-project-smoke.mjs
+          do
+            if ! node "$suite"; then
+              failed_suites+=("$suite")
+            fi
+          done
+          if ((${#failed_suites[@]})); then
+            printf 'Browser suite failed: %s\n' "${failed_suites[@]}"
+            exit 1
+          fi
       - name: Logs on failure
         if: failure()
         run: docker compose logs --tail=100
       - name: Stop this isolated test stack
         if: always()
-        run: docker compose down
+        run: docker compose --profile postgres down

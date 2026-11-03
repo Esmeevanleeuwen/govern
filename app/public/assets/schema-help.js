@@ -1,12 +1,12 @@
 import {el, icon, button} from './ui.js';
 import {t} from './i18n.js';
+import {attachDialog} from './modal-shell.js';
 import './schema-help-messages.js';
 
 /** A local guide: every described action already belongs to the Schema workspace. */
 export function createSchemaHelp({state = {}} = {}) {
     let destroyed = false;
     let opener;
-    let outsidePress = false;
     const trigger = button(t('app.schemaHelp.open'), () => open(), {
         id: 'schema-help-open', symbol: 'info', className: 'schema-help-trigger',
         'aria-haspopup': 'dialog', 'aria-controls': 'schema-help-dialog',
@@ -35,6 +35,7 @@ export function createSchemaHelp({state = {}} = {}) {
     dialog.append(el('header', {class: 'schema-help-header'}, el('div', {}, title), close), content,
         el('footer', {class: 'schema-help-footer'}, button(t('app.schemaHelp.done'), () => dialog.close(), {id: 'schema-help-done', kind: 'primary'})));
     document.body.append(dialog);
+    const shell = attachDialog(dialog, {handle: '.schema-help-header'});
 
     function open(restoring = false) {
         if (destroyed || dialog.open) return;
@@ -63,15 +64,6 @@ export function createSchemaHelp({state = {}} = {}) {
             (event.shiftKey ? last : first).focus({preventScroll: true});
         }
     });
-    const outside = event => {
-        const box = dialog.getBoundingClientRect();
-        return event.target === dialog && (event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom);
-    };
-    dialog.addEventListener('pointerdown', event => { outsidePress = outside(event); });
-    dialog.addEventListener('click', event => {
-        if (outsidePress && outside(event)) dialog.close();
-        outsidePress = false;
-    });
     if (state.helpOpen) open(true);
 
     return {button: trigger, destroy() {
@@ -80,6 +72,7 @@ export function createSchemaHelp({state = {}} = {}) {
         // A language remount keeps the guide open; leaving Schema disposes it.
         state.helpOpen = dialog.open && window.location.hash.slice(1).split('?')[0] === 'schema';
         if (dialog.open) dialog.close();
+        shell.destroy();
         dialog.remove();
     }};
 }

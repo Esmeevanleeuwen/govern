@@ -1,3 +1,4 @@
+import {selectWorkspaceLanguage, clickWorkspaceTool} from './workspace-tools.mjs';
 /**
  * Real browser check of Govern language, appearance and dashboard continuity.
  * Run against an isolated local stack seeded with Bestuursatlas.
@@ -6,6 +7,7 @@
  * phpMyAdmin can save its own interface preferences in the test database.
  * GOVERN_UI_WRITE_TESTS=1 adds a temporary saved-query discard check and cleanup.
  */
+import {authenticatedContext} from './auth-session.mjs';
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 import {mkdir} from 'node:fs/promises';
@@ -21,7 +23,7 @@ const screenshots = process.env.SCREENSHOTS_DIR;
 if (screenshots) await mkdir(screenshots, {recursive: true});
 const browser = await chromium.launch({headless: true, args,
     ...(process.env.BROWSER_BIN ? {executablePath: process.env.BROWSER_BIN} : {})});
-const context = await browser.newContext({locale: 'nl-NL', viewport: {width: 1440, height: 1000}});
+const context = await authenticatedContext(browser, base, {locale: 'nl-NL', viewport: {width: 1440, height: 1000}});
 const page = await context.newPage();
 const errors = [];
 page.on('pageerror', error => errors.push(error.message));
@@ -40,6 +42,10 @@ const navigate = async route => {
         if (!['gegevens', 'structuur', 'schema'].includes(current)) {
             await page.locator('#navigation [data-area="database"]').click();
         }
+        if (route === 'structuur' && !await page.locator('[data-database-view="structuur"]').count()) {
+            await page.locator('[data-database-view="schema"]').click();
+            await page.locator('#schema-viewport').waitFor();
+        }
         await page.locator('[data-database-view="' + route + '"]').click();
     } else await page.locator('#navigation [data-route="' + route + '"]').click();
     await page.waitForFunction(expected => location.hash.split('?')[0] === '#' + expected, route);
@@ -52,7 +58,7 @@ const settings = async () => {
     await page.locator('#preference-theme').waitFor();
 };
 const language = async value => {
-    await page.locator('#language-select').selectOption(value);
+    await selectWorkspaceLanguage(page, value);
     await page.waitForFunction(expected => document.documentElement.lang === expected, value);
 };
 const order = () => page.locator('.dashboard-block[data-block-id]').evaluateAll(nodes => nodes.map(node => node.dataset.blockId));
@@ -110,8 +116,8 @@ const verifyRestoreGuard = async () => {
     });
     let sibling;
     try {
-        await restorePage.goto(new URL('/#experimenten', base).href, {waitUntil: 'networkidle'});
-        await restorePage.locator('#language-select').selectOption('en');
+        await restorePage.goto(new URL('/workspace.php#experimenten', base).href, {waitUntil: 'networkidle'});
+        await selectWorkspaceLanguage(restorePage, 'en');
         await restorePage.locator('[data-snapshot-action="restore"]').nth(1).waitFor();
         const database = await restorePage.evaluate(async () => (await (await fetch('/api.php?action=bootstrap')).json()).data.database.name);
         await restorePage.locator('[data-snapshot-action="restore"]').first().click();
@@ -134,7 +140,7 @@ const verifyRestoreGuard = async () => {
         // again; all snapshot actions must remain disabled in the new DOM.
         sibling = await context.newPage();
         sibling.on('pageerror', error => errors.push(error.message));
-        await sibling.goto(new URL('/#instellingen', base).href, {waitUntil: 'networkidle'});
+        await sibling.goto(new URL('/workspace.php#instellingen', base).href, {waitUntil: 'networkidle'});
         const translatedList = restorePage.waitForResponse(response => {
             const url = new URL(response.url());
             return url.pathname === '/api.php' && url.searchParams.get('action') === 'snapshots';
@@ -170,8 +176,8 @@ const verifyExampleDraft = async () => {
     draftPage.on('pageerror', error => errors.push(error.message));
     let savedId;
     try {
-        await draftPage.goto(new URL('/#instellingen', base).href, {waitUntil: 'networkidle'});
-        await draftPage.locator('#language-select').selectOption('en');
+        await draftPage.goto(new URL('/workspace.php#instellingen', base).href, {waitUntil: 'networkidle'});
+        await selectWorkspaceLanguage(draftPage, 'en');
         const name = 'Example draft UI-test ' + Date.now();
         const originalSql = "SELECT 'original saved question' AS source;";
         savedId = await draftPage.evaluate(async ({name, sql}) => {
@@ -214,7 +220,7 @@ const verifyExampleDraft = async () => {
 };
 
 try {
-    await page.goto(new URL('/#onderzoeken?table=digital_systems', base).href, {waitUntil: 'networkidle'});
+    await page.goto(new URL('/workspace.php#onderzoeken?table=digital_systems', base).href, {waitUntil: 'networkidle'});
     await page.locator('.builder-actions button').waitFor();
     assert.equal(await page.locator('#language-select').inputValue(), 'nl');
     await page.getByRole('button', {name: 'Kolomkeuze wissen voor de basistabel', exact: true}).click();
@@ -253,7 +259,7 @@ try {
 
     // A preference change from another tab must translate the shell without
     // navigating an actively used phpMyAdmin document and losing its draft.
-    await page.locator('#open-database').click();
+    await clickWorkspaceTool(page, '#open-database');
     await page.locator('#database-dialog[open]').waitFor();
     await page.locator('.frame-message').waitFor({state: 'hidden'});
     await page.getByRole('tab', {name: 'SQL', exact: true}).click();
@@ -264,7 +270,7 @@ try {
     await frame.evaluate(() => { window.governUnsavedDocument = 'keep-this-active-document'; });
     const sibling = await page.context().newPage();
     sibling.on('pageerror', error => errors.push(error.message));
-    await sibling.goto(new URL('/#instellingen', base).href, {waitUntil: 'networkidle'});
+    await sibling.goto(new URL('/workspace.php#instellingen', base).href, {waitUntil: 'networkidle'});
     await sibling.locator('#preference-language').selectOption('en');
     await page.waitForFunction(() => document.documentElement.lang === 'en');
     await page.locator('#database-title').filter({hasText: 'Database workspace'}).waitFor();
@@ -273,7 +279,7 @@ try {
     await sibling.close();
     await page.locator('#database-dialog').getByRole('button', {name: 'Close', exact: true}).click();
     await page.locator('#database-dialog').waitFor({state: 'hidden'});
-    await page.locator('#open-database').click();
+    await clickWorkspaceTool(page, '#open-database');
     await page.locator('.frame-message').waitFor({state: 'hidden'});
     assert.equal(new URL(await page.locator('#database-frame').getAttribute('src'), base).searchParams.get('lang'), 'en',
         'The next explicit opening uses the newly selected language.');

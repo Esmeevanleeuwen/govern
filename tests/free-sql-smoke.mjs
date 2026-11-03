@@ -1,4 +1,6 @@
+import {clickWorkspaceTool, selectWorkspaceLanguage} from './workspace-tools.mjs';
 /** Exercise writable SQL and routine results only in an isolated local stack. */
+import {authenticatedPage} from './auth-session.mjs';
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 import {mkdir} from 'node:fs/promises';
@@ -12,7 +14,7 @@ assert.ok(['127.0.0.1', 'localhost', '[::1]'].includes(base.hostname), 'Use a di
 const args = process.env.BROWSER_ARGS_JSON ? JSON.parse(process.env.BROWSER_ARGS_JSON) : ['--no-sandbox'];
 const browser = await chromium.launch({headless: true, args,
     ...(process.env.BROWSER_BIN ? {executablePath: process.env.BROWSER_BIN} : {})});
-const page = await browser.newPage({locale: 'nl-NL', viewport: {width: 1440, height: 1100}});
+const page = await authenticatedPage(browser, base, {locale: 'nl-NL', viewport: {width: 1440, height: 1100}});
 const errors = [];
 page.on('pageerror', error => errors.push(error.message));
 const suffix = Date.now().toString(16) + Math.random().toString(16).slice(2, 8);
@@ -72,7 +74,7 @@ const exists = async () => {
 };
 
 try {
-    await page.goto(new URL('/#onderzoeken', base).href, {waitUntil: 'networkidle'});
+    await page.goto(new URL('/workspace.php#onderzoeken', base).href, {waitUntil: 'networkidle'});
     await page.locator('#sql-editor').waitFor();
     const sql = `CREATE TABLE ${table} (id BIGINT UNSIGNED PRIMARY KEY, label VARCHAR(80), amount DECIMAL(30,2)) ENGINE=InnoDB;
 INSERT INTO ${table} VALUES (9007199254740993, 'original', 123456789012345678901234.12);
@@ -118,9 +120,9 @@ CALL ${procedure}();`;
     });
     assert.equal(metadata.snapshot, true);
     assert.equal(metadata.table, undefined, 'CALL aliases cannot invent a source table.');
-    await page.locator('#selection-pointer-toggle').click();
+    await clickWorkspaceTool(page, '#selection-pointer-toggle');
     await secondCell.click();
-    await page.locator('#selection-pointer-count').click();
+    await clickWorkspaceTool(page, '#selection-pointer-count');
     await page.locator('#selection-pointer-more').click();
     const explanation = page.locator('#selection-pointer-dialog[open]');
     await explanation.waitFor();
@@ -135,7 +137,7 @@ CALL ${procedure}();`;
     await page.locator('.query-warnings').waitFor();
     await page.locator('.query-warnings summary').click();
     assert.match(await page.locator('.query-warnings').innerText(), /not-a-number/);
-    await page.locator('#language-select').selectOption('en');
+    await selectWorkspaceLanguage(page, 'en');
     await page.locator('.query-warnings summary').filter({hasText: 'Database messages'}).waitFor();
     assert.equal(await page.locator('#sql-editor').inputValue(), warnedSql);
     assert.equal((await page.locator('.query-result').innerText()).includes('app.core.'), false);
