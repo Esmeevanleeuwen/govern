@@ -34,6 +34,9 @@ const ready = async () => {
         const first = page.locator('#record-map-records [data-map-record]').first();
         await first.waitFor(); await first.focus(); await first.press('Enter');
     }
+    const moreActions = page.locator('#record-map-inspector .record-map-more-actions');
+    await moreActions.waitFor();
+    if (!await moreActions.evaluate(element => element.open)) await moreActions.locator('summary').click();
     await page.locator('#explorer-open-window').waitFor();
 };
 const countWindows = count => page.waitForFunction(count => document.querySelectorAll('dialog.record-window[open]').length === count, count);

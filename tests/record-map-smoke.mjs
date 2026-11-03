@@ -184,6 +184,7 @@ try {
     await page.locator('[data-record-node="' + info.focus.id + '"]').focus();
     await page.locator('[data-record-node="' + info.focus.id + '"]').press('Enter');
     const refreshSource = () => inspection.getByRole('button', {name: 'Read source again', exact: true});
+    await reveal(refreshSource());
     let reread = mapResponse('mariadb', undefined);
     await refreshSource().click();
     await reread;
@@ -200,6 +201,7 @@ try {
     });
     await page.locator('[data-record-relation="' + incoming.id + '"]').click();
     await bounded(expansionHeld);
+    await reveal(refreshSource());
     reread = mapResponse('mariadb', undefined);
     await refreshSource().click();
     await reread;
