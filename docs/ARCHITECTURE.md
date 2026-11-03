@@ -272,7 +272,7 @@ De gedeelde phpMyAdmin-opslag blijft in de oorspronkelijke `DB_NAME`-database.
 
 ## Database toevoegen en SQL importeren
 
-De knop naast de databasekiezer opent een eigen, kleine dialoog. Een bestaande
+De actie in Gereedschap opent een eigen, kleine dialoog. Een bestaande
 database kiezen gebruikt de normale wisselstroom. Een naam voorbereiden gebruikt
 `POST prepare-database` met CSRF en de expliciete huidige databasescope. Het
 antwoord bevat de voorbereide naam, of die nieuw was, en de opnieuw uitgelezen
@@ -470,6 +470,16 @@ verwijdert ook de scrollhandler. De bestaande zoomknoppen en toetsen blijven
 beschikbaar.
 
 ## Vormgeving
+
+`workspace-tools.js` verplaatst de bestaande werkplekbediening naar één
+gegroepeerde popover. IDs, handlers, rechten, disabled/hidden-toestand en
+actieve hulpmiddelen blijven bij de oorspronkelijke DOM-elementen. De
+databasekiezer en primaire phpMyAdmin-knop blijven in de bovenbalk. De
+non-modale popover gebruikt native focus en buitenklik, met een fallback voor
+browsers zonder Popover API. Sluiten vóór een handeling geeft nieuwe dialogen
+een zichtbare opener; de selectieaanwijzer gebruikt dezelfde Tools-knop als
+focusroute wanneer zijn eigen bediening verborgen is. Er is geen extra
+voorkeurenopslag, databaseactie of wijziging van de rechten.
 
 Govern gebruikt een open g als merk, systeemlettertypen en glasvlakken met brede,
 zachte schaduwen. Het standaardaccent is Lagoon; de gebruiker kan een ander

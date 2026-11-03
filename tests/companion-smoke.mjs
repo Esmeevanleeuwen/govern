@@ -74,7 +74,7 @@ try {
     assert.ok(portal && reporter, 'Load the optional fictional PostgreSQL sample records.');
     await page.evaluate(() => { window.companionSmokeOpen = window.open; window.open = () => null; });
     await page.locator('#explorer-companion-open').click();
-    await page.locator('#open-companion[data-companion-status="blocked"]').waitFor();
+    await page.locator('#open-companion[data-companion-status="blocked"]').waitFor({state: 'attached'});
     assert.equal(await page.locator('#companion-launch-notice').isVisible(), true, 'Blocked popups have a visible retry path.');
     await page.evaluate(() => { window.open = window.companionSmokeOpen; });
     companion = await opened(page);

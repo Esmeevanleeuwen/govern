@@ -129,6 +129,7 @@ jobs:
             tests/ui-settings-smoke.mjs \
             tests/schema-visualizer-smoke.mjs \
             tests/workspace-navigation-smoke.mjs \
+            tests/workspace-tools-smoke.mjs \
             tests/selection-pointer-smoke.mjs \
             tests/free-sql-smoke.mjs \
             tests/multidatabase-row-smoke.mjs \

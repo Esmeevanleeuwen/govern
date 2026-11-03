@@ -1,3 +1,4 @@
+import {selectWorkspaceLanguage} from './workspace-tools.mjs';
 /** Real read-only graph/table/explanation interaction against isolated fixtures. */
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
@@ -130,11 +131,11 @@ try {
     await loaded(publicKey, 'Riverside Council');
     const selectedBeforeLanguage = await page.locator('#explorer-record').inputValue();
     await page.getByLabel('Starting table', {exact: true}).waitFor();
-    await page.locator('#language-select').selectOption('nl');
+    await selectWorkspaceLanguage(page, 'nl');
     await loaded(publicKey, 'Riverside Council');
     assert.equal(await page.locator('#explorer-record').inputValue(), selectedBeforeLanguage, 'Language changes preserve the selected root record.');
     await page.getByLabel('Begintabel', {exact: true}).waitFor();
-    await page.locator('#language-select').selectOption('en');
+    await selectWorkspaceLanguage(page, 'en');
     await loaded(publicKey, 'Riverside Council');
 
     // Each scope remembers its database tab. Establish Explore for archive in

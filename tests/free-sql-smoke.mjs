@@ -1,3 +1,4 @@
+import {clickWorkspaceTool, selectWorkspaceLanguage} from './workspace-tools.mjs';
 /** Exercise writable SQL and routine results only in an isolated local stack. */
 import {authenticatedPage} from './auth-session.mjs';
 import assert from 'node:assert/strict';
@@ -119,9 +120,9 @@ CALL ${procedure}();`;
     });
     assert.equal(metadata.snapshot, true);
     assert.equal(metadata.table, undefined, 'CALL aliases cannot invent a source table.');
-    await page.locator('#selection-pointer-toggle').click();
+    await clickWorkspaceTool(page, '#selection-pointer-toggle');
     await secondCell.click();
-    await page.locator('#selection-pointer-count').click();
+    await clickWorkspaceTool(page, '#selection-pointer-count');
     await page.locator('#selection-pointer-more').click();
     const explanation = page.locator('#selection-pointer-dialog[open]');
     await explanation.waitFor();
@@ -136,7 +137,7 @@ CALL ${procedure}();`;
     await page.locator('.query-warnings').waitFor();
     await page.locator('.query-warnings summary').click();
     assert.match(await page.locator('.query-warnings').innerText(), /not-a-number/);
-    await page.locator('#language-select').selectOption('en');
+    await selectWorkspaceLanguage(page, 'en');
     await page.locator('.query-warnings summary').filter({hasText: 'Database messages'}).waitFor();
     assert.equal(await page.locator('#sql-editor').inputValue(), warnedSql);
     assert.equal((await page.locator('.query-result').innerText()).includes('app.core.'), false);

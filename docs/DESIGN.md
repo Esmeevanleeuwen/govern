@@ -134,7 +134,24 @@ the phpMyAdmin iframe to update window chrome, position, language or theme.
 
 Workspace navigation uses a slim muted scrollbar. Hide the outer document
 scrollbar while retaining document, keyboard and touch scrolling. Keep the
-database picker, add action and connection status together, including on mobile.
+database picker and connection status together, including on mobile. Database
+creation and import remain available in the compact Tools menu.
+
+## Compact workspace header
+
+Keep the database picker and Open database visible in one compact row. Group
+secondary actions in a labelled Tools disclosure: exploration, database tools
+and preferences. The panel shows full action labels, native language selection
+and the current disabled/hidden states. On narrow screens use accessible icon
+buttons in the header and retain full labels inside the panel. Keep connection
+status as an inline dot with its text available to assistive technology and a
+tooltip. Active tools have a small header indicator.
+
+Use a nonmodal popover, with outside/Escape dismissal, natural Tab navigation
+and a visible focus route back to Tools. Opening a dialog or assistant closes
+the menu before activating the original control. Language changes preserve
+the open panel and current work. Preserve the original control nodes and
+listeners; relocating presentation must not change scope or capabilities.
 
 ## Second-screen companion
 
@@ -378,8 +395,8 @@ theme and language updates; only explicit tool navigation loads another page.
 
 ### Add a database and import SQL
 
-Keep one compact, labelled create/import action beside the shared database
-selector. It opens a focused glass dialog rather than another permanent sidebar.
+Keep one labelled create/import action in the Tools menu beside the shared
+database selector. It opens a focused glass dialog.
 The dialog offers existing database choice and import, plus a name field for a
 new database. Keep the selected target visible in every action; changing the
 name must not silently change the active workspace before the request succeeds.

@@ -1,3 +1,4 @@
+import {selectWorkspaceLanguage} from './workspace-tools.mjs';
 /**
  * Real browser check of Govern language, appearance and dashboard continuity.
  * Run against an isolated local stack seeded with Bestuursatlas.
@@ -53,7 +54,7 @@ const settings = async () => {
     await page.locator('#preference-theme').waitFor();
 };
 const language = async value => {
-    await page.locator('#language-select').selectOption(value);
+    await selectWorkspaceLanguage(page, value);
     await page.waitForFunction(expected => document.documentElement.lang === expected, value);
 };
 const order = () => page.locator('.dashboard-block[data-block-id]').evaluateAll(nodes => nodes.map(node => node.dataset.blockId));
@@ -112,7 +113,7 @@ const verifyRestoreGuard = async () => {
     let sibling;
     try {
         await restorePage.goto(new URL('/workspace.php#experimenten', base).href, {waitUntil: 'networkidle'});
-        await restorePage.locator('#language-select').selectOption('en');
+        await selectWorkspaceLanguage(restorePage, 'en');
         await restorePage.locator('[data-snapshot-action="restore"]').nth(1).waitFor();
         const database = await restorePage.evaluate(async () => (await (await fetch('/api.php?action=bootstrap')).json()).data.database.name);
         await restorePage.locator('[data-snapshot-action="restore"]').first().click();
@@ -172,7 +173,7 @@ const verifyExampleDraft = async () => {
     let savedId;
     try {
         await draftPage.goto(new URL('/workspace.php#instellingen', base).href, {waitUntil: 'networkidle'});
-        await draftPage.locator('#language-select').selectOption('en');
+        await selectWorkspaceLanguage(draftPage, 'en');
         const name = 'Example draft UI-test ' + Date.now();
         const originalSql = "SELECT 'original saved question' AS source;";
         savedId = await draftPage.evaluate(async ({name, sql}) => {

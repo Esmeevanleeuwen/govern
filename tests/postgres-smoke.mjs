@@ -32,7 +32,8 @@ try {
     assert.equal(await page.locator('[data-postgres-read-only]').count(), 1);
     assert.equal(await page.locator('#open-database').isDisabled(), true);
     assert.equal(await page.locator('#add-row, [data-row-action]').count(), 0);
-    assert.equal(await page.locator('#context-export').isVisible(), false);
+    assert.equal(await page.locator('#context-export').evaluate(link => link.hidden), true,
+        'PostgreSQL disables export independently of whether Tools is open.');
     assert.equal(await page.locator('[data-area="research"]').isVisible(), false);
     assert.equal(await page.locator('[data-area="experiments"]').isVisible(), false);
     assert.ok((await row('literal%_value').first().textContent()).includes('123456789012345678901234.12'));

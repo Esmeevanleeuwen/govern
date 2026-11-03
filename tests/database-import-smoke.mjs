@@ -1,3 +1,4 @@
+import {ensureWorkspaceTools, clickWorkspaceTool} from './workspace-tools.mjs';
 /** Real database creation and official phpMyAdmin SQL-file import, isolated stack only. */
 import {authenticatedContext} from './auth-session.mjs';
 import assert from 'node:assert/strict';
@@ -64,7 +65,7 @@ const switchDatabase = async name => {
     await waitWorkspace(name);
 };
 const openManager = async () => {
-    await page.locator('#manage-databases').click();
+    await clickWorkspaceTool(page, '#manage-databases');
     await manager.waitFor({state: 'visible'});
 };
 const closeManager = async () => {
@@ -250,13 +251,13 @@ try {
     await openManager();
     await nameInput.fill('retained_cancel_draft');
     await closeManager();
-    await page.waitForFunction(() => document.activeElement?.id === 'manage-databases');
+    await page.waitForFunction(() => document.activeElement?.id === 'workspace-tools-toggle');
 
     const mobile = await context.newPage();
     await mobile.setViewportSize({width: 320, height: 900});
     await mobile.goto(new URL('/workspace.php#overzicht?' + new URLSearchParams({database: first}), base).href, {waitUntil: 'networkidle'});
-    await mobile.locator('#manage-databases:not([disabled])').waitFor();
-    await mobile.locator('#manage-databases').click();
+    await ensureWorkspaceTools(mobile, '#manage-databases:not([disabled])');
+    await clickWorkspaceTool(mobile, '#manage-databases');
     await mobile.locator('#database-manager-dialog[open]').waitFor();
     assert.equal(await mobile.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
     assert.equal(await mobile.locator('#database-manager-dialog').evaluate(node => node.scrollWidth <= innerWidth), true);

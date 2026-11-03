@@ -3,6 +3,37 @@
 Stand van de controles: **3 november 2026**. Eerdere resultaten hieronder horen
 bij hun beschreven wijziging en zijn niet automatisch opnieuw uitgevoerd.
 
+## Compacte bovenbalk en Gereedschap
+
+De bovenbalk toont de databasekiezer, een statusstip, Gereedschap en Database
+openen. De bestaande secundaire bediening staat met volledige labels in een
+gegroepeerde popover. De oorspronkelijke elementen, handlers en rechten blijven
+behouden. De selectieaanwijzer heeft een zichtbare focusroute via Gereedschap.
+
+Uitgevoerd in Chromium tegen het afzonderlijke PostgreSQL-/MariaDB-testproject:
+
+- De nieuwe Tools-proef controleert openen/sluiten met pointer en toetsenbord,
+  Tab, buitenklik/Escape, focus bij manager/AI, behoud van een AI-concept,
+  selectiebediening, taalwisseling in het open menu, een echt companion-popup
+  en PostgreSQL-onderdelen die ook bij een open menu verborgen blijven.
+- Visueel gecontroleerd op 1440, 1024, 768, 375 en 320 px: één bovenbalkrij,
+  72 px op desktop en 64–68 px op compacte schermen. Ook 44 px touchdoelen,
+  menu-scrollen op een kort scherm, NL/EN, donker en verminderde transparantie
+  zijn gecontroleerd zonder horizontale pagina-overloop.
+- De bestaande proeven voor de frontend, tweede scherm, instellingen,
+  Guided/Detailed, AI-werkplek/projectbronnen, PostgreSQL, schema en selectie
+  slagen. De importproef heeft opnieuw
+  een echt SQL-bestand via officiële phpMyAdmin geïmporteerd en de tabellen,
+  relaties en exacte records gelezen. De vrije-SQL-proef slaagt eveneens.
+- Syntax, i18n en **1.190** tweetalige berichten slagen. Een bronreview vond
+  geen resterende blokkerende defecten. Een lege optionele schrijfcaption wordt
+  in de alleen-lezen dataweergave niet meer letterlijk als `null` afgedrukt.
+
+De browserproeven gebruiken de nieuwe zichtbare Tools-stroom. Er zijn geen
+API-contracten of databaserechten gewijzigd. De volledige CI-workflow en andere
+browserengines zijn niet lokaal opnieuw uitgevoerd. De aangepaste
+multidatabase-rijproef is in deze wijziging niet opnieuw uitgevoerd.
+
 ## Vergelijkingsdesk en relatieradar op het tweede scherm
 
 De nieuwe begeleidende pagina gebruikt dezelfde inloggrens en alleen-lezen

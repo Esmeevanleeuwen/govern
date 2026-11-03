@@ -1,3 +1,4 @@
+import {selectWorkspaceLanguage} from './workspace-tools.mjs';
 /**
  * Follow the unified navigation with real catalog data on a disposable local
  * stack. This test does not write database records or create restore points.
@@ -202,7 +203,7 @@ try {
     const explorerBounds = await page.locator('#workspace-context').boundingBox();
     const canvasBounds = await page.locator('#schema-viewport').boundingBox();
     assert.ok(explorerBounds.x > canvasBounds.x, 'The unified explorer follows the saved right-side preference.');
-    await page.locator('#language-select').selectOption('en');
+    await selectWorkspaceLanguage(page, 'en');
     await page.waitForFunction(() => document.documentElement.lang === 'en');
     await page.locator('#schema-viewport').waitFor();
     assert.match(await page.locator('#schema-selected').innerText(), /sources/);

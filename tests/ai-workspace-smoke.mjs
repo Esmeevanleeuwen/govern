@@ -1,3 +1,4 @@
+import {clickWorkspaceTool, selectWorkspaceLanguage} from './workspace-tools.mjs';
 /** Real schema context with isolated provider-response fixtures; never calls a model. */
 import {authenticatedContext} from './auth-session.mjs';
 import assert from 'node:assert/strict';
@@ -69,7 +70,7 @@ const waitReady = async () => {
     await waitContext();
 };
 const open = async () => {
-    if (!await panel.isVisible()) await page.locator('#ai-toggle').click();
+    if (!await panel.isVisible()) await clickWorkspaceTool(page, '#ai-toggle');
     await panel.waitFor({state: 'visible'});
 };
 const close = async () => {
@@ -79,7 +80,7 @@ const close = async () => {
     }
 };
 const reviewSelection = async () => {
-    await page.locator('#selection-pointer-count').click();
+    await clickWorkspaceTool(page, '#selection-pointer-count');
     if (!await page.locator('#selection-pointer-dialog').isVisible()) {
         await page.locator('#selection-pointer-tag').waitFor();
         const more = page.locator('#selection-pointer-more');
@@ -147,7 +148,7 @@ try {
     await shot('disabled-live-context');
     await page.keyboard.press('Escape');
     await panel.waitFor({state: 'hidden'});
-    await page.waitForFunction(() => document.activeElement?.id === 'ai-toggle');
+    await page.waitForFunction(() => document.activeElement?.id === 'workspace-tools-toggle');
     await open();
     assert.equal(await prompt.inputValue(), 'Mijn vraag blijft staan terwijl Ollama uit staat.');
 
@@ -214,7 +215,7 @@ try {
     await table.locator('tbody tr').first().waitFor();
     const nameIndex = await table.locator('thead th').evaluateAll(cells => cells.findIndex(cell => cell.textContent.trim() === 'name'));
     assert.ok(nameIndex >= 0);
-    await page.locator('#selection-pointer-toggle').click();
+    await clickWorkspaceTool(page, '#selection-pointer-toggle');
     await table.locator('tbody tr').first().locator('td').nth(nameIndex).click();
     await reviewSelection();
     await page.locator('#selection-ask-ai').click();
@@ -238,7 +239,7 @@ try {
     await resultCell.waitFor();
     assert.equal(await resultCell.innerText(), privateSnapshot);
     queryBaseline = queryRequests.length;
-    await page.locator('#selection-pointer-toggle').click();
+    await clickWorkspaceTool(page, '#selection-pointer-toggle');
     await resultCell.click();
     await reviewSelection();
     const snapshotPreview = page.waitForResponse(response => apiRoute('ai-context')(new URL(response.url())));
@@ -253,7 +254,7 @@ try {
     await prompt.fill('Blijvend concept bij een taalwisseling.');
     await prompt.focus();
     await prompt.evaluate(node => node.setSelectionRange(3, 12));
-    await page.locator('#language-select').selectOption('en');
+    await selectWorkspaceLanguage(page, 'en');
     assert.equal(await prompt.inputValue(), 'Blijvend concept bij een taalwisseling.');
     assert.equal(await panel.evaluate(node => node.open), true);
     assert.equal((await panel.innerText()).includes('app.ai.'), false);

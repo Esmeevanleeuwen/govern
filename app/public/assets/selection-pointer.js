@@ -27,7 +27,7 @@ export class SelectionPointer {
         this.toggle = button('', () => this.setOn(!this.on), {id: 'selection-pointer-toggle', symbol: 'pointer',
             'aria-pressed': 'false', 'aria-describedby': 'selection-pointer-hint selection-pointer-keyboard', className: 'button-small'});
         this.count = button('', () => this.review(), {id: 'selection-pointer-count', className: 'button-small', hidden: true});
-        this.clear = button('', () => { this.selected.clear(); this.hideTag(); this.update(); this.toggle.focus({preventScroll: true}); },
+        this.clear = button('', () => { this.selected.clear(); this.hideTag(); this.update(); this.focusToggle(); },
             {id: 'selection-pointer-clear', symbol: 'close', className: 'icon-button', hidden: true});
         this.clear.querySelector('span').className = 'sr-only';
         this.controlGroup = el('div', {class: 'selection-pointer-controls', 'data-selection-ui': ''}, this.toggle, this.count, this.clear);
@@ -92,9 +92,9 @@ export class SelectionPointer {
         // The popover lives outside the shell. Escape must also work there,
         // including the brief native focus return while a dialog is closing.
         listen(document, 'keydown', event => {
-            if (event.key !== 'Escape' || !this.on || document.querySelector('dialog[open]')) return;
+            if (event.key !== 'Escape' || !this.on || this.toolsOpen() || document.querySelector('dialog[open]')) return;
             event.preventDefault(); event.stopImmediatePropagation();
-            this.setOn(false); this.toggle.focus({preventScroll: true});
+            this.setOn(false); this.focusToggle();
         }, {capture: true});
         listen(root, 'focusin', event => {
             if (this.on && !this.isUI(event.target)) {
@@ -139,6 +139,13 @@ export class SelectionPointer {
         this.hideTag();
         this.keyboardTarget = false;
         this.update();
+    }
+
+    toolsOpen() { return document.getElementById('workspace-tools-toggle')?.getAttribute('aria-expanded') === 'true'; }
+
+    focusToggle() {
+        const target = this.toggle.getClientRects().length ? this.toggle : document.getElementById('workspace-tools-toggle') || this.toggle;
+        target.focus({preventScroll: true});
     }
 
     updateLabels() {
@@ -307,11 +314,12 @@ export class SelectionPointer {
     keydown(event) {
         if (!this.on || this.dialog.open) return;
         if (event.key === 'Escape') {
+            if (this.toolsOpen()) return;
             event.preventDefault(); event.stopImmediatePropagation();
-            this.setOn(false); this.toggle.focus({preventScroll: true}); return;
+            this.setOn(false); this.focusToggle(); return;
         }
         const ownControl = this.isUI(event.target);
-        if (ownControl && !this.controlGroup.contains(event.target)) return;
+        if (ownControl && !this.controlGroup.contains(event.target) && !event.target.closest('#workspace-tools-toggle')) return;
         if (['ArrowDown', 'ArrowRight', 'ArrowUp', 'ArrowLeft'].includes(event.key)) {
             this.reviewPinned = false;
             event.preventDefault(); event.stopImmediatePropagation();
@@ -360,7 +368,8 @@ export class SelectionPointer {
             const fallback = this.selected.size ? this.count : this.toggle;
             const target = this.returnFocus?.isConnected && !this.tag.contains(this.returnFocus) &&
                 this.returnFocus.getClientRects().length ? this.returnFocus : fallback;
-            target.focus({preventScroll: true});
+            if (target.getClientRects().length) target.focus({preventScroll: true});
+            else this.focusToggle();
         });
         this.dialog.addEventListener('keydown', event => {
             if (event.key === 'Escape') { event.stopPropagation(); return; }

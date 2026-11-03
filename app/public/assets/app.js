@@ -9,6 +9,7 @@ import {createDashboardLayout} from './dashboard-layout.js';
 import {mountSchemaVisualizer} from './schema-visualizer.js';
 import {mountRecordExplorer} from './record-explorer.js';
 import {createWorkspaceCompanion} from './companion-workspace.js';
+import {createWorkspaceTools} from './workspace-tools.js';
 import {friendlyName, getExplorerMode} from './explorer-guide.js';
 import {registerSelection} from './selection-registry.js';
 import {SelectionPointer} from './selection-pointer.js';
@@ -428,6 +429,8 @@ const selectionPointer = new SelectionPointer({
     onAskAi: items => { if (supports('ai')) aiWorkspace.open({...aiContextOptions(items), scope: 'database'}); },
 });
 
+createWorkspaceTools();
+
 function aiContextOptions(items = []) {
     if (items.length > 8) toast(t('app.ai.selectionLimited'));
     const targets = items.slice(0, 8).map(item => {
@@ -453,6 +456,8 @@ function localizeShell() {
     document.querySelectorAll('[data-i18n-aria]').forEach(node => node.setAttribute('aria-label', t(node.dataset.i18nAria)));
     document.querySelectorAll('[data-i18n-title]').forEach(node => node.title = t(node.dataset.i18nTitle));
     document.getElementById('language-select').value = getLanguage();
+    openDatabase.setAttribute('aria-label', t('app.shell.openDatabase'));
+    openDatabase.title = t('app.shell.openDatabase');
     if (state.connectionError) document.getElementById('connection-state').replaceChildren(el('span', {class: 'status-dot offline'}), el('span', {}, t('app.core.connection.offline')));
     else if (state.bootstrap) document.getElementById('connection-state').replaceChildren(el('span', {class: 'status-dot ' + (state.bootstrap.database.status === 'unavailable' ? 'offline' : '')}), el('span', {}, t(state.bootstrap.database.status === 'unavailable' ? 'app.core.connection.offline' : 'app.navigation.ready')));
     const current = routes[route().name];
@@ -1176,7 +1181,9 @@ async function renderData(scope) {
         el('div', {class: 'search-field'}, icon('search'), search),
         el('div', {class: 'table-toolbar-right'}, el('span', {class: 'small muted'}, t('app.core.data.rows')), size)),
         result, pagination);
-    workspace.append(card, supports('write') ? el('p', {class: 'table-caption'}, t('app.databases.help')) : null, sql);
+    workspace.append(card);
+    if (supports('write')) workspace.append(el('p', {class: 'table-caption'}, t('app.databases.help')));
+    workspace.append(sql);
     page.append(workspace);
     await load();
 }

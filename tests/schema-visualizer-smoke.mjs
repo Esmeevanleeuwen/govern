@@ -1,3 +1,4 @@
+import {selectWorkspaceLanguage} from './workspace-tools.mjs';
 /**
  * Schema visualizer integration against a disposable local Govern stack.
  * Uses the same Playwright environment as the other browser tests. This test
@@ -199,7 +200,7 @@ try {
     const languagePage = await context.newPage();
     track(languagePage);
     await languagePage.goto(new URL('/workspace.php#instellingen', base).href, {waitUntil: 'networkidle'});
-    await languagePage.locator('#language-select').selectOption('en');
+    await selectWorkspaceLanguage(languagePage, 'en');
     await page.waitForFunction(() => document.documentElement.lang === 'en');
     await page.locator('#schema-help-dialog[open]').waitFor();
     assert.equal(await page.locator('#schema-help-dialog').count(), 1, 'A live language change cannot leave duplicate guide dialogs.');
@@ -214,7 +215,7 @@ try {
     await page.waitForFunction(() => !document.querySelector('#schema-help-dialog')?.open
         && document.activeElement?.id === 'schema-help-open', undefined, {timeout: 5000});
     assert.equal(await page.locator('#schema-help-open').evaluate(button => button === document.activeElement), true);
-    await languagePage.locator('#language-select').selectOption('nl');
+    await selectWorkspaceLanguage(languagePage, 'nl');
     await page.waitForFunction(() => document.documentElement.lang === 'nl');
     await languagePage.close();
     await page.locator('#schema-help-open').click();
@@ -307,9 +308,9 @@ try {
     await page.keyboard.press('Enter');
     assert.equal(await page.locator('#workspace-explorer-open').getAttribute('aria-expanded'), 'false',
         'A table selection respects a deliberately collapsed panel.');
-    await page.locator('#language-select').selectOption('en');
+    await selectWorkspaceLanguage(page, 'en');
     assert.equal(await page.locator('#workspace-explorer-open').getAttribute('aria-expanded'), 'false', 'Language retains a collapsed panel.');
-    await page.locator('#language-select').selectOption('nl');
+    await selectWorkspaceLanguage(page, 'nl');
     await page.locator('#workspace-explorer-open').click();
     assert.equal(await page.locator('#schema-table-panel').isVisible(), true, 'Reopening restores the explorer.');
     assert.match(await page.locator('#schema-selected').innerText(), new RegExp(table.name), 'Reopening retains the selected-table details.');
@@ -384,7 +385,12 @@ try {
     await searchFor(table.name);
     await header.focus();
     const viewportBeforeLanguage = await page.locator('.schema-world').evaluate(element => element.style.transform);
-    await page.locator('#language-select').selectOption('en');
+    // Use the sibling preferences flow so opening Tools does not deliberately
+    // move focus away from the table whose focus continuity is under test.
+    const focusLanguagePage = await context.newPage();
+    track(focusLanguagePage);
+    await focusLanguagePage.goto(new URL('/workspace.php#instellingen', base).href, {waitUntil: 'networkidle'});
+    await selectWorkspaceLanguage(focusLanguagePage, 'en');
     await page.waitForFunction(() => document.documentElement.lang === 'en');
     await page.locator('#schema-search').waitFor();
     assert.equal(await page.locator('#schema-search').inputValue(), table.name, 'Language keeps the filter.');
@@ -395,6 +401,7 @@ try {
     assert.equal(await page.locator('#schema-neighborhood').isChecked(), true);
     assert.match(await page.locator('#schema-selected').innerText(), new RegExp(table.name), 'Language keeps selection.');
     assert.equal((await page.locator('#page').innerText()).includes('app.schema.'), false, 'No untranslated keys leak.');
+    await focusLanguagePage.close();
     await page.reload({waitUntil: 'networkidle'});
     await page.locator('#schema-search').waitFor();
     assert.deepEqual(await position(table.name), moved, 'Positions are restored on reload.');

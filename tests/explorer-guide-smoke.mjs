@@ -1,3 +1,4 @@
+import {selectWorkspaceLanguage} from './workspace-tools.mjs';
 /** Coworkers explore actual records through plain choices, without SQL or keys. */
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
@@ -122,13 +123,13 @@ try {
     await screenshot('explorer-guide-desktop');
 
     const englishLabel = await page.locator('#explorer-table').getAttribute('aria-label');
-    await page.locator('#language-select').selectOption('nl');
+    await selectWorkspaceLanguage(page, 'nl');
     await ready();
     assert.equal(await explorer.getAttribute('data-experience'), 'guided');
     assert.equal(await page.locator('#explorer-record').inputValue(), rootBeforeMode);
     assert.equal(await page.locator('#explorer-filter').inputValue(), 'Plain-language');
     assert.notEqual(await page.locator('#explorer-table').getAttribute('aria-label'), englishLabel);
-    await page.locator('#language-select').selectOption('en');
+    await selectWorkspaceLanguage(page, 'en');
     await ready();
     await page.reload({waitUntil: 'networkidle'});
     await ready();

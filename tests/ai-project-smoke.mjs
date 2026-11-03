@@ -1,3 +1,4 @@
+import {clickWorkspaceTool, selectWorkspaceLanguage} from './workspace-tools.mjs';
 /** Live local-code retrieval and isolated provider UI fixtures; no model is run. */
 import {authenticatedContext} from './auth-session.mjs';
 import assert from 'node:assert/strict';
@@ -115,7 +116,7 @@ const verifySources = async sources => {
 
 try {
     await page.goto(new URL('/workspace.php#overzicht', base).href, {waitUntil: 'networkidle'});
-    await page.locator('#ai-toggle').waitFor();
+    await page.locator('#ai-toggle').waitFor({state: 'attached'});
     const bootstrap = await api('bootstrap');
     assert.equal(bootstrap.payload.ok, true);
     database = bootstrap.payload.data.database.name;
@@ -151,7 +152,7 @@ try {
     assert.deepEqual(noMatch.payload.data.sources, []);
     assert.equal((await api('ai-chat', {scope: 'project', message: query}, csrf)).payload.error_code, 'ai_disabled');
 
-    await page.locator('#ai-toggle').click();
+    await clickWorkspaceTool(page, '#ai-toggle');
     await panel.waitFor({state: 'visible'});
     await waitContext();
     await page.waitForFunction(() => document.querySelector('#ai-status .ai-status-dot')?.classList.contains('disabled'));
@@ -235,7 +236,7 @@ try {
     await prompt.fill(projectDraft);
     await prompt.focus();
     await prompt.evaluate(node => node.setSelectionRange(3, 11));
-    await page.locator('#language-select').selectOption('en');
+    await selectWorkspaceLanguage(page, 'en');
     assert.equal(await prompt.inputValue(), projectDraft);
     assert.deepEqual(await prompt.evaluate(node => [node.selectionStart, node.selectionEnd]), [3, 11]);
     assert.equal((await panel.innerText()).includes('app.ai.'), false);
@@ -291,7 +292,7 @@ try {
     await shot('mobile-sources');
     await page.keyboard.press('Escape');
     await panel.waitFor({state: 'hidden'});
-    await page.waitForFunction(() => document.activeElement?.id === 'ai-toggle');
+    await page.waitForFunction(() => document.activeElement?.id === 'workspace-tools-toggle');
     assert.deepEqual(queryRequests, [], 'Local code search and explanation never execute SQL.');
     assert.deepEqual(externalRequests, [], 'The browser performs this complete flow without external requests.');
     assert.deepEqual(errors, [], 'The local project flow has no uncaught browser errors.');

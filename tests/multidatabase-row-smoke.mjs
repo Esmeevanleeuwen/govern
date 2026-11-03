@@ -1,3 +1,4 @@
+import {clickWorkspaceTool, selectWorkspaceLanguage} from './workspace-tools.mjs';
 /** Real multi-database navigation and row writes in a disposable local stack. */
 import {authenticatedContext} from './auth-session.mjs';
 import assert from 'node:assert/strict';
@@ -280,7 +281,7 @@ INSERT INTO ${table} (id,label,amount) VALUES (1,'${marker} seed',10.10);`);
     const languagePage = await context.newPage();
     track(languagePage);
     await languagePage.goto(new URL('/workspace.php#instellingen', base).href, {waitUntil: 'networkidle'});
-    await languagePage.locator('#language-select').selectOption('en');
+    await selectWorkspaceLanguage(languagePage, 'en');
     await page.waitForFunction(() => document.documentElement.lang === 'en');
     assert.equal(await field('label').inputValue(), 'B editor draft', 'Changing language leaves row input intact.');
     assert.equal((await dialog.innerText()).includes('app.'), false);
@@ -299,14 +300,15 @@ INSERT INTO ${table} (id,label,amount) VALUES (1,'${marker} seed',10.10);`);
     await page.locator('#schema-actual').click();
     await page.locator('#schema-zoom-in').click();
     const bZoom = await page.locator('#schema-zoom-value').innerText();
-    await page.locator('#selection-pointer-toggle').click();
+    await clickWorkspaceTool(page, '#selection-pointer-toggle');
     await page.locator('[data-schema-header=' + JSON.stringify(name) + ']').click();
-    await page.locator('#selection-pointer-toggle').click();
+    await clickWorkspaceTool(page, '#selection-pointer-toggle');
     await switchDatabase(first);
     await waitTable(first);
     assert.equal(await page.locator('[data-database-view="gegevens"]').getAttribute('aria-current'), 'page',
         'The picker restores the database’s own previous data view.');
-    assert.equal(await page.locator('#selection-pointer-count').isVisible(), false, 'Database switching clears data-object selection from the previous schema.');
+    assert.equal(await page.locator('#selection-pointer-count').evaluate(button => button.hidden), true,
+        'Database switching clears the selection count itself, independently of the closed Tools menu.');
     await page.locator('[data-database-view="schema"]').click();
     await page.locator('#schema-viewport').waitFor();
     await page.locator('#schema-actual').click();

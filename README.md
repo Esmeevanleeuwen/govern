@@ -108,12 +108,19 @@ Meer over configuratie, schema's en de volgende bouwfasen:
 
 ## Een andere database kiezen of toevoegen
 
+De compacte bovenbalk houdt de databasekiezer en **Database openen / Open
+database** zichtbaar. Onder **Gereedschap / Tools** staan de selectieaanwijzer,
+het tweede scherm, de AI-assistent, verversen, context exporteren, databases
+toevoegen/importeren, taal en Account. Klik buiten het menu of druk op Escape
+om het te sluiten. De verbindingsstatus staat als stip bij de databasekiezer;
+de volledige status blijft beschikbaar via de tooltip en schermlezer.
+
 Kies bovenaan je database. De tabelverkenner, schemaweergave, onderzoeken,
 context-export en herstelpunten volgen die keuze. Je onderzoeksconcept en
 tabelkeuze blijven tijdens deze browsersessie per database behouden; de keuze
 geldt alleen voor dit browsertabblad.
 
-Gebruik **Database toevoegen of importeren** naast de databasekiezer. Je hoeft
+Gebruik **Gereedschap → Database toevoegen of importeren**. Je hoeft
 daarvoor `.env` niet aan te passen:
 
 1. Vul een databasenaam in, bijvoorbeeld `onderzoek`.
