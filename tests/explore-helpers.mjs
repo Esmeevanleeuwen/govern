@@ -34,6 +34,15 @@ export async function exploreHarness(options = {}) {
     const source = page.locator('#record-map-sources');
     const inspector = page.locator('#record-map-inspector');
     const ensureSources = async () => {
+        // A hash-only schema navigation can resolve before the new canvas mounts.
+        // Measure its panel state only after the requested scope has finished loading.
+        await page.waitForFunction(() => {
+            const params = new URLSearchParams(location.hash.split('?')[1] || '');
+            const database = document.querySelector('#database-select');
+            return document.querySelector('#record-map-sources') && database && !database.disabled
+                && !document.querySelector('#refresh-app')?.disabled
+                && (!params.get('database') || database.value === params.get('database'));
+        });
         if (!await source.isVisible()) await page.locator('#record-map-sources-toggle').click();
         await source.waitFor({state: 'visible'});
     };
