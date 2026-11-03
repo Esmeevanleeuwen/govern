@@ -199,6 +199,7 @@ services:
       - "127.0.0.1:${APP_PORT:-8080}:80"
     volumes:
       - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./docker/nginx/govern-routes.inc:/etc/nginx/govern-routes.inc:ro
     depends_on:
       app:
         condition: service_started

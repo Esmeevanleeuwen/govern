@@ -3,6 +3,47 @@
 Stand van de controles: **3 november 2026**. Eerdere resultaten hieronder horen
 bij hun beschreven wijziging en zijn niet automatisch opnieuw uitgevoerd.
 
+## Optionele VPS-configuratie met HTTPS
+
+De nieuwe VPS-start heeft **161** geslaagde fixturecontroles voor de bestaande
+eigenaar, domeinvalidatie, `.env`-behoud, PostgreSQL, herladen van beide proxies,
+herstart met een gestopte app en stoppen van de publieke ingang bij fouten.
+Ook de bestaande **32** opstartcontroles slagen. De phpMyAdmin-hostcontrole
+heeft **30** geslaagde gevallen; de bestaande accountproef **42**. Beide
+PHP-proeven zijn in de app-image uitgevoerd als `www-data` met alleen-lezen
+bronbestanden.
+
+De **35** geslaagde controles in `tests/vps-https-smoke.py` gebruiken een
+afzonderlijke Docker-installatie met
+gegenereerde testgegevens, een eigen project en uitsluitend loopbackpoorten.
+De proef maakt eerst via de lokale ingang een eigenaar en schakelt daarna de
+VPS-override in. Hij controleert HTTPS met echte certificaatverificatie tegen
+de openbare rootcertificaatkopie van de lokale Caddy-testissuer. Er wordt geen
+TLS-verificatie uitgeschakeld en geen publiek certificaat aangevraagd.
+
+De controles behandelen HTTP-naar-HTTPS, Secure/HttpOnly/SameSite-cookies,
+echt inloggen, de werkplek/API, behoud van de bestaande eigenaar, Origin/CSRF,
+de oorspronkelijke HTTP-ingang en afgeschermde interne poorten. Ook de echte
+phpMyAdmin wordt gebruikt om de gezaaide DigiD-rij te lezen via HTTPS en HTTP;
+afmelden sluit die toegang weer af. Herstarten van de HTTPS-edge behoudt de
+certificaatopslag en het account. De proef verwijdert uitsluitend zijn eigen,
+vooraf afwezig bevonden testresources.
+
+Deze HTTPS-proef slaagde vóór het opnemen van de later samengevoegde
+PostgreSQL-wijzigingen uit PR #22. Een herhaling op die bijgewerkte bron stopte
+vóór de HTTP-controles: de lokale Docker-testschijf was vol en MariaDB meldde
+`errno 28: No space left on device`. De testresources zijn opgeruimd; deze
+herhaling geldt niet als geslaagde controle van de nieuwste bron. De 161
+VPS-startupfixtures en 32 bestaande opstartcontroles zijn daarop wel uitgevoerd.
+De volledige CI bevat ook de geïsoleerde HTTPS-proef voor de uiteindelijke PR.
+
+De managed werkplek heeft privébronrechten; de Docker-proef gebruikt daarom
+een tijdelijke bronkopie met gewone leesrechten, zonder lokale instellingen
+of credentials. Alleen intern Docker-verkeer naar `gateway` wordt in de proef
+aan de bestaande proxy-uitzonderingen toegevoegd. De oorspronkelijke werkplek
+en echte VPS worden niet gewijzigd. Publieke DNS, TransIP-firewall en een echt
+publiek certificaat blijven aparte uitvoercontroles bij de gebruiker.
+
 ## Gelijke canvasvormgeving voor Schema en Explore
 
 De echte frontendmodules zijn met vaste, geïsoleerde voorbeeldmetadata en

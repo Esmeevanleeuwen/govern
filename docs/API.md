@@ -1,6 +1,7 @@
 # API contract — Govern
 
-Personal local workbench. Database endpoints are `GET/POST /api.php?action=...`,
+Personal workbench with a local default and optional VPS HTTPS hosting.
+Database endpoints are `GET/POST /api.php?action=...`,
 and installation-account endpoints are `GET/POST /auth-api.php?action=...`, JSON.
 Success envelope `{ "ok": true, "data": ... }`. A failure keeps the existing
 `error` string and adds stable localization fields, with the same HTTP status:
@@ -89,8 +90,10 @@ returns 503 `auth_unavailable`, never a guest bypass.
 `account_data` Docker volume, outside public files and work-database exports.
 PHP PDO SQLite and Argon2id support are required. Email is only an account
 identifier: email verification, email delivery and password-reset/recovery
-endpoints are not implemented. Bindings/allowed hosts remain loopback-only;
-these accounts do not make this configuration an internet service.
+endpoints are not implemented. The default stack remains loopback-only.
+The opt-in VPS configuration described in [VPS.md](VPS.md) serves one configured
+DNS name over HTTPS. Approved accounts still share installation-wide database
+access; HTTPS hosting does not add private tenants or password recovery.
 
 Nginx protects every native `/phpmyadmin/` route with internal
 `/_govern_auth` → `/auth-check.php`. An approved session returns 204; missing
@@ -98,6 +101,26 @@ login returns 401, and failed checks deny access. The gateway converts missing
 login to an explicit 302 redirect to `/auth.php?mode=login`. The internal location
 cannot be requested directly. Native uploads/downloads and direct links receive
 the same check; official phpMyAdmin remains the actual application.
+
+### Optional VPS HTTPS origin
+
+`compose.vps.yaml` adds a Caddy edge on ports 80/443 for `GOVERN_DOMAIN` and
+persists its certificate state. It proxies to Nginx's private port 81, which
+accepts only that exact domain and supplies a constant HTTPS scheme to the app,
+the internal account check and phpMyAdmin. The existing loopback port 8080 uses
+its actual HTTP scheme. Neither listener trusts an incoming scheme header.
+
+The app's `APP_ALLOWED_HOSTS` includes the exact domain only in this opt-in
+configuration. Existing same-origin and CSRF checks apply to HTTPS, and session
+cookies carry Secure. phpMyAdmin validates the configured domain and builds an
+HTTPS absolute URL while retaining its normal account gate. Unknown hosts are
+rejected. Databases, PHP backends and port 81 have no public host port.
+
+`scripts/start-vps.sh` verifies an existing active installation owner before
+starting the public edge. It retains the original account/data volumes and
+loopback entry. Domain configuration and startup do not migrate databases from
+another installation or approve users. See [VPS.md](VPS.md) for DNS, certificate,
+firewall, update and backup steps.
 
 ## Eerste eigen SQL-import
 

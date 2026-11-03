@@ -1,0 +1,38 @@
+# Explicit opt-in: docker compose -f compose.yaml -f compose.vps.yaml ...
+# The normal local gateway and all existing data/account volumes stay intact.
+services:
+  app:
+    environment:
+      APP_ALLOWED_HOSTS: "localhost,127.0.0.1,::1,${GOVERN_DOMAIN:?Set the exact public domain}"
+
+  phpmyadmin:
+    environment:
+      GOVERN_DOMAIN: "${GOVERN_DOMAIN:?Set the exact public domain}"
+
+  gateway:
+    environment:
+      GOVERN_DOMAIN: "${GOVERN_DOMAIN:?Set the exact public domain}"
+      # Substitute only this deployment value; retain Nginx request variables.
+      NGINX_ENVSUBST_FILTER: "^GOVERN_DOMAIN$"
+    volumes:
+      - ./docker/nginx/vps.conf.template:/etc/nginx/templates/vps.conf.template:ro
+
+  caddy:
+    image: caddy:2-alpine
+    environment:
+      GOVERN_DOMAIN: "${GOVERN_DOMAIN:?Set the exact public domain}"
+    ports:
+      - "${GOVERN_HTTP_PORT:-80}:80"
+      - "${GOVERN_HTTPS_PORT:-443}:443"
+    volumes:
+      - ./docker/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      gateway:
+        condition: service_started
+    restart: unless-stopped
+
+volumes:
+  caddy_data:
+  caddy_config:
