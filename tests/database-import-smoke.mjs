@@ -164,6 +164,13 @@ try {
     await page.locator('#import-inspection').waitFor({state: 'visible'});
     await page.waitForFunction(() => document.querySelector('#import-inspection .import-inspection-summary')?.textContent.includes('0 tables'));
 
+    // An empty/rejected phpMyAdmin form must not trap the surrounding dialog.
+    await frame.locator('#buttonGo').click();
+    await page.waitForFunction(() => !document.querySelector('#modal-database')?.disabled
+        && !document.querySelector('#database-dialog .database-dialog-header .button')?.disabled,
+    null, {timeout: 5000});
+    assert.equal(await nativeDialog.locator('#native-import-file').isDisabled(), false);
+
     const dump = `-- Govern isolated native import fixture\nSET NAMES utf8mb4;\n`
         + 'CREATE TABLE imported_people (id INT PRIMARY KEY, name VARCHAR(100)) ENGINE=InnoDB;\n'
         + 'CREATE TABLE imported_notes (id INT PRIMARY KEY, person_id INT NOT NULL, body TEXT, '
@@ -176,8 +183,28 @@ try {
         return url.pathname.startsWith('/phpmyadmin/') && url.searchParams.get('route') === '/import'
             && response.request().method() === 'POST';
     });
+    let importStarted;
+    const nativeStarted = new Promise(resolve => { importStarted = resolve; });
+    const nativeGate = new Promise(resolve => { releaseRequest = resolve; });
+    const nativeImportRoute = url => url.pathname.startsWith('/phpmyadmin/') && url.searchParams.get('route') === '/import';
+    const holdNativeImport = async route => {
+        if (route.request().method() !== 'POST') return route.continue();
+        importStarted();
+        await nativeGate;
+        await route.continue();
+    };
+    await page.route(nativeImportRoute, holdNativeImport);
     await frame.locator('#buttonGo').click();
+    await nativeStarted;
+    // Let status polling run while the real transport is deliberately pending.
+    await page.waitForTimeout(1000);
+    assert.equal(await nativeDialog.locator('#modal-database').isDisabled(), true,
+        'An official phpMyAdmin import holds the selected database and engine.');
+    assert.equal(await nativeDialog.locator('#native-import-file').isDisabled(), true);
+    assert.equal(await nativeDialog.locator('.database-dialog-header .button').isDisabled(), true);
+    releaseRequest(); releaseRequest = null;
     const uploadedResponse = await uploaded;
+    await page.unroute(nativeImportRoute, holdNativeImport);
     assert.equal(uploadedResponse.status(), 200, 'The official phpMyAdmin upload accepts the SQL file.');
     await page.waitForFunction(async ({database}) => {
         const response = await fetch('/api.php?' + new URLSearchParams({action: 'schema', database}));
@@ -189,6 +216,7 @@ try {
     assert.equal(importReport.foreign_keys, 1);
     assert.equal(importReport.total_records, 2);
     await page.waitForFunction(() => document.querySelector('#import-inspection .import-inspection-summary')?.textContent.includes('After import: 2 tables'));
+    assert.equal(await nativeDialog.locator('#modal-database').isDisabled(), false, 'The completed import releases the chooser.');
     const schema = data(await api('schema', created));
     assert.deepEqual(schema.tables.map(table => table.name).sort(), ['imported_notes', 'imported_people']);
     const notes = schema.tables.find(table => table.name === 'imported_notes');
@@ -254,7 +282,21 @@ try {
     assert.equal(ownPlan.data.before.tables.length, 0);
     assert.equal(await nativeDialog.locator('.native-import button').last().isDisabled(), true,
         'Import requires confirmation.');
+    assert.ok((await nativeDialog.locator('#native-import-target').textContent()).includes('MariaDB · ' + emptyDatabase));
+    assert.ok((await nativeDialog.locator('label[for="native-import-confirm"]').textContent()).includes(emptyDatabase));
+    await nativeDialog.locator('#native-import-confirm').fill('test');
+    assert.equal(await nativeDialog.locator('#native-import-run').isDisabled(), true,
+        'A different name cannot silently select or create an import target.');
+    assert.equal(await nativeDialog.locator('#native-import-confirm').getAttribute('aria-invalid'), 'true');
+    assert.ok((await nativeDialog.locator('#native-import-confirm-help').textContent()).includes(emptyDatabase));
+    await language('nl');
+    assert.equal(await nativeDialog.locator('#native-import-confirm').inputValue(), 'test');
+    assert.ok((await nativeDialog.locator('#native-import-confirm-help').textContent()).includes('Typ ' + emptyDatabase));
+    assert.equal(await ownFile.evaluate(node => node.files[0]?.name), 'govern-native.sql');
+    await language('en');
+    assert.deepEqual(data(await api('schema', emptyDatabase)).tables, [], 'A mismatched confirmation executes no SQL.');
     await nativeDialog.locator('#native-import-confirm').fill(emptyDatabase);
+    assert.equal(await nativeDialog.locator('#native-import-confirm').getAttribute('aria-invalid'), 'false');
     const ownExecuteResponse = responseFor('native-import-execute');
     await nativeDialog.locator('.native-import button').last().click();
     const ownResult = await (await ownExecuteResponse).json();
