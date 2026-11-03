@@ -436,3 +436,16 @@ Een lopende SQL-opdracht in een afzonderlijk phpMyAdmin-venster wordt daarmee
 niet stilgezet. Rond zulke opdrachten af voordat je een herstelpunt maakt of
 terugzet. Een volledige databaseherstelactie bestaat uit meerdere stappen;
 een gewone SQL-transactie kan die niet als geheel ongedaan maken.
+
+## Explore and record layout — 3 November 2026
+
+`node tests/explore-layout-smoke.mjs` passed in Chromium with deterministic
+intercepted API fixtures. It checks repeated area navigation, one explorer
+scroll region with pinned search, retained and inert old rows while searching,
+24 px gaps between statement cards and result sets, and page overflow at
+1440, 768 and 320 px. The bilingual message, i18n and schema navigation unit
+checks also passed, together with JavaScript syntax and diff whitespace checks.
+The fixture browser check uses Playwright and Chromium (`BROWSER_BIN` can
+select the executable). It does not verify the PHP/API/MariaDB path. That
+end-to-end check and the existing live-stack navigation smoke test were not
+run: PHP is unavailable and Docker access is restricted in this workspace.

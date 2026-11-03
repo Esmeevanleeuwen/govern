@@ -143,7 +143,8 @@ an unrelated server.
 
 The rail and context panel form one connected glass surface with one shared
 elevation. Do not add another tool rail beside them. Clicking an active area
-with context toggles its panel; switching area replaces that panel's contents.
+with context opens its panel; the dedicated collapse button hides it. Switching
+area replaces that panel's contents.
 Overview and Settings open their own screens without a contextual menu of
 links to other main areas. A dashboard action may still resume a specific task.
 
@@ -160,7 +161,8 @@ Use the same order in Data, Structure and Schema:
 1. A compact **Database** heading. The **Tables** opener occupies the same header
    position in every view when the explorer is collapsed or the mobile drawer is closed.
 2. One view row directly beneath it: **Data**, **Structure**, **Schema**, followed
-   by the selected table context. Let that context wrap below the views on narrow screens.
+   by the content. Data and Structure identify the table once in their content
+   heading; Schema identifies it in its selection panel.
 3. One tool area immediately before the table, structure or canvas it controls.
 4. The main content, followed by a compact summary or optional explanation.
 
@@ -674,3 +676,15 @@ Do not reset the database, replace saved SQL or overwrite user layouts to apply 
 ## Technical references
 
 The existing application behaviour and integration boundaries are described in the [Govern architecture](https://github.com/Esmeevanleeuwen/govern/blob/main/docs/ARCHITECTURE.md), [API contract](https://github.com/Esmeevanleeuwen/govern/blob/main/docs/API.md) and [repository working guide](https://github.com/Esmeevanleeuwen/govern/blob/main/AGENTS.md). This documentation defines the UX and visual system for current and future changes. The original prototype remains illustrative; production controls operate through the real API.
+
+### Explore and record layout refinement — 3 November 2026
+
+The table explorer uses the context panel as its single scrolling region, with
+search pinned above the table list. The list has no independent height limit;
+selected details remain below it. Active area links open the panel consistently.
+Independent query result cards and adjacent result sets have 24 px separation.
+Record searches retain existing rows and pagination during loading, show a
+localized updating status, and disable stale row and paging actions until the
+response arrives. Only the latest response may update the view. Errors offer
+retry and clear stale pagination and SQL. Routes and stored preferences retain
+their existing format.

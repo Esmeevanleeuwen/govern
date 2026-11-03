@@ -103,7 +103,8 @@ try {
     await tableButton('sources').scrollIntoViewIfNeeded();
     const beforeTableSwitch = await catalogList.evaluate(list => ({list: list.scrollTop,
         outer: document.getElementById('workspace-context-content').scrollTop}));
-    assert.ok(beforeTableSwitch.list > 0, 'Exercise a scrolled table explorer, not its initial position.');
+    assert.equal(beforeTableSwitch.list, 0, 'The table list does not create a nested scroll region.');
+    assert.ok(beforeTableSwitch.outer > 0, 'Exercise the single scrolled explorer.');
     await tableButton('sources').click();
     await waitForTable(page, 'sources');
     const afterTableSwitch = await catalogList.evaluate(list => ({list: list.scrollTop,
@@ -165,6 +166,8 @@ try {
     await page.locator('#navigation [data-area="database"]').click();
     assert.equal(await currentRoute(page), hash, 'Clicking the active area only expands its context.');
     assert.equal(await page.locator('#workspace-context').isVisible(), true);
+    await page.locator('#navigation [data-area="database"]').click();
+    assert.equal(await page.locator('#workspace-context').isVisible(), true, 'Repeated area clicks keep the explorer open.');
     await page.locator('#navigation [data-area="overview"]').click();
     await page.locator('.stats-grid').waitFor();
     assert.equal(await page.locator('#workspace-context').isVisible(), false);

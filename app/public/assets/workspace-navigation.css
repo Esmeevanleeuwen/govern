@@ -24,9 +24,9 @@
 .workspace-context-heading .icon-button .icon { transform: rotate(180deg); }
 .workspace-context-content { min-height: 0; flex: 1; overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; padding: 3px; overscroll-behavior: contain; }
 .workspace-context-foot { font-size: 11px; color: var(--muted); margin-top: 18px; }
-.workspace-context .catalog { position: static; width: 100%; padding: 0; margin: 0; border-radius: 0; background: transparent; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
-.workspace-context .catalog-head { padding: 0 0 15px; }
-.workspace-context .catalog-list { display: grid; grid-template-columns: minmax(0, 1fr); padding: 2px; gap: 4px; max-height: min(40dvh, 390px); overflow-y: auto; }
+.workspace-context .catalog { overflow: visible; position: static; width: 100%; padding: 0; margin: 0; border-radius: 0; background: transparent; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
+.workspace-context .catalog-head { position: sticky; top: 0; z-index: 2; padding: 0 0 15px; background: var(--g-panel); border-radius: 12px; }
+.workspace-context .catalog-list { display: grid; grid-template-columns: minmax(0, 1fr); padding: 2px; gap: 4px; max-height: none; overflow: visible; }
 .workspace-context .catalog-item { width: 100%; max-width: none; gap: 8px; padding: 11px 8px; flex: initial; min-width: 0; }
 .workspace-context .catalog-item-name { flex: 1; min-width: 0; }
 .workspace-context .catalog-item-count { display: none; }
@@ -111,7 +111,7 @@
     .database-heading h1 { font-size: 24px; }
     .database-views { width: 100%; }
     .database-view { padding: 10px; }
-    .workspace-context .catalog-list { display: grid; max-height: 38dvh; padding: 2px; }
+    .workspace-context .catalog-list { display: grid; max-height: none; padding: 2px; }
     .unified-research .save-query-form { grid-template-columns: minmax(0, 1fr); }
     .unified-research .save-query-form > .field-label:nth-child(2) { grid-row: auto; }
 }

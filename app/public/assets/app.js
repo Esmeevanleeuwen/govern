@@ -204,7 +204,7 @@ navigation.addEventListener('click', event => {
     if (!link || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     const area = workspaceArea();
     if (link.dataset.area === area && Object.hasOwn(state.contextOpen, area)) {
-        event.preventDefault(); toggleWorkspaceContext();
+        event.preventDefault(); openWorkspaceContext();
     } else closeSidebar();
 });
 document.getElementById('settings-link').addEventListener('click', closeSidebar);
@@ -945,9 +945,7 @@ function databaseHeading(view) {
     registerSelection(explorer, {kind: 'control', key: 'database:explorer', label: t('app.navigation.tables'), purpose: 'openNavigation'});
     return el('header', {class: 'page-heading database-heading'},
         el('div', {class: 'database-heading-main'}, el('h1', {}, t('app.navigation.database')), explorer),
-        el('div', {class: 'database-viewbar'}, modeLinks,
-            el('p', {class: 'database-selection'}, el('span', {}, t('app.navigation.selected')),
-                el('code', {class: 'database-selected-table', id: 'database-selected-table'}, state.table || t('app.navigation.emptySelection')))));
+        el('div', {class: 'database-viewbar'}, modeLinks));
 }
 
 function databaseContext(view, scope) {
@@ -991,7 +989,7 @@ function drawTableInspector(inspector, table, data) {
 
 function tableHeader(table, tab) {
     return el('div', {class: 'table-heading'},
-        el('div', {}, el('div', {class: 'table-heading-title'}, el('h2', {}, table.name), badge(table.type === 'view' ? t('app.core.table.viewBadge') : t('app.core.table.tableBadge'), table.type === 'view' ? 'badge-blue' : 'badge-green'))),
+        el('div', {}, el('div', {class: 'table-heading-title'}, el('h2', {id: 'database-selected-table'}, table.name), badge(table.type === 'view' ? t('app.core.table.viewBadge') : t('app.core.table.tableBadge'), table.type === 'view' ? 'badge-blue' : 'badge-green'))),
         el('div', {class: 'table-heading-actions'},
             button(tab === 'structure' ? t('app.core.table.openStructure') : t('app.core.table.openBrowse'), () => databaseModal.open(table.name, tab), {className: 'button-small', symbol: 'database'})));
 }
@@ -1022,6 +1020,7 @@ async function renderData(scope) {
     registerSelection(search, {kind: 'control', key: 'data:search', label: t('app.core.data.searchLabel'), table: table.name, purpose: 'searchRecords'});
     registerSelection(size, {kind: 'control', key: 'data:page-size', label: t('app.core.data.pageSize'), table: table.name, purpose: 'pageSize'});
     const result = el('div');
+    const updateStatus = el('span', {class: 'data-update-status small muted', role: 'status', 'aria-live': 'polite'});
     const pagination = el('div', {class: 'table-pagination'});
     const sql = el('div');
     let currentPage = viewState.page;
@@ -1033,9 +1032,12 @@ async function renderData(scope) {
         rowController?.abort();
         rowController = new AbortController();
         const id = ++requestId;
-        result.replaceChildren(loading());
-        pagination.replaceChildren();
-        sql.replaceChildren();
+        const hasRows = Boolean(result.querySelector('.data-table'));
+        if (!hasRows) result.replaceChildren(loading());
+        result.setAttribute('aria-busy', 'true');
+        result.inert = hasRows;
+        updateStatus.textContent = t('app.databases.updating');
+        pagination.querySelectorAll('button').forEach(control => { control.disabled = true; });
         try {
             const data = await request('browse', {params: {database: scope.database, table: table.name, page: currentPage, page_size: size.value, q: search.value.trim()}, signal: rowController.signal});
             if (!scope.live() || id !== requestId) return;
@@ -1096,9 +1098,19 @@ async function renderData(scope) {
                     button(t('app.core.data.previous'), () => { currentPage -= 1; load(); }, {disabled: currentPage <= 1}),
                     el('span', {}, currentPage + ' / ' + pages),
                     button(t('app.core.data.next'), () => { currentPage += 1; load(); }, {disabled: currentPage >= pages})));
-            sql.append(sqlDisclosure(data.sql, data.params));
+            sql.replaceChildren(sqlDisclosure(data.sql, data.params));
         } catch (error) {
-            if (error.name !== 'AbortError' && scope.live() && id === requestId) result.replaceChildren(errorPanel(error, load));
+            if (error.name !== 'AbortError' && scope.live() && id === requestId) {
+                result.replaceChildren(errorPanel(error, load));
+                pagination.replaceChildren();
+                sql.replaceChildren();
+            }
+        } finally {
+            if (scope.live() && id === requestId) {
+                result.setAttribute('aria-busy', 'false');
+                result.inert = false;
+                updateStatus.textContent = '';
+            }
         }
     };
     search.addEventListener('input', () => {
@@ -1110,7 +1122,7 @@ async function renderData(scope) {
     size.addEventListener('change', () => { currentPage = 1; viewState.page = 1; viewState.pageSize = Number(size.value); load(); });
     card.append(el('div', {class: 'table-toolbar'},
         el('div', {class: 'search-field'}, icon('search'), search),
-        el('div', {class: 'table-toolbar-right'}, el('span', {class: 'small muted'}, t('app.core.data.rows')), size)),
+        el('div', {class: 'table-toolbar-right'}, updateStatus, el('span', {class: 'small muted'}, t('app.core.data.rows')), size)),
         result, pagination);
     workspace.append(card, el('p', {class: 'table-caption'}, t('app.databases.help')), sql);
     page.append(workspace);
