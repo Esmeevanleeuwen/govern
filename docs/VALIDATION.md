@@ -1,5 +1,27 @@
 # Validatie
 
+## Explore-panelen en ruimte tussen Records-kaarten — 3 november 2026
+
+Deze wijziging is gebaseerd op de actuele `main` met de geïntegreerde
+Records/Explore/Schema-werkplek. `tests/record-explorer-smoke.mjs` slaagt tegen
+een afzonderlijke, ingelogde PHP/MariaDB-installatie met de bestaande echte
+record-mapfixtures. De proef controleert de volledige route van Explore naar
+de exact geselecteerde rij in Records, 24 px ruimte tussen de bronkaart en de
+volledige tabel op desktop en 320 px, behoud van leesbare maar inactieve rijen
+tijdens een vertraagd zoekantwoord, directe blokkering vóór de debounce,
+focusherstel bij sluiten en het behouden van focus bij paneelwisselingen.
+Ook slepen, toetsenbordbediening, uitvouwen, pinnen, indelen, Undo en mobiele
+panelen slagen in dezelfde proef. De schermafbeeldingen zijn visueel bekeken.
+
+De bestaande `tests/workspace-navigation-smoke.mjs` slaagt tegen dezelfde echte
+installatie: tabelkeuze en zoekstatus blijven behouden, evenals schemastatus,
+onderzoeksconcepten, rechter navigatie en de 320/375/390 px-weergaven.
+De tweetalige frontendteksten, i18n, API-scope, schema-navigatie en beide
+record-map/canvasmodelproeven slagen; JavaScript-syntaxis en diff-witruimte
+zijn gecontroleerd. PostgreSQL en de Nginx/phpMyAdmin-integratie zijn voor deze
+gerichte UI-wijziging niet opnieuw uitgevoerd. Er is geen API-, database- of
+opslagformaat veranderd.
+
 Stand van de controles: **3 november 2026**. Eerdere resultaten hieronder horen
 bij hun beschreven wijziging en zijn niet automatisch opnieuw uitgevoerd.
 

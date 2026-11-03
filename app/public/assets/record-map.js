@@ -47,6 +47,7 @@ export function mountRecordMap(root, {state = {}, tables = [], scopeKey = '', in
     state.panels ||= {sources: {open: true}, inspector: {open: false}};
     state.trail = Array.isArray(state.trail) ? state.trail.filter(id => state.nodes.has(id)) : [];
     let layoutVersion = 0, mode = 'select', suppressClick = false;
+    let lastOpenPanel = state.panels.inspector.open ? 'inspector' : 'sources';
     const nodeElements = new Map();
     const smallButton = (label, handler, attributes = {}) => button(label, handler, {className: 'button-small', ...attributes});
     const summary = el('p', {class: 'record-map-summary'});
@@ -521,8 +522,19 @@ export function mountRecordMap(root, {state = {}, tables = [], scopeKey = '', in
         else { const left = clamp(node.offsetLeft + delta[0], 8, Math.max(8, size.width - node.offsetWidth - 8)), top = clamp(node.offsetTop + delta[1], 76, Math.max(76, size.height - node.offsetHeight - 94));
             node.style.left = left + 'px'; node.style.top = top + 'px'; node.style.right = 'auto'; Object.assign(state.panels[name], {left, top}); }
     }
+    function syncPanelLayout(size = dimensions()) {
+        shell.dataset.narrow = String(size.width < 600);
+        shell.dataset.constrained = String(size.width < 1000);
+        if (size.width < 900 && !picker.hidden && !inspector.hidden) {
+            const keep = picker.contains(document.activeElement) ? 'sources'
+                : inspector.contains(document.activeElement) ? 'inspector' : lastOpenPanel;
+            setPanel(keep === 'sources' ? 'inspector' : 'sources', false);
+        }
+        updateSelectionBar();
+    }
     function setPanel(name, open) {
         const node = name === 'sources' ? picker : inspector;
+        if (open) lastOpenPanel = name;
         state.panels[name].open = open; node.hidden = !open;
         if (open && dimensions().width < 900) {
             const other = name === 'sources' ? 'inspector' : 'sources';
@@ -703,7 +715,7 @@ export function mountRecordMap(root, {state = {}, tables = [], scopeKey = '', in
     viewport.addEventListener('pointerdown', onPointerDown); viewport.addEventListener('pointermove', onPointerMove); viewport.addEventListener('pointerup', onPointerUp); viewport.addEventListener('pointercancel', onPointerUp); viewport.addEventListener('wheel', onWheel, {passive: false}); shell.addEventListener('keydown', onKey);
     let previousSize = '';
     const observer = new ResizeObserver(() => { if (!active()) return; const size = dimensions(), key = size.width + 'x' + size.height; if (key === previousSize) return; previousSize = key;
-        if (size.width < 600 && !picker.hidden && !inspector.hidden) setPanel('inspector', false);
+        syncPanelLayout(size);
         if (state.nodes.size) { fit(); if (size.width < 600 && camera().zoom < .65) { const p = state.positions.get(state.focusId); if (p) { const box = canvasBox(); state.viewport = {x: (box.left + box.right) / 2 - p.x * .65, y: (box.top + box.bottom) / 2 - p.y * .65, zoom: .65}; transform(); } } }
     }); observer.observe(viewport);
     function destroy() {
@@ -713,6 +725,7 @@ export function mountRecordMap(root, {state = {}, tables = [], scopeKey = '', in
     }
     signal?.addEventListener('abort', destroy, {once: true});
     if (!available.length) seedList.append(notice(text('noTablesHelp')));
+    syncPanelLayout();
     renderAll();
     const restoredSelection = selectedRecordMapNodes(state);
     onSelectRecord?.(restoredSelection.length === 1 ? restoredSelection[0] : null);

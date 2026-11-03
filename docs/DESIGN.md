@@ -156,6 +156,26 @@ appearance and panel changes preserve temporary work. Each connection,
 database and schema owns its own selection, filters, loaded records and canvas
 presentation. Never persist fetched records or evidence in browser storage.
 
+### Explore and Records continuity
+
+Keep the selected source record in its own labelled card above the complete
+Records table, with 24 px between the two cards. Give the source summary,
+values and action row 16 px of separation. Clearing that card returns focus to
+record search; opening it continues to read the exact key in the current scope.
+
+Record search and pagination keep the last rows visible while the next response
+loads, with an EN/NL updating status. Stale rows and paging actions are disabled
+until the latest response arrives. Errors replace the old rows with retry and
+clear stale pagination and SQL. Keep the current Records/Explore/Schema routes,
+table headings, per-scope state and existing actions.
+
+Explore panels keep their close controls outside their scrolling content.
+Sources keeps table choice, search and pagination reachable while its record
+list scrolls. Compact panel placement follows the actual canvas width, not the
+browser window: below 600 px use the compact drawer layout; below 900 px allow
+only one open context panel, including after resizing. Retain the most recently
+opened panel. Desktop panels remain movable and resizable.
+
 ## Shared windows
 
 Keep window chrome separate from content and data loading. The shared modal
