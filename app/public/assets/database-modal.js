@@ -259,6 +259,7 @@ export class DatabaseModal {
             this.tableSelect.value = table;
             const route = location.searchParams.get('route') || '';
             if (route === '/table/import' || route === '/database/import' || route === '/import') this.tab = 'import';
+            else if (route === '/table/export' || route === '/database/export' || route === '/export') this.tab = 'export';
             else if (route === '/table/sql' || route === '/database/sql') this.tab = 'sql';
             else if (route === '/table/structure' || route === '/database/structure') this.tab = 'structure';
             else if (route === '/sql') this.tab = 'browse';

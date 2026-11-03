@@ -49,12 +49,24 @@ const waitForModal = async page => {
     assert.match(await modalDocument(page).title(), /phpMyAdmin/i);
 };
 const switchModalTab = async (page, label) => {
-    const response = page.waitForResponse(result =>
-        result.url().includes('/phpmyadmin/index.php') && result.request().resourceType() === 'document');
-    await page.getByRole('tab', {name: label, exact: true}).click();
+    const tab = page.getByRole('tab', {name: label, exact: true});
+    const key = (await tab.getAttribute('id')).replace('database-tab-', '');
+    const database = await page.locator('#modal-database').inputValue();
+    const table = await page.locator('#modal-table').inputValue();
+    const route = key === 'browse' ? (table ? '/sql' : '/database/structure')
+        : (table ? '/table/' : '/database/') + key;
+    const requestedDocument = url => url.pathname === '/phpmyadmin/index.php'
+        && url.searchParams.get('route') === route && url.searchParams.get('db') === database
+        && (url.searchParams.get('table') || '') === table;
+    // The previous keyboard tab navigation can still be in flight. Only the
+    // document requested by this click establishes that the new tab loaded.
+    const response = page.waitForResponse(result => result.request().resourceType() === 'document'
+        && requestedDocument(new URL(result.url())));
+    await tab.click();
     assert.equal((await response).status(), 200);
+    await modalDocument(page).waitForURL(requestedDocument);
     await waitForModal(page);
-    assert.equal(await page.getByRole('tab', {name: label, exact: true}).getAttribute('aria-selected'), 'true');
+    assert.equal(await tab.getAttribute('aria-selected'), 'true');
 };
 
 try {
