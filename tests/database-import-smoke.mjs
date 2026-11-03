@@ -27,7 +27,7 @@ const manager = page.locator('#database-manager-dialog');
 const nameInput = manager.locator('#database-manager-name');
 const nativeDialog = page.locator('#database-dialog');
 const frame = page.frameLocator('#database-frame');
-let first = '', csrf = '', releaseRequest;
+let first = '', csrf = '', releaseRequest, abortHeldImport = false;
 const beforeDraft = "SELECT 'original database draft' AS before_import;";
 const importedDraft = "SELECT 'imported database draft' AS after_import;";
 const literal = '<img src=x onerror="window.importUnsafe=1">';
@@ -183,23 +183,33 @@ try {
         return url.pathname.startsWith('/phpmyadmin/') && url.searchParams.get('route') === '/import'
             && response.request().method() === 'POST';
     });
+    // Preserve the primary assertion if finally closes a still-pending waiter.
+    uploaded.catch(() => {});
     let importStarted;
-    const nativeStarted = new Promise(resolve => { importStarted = resolve; });
+    const nativeStarted = new Promise((resolve, reject) => {
+        importStarted = resolve;
+        setTimeout(() => reject(new Error('phpMyAdmin did not submit the selected SQL file within 30 seconds.')), 30000).unref();
+    });
     const nativeGate = new Promise(resolve => { releaseRequest = resolve; });
     const nativeImportRoute = url => url.pathname.startsWith('/phpmyadmin/') && url.searchParams.get('route') === '/import';
     const holdNativeImport = async route => {
         if (route.request().method() !== 'POST') return route.continue();
         importStarted();
         await nativeGate;
-        await route.continue();
+        try { await (abortHeldImport ? route.abort() : route.continue()); }
+        catch (error) { if (!abortHeldImport) throw error; }
     };
     await page.route(nativeImportRoute, holdNativeImport);
     await frame.locator('#buttonGo').click();
     await nativeStarted;
     // Let status polling run while the real transport is deliberately pending.
     await page.waitForTimeout(1000);
+    const nativeState = await frame.locator('body').evaluate(() => ({
+        uploadDisplay: document.querySelector('#upload_form_status')?.style.display ?? null,
+        observedForm: document.querySelector('#input_import_file')?.closest('form')?.dataset.governImportWatch ?? null,
+    }));
     assert.equal(await nativeDialog.locator('#modal-database').isDisabled(), true,
-        'An official phpMyAdmin import holds the selected database and engine.');
+        'An official phpMyAdmin import holds the selected database and engine: ' + JSON.stringify(nativeState));
     assert.equal(await nativeDialog.locator('#native-import-file').isDisabled(), true);
     assert.equal(await nativeDialog.locator('.database-dialog-header .button').isDisabled(), true);
     releaseRequest(); releaseRequest = null;
@@ -343,6 +353,7 @@ try {
     assert.deepEqual(errors, []);
     console.log('PASS: preflight/post-import schema and exact records, Bestuursatlas completeness, native SQL import, database safety and navigation.');
 } finally {
+    abortHeldImport = true;
     releaseRequest?.();
     if (first && csrf) for (const fixture of owned) {
         if (!fixture.startsWith('govern_ui_') || !fixture.endsWith(suffix)) continue;

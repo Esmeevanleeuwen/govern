@@ -308,19 +308,24 @@ export class DatabaseModal {
             const form = document.querySelector('#input_import_file')?.closest('form');
             if (form && !form.dataset.governImportWatch) {
                 form.dataset.governImportWatch = '1';
-                form.addEventListener('submit', () => {
+                const observeAccepted = () => {
+                    const database = this.database;
                     const previous = new Map([...document.querySelectorAll('.alert-danger, .alert-error, #error_message, .alert-success')]
                         .map(node => [node, {text: node.textContent, child: node.firstChild}]));
-                    // phpMyAdmin validates at document level. Observe its accepted
-                    // upload state after those handlers, not the raw button click.
-                    queueMicrotask(() => {
-                        if (this.isPostgres() || this.tab !== 'import' || !this.dialog.open || document !== this.frame.contentDocument) return;
+                    // Delegated phpMyAdmin handlers run later in this event.
+                    // A new task observes their accepted state; a microtask can
+                    // run between native listeners before validation has finished.
+                    setTimeout(() => {
+                        if (this.database !== database || this.isPostgres() || this.tab !== 'import' || !this.dialog.open
+                            || document !== this.frame.contentDocument || this.importInspection.submitted) return;
                         if (document.querySelector('#upload_form_status')?.style.display === 'inline') {
                             this.nativeMessagesBefore = previous;
                             this.importInspection.submittedFile();
                         }
-                    });
-                });
+                    }, 0);
+                };
+                form.addEventListener('submit', observeAccepted);
+                document.querySelector('#buttonGo')?.addEventListener('click', observeAccepted);
             }
             if (!this.importInspection.submitted) return;
             const changed = node => {
