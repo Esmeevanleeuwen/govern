@@ -38,6 +38,7 @@ jobs:
         run: |
           python3 tests/start-gateway-reload.py
           python3 tests/postgres-demo-loader-unit.py
+          python3 tests/postgres-tools-unit.py
       - name: Start an isolated Docker stack
         run: sh start.sh
       - name: Initialize the test installation owner through registration

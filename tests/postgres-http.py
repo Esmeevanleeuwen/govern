@@ -133,7 +133,7 @@ def main():
         check(status == 403 and result.get("error_code") == "csrf_invalid",
               "Multipart import preserves CSRF validation")
         status, result = request(action, upload=True)
-        check((status == 200 and result.get("ok")) if action == "dataset-preview" else status == 422,
+        check((status == 200 and result.get("ok")) if action == "dataset-preview" else status == 409 and result.get("error_code") == "dataset_changed",
               "PostgreSQL previews table files and refuses import without explicit confirmation")
     status, result = request("query", {"sql": "SELECT 1"}, token=False)
     check(status == 403 and result.get("error_code") == "csrf_invalid", "CSRF checks still precede unsupported mutation handling")

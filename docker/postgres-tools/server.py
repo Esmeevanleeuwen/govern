@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import re
+import resource
 import secrets
 import socket
 import stat
@@ -78,12 +79,18 @@ class Tools:
         result["PGAPPNAME"] = "govern-checkpoints-" + role
         return result
 
-    def run(self, argv, *, role="admin", input=None, output=None, error="postgres_snapshot_failed"):
+    def run(self, argv, *, role="admin", input=None, output=None, error="postgres_snapshot_failed", max_file_bytes=None):
+        def limit_files():
+            inherited = resource.getrlimit(resource.RLIMIT_FSIZE)
+            finite = [value for value in inherited if value != resource.RLIM_INFINITY]
+            ceiling = min([max_file_bytes, *finite])
+            resource.setrlimit(resource.RLIMIT_FSIZE, (ceiling, ceiling))
+
         try:
             result = subprocess.run(argv, input=input, stdout=output or subprocess.PIPE,
                                     stderr=subprocess.PIPE, env=self.process_env(role), timeout=self.timeout,
-                                    check=False)
-        except (OSError, subprocess.TimeoutExpired):
+                                    check=False, preexec_fn=limit_files if max_file_bytes is not None else None)
+        except (OSError, subprocess.SubprocessError):
             raise Failure(error) from None
         if result.returncode != 0:
             # Driver diagnostics may contain records or secrets. Only stable
@@ -282,7 +289,7 @@ class Tools:
             # An actual reader login prevents executing user-defined data output
             # functions with bootstrap authority while exporting.
             self.run(["pg_dump", "--format=custom", "--no-owner", "--no-acl", "--schema=" + identifier(schema),
-                      "--file=" + str(archive), "--dbname=" + self.database], role="reader")
+                      "--file=" + str(archive), "--dbname=" + self.database], role="reader", max_file_bytes=MAX_DUMP)
             size = archive.stat().st_size
             if not 0 < size <= MAX_DUMP:
                 raise Failure("postgres_snapshot_failed")
@@ -409,7 +416,7 @@ class Tools:
             restored_sql = temporary / "restore.sql"
             with restored_sql.open("wb") as stream:
                 self.run(["pg_restore", "--no-owner", "--no-acl", "--use-list=" + str(use_list),
-                          "--file=-", str(archive)], output=stream, error="postgres_restore_failed")
+                          "--file=-", str(archive)], output=stream, error="postgres_restore_failed", max_file_bytes=MAX_DUMP * 4)
             if restored_sql.stat().st_size > MAX_DUMP * 4:
                 raise Failure("postgres_restore_failed")
             control_changed = success = False

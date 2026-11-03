@@ -2,6 +2,7 @@ import {registerMessages} from './i18n.js';
 
 registerMessages('app.postgres', {
     nl: {
+        createUnavailable: 'Nieuwe PostgreSQL-databases aanmaken is hier nog niet beschikbaar. Je kunt bestaande ingestelde schema’s openen en daarin importeren.',
         restoreUnavailable: 'Herstellen is nu niet beschikbaar voor dit schema. Controleer niet-ondersteunde objecten en verwijzingen vanuit andere schema’s. De download blijft beschikbaar.',
         tools: "PostgreSQL · Bewerk records, voer SQL uit, importeer bestanden en beheer herstelpunten van het gekozen schema.",
         sqlHelp: "Voer PostgreSQL-opdrachten uit in de gekozen database en het schema. Je concept en resultaten blijven tijdens deze sessie behouden.",
@@ -23,6 +24,7 @@ registerMessages('app.postgres', {
         definitionUnavailable: 'Een volledige CREATE-definitie is nog niet beschikbaar voor PostgreSQL. De kolommen, sleutels en relaties hierboven komen uit de actuele database.',
     },
     en: {
+        createUnavailable: 'Creating PostgreSQL databases is not available here yet. Open and import into existing configured schemas instead.',
         restoreUnavailable: 'Restore is currently unavailable for this schema. Check unsupported objects and dependencies from other schemas. The archive remains available to download.',
         tools: "PostgreSQL · Edit records, run SQL, import files and manage restore points for the selected schema.",
         sqlHelp: "Run PostgreSQL statements in the selected database and schema. Your draft and results stay available during this session.",

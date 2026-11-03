@@ -188,7 +188,8 @@ const databaseManager = createDatabaseManager({getDatabase, getDatabases: () => 
     onImport: async database => {
         if (database !== getDatabase()) await switchDatabase(database);
         else await refreshBootstrap(false);
-        if (getDatabase() === database && !state.connectionError) databaseModal.open('', 'import');
+        if (getDatabase() === database && !state.connectionError && supports('import')) databaseModal.open('', 'import');
+        else if (getDatabase() === database && !supports('import')) toast(t('app.postgres.unavailable'), 'error');
     },
     onPrepared: async (data, {importSql}) => {
         knownDatabases = data.databases;

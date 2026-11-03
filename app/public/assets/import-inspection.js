@@ -22,6 +22,7 @@ export class ImportInspectionPanel {
         this.ownPlan = null;
         this.ownHeading = el('h4', {}, t('imports.ownTitle'));
         this.ownDescription = el('p', {class: 'small muted'}, t('imports.ownDescription'));
+        this.ownScope = el('p', {class: 'small muted', hidden: true});
         this.ownFile = el('input', {id: 'native-import-file', type: 'file', accept: '.sql,text/plain', class: 'input'});
         this.ownFileLabel = el('label', {class: 'field-label', for: 'native-import-file'}, t('imports.ownChoose'));
         this.ownPreviewButton = button(t('imports.ownPreview'), () => this.previewOwn(),
@@ -33,7 +34,7 @@ export class ImportInspectionPanel {
         this.ownStatus = el('p', {role: 'status', 'aria-live': 'polite', class: 'small muted'});
         this.ownError = el('p', {role: 'alert', class: 'notice notice-error', hidden: true});
         this.ownPanel = el('section', {class: 'native-import'},
-            this.ownHeading, this.ownDescription, this.ownFileLabel, this.ownFile,
+            this.ownHeading, this.ownDescription, this.ownScope, this.ownFileLabel, this.ownFile,
             el('div', {class: 'database-manager-actions'}, this.ownPreviewButton),
             this.ownConfirmLabel, this.ownConfirm,
             el('div', {class: 'database-manager-actions'}, this.ownRunButton),
@@ -317,6 +318,8 @@ export class ImportInspectionPanel {
         if (!this.ownError.hidden && this.ownCurrentError) this.ownError.textContent = errorText(this.ownCurrentError);
         this.ownHeading.textContent = t('imports.ownTitle');
         this.ownDescription.textContent = t(this.isPostgres() ? 'imports.ownDescriptionPostgres' : 'imports.ownDescription');
+        this.ownScope.hidden = !this.isPostgres();
+        this.ownScope.textContent = this.target();
         this.ownFileLabel.textContent = t('imports.ownChoose');
         this.ownConfirmLabel.textContent = t(this.isPostgres() ? 'imports.ownConfirmPostgres' : 'imports.ownConfirm');
         this.ownPreviewButton.querySelector('span').textContent = t('imports.ownPreview');

@@ -3,7 +3,7 @@ import {registerMessages} from './i18n.js';
 registerMessages('app.databases', {
     nl: {
         manage: 'Database toevoegen of importeren', closeManager: 'Sluiten', managerTitle: 'Jouw databases',
-        managerDescription: 'Open een werkdatabase of importeer een database met phpMyAdmin.',
+        managerDescription: 'Open een werkdatabase of importeer SQL- en tabelbestanden.',
         existingDatabases: 'Beschikbare databases', existingHelp: 'Kies een database om de werkplek te openen of een SQL-bestand te importeren.',
         openWorkspace: 'Werkplek openen', importSelected: 'Importeren in gekozen database',
         newDatabase: 'Database toevoegen', databaseName: 'Databasenaam',
@@ -27,7 +27,7 @@ registerMessages('app.databases', {
     },
     en: {
         manage: 'Add or import database', closeManager: 'Close', managerTitle: 'Your databases',
-        managerDescription: 'Open a workspace database or import a database with phpMyAdmin.',
+        managerDescription: 'Open a workspace database or import SQL and table files.',
         existingDatabases: 'Available databases', existingHelp: 'Choose a database to open its workspace or import an SQL file.',
         openWorkspace: 'Open workspace', importSelected: 'Import into selected database',
         newDatabase: 'Add a database', databaseName: 'Database name',
