@@ -31,7 +31,7 @@ CREATE TABLE public.govern_pg_edit_composite (
 INSERT INTO public.govern_pg_edit_composite VALUES ('same',9007199254740993,'composite original');
 CREATE TABLE archive.govern_pg_edit_composite (LIKE public.govern_pg_edit_composite INCLUDING ALL);
 INSERT INTO archive.govern_pg_edit_composite VALUES ('same',9007199254740993,'composite original');
-CREATE TABLE public.govern_pg_edit_unique (code text NOT NULL UNIQUE INCLUDE (label), label text);
+CREATE TABLE public.govern_pg_edit_unique (code text NOT NULL, label text, UNIQUE(code) INCLUDE (label));
 INSERT INTO public.govern_pg_edit_unique VALUES ('one','unique original');
 CREATE TABLE public.govern_pg_edit_partial (code text NOT NULL, label text);
 CREATE UNIQUE INDEX govern_pg_edit_partial_index ON public.govern_pg_edit_partial(code) WHERE label IS NOT NULL;

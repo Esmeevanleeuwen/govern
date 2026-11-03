@@ -125,6 +125,9 @@ try {
     await waitRows(marker + ' edited');
 
     await page.locator('#database-select').selectOption(archiveKey);
+    await page.waitForFunction(key => document.querySelector('#database-select')?.value === key
+        && !document.querySelector('#database-select').disabled, archiveKey);
+    await page.locator('.catalog-item[title="govern_pg_edit"]').click();
     await waitRows('Archive row');
     assert.equal((await page.locator('.table-workspace .data-table').innerText()).includes(marker), false);
     await page.locator('#database-select').selectOption(publicKey);

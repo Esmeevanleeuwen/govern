@@ -63,6 +63,9 @@ try {
     await page.goto(bookmark('gegevens', publicKey, 'govern_pg_values'), {waitUntil: 'networkidle'});
     await loaded(publicKey, 'literal%_value');
     await page.locator('#database-select').selectOption(archiveKey);
+    await page.waitForFunction(key => document.querySelector('#database-select')?.value === key
+        && !document.querySelector('#database-select').disabled, archiveKey);
+    await page.locator('.catalog-item[title="govern_pg_values"]').click();
     await loaded(archiveKey, 'Archive-only row');
     assert.equal((await page.locator('.data-table').textContent()).includes('literal%_value'), false);
     await page.locator('#database-select').selectOption(publicKey);

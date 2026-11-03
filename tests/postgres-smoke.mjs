@@ -47,6 +47,9 @@ try {
     await searched;
     await row('literal%_value').first().waitFor();
     await page.locator('#database-select').selectOption(archiveKey);
+    await page.waitForFunction(key => document.querySelector('#database-select')?.value === key
+        && !document.querySelector('#database-select').disabled, archiveKey);
+    await page.locator('.catalog-item[title="govern_pg_values"]').click();
     await loaded(archiveKey, 'Archive-only row');
     assert.equal(await page.locator('#data-search').inputValue(), '', 'Schema searches stay separate.');
     assert.equal((await page.locator('.data-table').textContent()).includes('literal%_value'), false);
