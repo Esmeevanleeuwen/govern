@@ -136,7 +136,7 @@ def main():
         check((status == 200 and result.get("ok")) if action == "dataset-preview" else status == 409 and result.get("error_code") == "dataset_changed",
               "PostgreSQL previews table files and refuses import without explicit confirmation")
     status, result = request("query", {"sql": "SELECT 1"}, token=False)
-    check(status == 403 and result.get("error_code") == "csrf_invalid", "CSRF checks still precede unsupported mutation handling")
+    check(status == 403 and result.get("error_code") == "csrf_invalid", "CSRF remains enforced for writable PostgreSQL SQL")
     status, result = request("bootstrap", parameters={"schema": "pg_catalog"})
     check(status == 403 and not result["ok"], "Unconfigured PostgreSQL namespaces are not selectable")
     status, result = request("bootstrap", parameters={"database": "postgres"})

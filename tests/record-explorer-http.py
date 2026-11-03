@@ -142,7 +142,9 @@ def main():
     status, result, _ = request(parameters=packed)
     check(status == 200 and result["data"]["center"] == data["center"], "Cached-client packed scopes retain the same record identity")
     status, result, _ = request("query", body={"sql": "SELECT 1"})
-    check(status == 403 and result.get("error_code") == "postgres_read_only", "Adding graph reads does not enable arbitrary PostgreSQL SQL")
+    check(status == 200 and result["ok"] and result["data"]["failed"] is None
+          and result["data"]["executed"] == 1 and result["data"]["statements"][0]["rows"] == [["1"]],
+          "The separate native SQL route works alongside the read-only record explorer")
     status, result, _ = request(parameters={"connection": "mariadb", "database": "bestuursatlas", "schema": None,
                                            "table": "organizations"})
     check(status == 200 and result["data"]["scope_key"] == "bestuursatlas"
