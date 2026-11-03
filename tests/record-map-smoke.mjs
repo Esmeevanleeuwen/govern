@@ -184,7 +184,13 @@ try {
     await page.locator('[data-record-node="' + info.focus.id + '"]').click();
     await inspection.locator('[data-map-connections-for="' + info.focus.id + '"]').waitFor({state: 'visible'});
     const refreshSource = () => inspection.locator('[data-map-refresh-record="' + info.focus.id + '"]');
-    await reveal(refreshSource());
+    const openRefreshSource = async () => {
+        const moreActions = inspection.locator('.record-map-more-actions');
+        await moreActions.waitFor({state: 'visible'});
+        if (!await moreActions.evaluate(element => element.open)) await moreActions.locator('summary').click();
+        await refreshSource().waitFor({state: 'visible'});
+    };
+    await openRefreshSource();
     let reread = mapResponse('mariadb', undefined);
     await refreshSource().click();
     await reread;
@@ -201,7 +207,7 @@ try {
     });
     await page.locator('[data-record-relation="' + incoming.id + '"]').click();
     await bounded(expansionHeld);
-    await reveal(refreshSource());
+    await openRefreshSource();
     reread = mapResponse('mariadb', undefined);
     await refreshSource().click();
     await reread;
