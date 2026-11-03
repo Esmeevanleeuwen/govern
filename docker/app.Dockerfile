@@ -1,7 +1,7 @@
 FROM php:8.4-apache-bookworm
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends mariadb-client \
+    && apt-get install -y --no-install-recommends mariadb-client python3 \
     && docker-php-ext-install pdo_mysql \
     && rm -rf /var/lib/apt/lists/* \
     && sed -ri 's!/var/www/html!/var/www/public!g' /etc/apache2/sites-available/*.conf \
@@ -19,3 +19,4 @@ RUN chmod +x /usr/local/bin/govern-entrypoint
 WORKDIR /var/www
 ENTRYPOINT ["govern-entrypoint"]
 CMD ["apache2-foreground"]
+

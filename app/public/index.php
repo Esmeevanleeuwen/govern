@@ -17,6 +17,7 @@
     <link rel="stylesheet" href="/assets/database-manager.css">
     <link rel="stylesheet" href="/assets/ai-workspace.css">
     <script type="module" src="/assets/app.js"></script>
+    <link rel="stylesheet" href="/assets/dataset-import.css">
 </head>
 <body>
     <a class="skip-link" href="#main-content" data-i18n="app.shell.skip">Ga naar de inhoud</a>
@@ -58,3 +59,4 @@
     <noscript><p class="noscript-notice">Schakel JavaScript in om deze werkplek te gebruiken. Enable JavaScript to use Govern. <a href="/phpmyadmin/">phpMyAdmin</a></p></noscript>
 </body>
 </html>
+

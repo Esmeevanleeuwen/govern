@@ -21,14 +21,17 @@ use Govern\SavedQueries;
 use Govern\AiService;
 use Govern\DatabaseProvisioner;
 use Govern\ImportInspection;
+use Govern\DatasetImport;
 
 try {
     $baseConfig = Config::fromEnvironment();
     $csrf = Http::start($baseConfig);
     $action = Http::text($_GET, 'action');
     $posts = ['build-query', 'query', 'save-query', 'delete-query', 'create-snapshot', 'restore-snapshot', 'insert-row', 'update-row', 'delete-row', 'ai-context', 'ai-chat', 'prepare-database'];
+    $datasetUpload = in_array($action, ['dataset-preview', 'dataset-import'], true);
+    $file = $datasetUpload ? DatasetImport::upload($csrf) : null;
     $input = in_array($action, $posts, true) ? Http::post($csrf) : [];
-    if (!in_array($action, $posts, true)) {
+    if (!$datasetUpload && !in_array($action, $posts, true)) {
         Http::get();
     }
     $scope = new DatabaseScope($baseConfig);
@@ -69,6 +72,12 @@ try {
         exit;
     }
     $database = new Database($config);
+    if ($datasetUpload) {
+        $parsed = DatasetImport::read($file);
+        $lock = new MaintenanceLock($config['maintenance_dir']);
+        $importer = new DatasetImport($database);
+        Http::json($action === 'dataset-preview' ? $importer->preview($parsed) : $importer->commit($parsed, $_POST));
+    }
     $catalog = new Catalog($database);
     $queries = new SavedQueries($database, $config);
     if ($action === 'import-inspection') {
@@ -218,3 +227,4 @@ try {
     error_log('Govern internal error [' . get_class($exception) . ']');
     Http::json(Messages::text('internal_error'), 500, false, 'internal_error');
 }
+

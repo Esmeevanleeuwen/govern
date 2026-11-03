@@ -22,6 +22,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Start an isolated Docker stack
         run: sh start.sh
+      - name: Dataset readers
+        run: python3 tests/dataset-readers.py
       - name: PHP syntax
         run: |
           docker compose exec -T app sh -c 'find /var/www/src /var/www/public -name "*.php" -exec php -l {} \;'
@@ -44,6 +46,8 @@ jobs:
           docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" -e GOVERN_TEST_SECOND_DATABASE app php /workspace/tests/multidatabase-row-integration.php --confirm-database=bestuursatlas --confirm-second-database=govern_multi_test
           docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" -e GOVERN_TEST_SECOND_DATABASE app php /workspace/tests/ai-integration.php --confirm-database=bestuursatlas
           docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" app php /workspace/tests/database-provisioning-integration.php --confirm-database=bestuursatlas
+      - name: Tabular dataset integration
+        run: docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" app php /workspace/tests/dataset-import-integration.php --confirm-database=bestuursatlas
       - name: Backup and recovery integration
         run: docker compose run --rm -T --no-deps -v "$PWD:/workspace:ro" app php /workspace/tests/backup_integration.php --confirm-database=bestuursatlas
       - name: Proxy follows recreated web containers
@@ -65,6 +69,7 @@ jobs:
           export BROWSER_BIN
           export BASE_URL=http://127.0.0.1:8080
           export GOVERN_UI_WRITE_TESTS=1
+          node tests/dataset-import-smoke.mjs
           node tests/database-import-smoke.mjs
           node tests/frontend-smoke.mjs
           node tests/query-builder-smoke.mjs
@@ -82,3 +87,4 @@ jobs:
       - name: Stop this isolated test stack
         if: always()
         run: docker compose down
+

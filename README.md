@@ -378,3 +378,37 @@ eerdere opdrachten in een script kunnen al zijn uitgevoerd als een latere faalt.
 De interface en configuratie zijn niet bedoeld om rechtstreeks openbaar op
 internet te zetten. Voor delen of publiceren hoort eerst authenticatie en een
 passende toegangsconfiguratie te worden toegevoegd.
+
+
+## Excel, CSV, TXT en JSON rechtstreeks importeren
+
+Open **Database openen → Bestanden importeren**. Kies een `.xlsx`, `.csv`, `.tsv`,
+`.txt`, `.json` of een ZIP met zulke bestanden en klik **Importvoorbeeld bekijken**.
+Selecteer het werkblad, controleer de kolomnamen en kies een nieuwe tabelnaam.
+Typ de getoonde databasenaam en klik **Importeren**. Sluit het venster om de
+vernieuwde tabel in de gewone Govern-verkenner te bekijken.
+
+Het voorbeeld toont de eerste twintig rijen, een verdeling van die voorbeeldrijen,
+lege velden, mogelijke unieke sleutels en dubbele rijen uit het hele bestand.
+Deze meldingen maken geen foreign keys en verwijderen geen dubbelen. Alle rijen
+worden geïmporteerd. Een passende bestaande InnoDB-tabel met dezelfde kolomnamen
+in dezelfde volgorde en tekstvelden kan ook als bestemming worden gekozen.
+Toevoegen vervangt geen bestaande records. Controleer bij een verbindingsfout eerst
+de doeltabel voordat je opnieuw importeert: een verloren antwoord kan ná opslaan ontstaan.
+
+De eerste rij bevat kolomnamen. CSV/TXT gebruikt UTF-8 en herkent komma, puntkomma,
+tab of pipe. JSON bevat een lijst met objecten. Kolomnamen worden geschikt gemaakt
+voor SQL; dubbele namen krijgen een achtervoegsel. Waarden blijven tekst zodat
+voorloopnullen en historische jaaraanduidingen behouden blijven. XLSX-datums worden
+leesbare datumteksten. Formules worden nooit uitgevoerd: alleen bestaande uitkomsten
+worden gelezen; ontbrekende uitkomsten en foutcellen worden afgewezen. Uitkomsten
+kunnen verouderd zijn. Nieuwe tabellen krijgen een eigen `_govern_id` als primaire sleutel.
+
+Deze eerste versie ondersteunt 16 MB per bestand, maximaal 100.000 records en 256
+kolommen, maximaal 32 tabellen/werkbladen en 64 MB uitgepakte inhoud per archief.
+XLS, GeoPackage, GeoJSON-kaarten en QGIS-projecten volgen niet automatisch uit deze
+functie. Geografische lezers en kaartweergaven zijn een volgende uitbreiding.
+SQL-bestanden blijven via de bestaande officiële phpMyAdmin-import werken.
+
+Werk voor deze uitbreiding de broncode bij en voer `start.cmd` of `sh start.sh`
+uit zodat de app-image met de lokale Python-bestandslezer wordt opgebouwd.

@@ -2,9 +2,11 @@ import {t, getLanguage} from './i18n.js';
 import './modal-messages.js';
 import './database-messages.js';
 import {el, icon, button, badge} from './ui.js';
+import {DatasetImportPanel} from './dataset-import.js';
 import {ImportInspectionPanel} from './import-inspection.js';
 
 const routes = {
+    dataset: {table: '/table/import', database: '/database/import'},
     browse: {table: '/sql', database: '/database/structure'},
     structure: {table: '/table/structure', database: '/database/structure'},
     sql: {table: '/table/sql', database: '/database/sql'},
@@ -28,6 +30,10 @@ export class DatabaseModal {
         this.currentUrl = '';
         this.onClose = onClose;
         this.importInspection = new ImportInspectionPanel();
+        this.datasetImport = new DatasetImportPanel(busy => {
+            this.databaseSelect.disabled = busy; this.tableSelect.disabled = busy; this.closeButton.disabled = busy;
+            Object.values(this.tabButtons).forEach(tab => {tab.disabled = busy;});
+        });
         this.dialog = el('dialog', {id: 'database-dialog', class: 'database-dialog', 'aria-labelledby': 'database-title'});
         this.name = el('span', {class: 'database-name sr-only'});
         this.databaseSelect = el('select', {id: 'modal-database', class: 'input select modal-database-select',
@@ -42,8 +48,8 @@ export class DatabaseModal {
         this.expand = el('button', {type: 'button', class: 'icon-button', title: t('modal.expand'), 'aria-label': t('modal.expand'), 'aria-pressed': 'false', on: {click: () => this.toggleExpanded()}}, icon('expand'));
         this.tabButtons = {};
         const tablist = el('div', {class: 'database-tabs', role: 'tablist', 'aria-label': t('modal.tools')});
-        for (const [key, label, symbol] of [['browse', 'Browse', 'table'], ['structure', 'Structure', 'layers'], ['sql', 'SQL', 'code'], ['import', t('modal.import'), 'download']]) {
-            const tab = el('button', {type: 'button', class: 'database-tab', id: 'database-tab-' + key, role: 'tab', 'aria-controls': 'database-panel', 'aria-selected': 'false', on: {
+        for (const [key, label, symbol] of [['browse', 'Browse', 'table'], ['structure', 'Structure', 'layers'], ['sql', 'SQL', 'code'], ['import', t('modal.import'), 'download'], ['dataset', t('dataset.title'), 'plus']]) {
+            const tab = el('button', {type: 'button', class: 'database-tab', id: 'database-tab-' + key, role: 'tab', 'aria-controls': key === 'dataset' ? 'dataset-import-panel' : 'database-panel', 'aria-selected': 'false', on: {
                 click: () => { this.tab = key; this.navigate(); },
                 keydown: event => this.tabKeydown(event, key),
             }}, icon(symbol), label);
@@ -66,11 +72,13 @@ export class DatabaseModal {
                 el('div', {class: 'database-context'},
                     el('div', {class: 'modal-database'}, icon('database'), this.name, this.databaseSelect),
                     el('label', {class: 'sr-only', for: 'modal-table', 'data-i18n': 'modal.table'}, t('modal.table')), this.tableSelect)),
+            this.datasetImport.panel,
             this.importInspection.panel,
             this.panel,
             el('div', {class: 'database-dialog-footer'}, el('span', {class: 'status-dot'}), this.status,
                 el('span', {class: 'modal-footer-hint', 'data-i18n': 'modal.footerHint'}, t('modal.footerHint'))));
         this.fallbackVisible = false;
+        this.dialog.addEventListener('cancel', event => {if (this.datasetImport.busy) event.preventDefault();});
         this.dialog.addEventListener('close', () => {
             clearInterval(this.poll);
             clearTimeout(this.loadTimeout);
@@ -82,6 +90,8 @@ export class DatabaseModal {
 
     /** Translate the shell without reloading an active phpMyAdmin form or SQL draft. */
     refreshLanguage() {
+        this.tabButtons.dataset.replaceChildren(icon('plus'), t('dataset.title'));
+        this.datasetImport.render();
         this.dialog.querySelectorAll('[data-i18n]').forEach(node => { node.textContent = t(node.dataset.i18n); });
         this.external.title = t('modal.externalTitle');
         this.external.setAttribute('aria-label', t('modal.externalLabel'));
@@ -113,6 +123,7 @@ export class DatabaseModal {
         this.databaseSelect.replaceChildren(...databases.map(item => el('option', {value: item.name, selected: item.name === database}, item.name)));
         this.databaseSelect.setAttribute('aria-label', t('app.databases.choose'));
         this.database = database;
+        this.datasetImport.configure(database);
         this.tables = tables;
         this.name.textContent = database;
         const selected = this.table;
@@ -131,7 +142,7 @@ export class DatabaseModal {
         if (!this.dialog.open) this.dialog.showModal();
         // A completed native import can keep the same URL while showing its result.
         // An explicit Import action must open a fresh file form each time.
-        if (this.tab === 'import' || nextUrl !== this.currentUrl || this.frame.getAttribute('src') === 'about:blank') this.navigate();
+        if (this.panel.hidden || this.tab === 'dataset' || this.tab === 'import' || nextUrl !== this.currentUrl || this.frame.getAttribute('src') === 'about:blank') this.navigate();
         else this.updateTabs();
         clearInterval(this.poll);
         this.poll = setInterval(() => { this.syncLocation(); this.watchNativeImport(); }, 800);
@@ -139,6 +150,15 @@ export class DatabaseModal {
     }
 
     navigate() {
+        this.datasetImport.panel.hidden = this.tab !== 'dataset';
+        this.panel.hidden = this.tab === 'dataset';
+        this.external.hidden = this.tab === 'dataset';
+        this.tableSelect.hidden = this.tab === 'dataset';
+        if (this.tab === 'dataset') {
+            this.importInspection.close(); this.updateTabs(); clearTimeout(this.loadTimeout);
+            this.frameMessage.hidden = true; this.status.textContent = this.database + ' · ' + t('dataset.title');
+            return;
+        }
         if (this.tab === 'import') this.importInspection.open(this.database);
         else this.importInspection.close();
         this.updateTabs();
@@ -179,6 +199,7 @@ export class DatabaseModal {
     }
 
     checkLoaded() {
+        if (this.tab === 'dataset') return;
         try {
             const document = this.frame.contentDocument;
             if (document && this.frame.contentWindow.location.pathname.startsWith('/phpmyadmin/') && document.body) {
@@ -229,6 +250,7 @@ export class DatabaseModal {
     }
 
     syncLocation() {
+        if (this.tab === 'dataset') return;
         if (!this.dialog.open) return;
         try {
             const location = new URL(this.frame.contentWindow.location.href);
@@ -275,3 +297,4 @@ export class DatabaseModal {
         this.expand.title = expanded ? t('modal.collapse') : t('modal.expand');
     }
 }
+

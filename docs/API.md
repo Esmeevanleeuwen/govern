@@ -730,3 +730,33 @@ language applies on the next explicit open, tab/table navigation or reload.
 The embedded application's own interface remains phpMyAdmin's responsibility.
 
 Snapshots are real SQL exports, not container volume snapshots. Restoring overwrites current selected DB contents; user confirmation and automatic safety export required. DDL is not represented as transactionally undoable. No database or phpMyAdmin host port; only proxy bound127.0.0.1:8080. Nothing runs on the user computer until they start this project.
+
+
+## Tabular dataset upload
+
+`POST dataset-preview` and `POST dataset-import` are exceptions to the JSON request
+body convention: they accept multipart FormData with a single `file` upload.
+Both require the ordinary `X-CSRF-Token`, same-origin session and explicit
+`database` URL scope. They return the usual JSON envelope. The PHP upload limit is
+16 MB (18 MB multipart envelope); ordinary JSON POST remains limited to 1 MB.
+
+Preview returns `{database,sha256,datasets:[{index,name,count,columns,rows,
+formulas,duplicate_rows,targets}]}`. Columns include `{source,name,type:"LONGTEXT",
+suggestion,empty,distinct,unique}`; rows contain the first 20 records only, while
+counts/profile cover the complete imported table. `unique` suggests a possible key,
+not a generated constraint. Targets contain compatible catalog table names and
+structure versions. Preview does not create any table.
+
+Import additionally accepts multipart string fields `dataset` (zero-based index),
+`mode` (`create` or `append`), `table`, `confirmation` (exact database name),
+`sha256` (from preview), and `version` (required for append). The uploaded file is
+parsed again. Success returns `{database,table,mode,imported}` after commit.
+No overwrite, merge, deduplication or automatic retry is performed. All source
+values are text or NULL; new tables use LONGTEXT columns plus `_govern_id`.
+Append supports compatible InnoDB text tables only; schema drift returns 409.
+Source column names are normalized by the reader, and existing destinations are
+resolved through the catalog. Values always use bound parameters.
+
+Stable errors: `dataset_upload`, `dataset_invalid`, `dataset_unavailable`,
+`dataset_name`, `dataset_changed`, `dataset_exists`, plus ordinary CSRF/database
+errors. Native SQL imports remain a separate phpMyAdmin capability.

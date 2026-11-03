@@ -674,3 +674,19 @@ Do not reset the database, replace saved SQL or overwrite user layouts to apply 
 ## Technical references
 
 The existing application behaviour and integration boundaries are described in the [Govern architecture](https://github.com/Esmeevanleeuwen/govern/blob/main/docs/ARCHITECTURE.md), [API contract](https://github.com/Esmeevanleeuwen/govern/blob/main/docs/API.md) and [repository working guide](https://github.com/Esmeevanleeuwen/govern/blob/main/AGENTS.md). This documentation defines the UX and visual system for current and future changes. The original prototype remains illustrative; production controls operate through the real API.
+
+
+## Tabular file import
+
+A new **Bestanden importeren / Import files** tab lives inside the existing database
+window, alongside the official SQL-import shortcut. It uses shared buttons, input
+styles and semantic labels. Its panel has its own tabpanel ID and a contained scroll
+area for wide tables. The file preview explains its limits and distinguishes
+whole-file profile counts from the 20-row sample chart. The main action requires
+the visible database name before import. During a pending request all context
+controls and close actions are disabled. A language change preserves the draft.
+Errors preserve the chosen file; an uncertain write response invalidates the old
+preview and asks the user to inspect the table before retrying. Success identifies
+database, table and record count; closing refreshes the normal Govern catalog.
+This first phase adds tabular readers and a sample visualization, without a new
+top-level area, persisted charts or maps.

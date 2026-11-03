@@ -7,6 +7,12 @@ namespace Govern;
 final class Messages
 {
     private const TEXT = [
+        'dataset_invalid' => ['nl' => 'Dit bestand kan niet als tabel worden gelezen. Gebruik UTF-8 CSV/TXT, XLSX of een JSON-lijst met objecten. Controleer lege bladen, formulefouten en limieten: 16 MB, 100.000 rijen en 256 kolommen.', 'en' => 'This file cannot be read as a table. Use UTF-8 CSV/TXT, XLSX or a JSON array of objects. Check empty sheets, formula errors and limits: 16 MB, 100,000 rows and 256 columns.'],
+        'dataset_upload' => ['nl' => 'Selecteer een bestand van maximaal 16 MB. Controleer na bijwerken of Govern opnieuw is opgebouwd.', 'en' => 'Choose a file up to 16 MB. After updating, check that Govern has been rebuilt.'],
+        'dataset_unavailable' => ['nl' => 'De lokale bestandslezer is niet beschikbaar. Bouw Govern opnieuw op met het startscript.', 'en' => 'The local file reader is unavailable. Rebuild Govern with the start script.'],
+        'dataset_changed' => ['nl' => 'Het bestand, de tabelstructuur of de bevestiging is veranderd. Bekijk het importvoorbeeld opnieuw.', 'en' => 'The file, table structure or confirmation changed. Preview the import again.'],
+        'dataset_name' => ['nl' => 'Begin de tabelnaam met een letter en gebruik maximaal 64 letters, cijfers of underscores.', 'en' => 'Start the table name with a letter and use up to 64 letters, digits or underscores.'],
+        'dataset_exists' => ['nl' => 'Deze tabel bestaat al. Kies een andere naam of voeg toe aan een passende bestaande tabel.', 'en' => 'This table already exists. Choose another name or append to a compatible existing table.'],
         'database_create_invalid' => ['nl' => 'Gebruik voor de databasenaam 1–64 letters, cijfers of underscores. Systeemdatabases en te lange permissienamen zijn niet toegestaan.', 'en' => 'Use 1–64 letters, numbers or underscores for the database name. System databases and overlong permission names are not allowed.'],
         'database_manager_unavailable' => ['nl' => 'De lokale databasebeheerder is niet bereikbaar. Start Govern opnieuw met het startscript.', 'en' => 'The local database manager is unavailable. Restart Govern with the start script.'],
         'database_manager_invalid' => ['nl' => 'De lokale databasebeheerder gaf geen geldig antwoord. Probeer opnieuw of start Govern opnieuw.', 'en' => 'The local database manager did not return a valid response. Retry or restart Govern.'],
@@ -233,3 +239,4 @@ final class Messages
         return array_map(static fn (array $message): string => self::text($message['code'], $message['params'] ?? [], $language), $messages);
     }
 }
+
