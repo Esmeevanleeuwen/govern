@@ -105,6 +105,11 @@ Uitgevoerd tegen het afzonderlijke PostgreSQL-/MariaDB-testproject:
 
 Deze wijziging raakt geen backendcontract of databaserechten. De volledige
 CI-workflow en een echte Windows-browser zijn niet lokaal opnieuw uitgevoerd.
+De actuele bediening staat in [Explore](RECORD_MAP.md): één flexibel canvas
+met de gepagineerde record-map-acties. De hieronder bewaarde controles van
+Guided/Detailed en de eerdere GET-verkenner beschrijven hun eigen voorganger,
+niet een tweede actuele interface. Het `GET explore`-contract blijft beschikbaar
+voor bestaande clients.
 
 ## Guided / Stap voor stap voor collega's
 

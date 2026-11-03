@@ -75,43 +75,49 @@ diagram state. Cached data and delayed responses from another scope must never
 replace the visible selection. A configured but unreadable schema uses the
 same honest unavailable state as other connection failures.
 
-## Record exploration
+## Unified record exploration
 
-The shared Database area adds **Explore / Verkennen** beside Data, Structure
-and Schema. Schema shows table definitions; Explore shows actual keyed records
-and the declared references between them. Use a bounded neighborhood centered
-on one chosen record, a synchronized record list, and a nearby explanation
-panel. Selection and relationship filters change the view only.
+**Database → Explore / Verkennen** combines the guided record explorer and
+relationship map in one workspace. Records is for ordinary rows and editing;
+Explore is for following actual record connections; Schema groups table details
+and the table diagram. Keep these tasks in the fixed order **Records, Explore,
+Schema**. The old `#verbanden` hash is an alias of `#verkennen`.
 
-Keep the current record visibly distinct, provide keyboard alternatives for
-graph nodes and edges, and show non-colour selection states in the record list.
-The explanation names the exact source and referenced fields/values instead
-of inventing a semantic or causal relationship. Scope, loaded counts, truncation
-and skipped relationships remain visible. A partial neighborhood must never
-look like a complete graph of the database.
+Let the canvas dominate Explore. Use readable record cards, a floating source
+library and a selected-record inspector rather than a second fixed table list.
+The library owns table choice, record search and paginated starting records.
+The inspector owns the selected record's references, source actions and evidence.
+Cards, questions and inspector share one exact selection and the same reader API.
 
-Keep search, relationship choices and the selected record when changing
-language or appearance. A database/schema change owns separate view state and
-invalidates old network callbacks. On compact screens stack graph, records
-and explanation within the viewport; controls retain readable labels and focus.
+Provide Select/Pan, zoom and Fit; Shift-selection; Pin/Unpin; Hide; and bounded
+Undo for canvas presentation. Orbit and Flow arrange unpinned cards; Manual
+keeps the user's positions. Expanding a reference adds nearby records without
+rearranging existing cards. Show explicit loading and further-page actions.
+Hide and filters change visibility only. Undo may restore presentation or hide
+newly expanded cards, but must never restore stale record/edge evidence or
+relationship cursors. Clear map starts a fresh loaded graph and is not undone.
 
-## Guided record exploration
+The source library and inspector can move, resize in width, close and reopen.
+Keep main navigation fixed. On narrow screens use one drawer at a time, with
+readable controls and focus return. Keyboard and touch alternatives accompany
+dragging. Avoid continuous simulation motion and respect reduced motion.
 
-Explore defaults to **Guided / Stap voor stap** for coworkers who need no code.
-Keep the same graph, records, explanation and read-only API. Label the starting
-controls as category/item choices and offer questions derived from the loaded
-neighborhood: show all loaded links, show a category, explain a real connection,
-or follow a linked item. Counts refer to distinct loaded neighboring records.
+Questions stay near the current selection: show the linked records for a real
+reference, or show all records already loaded in this canvas. They are fixed
+read actions, not generated answers or free SQL. Loaded counts never imply a
+complete database graph. Unsupported identities, external references, missing
+records and truncated previews have explicit states and a route back.
 
-Use readable aliases for schema identifiers, with original names, complete keys
-and FK evidence available under **Technical details**. Do not rewrite record
-text or infer business meaning such as ownership or causality from field names.
-The plain explanation describes the actual stored reference.
+Keep names readable while preserving exact identifiers, complete keys, FK
+column pairs and SQL/parameters under **Technical details**. Do not infer
+ownership or causality from a field name. Opening **View row** reads the exact
+selected source again in Records. Technical detail is a disclosure inside the
+same workspace, not a separate Guided/Detailed navigation mode.
 
-**Detailed / Details** restores the technical controls without changing the
-root, filters, selected item or database scope. Persist only the mode preference
-in the browser, with an in-memory fallback when storage is unavailable. Guided
-question actions remain keyboard accessible and fit a 320 px viewport.
+Keep complete scope identity and cancellation checks on every read. Language,
+appearance and panel changes preserve temporary work. Each connection,
+database and schema owns its own selection, filters, loaded records and canvas
+presentation. Never persist fetched records or evidence in browser storage.
 
 ## Shared windows
 
@@ -286,21 +292,32 @@ Keep primary actions visible without hover. Check the layout at 320 px, tablet w
 
 ## Information architecture
 
-- **Overview / Overzicht:** a personal starting point with data access, research, guidance and restore points. Open it directly, without a second navigation menu repeating Research and Experiments. Counts come from the live database; label row estimates as estimates.
+- **Overview / Overzicht:** a starting point with data access, research,
+  guidance and restore points. Open it directly. Counts come from the live
+  database; row estimates are labelled as estimates.
 
-- **Database / Database:** one workspace with **Data / Gegevens**, **Structure / Structuur** and **Schema / Schema** as its views. Keep these view controls beside the workspace rather than repeating them as main navigation areas.
+- **Database / Database:** one fixed primary row: **Records**, **Explore /
+  Verkennen**, **Schema**. These are workspace views, not extra main rail areas.
 
-  - **Data:** table selection, record search, pagination, readable rows and optional SQL explanation. Add rows or use row actions to edit/delete in a focused dialog. Keep the official phpMyAdmin available for unsupported editing and its full toolset.
+  - **Records:** table selection, search, pagination, readable rows and optional
+    SQL explanation. Add rows or edit/delete through focused row dialogs. Keep
+    official phpMyAdmin available for unsupported editing and its full toolset.
+  - **Explore:** one flexible record canvas, source library, selection and
+    inspector. Contextual questions expand declared references. Every card can
+    open its source row; every line exposes its exact database evidence.
+  - **Schema:** secondary **Table details / Tabeldetails** and **Diagram** views.
+    Table details show columns, keys, relationships and definitions. Diagram
+    shows the live whole-database table/foreign-key structure.
+  - **Tools:** existing phpMyAdmin Import/Export actions and Backups. Keep
+    capabilities explicit, including PostgreSQL's unavailable write tools.
+    Backup creation, download and recovery use the existing restore-point flow;
+    old `#experimenten` bookmarks remain reachable.
 
-  - **Structure:** columns, keys, relationships and table definitions from the live catalog. Related objects have a clear route back.
+- **Research / Onderzoeken:** visual query building, editable SQL, results and
+  saved research. Keep it separate from visually following loaded records.
 
-  - **Schema:** a whole-database diagram for following declared foreign keys. Keep its canvas, table cards and tools when adopting the shared Database explorer.
-
-- **Research / Onderzoeken:** visual query building, editable SQL, results and saved research. Explain the relationship between a visual design and hand edited SQL.
-
-- **Experiments / Experimenten:** creating, downloading and restoring named restore points. Recovery remains reachable when the database is unavailable.
-
-- **Settings / Instellingen:** language, appearance and workspace preferences. Keep it in a consistent, easy to find position.
+- **Settings / Instellingen:** language, appearance, workspace preferences and
+  existing local AI configuration. Keep its entry in a consistent position.
 
 The **database selector** belongs in the shared top bar: it changes the context
 of these areas rather than adding another navigation level. Show the exact
@@ -313,8 +330,8 @@ an unrelated server.
 
 | Layer | Responsibility | Content |
 | --- | --- | --- |
-| Main rail | Choose an area | Overview, Database, Research and Experiments; Settings at the bottom |
-| Context panel | Choose an object in that area | Tables, saved research or restore points |
+| Main rail | Choose an area | Overview, Database and Research; Settings at the bottom |
+| Context panel or Explore library | Choose an object in that area | Tables, records, saved research or restore points |
 | Workspace | Read, inspect or act on the object | Database views, query builder and editor, restore controls and task tools |
 
 The rail and context panel form one connected glass surface with one shared
@@ -323,43 +340,56 @@ with context toggles its panel; switching area replaces that panel's contents.
 Overview and Settings open their own screens without a contextual menu of
 links to other main areas. A dashboard action may still resume a specific task.
 
-Database always keeps a searchable table explorer. Selecting a table highlights
-it in the list and updates the workspace; details appear below the list rather
-than replacing it. The next table stays one click away. The same table selection
-and explorer search carry between Data, Structure and Schema. Record search and
-pagination belong to Data and remain separate from explorer search.
+Records and Schema keep the searchable table explorer. Selecting a table
+highlights it and updates the workspace; details do not replace the list.
+Explore uses its single floating source library instead of duplicating that
+fixed panel. The selected table carries between the three Database tasks.
+Record search and pagination remain separate from table-catalog search.
 
 ### Predictable placement within Database
 
-Use the same order in Data, Structure and Schema:
+Use the same order across Database:
 
-1. A compact **Database** heading. The **Tables** opener occupies the same header
-   position in every view when the explorer is collapsed or the mobile drawer is closed.
-2. One view row directly beneath it: **Data**, **Structure**, **Schema**, followed
-   by the selected table context. Let that context wrap below the views on narrow screens.
-3. One tool area immediately before the table, structure or canvas it controls.
-4. The main content, followed by a compact summary or optional explanation.
+1. A compact **Database** heading and the shared source/panel opener.
+2. One primary view row: **Records**, **Explore**, **Schema**, with the selected
+   table context. Allow wrapping on narrow screens. Database Tools stays here.
+3. Schema alone adds **Table details / Diagram** beneath its primary task.
+4. Local tools stay beside the content they control. Canvas tools may float
+   within Explore; main navigation and the database selector do not move.
+5. Main content, then a compact loaded summary or optional explanation.
 
-The sidebar owns the searchable table list and expandable table details. Do not
-repeat Browse, Structure or Focus connections buttons there: the view row and
-Schema connection filter already provide those actions. Keep selecting another
-table independent from expanding its columns or connections.
+Keep object selection separate from changing view or expanding details. The
+fixed explorer serves Records and Schema; Explore owns one floating library
+and inspector. Avoid a second table picker, another rail, or a permanent column
+for every tool.
 
 In Schema, group the tool area by purpose: connection filtering and column
 display; arrangement; zoom, actual size and fit; then refresh and Help. Keep
 those groups together above the canvas, with consistent alignment and wrapping.
 Zoom controls must not cover table fields or move below a large diagram.
 Put table/relationship counts and the PK/FK legend in a compact canvas footer.
-Long interaction, relationship and local-layout explanations belong in Help or
-a collapsed explanation below the canvas, keeping the initial workspace concise.
+
+### Record canvas
+
+Use the unified Explore behaviour above. Start from one actual record and
+expand declared incoming/outgoing references deliberately. Composite and self
+links retain their identity; table colour remains stable and paired with text.
+Selecting an edge exposes its ordered column pairs, complete keys and optional
+prepared SQL. The graph never implies inferred similarity or causal influence.
+
+Keep the empty, unsupported, missing-record, cross-schema and partial-result
+states close to the relevant action. Show loaded records rather than claiming
+a full database scan. A source row can be inspected even if it is outside the
+first Records page. See [RECORD_MAP.md](RECORD_MAP.md) for controls and limits.
 
 The Database rail entry returns to the last Database view in the current
-session. Preserve direct links and existing hashes: `#gegevens`, `#structuur`
-and `#schema`, including supported table parameters. Changing navigation must
+session. Preserve direct links and existing hashes: `#gegevens`, `#structuur`,
+`#schema`, `#verkennen` and `#verbanden`, including table parameters. Changing navigation must
 not discard research drafts, builder choices, table state or schema placement.
 
-Research uses the shared panel for saved research and Experiments for restore
-points. Keep execution, saving and restoration controls in their workspace.
+Research uses the shared panel for saved research. Database Tools opens the
+existing backup workspace and its restore-point context. Keep execution,
+saving and restoration controls in their workspace.
 Panel content must have its own loading, empty and error states. Recovery and
 Settings remain reachable when the database is unavailable.
 
@@ -417,8 +447,10 @@ The create-and-import action prepares the database, switches through the shared
 database flow and opens the official phpMyAdmin Import screen. Import into an
 existing database opens that same screen directly. The user selects the file in
 phpMyAdmin; do not add a duplicate file picker that would require choosing the
-file twice. Add **Import** beside Browse, Structure and SQL as a native modal
-shortcut while leaving all of phpMyAdmin's tools available.
+file twice. Keep **Import** and **Export** beside Browse, Structure and SQL
+as native modal shortcuts while leaving all of phpMyAdmin's tools available.
+Database Tools uses these same screens; it adds no competing import/export
+engine.
 
 Show pending state during preparation and prevent duplicate creation or a
 competing target switch. Keep validation and server errors beside the name and
@@ -582,7 +614,7 @@ the visible catalog instead of drawing a connection to the wrong local table.
 
 ### Explore and change data
 
-Choose a table, read or search its rows, and optionally open the SQL explanation.
+Open Records, choose a table, read or search its rows, and optionally open the SQL explanation.
 Place **Add row** in the table's action area and **Edit** / **Delete** beside each
 row with a usable identity. These actions remain visible without hover and
 preserve the table explorer, search and pagination. A dialog names both database

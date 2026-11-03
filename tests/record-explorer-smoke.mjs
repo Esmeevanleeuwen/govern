@@ -1,204 +1,164 @@
 import {selectWorkspaceLanguage} from './workspace-tools.mjs';
-/** Real read-only graph/table/explanation interaction against isolated fixtures. */
+/** Flexible canvas interaction against real, isolated record-map fixtures. */
 import assert from 'node:assert/strict';
-import {createRequire} from 'node:module';
-import {mkdir} from 'node:fs/promises';
-import path from 'node:path';
-import {authenticatedContext} from './auth-session.mjs';
+import {exploreHarness} from './explore-helpers.mjs';
 
-const require = createRequire(import.meta.url);
-const {chromium} = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
-const base = new URL(process.env.BASE_URL || 'http://127.0.0.1:8080');
-assert.ok(['127.0.0.1', 'localhost', '[::1]'].includes(base.hostname), 'Use an isolated local fixture stack.');
-const browser = await chromium.launch({headless: true,
-    args: process.env.BROWSER_ARGS_JSON ? JSON.parse(process.env.BROWSER_ARGS_JSON) : ['--no-sandbox'],
-    ...(process.env.BROWSER_BIN ? {executablePath: process.env.BROWSER_BIN} : {})});
-const context = await authenticatedContext(browser, base, {locale: 'en-GB', viewport: {width: 1440, height: 1000}});
-await context.addInitScript(() => localStorage.setItem('govern.explorer.mode.v1', 'detailed'));
-const page = await context.newPage();
-const errors = [], failedApis = [], mutations = [];
-page.on('pageerror', error => errors.push(error.message));
-page.on('request', request => {
-    if (new URL(request.url()).pathname === '/api.php' && request.method() !== 'GET') mutations.push(request.method());
-});
-page.on('response', response => {
-    const url = new URL(response.url());
-    if (url.pathname === '/api.php' && response.status() >= 400) failedApis.push(url.searchParams.get('action'));
-});
-const publicKey = 'postgres:govern_pg:public', archiveKey = 'postgres:govern_pg:archive';
-const bookmark = (database, table = '') => new URL('/workspace.php#verkennen?' +
-    new URLSearchParams({database, ...(table ? {table} : {})}), base).href;
-const explorer = page.locator('[data-record-explorer]');
-const node = label => page.locator('[data-explorer-node]').filter({hasText: label}).first();
-const responseFor = condition => page.waitForResponse(response => {
-    const url = new URL(response.url());
-    return url.pathname === '/api.php' && url.searchParams.get('action') === 'explore' && condition(url.searchParams);
-});
-const rootRecord = async label => {
-    const value = await page.locator('#explorer-record option').evaluateAll((options, text) =>
-        options.find(option => option.textContent.includes(text))?.value, label);
-    assert.ok(value, 'A real candidate record is available: ' + label);
-    await page.locator('#explorer-record').selectOption(value);
-};
-const loaded = async (database, label) => {
-    await page.waitForFunction(key => document.getElementById('database-select')?.value === key, database);
-    await node(label).waitFor();
-    await page.waitForFunction(() => document.querySelector('[data-record-explorer]')?.getAttribute('aria-busy') !== 'true');
-};
-const screenshot = async name => {
-    if (!process.env.SCREENSHOTS_DIR) return;
-    await mkdir(process.env.SCREENSHOTS_DIR, {recursive: true});
-    await page.screenshot({path: path.join(process.env.SCREENSHOTS_DIR, name + '.png'), fullPage: true});
-};
-
-try {
-    const first = responseFor(params => params.get('table') === 'demo_organizations');
-    await page.goto(bookmark(publicKey, 'demo_organizations'), {waitUntil: 'networkidle'});
-    const initialResponse = await first;
-    assert.equal(initialResponse.status(), 200);
-    const initial = (await initialResponse.json()).data;
-    await loaded(publicKey, 'Northbridge Council');
-    assert.equal(await page.locator('#explorer-table').inputValue(), 'demo_organizations');
-    assert.equal(await page.locator('#open-database').isDisabled(), true);
-    assert.equal(await page.locator('#add-row, [data-row-action]').count(), 0);
-    assert.ok(await page.locator('[data-explorer-row]').count() > 1, 'Linked records are listed beneath the graph.');
-
-    const portal = initial.nodes.find(item => item.table === 'demo_systems' && item.key.id === '1');
-    assert.ok(portal, 'The returned neighborhood includes the actual portal record.');
-    await node('Resident Services Portal').click();
-    assert.equal(await page.locator(`[data-explorer-node="${portal.id}"]`).getAttribute('data-selected'), 'true');
-    assert.equal(await page.locator(`[data-explorer-row="${portal.id}"]`).getAttribute('data-selected'), 'true');
-    assert.equal(await page.locator(`[data-explorer-row="${portal.id}"]`).evaluate(row => {
-        const scroller = row.closest('.table-scroll'), record = row.getBoundingClientRect();
-        const frame = scroller.getBoundingClientRect(), header = scroller.querySelector('thead').getBoundingClientRect();
-        return record.top >= frame.top + header.height - 1 && record.bottom <= frame.bottom + 1;
-    }), true, 'Graph selection reveals the selected record within the scrollable list.');
-    await page.locator('#explorer-detail').getByText('Resident Services Portal', {exact: true}).first().waitFor();
-    assert.ok((await page.locator('#explorer-detail').textContent()).includes('annual_budget'), 'Selected record fields are inspectable.');
-
-    const center = initial.nodes.find(item => item.id === initial.center);
-    await page.locator(`[data-explorer-row="${center.id}"] button`).first().click();
-    assert.equal(await page.locator(`[data-explorer-node="${center.id}"]`).getAttribute('data-selected'), 'true',
-        'Selecting a row selects the corresponding graph record.');
-    const ownership = initial.edges.find(edge => edge.source === portal.id && edge.target === center.id);
-    assert.ok(ownership, 'The portal ownership edge is real.');
-    const edge = page.locator(`[data-explorer-edge="${ownership.id}"]`);
-    await edge.focus();
-    await edge.press('Enter');
-    const evidence = page.locator(`[data-explorer-evidence="${ownership.id}"]`);
-    await evidence.waitFor();
-    assert.ok((await evidence.textContent()).includes('owner_organization_id')
-        && (await evidence.textContent()).includes('demo_organizations'), 'Keyboard edge selection explains the actual foreign-key columns.');
-    assert.ok((await evidence.textContent()).includes('1'), 'Relationship evidence shows the matching record-key value.');
-
-    const relation = initial.relations.find(item => item.source_table === 'demo_systems'
-        && item.target_table === 'demo_organizations' && item.columns.includes('owner_organization_id'));
-    assert.ok(relation, 'Ownership is an available relationship filter.');
-    const relationshipPanel = page.locator('#explorer-relationships');
-    if (await relationshipPanel.count() && !(await relationshipPanel.evaluate(element => element.open))) {
-        await relationshipPanel.locator('summary').click();
+const h = await exploreHarness();
+const {page, inspector, node, api, bookmark, ensureSources, selectSeed, mapResponse} = h;
+const rootInput = {table: 'zz_record_map_people', key: {id: '9007199254740993'}};
+const outer = id => page.locator('.record-map-node[data-node-id="' + id + '"]');
+const position = id => outer(id).evaluate(el => ({left: el.style.left, top: el.style.top, transform: el.style.transform}));
+const positions = () => page.locator('.record-map-node[data-node-id]').evaluateAll(items =>
+    Object.fromEntries(items.map(el => [el.dataset.nodeId, {left: el.style.left, top: el.style.top, transform: el.style.transform}])));
+const waitPosition = async (id, expected) => page.waitForFunction(({id, expected}) => {
+    const el = document.querySelector('.record-map-node[data-node-id="' + id + '"]');
+    return el && JSON.stringify({left: el.style.left, top: el.style.top, transform: el.style.transform}) === JSON.stringify(expected);
+}, {id, expected});
+const closePanels = async () => {
+    for (const selector of ['#record-map-sources-close', '#record-map-inspector-close']) {
+        if (await page.locator(selector).isVisible()) await page.locator(selector).click();
     }
-    await page.locator(`[data-explorer-relation="${relation.id}"]`).uncheck();
-    assert.equal(await page.locator(`[data-explorer-edge="${ownership.id}"]`).count(), 0, 'A relationship filter updates the graph.');
-    assert.equal(await page.locator(`[data-explorer-node="${center.id}"]`).getAttribute('data-selected'), 'true',
-        'Hiding the selected relationship leaves a valid focus-record selection.');
-    await page.locator(`[data-explorer-relation="${relation.id}"]`).check();
-    await page.locator(`[data-explorer-edge="${ownership.id}"]`).waitFor();
+};
+const drag = async (locator, dx, dy) => {
+    const box = await locator.boundingBox();
+    assert.ok(box, 'The drag handle is visible.');
+    const x = box.x + box.width / 2, y = box.y + Math.min(22, box.height / 2);
+    await page.mouse.move(x, y); await page.mouse.down();
+    await page.mouse.move(x + dx, y + dy, {steps: 8}); await page.mouse.up();
+};
+try {
+    const info = await api('record-map', {database: 'bestuursatlas'}, rootInput);
+    const incoming = info.relations.find(item => item.constraint === 'zz_record_map_project_lead' && item.direction === 'incoming');
+    await page.goto(bookmark('bestuursatlas', rootInput.table), {waitUntil: 'networkidle'});
+    assert.equal(await page.locator('#workspace-context').isVisible(), false,
+        'Explore has one source library rather than a second fixed table sidebar.');
+    await ensureSources();
+    await page.locator('#record-map-search').fill('%_');
+    const rootId = await selectSeed('Atlas%_');
+    const originalRootPosition = await position(rootId);
+    const expanded = mapResponse('mariadb', incoming.id);
+    await page.locator('[data-record-relation="' + incoming.id + '"]').click();
+    const payload = (await (await expanded).json()).data;
+    await page.waitForFunction(() => document.querySelectorAll('[data-record-node]').length === 3);
+    assert.deepEqual(await position(rootId), originalRootPosition, 'Expanding a branch preserves existing card positions.');
+    const children = payload.nodes.filter(item => item.table === 'zz_record_map_projects');
+    const first = children.find(item => item.key.id === '11'), second = children.find(item => item.key.id === '12');
+    assert.ok(first && second, 'The canvas contains both real composite-key projects.');
+    await closePanels();
+    await page.locator('#record-map-fit').click();
 
-    const unfilteredRows = await page.locator('[data-explorer-row]').count();
-    await page.locator('#explorer-filter').fill('Resident Services Portal');
-    assert.equal(await page.locator('[data-explorer-row]').count(), 2,
-        'Text filtering keeps the matching record and its focus context.');
-    await node('Resident Services Portal').waitFor();
-    await node('Northbridge Council').waitFor();
-    await page.locator('#explorer-filter').fill('');
-    assert.equal(await page.locator('[data-explorer-row]').count(), unfilteredRows);
+    const beforeDrag = await position(first.id);
+    const beforeLayout = await page.locator('#record-map-layout').inputValue();
+    await drag(node(first.id), 54, 28);
+    assert.equal(await page.locator('#record-map-layout').inputValue(), 'manual', 'Dragging takes control of the arrangement.');
+    assert.notDeepEqual(await position(first.id), beforeDrag);
+    await page.locator('#record-map-undo').click();
+    await waitPosition(first.id, beforeDrag);
+    assert.equal(await page.locator('#record-map-layout').inputValue(), beforeLayout, 'Undo restores the preceding arrangement mode and position.');
 
-    await node('Resident Services Portal').click();
-    const expanded = responseFor(params => params.get('table') === 'demo_systems' && params.has('key'));
-    await page.locator('#explorer-expand').click();
-    assert.equal((await expanded).status(), 200);
-    await loaded(publicKey, 'Resident Services Portal');
-    await node('Plain-language service pages').waitFor();
-    assert.equal(await page.locator('#explorer-table').inputValue(), 'demo_systems', 'Expanding follows a selected record into its own table.');
-    await screenshot('record-explorer-desktop');
+    const hydrated = mapResponse('mariadb', undefined, first.key);
+    await node(first.id).focus(); await node(first.id).press('Enter');
+    const firstInfo = (await (await hydrated).json()).data;
+    await inspector.locator('h3').filter({hasText: first.label}).waitFor();
+    await page.locator('[data-record-relation="' + firstInfo.relations[0].id + '"]').waitFor();
+    assert.deepEqual(await page.locator('[data-record-edge]').evaluateAll(items => items.map(el => el.dataset.recordEdge).sort()),
+        payload.edges.map(item => item.id).sort(), 'Inspecting an unchanged neighboring record preserves the loaded branch evidence.');
+    await page.locator('#record-map-inspector-close').click();
+    await page.locator('#record-map-pin').click();
+    assert.equal(await outer(first.id).getAttribute('data-pinned'), 'true');
+    const pinnedPosition = await position(first.id), beforeArrange = await positions();
+    await page.locator('#record-map-layout').selectOption('flow');
+    await page.waitForFunction(({id, old}) => {
+        const el = document.querySelector('.record-map-node[data-node-id="' + id + '"]');
+        return el && JSON.stringify({left: el.style.left, top: el.style.top, transform: el.style.transform}) !== JSON.stringify(old);
+    }, {id: second.id, old: beforeArrange[second.id]});
+    assert.deepEqual(await position(first.id), pinnedPosition, 'Automatic layout preserves a pinned card.');
+    await page.locator('#record-map-undo').click();
+    await waitPosition(second.id, beforeArrange[second.id]);
+    assert.equal(await outer(first.id).getAttribute('data-pinned'), 'true', 'Undoing a layout does not undo the earlier pin action.');
 
-    const organizations = responseFor(params => params.get('table') === 'demo_organizations');
-    await page.locator('#explorer-table').selectOption('demo_organizations');
-    await organizations;
-    await loaded(publicKey, 'Northbridge Council');
-    await rootRecord('Riverside Council');
-    await loaded(publicKey, 'Riverside Council');
-    const selectedBeforeLanguage = await page.locator('#explorer-record').inputValue();
-    await page.getByLabel('Starting table', {exact: true}).waitFor();
-    await selectWorkspaceLanguage(page, 'nl');
-    await loaded(publicKey, 'Riverside Council');
-    assert.equal(await page.locator('#explorer-record').inputValue(), selectedBeforeLanguage, 'Language changes preserve the selected root record.');
-    await page.getByLabel('Begintabel', {exact: true}).waitFor();
-    await selectWorkspaceLanguage(page, 'en');
-    await loaded(publicKey, 'Riverside Council');
+    await node(second.id).click({modifiers: ['Shift']});
+    assert.equal(await page.locator('.record-map-node[data-selected="true"]').count(), 2, 'Shift-click shares a multi-record selection.');
+    const validEdgesBeforeHide = await page.locator('[data-record-edge]').evaluateAll(items => items.map(el => el.dataset.recordEdge).sort());
+    await page.locator('#record-map-hide').click();
+    await page.waitForFunction(() => document.querySelectorAll('[data-record-node]').length === 1);
+    assert.equal(await page.locator('[data-record-edge]').count(), 0, 'Hiding cards also hides their attached lines.');
+    await page.locator('#record-map-undo').click();
+    await page.waitForFunction(() => document.querySelectorAll('[data-record-node]').length === 3);
+    assert.deepEqual(await page.locator('[data-record-edge]').evaluateAll(items => items.map(el => el.dataset.recordEdge).sort()), validEdgesBeforeHide,
+        'Undo restores presentation visibility using still-current source evidence, never links invalidated by a source re-read.');
 
-    // Each scope remembers its database tab. Establish Explore for archive in
-    // the same document before the picker restores that scope during the race.
-    await page.evaluate(hash => { location.hash = hash; }, new URL(bookmark(archiveKey, 'govern_pg_values')).hash);
-    await loaded(archiveKey, 'Archive-only row');
-    await page.evaluate(hash => { location.hash = hash; }, new URL(bookmark(publicKey, 'demo_organizations')).hash);
-    await loaded(publicKey, 'Riverside Council');
+    await closePanels();
+    await ensureSources();
+    const sourcePanel = page.locator('#record-map-sources');
+    const sourceBefore = await sourcePanel.boundingBox();
+    await drag(page.locator('[data-map-panel-handle="sources"]'), 40, 24);
+    const sourceAfter = await sourcePanel.boundingBox();
+    assert.ok(sourceAfter.x > sourceBefore.x + 20 && sourceAfter.y > sourceBefore.y + 10, 'The source library can move within the workspace.');
+    const resize = await sourcePanel.boundingBox();
+    await page.mouse.move(resize.x + resize.width - 3, resize.y + resize.height - 3); await page.mouse.down();
+    await page.mouse.move(resize.x + resize.width + 32, resize.y + resize.height - 3, {steps: 6}); await page.mouse.up();
+    assert.ok((await sourcePanel.boundingBox()).width > resize.width + 15, 'The source library can be resized.');
+    const grip = page.locator('[data-map-panel-move="sources"]');
+    await grip.focus();
+    const beforeGrip = await sourcePanel.boundingBox();
+    await grip.press('ArrowRight');
+    assert.ok((await sourcePanel.boundingBox()).x > beforeGrip.x + 10, 'The source panel can move with its keyboard grip.');
+    const beforeKeyResize = await sourcePanel.boundingBox();
+    await grip.press('Shift+ArrowRight');
+    assert.ok((await sourcePanel.boundingBox()).width > beforeKeyResize.width + 10, 'The same keyboard grip can resize the source panel.');
+    await page.locator('#record-map-sources-close').click();
 
-    // Hold a completed public read beyond a schema switch. The released result
-    // must never replace the archive graph or its selected record.
-    let markHeld, releaseOld;
-    const held = new Promise(resolve => { markHeld = resolve; });
-    const release = new Promise(resolve => { releaseOld = resolve; });
-    await page.route(url => url.pathname === '/api.php' && url.searchParams.get('action') === 'explore'
-        && url.searchParams.get('schema') === 'public' && url.searchParams.get('table') === 'demo_organizations'
-        && JSON.parse(url.searchParams.get('key') || '{}').id === '1', async route => {
-        const response = await route.fetch();
-        markHeld();
-        await release;
-        try { await route.fulfill({response}); } catch { /* Scope changes can abort the held read. */ }
+    await node(first.id).focus();
+    const beforeKeyboard = await position(first.id);
+    await node(first.id).press('ArrowRight');
+    assert.notDeepEqual(await position(first.id), beforeKeyboard, 'Keyboard controls can move a card without a pointer.');
+    await page.locator('#record-map-undo').click();
+    await waitPosition(first.id, beforeKeyboard);
+    await node(first.id).press('Enter');
+    await inspector.locator('h3').filter({hasText: first.label}).waitFor();
+    const sourceRead = page.waitForRequest(request => {
+        const url = new URL(request.url());
+        return url.pathname === '/api.php' && url.searchParams.get('action') === 'record-map'
+            && request.postDataJSON()?.table === first.table && !request.postDataJSON()?.relation;
     });
-    await rootRecord('Northbridge Council');
-    await held;
-    await page.locator('#database-select').selectOption(archiveKey);
-    await loaded(archiveKey, 'Archive-only row');
-    releaseOld();
-    await page.waitForLoadState('networkidle');
-    assert.equal((await explorer.textContent()).includes('Northbridge Council'), false,
-        'Late results from another schema do not replace the active graph.');
-    await page.unrouteAll({behavior: 'wait'});
+    await page.locator('[data-map-open-table="' + first.table + '"]').click();
+    assert.deepEqual((await sourceRead).postDataJSON().key, first.key, 'Opening Data passes the complete composite record key.');
+    await page.locator('#selected-source-record .data-table').waitFor();
+    assert.ok((await page.locator('#selected-source-record').textContent()).includes(first.label));
+    await page.locator('[data-database-view="verkennen"]').click();
+    await page.locator('#record-map-layout').waitFor();
+    assert.equal(await page.locator('[data-record-node]').count(), 3, 'Data and Explore share the selected record without discarding the canvas.');
+    assert.equal(await outer(first.id).getAttribute('data-pinned'), 'true');
+    await h.screenshot('flexible-explore-expanded');
+    const beforeRefresh = await position(first.id);
+    const refreshed = mapResponse('mariadb', undefined, first.key);
+    await page.locator('#refresh-app').click();
+    await refreshed;
+    await node(first.id).waitFor();
+    assert.equal(await outer(first.id).getAttribute('data-pinned'), 'true', 'Global refresh keeps the pinned presentation state.');
+    assert.deepEqual(await position(first.id), beforeRefresh, 'Global refresh preserves the pinned card geometry.');
+    assert.equal(await page.locator('[data-record-edge]').count(), 0, 'Global refresh drops the previous source evidence before re-reading.');
+    assert.equal(await page.locator('#record-map-undo').isDisabled(), true, 'Canvas Undo cannot revive pre-refresh record snapshots.');
+    await h.screenshot('flexible-explore-desktop');
 
-    await page.evaluate(hash => { location.hash = hash; }, new URL(bookmark('bestuursatlas', 'organizations')).hash);
-    await page.waitForFunction(() => document.getElementById('database-select')?.value === 'bestuursatlas');
-    await page.locator('[data-explorer-node]').first().waitFor();
-    assert.equal((await explorer.textContent()).includes('Archive-only row'), false, 'MariaDB has its own graph selection.');
-    assert.equal(await page.locator('#open-database').isEnabled(), true);
-
-    await page.goto(bookmark(publicKey, 'demo_organizations'), {waitUntil: 'networkidle'});
-    await loaded(publicKey, 'Riverside Council');
-    await rootRecord('Northbridge Council');
-    await loaded(publicKey, 'Northbridge Council');
-    await page.setViewportSize({width: 320, height: 800});
-    await page.waitForFunction(() => document.documentElement.scrollWidth <= innerWidth);
-    await node('Resident Services Portal').focus();
-    await page.keyboard.press('Enter');
-    await page.locator('#explorer-detail').getByText('Resident Services Portal', {exact: true}).first().waitFor();
-    await screenshot('record-explorer-mobile');
-    await page.reload({waitUntil: 'networkidle'});
-    await loaded(publicKey, 'Northbridge Council');
-    assert.equal(await page.locator('#explorer-table').inputValue(), 'demo_organizations', 'The Explore bookmark survives reload.');
-    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'The explorer fits a 320px viewport.');
-
-    const empty = responseFor(params => params.get('table') === 'demo_project_overview');
-    await page.locator('#explorer-table').selectOption('demo_project_overview');
-    assert.equal((await empty).status(), 200);
-    await page.waitForFunction(() => document.querySelector('[data-record-explorer]')?.getAttribute('aria-busy') !== 'true');
-    assert.equal(await page.locator('[data-explorer-node]').count(), 0, 'A view without a stable key has an honest empty graph.');
-    assert.deepEqual(errors, [], 'No browser exceptions.');
-    assert.deepEqual(failedApis, [], 'The read-only UI makes no rejected API calls.');
-    assert.deepEqual(mutations, [], 'Every data request from Explore is a GET.');
-    console.log('PASS: record graph/table synchronization, exact relationship evidence, filters, expansion, scope isolation, language, keyboard and mobile.');
-} finally {
-    await context.close();
-    await browser.close();
-}
+    await page.setViewportSize({width: 360, height: 860});
+    await ensureSources();
+    await page.locator('#record-map-sources-close').click();
+    await node(first.id).focus(); await node(first.id).press('Enter');
+    await inspector.waitFor({state: 'visible'});
+    assert.equal(await sourcePanel.isVisible(), false, 'A mobile source library and inspector do not overlap.');
+    await page.locator('#record-map-sources-toggle').click();
+    await sourcePanel.waitFor({state: 'visible'});
+    assert.equal(await inspector.isVisible(), false, 'Opening mobile sources replaces the inspector.');
+    await page.locator('#record-map-sources-close').click();
+    for (const width of [320, 375]) {
+        await page.setViewportSize({width, height: 860});
+        assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'Canvas controls fit ' + width + 'px.');
+    }
+    await h.screenshot('flexible-explore-mobile');
+    assert.equal(await page.evaluate(() => JSON.stringify({...localStorage, ...sessionStorage}).includes('9007199254740993')), false,
+        'Source records and exact keys are never persisted in browser storage.');
+    h.clean();
+    console.log('PASS: flexible real-record cards, drag/keyboard positioning, expansion stability, pin/layout/undo/hide, movable/resizable sources, exact shared source selection and mobile drawers.');
+} finally { await h.close(); }

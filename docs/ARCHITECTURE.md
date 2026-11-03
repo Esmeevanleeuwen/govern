@@ -66,8 +66,9 @@ toegangsregels niet actief achterblijven.
 
 De PostgreSQL-uitbreiding bouwt voort op de startpagina en installatieaccounts
 uit PR #16. Ze voegt een tweede SQL-engine toe aan dezelfde werkplek, zonder
-een tweede tabelverkenner of schemadiagram. De eerste bouwfase is alleen lezen:
-tabellen, kolommen, sleutels, relaties, records en zoeken binnen de gekozen tabel.
+een tweede tabelverkenner of schemadiagram. De leesfuncties omvatten tabellen,
+kolommen, sleutels, relaties, records, zoeken binnen de gekozen tabel en de
+recordkaart.
 
 `Database` blijft de gedeelde facade en kiest `MariaDbAdapter` of
 `PostgresAdapter`. `Catalog` kiest overeenkomstig `MariaDbCatalog` of
@@ -89,8 +90,15 @@ diagramindeling. MariaDB houdt zijn bestaande databasesleutel en oude links.
 Een wissel annuleert oude leesacties en laat late antwoorden uit de vorige
 scope buiten de huidige weergave.
 
+`ConnectionScope::selectRequest` blijft oude gecachete API-modules ondersteunen:
+alleen wanneer `connection` en `schema` ontbreken mag `database` de volledige
+servergestuurde `postgres:<database>:<schema>`-sleutel bevatten. De gedecodeerde
+namen ondergaan dezelfde configuratiecontrole. Een gemengde of ongeldige
+scopesleutel krijgt geen ruimere toegang en wordt geweigerd.
+
 De capabilityvelden in bootstrap sturen de zichtbare bediening. De API weigert
-voor PostgreSQL alle acties buiten bootstrap, catalogus, structuur, bladeren en records verkennen;
+voor PostgreSQL alle acties buiten bootstrap, catalogus, structuur, bladeren,
+de afzonderlijke leesacties van de recordkaart en het compatibele `GET explore`;
 de writer- en vrije-SQL-verbinding weigeren eveneens. Er wordt geen MariaDB-
 snapshot-, query-, import- of AI-service op een PostgreSQL-scope aangeroepen.
 phpMyAdmin blijft de officiële MariaDB-toepassing en wordt niet als
@@ -103,10 +111,10 @@ De startbestanden schakelen het profiel in bij `PG_ENABLED=1` en bewaren
 bestaande wachtwoorden en volumes. Zie [POSTGRESQL.md](POSTGRESQL.md) voor de
 configuratie en de grens van deze eerste bouwfase.
 
-### Records verkennen
+### Compatibiliteit met de eerdere recordverkenner
 
 `RecordExplorer.php` leest dezelfde genormaliseerde catalogus als de bestaande
-schermen. De nieuwe GET-actie `explore` bouwt een begrensde buurt rond één echt
+schermen. De bestaande GET-actie `explore` bouwt een begrensde buurt rond één echt
 record met een primaire of volledige, niet-nullbare unieke sleutel. Alle
 recordvragen lopen via de reader van de gekozen adapter. Kolomnamen en relaties
 komen uit de actuele catalogus; waarden worden gebonden en tabellen zijn binnen
@@ -119,35 +127,15 @@ Er worden geen relaties afgeleid uit gelijkende namen en er wordt niet buiten
 de geselecteerde scope gezocht. Tabellen zonder bruikbare sleutel en externe
 verwijzingen blijven herkenbaar overgeslagen.
 
-`record-explorer.js` koppelt een SVG-grafiek, recordlijst en uitleg binnen de
-bestaande Database-werkplek. Alleen lezen is een servergrens en een UI-keuze;
-de PostgreSQL-writer blijft ontoegankelijk. De route `#verkennen` gebruikt
-dezelfde tabellenkiezer, taal, materialen en databasewisseling. Tijdelijke
-selectie en filters staan per scope in `recordExploreView`; annulering en
-scopecontrole verhinderen dat een oud antwoord een nieuwe werkplek vervangt.
+Vaste aantals-, preview- en tijdgrenzen begrenzen iedere vraag. Het antwoord
+beschrijft alleen de geladen buurt en haar beperkingen. Er is geen blijvende
+index, aparte grafiekdatabase of nieuwe frameworklaag nodig.
 
-Vaste aantals-, preview- en tijdgrenzen begrenzen iedere vraag. Het scherm
-beschrijft de geladen buurt en haar beperkingen; verder verkennen vraagt een
-nieuwe buurt op. Er is geen blijvende index, aparte grafiekdatabase of nieuwe
-frameworklaag nodig.
-
-### Begeleide kijkmodus
-
-`explorer-guide.js` voegt boven dezelfde recordverkenner een begeleide
-presentatielaag toe. Vaste vraagknoppen filteren de al geladen records, tonen
-de uitleg van een echte edge of halen via de bestaande GET-actie een nieuwe
-buurt op. Aantallen gebruiken verschillende node-ID's; parallelle verwijzingen
-tellen hetzelfde item niet dubbel. Er is geen AI-interpretatie of vrije SQL.
-
-Leesbare aliassen veranderen alleen de weergave van schema-identifiers.
-Bronlabels, exacte sleutels, edge-richting en queryparameters blijven behouden.
-Technische details zijn op verzoek beschikbaar; Detailed herstelt de originele
-bediening met dezelfde tijdelijke selectie en filters. Beide modi gebruiken
-dezelfde scope- en annuleringscontroles.
-
-De browservoorkeur `govern.explorer.mode.v1` bevat uitsluitend `guided` of
-`detailed`. Bij geblokkeerde opslag blijft de keuze voor deze pagina in geheugen.
-Records, sleutels en antwoorden worden hiervoor niet in localStorage gezet.
+Dit API-contract blijft beschikbaar voor oudere clients. De actuele Explore-
+werkplek gebruikt de gepagineerde `RecordMap`-acties uit de sectie
+**Flexibele Explore-werkplek**. Beide antwoorden en hun node-ID's worden niet
+samengevoegd tot twee parallelle grafieken in één scherm. De PostgreSQL-writer
+blijft ontoegankelijk.
 
 ### Gedeelde vensterlaag
 
@@ -222,6 +210,10 @@ De onderdelen hebben een kleine, duidelijke taak:
 | `dashboard-layout.js` | Blokvolgorde, breedtes, zichtbaarheid en een aparte bewerkingsversie |
 | `query-builder.js` | Het tijdelijke visuele queryontwerp en de toegepaste versie |
 | `schema-model.js` en `schema-visualizer.js` | Live relaties, diagramindeling en interactieve schemaverkenning |
+| `record-map.js`, `record-map.css` en `record-map-messages.js` | Eén Explore-canvas, bronbibliotheek, vragen en inspecteur |
+| `record-map-model.js` | Scoped recordidentiteit, selectie en lokale canvaspresentatie met begrensde Undo |
+| `RecordMap.php` | Alleen-lezen recordkeuze, inspectie en gepagineerde expansie van echte foreign keys |
+| `RecordExplorer.php` | Het behouden `GET explore`-contract voor bestaande clients |
 | `schema-navigation.js` | Alleen binnen het diagram genormaliseerde, muisgerichte scrollzoom |
 | `schema-help.js` | Een vertaalde schemagids in een native dialoog met focusbeheer en opruimen |
 | `selection-pointer.js` | Globale selectiepijl, Shift-selectie, vertraagde naamkaartjes en de uitlegdialoog |
@@ -428,12 +420,69 @@ framework, vectoropslag of training toegevoegd om dit eerste pad mogelijk te
 maken. Een toekomstige leesfunctie krijgt een afzonderlijke, begrensde
 toegangslaag; de vrije SQL-runner is daarvoor geen veilige automatische tool.
 
+## Flexibele Explore-werkplek
+
+De route `#verkennen` voegt de eerdere verkenner en recordkaart samen in één
+Database-weergave. `#verbanden` blijft een alias voor bestaande bookmarks.
+Het schemadiagram toont tabellen; Explore toont geselecteerde rijen en de
+verwijzingen die werkelijk op die rijen passen. Beide gebruiken de bestaande
+databasekiezer, catalogus en leesrechten.
+
+`RecordMap` bouwt op `Database` en `Catalog` en kent geen vast domeinmodel.
+De service valideert tabel, volledige recordsleutel en relatie aan de actuele
+catalogus, leest het bronrecord opnieuw en gebruikt gebonden waarden met
+engine-specifiek gequote identifiers. Inkomende relaties worden uit dezelfde
+catalogus afgeleid. Er is geen vrije SQL of schrijfverbinding in dit pad.
+Alle delen van samengestelde sleutels en foreign keys behouden hun volgorde.
+Sleutel- en relatiekolommen worden vóór PDO-conversie als engine-tekst gelezen.
+Daardoor komt identiteit niet uit afgeronde numerieke previews. Edges leveren
+volledige bron- en doelwaarden apart van eventueel verkorte recordvelden.
+
+`record-map-records` levert een gepagineerde keuze van beginrecords.
+`record-map` inspecteert een gekozen record of breidt één gekozen verwijzing
+uit. De reactie bevat punten, lijnen, beschikbare verwijzingen en herkomst:
+constraint, kolomparen, exacte sleutels, SQL en parameters. Pagina's laden
+bewust bij; de kaart doet geen volledige databasescan of automatische
+recursieve expansie. Niet-ondersteunde sleutels, views en externe schema's
+krijgen een herkenbare grens in de interface.
+
+`record-map.js` verzorgt canvas, bronbibliotheek en inspectie. Het zuivere
+`record-map-model.js` beheert de identiteit van records en lijnen, selectie en
+lokale presentatie. De bronbibliotheek kiest tabel en beginrecord; de vaste
+werkpleknavigatie blijft daarvan los. Een tweede vaste tabelkiezer naast de
+canvasbibliotheek wordt in Explore niet getoond.
+
+Kaarten kunnen worden verplaatst, vastgezet en uit het werkvlak verborgen.
+Orbit en Flow geven de kaart een andere indeling; Manual bewaart zelfgekozen
+posities. Uitbreiden plaatst nieuwe buren zonder bestaande kaarten opnieuw te
+rangschikken. Undo hoort alleen bij de canvaspresentatie: het schrijft geen
+gegevens terug en herstelt geen verouderde bronrecords, lijnen of cursors na
+opnieuw uitlezen. De bronbibliotheek en inspecteur kunnen worden verborgen,
+verplaatst en in breedte aangepast; op smalle schermen is één lade tegelijk open.
+
+Vragen horen bij dezelfde selectie, geladen records en relatiebeschrijvingen.
+Leesbare labels veranderen geen identifiers of records. Sleutels, constraint-
+namen en SQL zijn beschikbaar onder technische details. Het scherm maakt geen
+AI-interpretatie of causale uitleg uit alleen een foreign key.
+
+Openen in Records toont een afzonderlijk, opnieuw uitgelezen bronrecord met zijn sleutel, ook wanneer
+het niet op de eerste tabelpagina staat. De huidige Explore-werkplek voegt geen
+semantisch model, correlatieberekening, 3D-clustering of datakunst toe.
+Er verschijnen alleen uitgelezen databaseverbanden.
+
+Kaarttoestand staat in het bestaande per-scope werkplekgeheugen. De complete
+verbinding/database/schema-identiteit voorkomt vermenging van gelijknamige
+tabellen. Weggaan of wisselen annuleert leeswerk en negeert late antwoorden.
+Recordpreviews worden niet naar `localStorage` of `sessionStorage` geschreven;
+de bestaande per-tab keuze van de database blijft wel bewaard. Zie
+[RECORD_MAP.md](RECORD_MAP.md) voor gebruik en grenzen.
+
 ## Schemavisualisatie
 
-De route `#schema` biedt een afzonderlijk werkvlak om de hele database te
-verkennen. Vanuit Structuur kan de huidige tabel direct in het diagram worden
-geselecteerd. Vanuit het diagram blijven Gegevens en Structuur bereikbaar voor
-de gekozen tabel. De visualizer gebruikt dezelfde glasmaterialen, vertaalsleutels
+Schema groepeert tabeldetails (`#structuur`) en het diagram (`#schema`) onder
+één primaire Database-taak. Vanuit tabeldetails kan de huidige tabel direct in
+het diagram worden geselecteerd. Vanuit het diagram blijven Records en
+tabeldetails bereikbaar voor de gekozen tabel. De visualizer gebruikt dezelfde glasmaterialen, vertaalsleutels
 en instellingen als de andere schermen.
 
 `GET schema` haalt de metadata in drie gebonden catalogusqueries op via de

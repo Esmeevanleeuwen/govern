@@ -7,10 +7,10 @@ import {t, getLanguage, setLanguage} from './i18n.js';
 import {getPreferences, updatePreferences, resetAppearance, subscribePreferences} from './preferences.js';
 import {createDashboardLayout} from './dashboard-layout.js';
 import {mountSchemaVisualizer} from './schema-visualizer.js';
-import {mountRecordExplorer} from './record-explorer.js';
+import {mountRecordMap} from './record-map.js';
+import {resetRecordMapEvidence} from './record-map-model.js';
 import {createWorkspaceCompanion} from './companion-workspace.js';
 import {createWorkspaceTools} from './workspace-tools.js';
-import {friendlyName, getExplorerMode} from './explorer-guide.js';
 import {registerSelection} from './selection-registry.js';
 import {SelectionPointer} from './selection-pointer.js';
 import {createRowEditor} from './row-editor.js';
@@ -28,7 +28,7 @@ const routes = {
     gegevens: {labelKey: 'app.route.data', icon: 'table'},
     structuur: {labelKey: 'app.route.structure', icon: 'layers'},
     schema: {labelKey: 'app.route.schema', icon: 'network'},
-    verkennen: {labelKey: 'app.explorer.title', icon: 'network'},
+    verkennen: {labelKey: 'app.navigation.explore', icon: 'network'},
     onderzoeken: {labelKey: 'app.route.research', icon: 'search'},
     experimenten: {labelKey: 'app.route.experiments', icon: 'flask'},
     instellingen: {labelKey: 'app.route.settings', icon: 'settings'},
@@ -64,7 +64,8 @@ const state = {
     snapshotError: null,
     schemaData: null,
     schemaView: {},
-    recordExploreView: {},
+    recordMapState: {},
+    selectedRecord: null,
     databaseView: 'gegevens',
     contextOpen: {database: true, research: true, experiments: true},
     structureData: new Map(),
@@ -86,25 +87,26 @@ const navigation = document.getElementById('navigation');
 const workspaceContext = document.getElementById('workspace-context');
 const contextContent = document.getElementById('workspace-context-content');
 const panelToggle = document.getElementById('workspace-panel-toggle');
-const databaseViews = ['gegevens', 'structuur', 'schema', 'verkennen'];
+const databaseViews = ['gegevens', 'verkennen', 'structuur', 'schema'];
+const databasePrimaryViews = ['gegevens', 'verkennen', 'schema'];
 const databaseSelect = document.getElementById('database-select');
 const manageDatabases = document.getElementById('manage-databases');
 const aiToggle = document.getElementById('ai-toggle');
 const databaseCache = new Map();
 const databaseStateKeys = ['bootstrap', 'table', 'queryDraft', 'queryName', 'queryNotes', 'queryId', 'queryResult', 'queryRevision',
     'queryDesign', 'builderDraft', 'builderOpen', 'dataViews', 'catalogSearch', 'snapshotLabel', 'savedQueries', 'queryDirty',
-    'connectionError', 'queryError', 'querySaveError', 'snapshotError', 'schemaData', 'schemaView', 'recordExploreView', 'databaseView',
-    'contextOpen', 'structureData', 'inspectorExpanded', 'explorerScroll'];
+    'connectionError', 'queryError', 'querySaveError', 'snapshotError', 'schemaData', 'schemaView', 'databaseView',
+    'contextOpen', 'structureData', 'inspectorExpanded', 'explorerScroll', 'recordMapState', 'selectedRecord'];
 const emptyDatabaseState = () => ({bootstrap: null, table: '', queryDraft: '', queryName: '', queryNotes: '', queryId: null,
     queryResult: null, queryRevision: 0, queryDesign: null, builderDraft: null, builderOpen: true, dataViews: new Map(),
     catalogSearch: {}, snapshotLabel: '', savedQueries: null, queryDirty: false, connectionError: null, queryError: null,
-    querySaveError: null, snapshotError: null, schemaData: null, schemaView: {}, recordExploreView: {}, databaseView: 'gegevens',
-    contextOpen: {database: true, research: true, experiments: true}, structureData: new Map(), inspectorExpanded: {}, explorerScroll: {}});
+    querySaveError: null, snapshotError: null, schemaData: null, schemaView: {}, databaseView: 'gegevens',
+    contextOpen: {database: true, research: true, experiments: true}, structureData: new Map(), inspectorExpanded: {}, explorerScroll: {}, recordMapState: {}, selectedRecord: null});
 const scopeKey = item => item.scope_key || item.name;
 const schemaName = () => state.bootstrap?.database?.schema || state.bootstrap?.database?.name || '';
 function supports(capability) {
     if (state.bootstrap?.capabilities?.[capability] !== undefined) return state.bootstrap.capabilities[capability] === true;
-    return !getDatabase().startsWith('postgres:') || ['browse', 'structure', 'schema', 'explore'].includes(capability);
+    return !getDatabase().startsWith('postgres:') || ['browse', 'structure', 'schema', 'explore', 'record_map'].includes(capability);
 }
 function unavailableFeature() {
     return el('section', {'data-capability-unavailable': ''}, notice(t('app.postgres.unavailable')),
@@ -125,10 +127,7 @@ const companion = createWorkspaceCompanion({onSelect: async context => {
     if (context.database !== getDatabase()) await switchDatabase(context.database);
     if (context.database !== getDatabase() || databaseBusy()) return;
     if (!tables().some(table => table.name === context.table)) { toast(t('app.companionLaunch.unavailable'), 'error'); return; }
-    state.table = context.table;
-    Object.assign(state.recordExploreView, {scope_key: context.database, table: context.table, rootKey: context.key,
-        search: '', selected: '', selectedEdge: '', enabledRelations: null, zoom: 1, pan: {x: 0, y: 0}});
-    go('verkennen', {table: context.table});
+    openRecordMap(context.table, context.key);
 }});
 
 const aiWorkspace = createAiWorkspace({getDatabase,
@@ -156,7 +155,7 @@ const rowEditor = createRowEditor({getDatabase,
     onBusy: busy => { state.rowEditorOpen = busy; syncDatabasePicker(); },
     onSaved: ({database, table, mode}) => {
         toast(t('app.databases.' + (mode === 'delete' ? 'deleted' : mode === 'insert' ? 'inserted' : 'saved')));
-        if (database === getDatabase() && state.table === table) return refreshBootstrap(false, {preserveFocus: true});
+        if (database === getDatabase() && state.table === table) return refreshBootstrap(false, {preserveFocus: true, invalidateRecordMap: true});
     },
     onPhpMyAdmin: table => databaseModal.open(table, 'browse'),
 });
@@ -168,8 +167,8 @@ const databaseModal = new DatabaseModal(() => {
             databaseModal.configure(getDatabase(), tables(), knownDatabases);
             toast(t('app.databases.busy'), 'error');
             work = Promise.resolve();
-        } else work = switchDatabase(databaseModal.database);
-    } else work = refreshBootstrap(false);
+        } else { invalidateCanvasSources({allMaria: true}); work = switchDatabase(databaseModal.database); }
+    } else work = refreshBootstrap(false, {invalidateRecordMap: true, allRecordMaps: true});
     work.then(() => {
         if (!databaseModal.dialog.open && document.activeElement === document.body && !openDatabase.disabled) openDatabase.focus();
     }).catch(error => toast(errorText(error), 'error'));
@@ -202,7 +201,6 @@ for (const [area, key, labelKey, symbol] of [
     ['overview', 'overzicht', 'app.route.overview', 'grid'],
     ['database', 'gegevens', 'app.navigation.database', 'database'],
     ['research', 'onderzoeken', 'app.route.research', 'search'],
-    ['experiments', 'experimenten', 'app.route.experiments', 'flask'],
 ]) {
     navigation.append(el('a', {class: 'nav-link', href: '#' + key, 'data-route': key, 'data-area': area},
         icon(symbol), el('span', {'data-i18n': labelKey}, t(labelKey))));
@@ -231,7 +229,7 @@ navigation.addEventListener('click', event => {
     const link = event.target.closest('a');
     if (!link || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     const area = workspaceArea();
-    if (link.dataset.area === area && Object.hasOwn(state.contextOpen, area)) {
+    if (link.dataset.area === area && Object.hasOwn(state.contextOpen, area) && !isRecordCanvas()) {
         event.preventDefault(); toggleWorkspaceContext();
     } else closeSidebar();
 });
@@ -243,6 +241,9 @@ mobileViewport.addEventListener('change', () => {
 document.addEventListener('click', event => {
     const fromMenu = event.composedPath().some(node => ['sidebar', 'menu-toggle', 'workspace-explorer-open'].includes(node.id));
     if (document.body.classList.contains('sidebar-open') && !fromMenu) closeSidebar();
+});
+document.addEventListener('click', event => {
+    for (const menu of page.querySelectorAll('.database-tools[open]')) if (!menu.contains(event.target)) menu.open = false;
 });
 document.addEventListener('keydown', event => {
     if (event.key === 'Escape') closeSidebar();
@@ -268,19 +269,21 @@ function workspaceArea(name = route().name) {
     return databaseViews.includes(name) ? 'database' : ({overzicht: 'overview', onderzoeken: 'research', experimenten: 'experiments', instellingen: 'settings'}[name]);
 }
 
+function isRecordCanvas() { return route().name === 'verkennen'; }
+
 function isExplorerOpen() {
+    if (isRecordCanvas()) return false;
     const area = workspaceArea();
     return Boolean(state.contextOpen[area]) && (!mobileViewport.matches || document.body.classList.contains('sidebar-open'));
 }
 
 function syncWorkspaceNavigation() {
     const area = workspaceArea();
-    const hasContext = Object.hasOwn(state.contextOpen, area);
+    const hasContext = Object.hasOwn(state.contextOpen, area) && !isRecordCanvas();
     const expanded = hasContext && state.contextOpen[area];
     workspaceContext.hidden = !hasContext || !isExplorerOpen();
     sidebar.classList.toggle('has-context', expanded);
-    document.getElementById('workspace-context-title').textContent = t(area === 'database' && route().name === 'verkennen' && getExplorerMode() === 'guided'
-        ? 'app.explorerGuide.categories' : {database: 'app.navigation.tables', research: 'app.navigation.saved', experiments: 'app.navigation.snapshots'}[area] || 'app.shell.workspace');
+    document.getElementById('workspace-context-title').textContent = t({database: 'app.navigation.tables', research: 'app.navigation.saved', experiments: 'app.navigation.snapshots'}[area] || 'app.shell.workspace');
     panelToggle.setAttribute('aria-expanded', String(expanded));
     panelToggle.setAttribute('aria-label', t('app.navigation.hide'));
     const workspaceOpener = document.getElementById('workspace-explorer-open');
@@ -297,12 +300,14 @@ function syncWorkspaceNavigation() {
     document.querySelector('.rail-brand').href = routeHash('overzicht');
     for (const link of document.querySelectorAll('#navigation [data-area], #settings-link')) {
         link.hidden = link.dataset.area === 'research' && !supports('query') || link.dataset.area === 'experiments' && !supports('snapshots');
-        const active = link.dataset.area === area;
+        const active = link.dataset.area === area || link === databaseLink && area === 'experiments';
         link.classList.toggle('active', active);
         if (active) link.setAttribute('aria-current', 'page'); else link.removeAttribute('aria-current');
-        if (Object.hasOwn(state.contextOpen, link.dataset.area)) {
+        if (Object.hasOwn(state.contextOpen, link.dataset.area) && !isRecordCanvas()) {
             link.setAttribute('aria-expanded', String(active && isExplorerOpen()));
             link.setAttribute('aria-controls', 'workspace-context');
+        } else {
+            link.removeAttribute('aria-expanded'); link.removeAttribute('aria-controls');
         }
     }
     document.dispatchEvent(new CustomEvent('govern:explorerchange', {detail: {open: isExplorerOpen()}}));
@@ -383,6 +388,7 @@ async function switchDatabase(database, {fromHash = false} = {}) {
 
 
 function openWorkspaceContext() {
+    if (isRecordCanvas()) { currentScope?.recordMap?.openSources(); return; }
     const area = workspaceArea();
     if (!Object.hasOwn(state.contextOpen, area)) return;
     state.contextOpen[area] = true;
@@ -392,6 +398,7 @@ function openWorkspaceContext() {
 }
 
 function toggleWorkspaceContext() {
+    if (isRecordCanvas()) { currentScope?.recordMap?.toggleSources(); return; }
     const area = workspaceArea();
     if (!Object.hasOwn(state.contextOpen, area)) return;
     if (!isExplorerOpen()) { openWorkspaceContext(); return; }
@@ -516,7 +523,8 @@ subscribePreferences(preferences => {
 localizeShell();
 
 function route() {
-    const [name, query = ''] = window.location.hash.slice(1).split('?');
+    const [requested, query = ''] = window.location.hash.slice(1).split('?');
+    const name = requested === 'verbanden' ? 'verkennen' : requested;
     return {name: routes[name] ? name : 'overzicht', params: new URLSearchParams(query)};
 }
 
@@ -618,12 +626,37 @@ function syncSnapshotControls() {
     document.querySelectorAll('[data-snapshot-action]').forEach(control => { control.disabled = busy; });
 }
 
-async function refreshBootstrap(notify = false, {preserveFocus = false, focusFallback} = {}) {
+/** Invalidate source snapshots after known data changes; geometry never restores records. */
+function invalidateCanvasSources({allMaria = false} = {}) {
+    const visited = new Set();
+    const reset = target => {
+        const map = target.recordMapState;
+        if (!map || !(map.nodes instanceof Map) || visited.has(map)) return;
+        visited.add(map);
+        const previous = resetRecordMapEvidence(map);
+        const record = target.selectedRecord || previous;
+        if (record) map.pendingRecord = {table: record.table, key: {...record.key}};
+    };
+    reset(state);
+    if (allMaria) for (const [key, cached] of databaseCache) if (!key.startsWith('postgres:')) reset(cached);
+}
+
+async function refreshBootstrap(notify = false, {preserveFocus = false, focusFallback, invalidateRecordMap = false, allRecordMaps = false} = {}) {
     bootstrapController?.abort();
     const controller = new AbortController();
     bootstrapController = controller;
     const database = getDatabase();
     const revision = databaseRevision;
+    const invalidated = notify || invalidateRecordMap;
+    const reloadingCanvas = invalidated && isRecordCanvas();
+    if (invalidated) {
+        if (reloadingCanvas) {
+            currentScope?.controller.abort(); currentScope?.cleanup.forEach(cleanup => cleanup());
+            currentScope = null;
+        }
+        invalidateCanvasSources({allMaria: allRecordMaps});
+        if (reloadingCanvas) page.replaceChildren(databaseHeading('verkennen'), loading(t('app.shell.loading')));
+    }
     refreshButton.disabled = true;
     try {
         const data = await request('bootstrap', {params: {database}, signal: controller.signal});
@@ -677,7 +710,9 @@ async function refreshBootstrap(notify = false, {preserveFocus = false, focusFal
     } catch (error) {
         if (error.name === 'AbortError' || revision !== databaseRevision || bootstrapController !== controller) return;
         state.connectionError = error;
-        if (!state.bootstrap || state.switchingDatabase) {
+        if (reloadingCanvas && isRecordCanvas()) {
+            page.replaceChildren(databaseHeading('verkennen'), errorPanel(error, () => refreshBootstrap(true)));
+        } else if (!state.bootstrap || state.switchingDatabase) {
             contextContent.replaceChildren();
             page.replaceChildren(heading(t('app.core.connection.eyebrow'), t('app.core.connection.title'), t('app.core.connection.help')),
                 errorPanel(error, () => refreshBootstrap()));
@@ -696,6 +731,8 @@ async function refreshBootstrap(notify = false, {preserveFocus = false, focusFal
 function render() {
     const location = route();
     if (location.name !== 'verkennen') companion.select(null);
+    if (/^#verbanden(?:\?|$)/.test(window.location.hash)) history.replaceState(null, '', routeHash('verkennen', Object.fromEntries(location.params)));
+    page.classList.toggle('explore-page', location.name === 'verkennen');
     if (!state.bootstrap && location.name !== 'instellingen') {
         if (state.connectionError) page.replaceChildren(heading(t('app.core.connection.eyebrow'), t('app.core.connection.title'), t('app.core.connection.help')), errorPanel(state.connectionError, () => refreshBootstrap()));
         return;
@@ -721,9 +758,8 @@ function render() {
     renderConnectionNotice();
     page.replaceChildren();
     contextContent.replaceChildren();
-    const views = {overzicht: renderOverview, gegevens: renderData, structuur: renderStructure, schema: renderSchema, verkennen: renderExplore, onderzoeken: renderResearch, experimenten: renderExperiments, instellingen: renderSettings};
-    if (location.name === 'onderzoeken' && !supports('query') || location.name === 'experimenten' && !supports('snapshots')
-        || location.name === 'verkennen' && !supports('explore')) {
+    const views = {overzicht: renderOverview, gegevens: renderData, structuur: renderStructure, schema: renderSchema, verkennen: renderRecordMap, onderzoeken: renderResearch, experimenten: renderExperiments, instellingen: renderSettings};
+    if (location.name === 'onderzoeken' && !supports('query') || location.name === 'experimenten' && !supports('snapshots') || location.name === 'verkennen' && !supports('record_map')) {
         page.append(unavailableFeature());
         return;
     }
@@ -967,18 +1003,16 @@ function renderSettings() {
 
 function catalog(routeName) {
     const list = el('div', {class: 'catalog-list'});
-    const guided = routeName === 'verkennen' && getExplorerMode() === 'guided';
-    const search = el('input', {id: 'catalog-search', type: 'search', class: 'input', value: state.catalogSearch.database || '', placeholder: t(guided ? 'app.explorerGuide.findCategory' : 'app.core.catalog.searchPlaceholder'), 'aria-label': t(guided ? 'app.explorerGuide.findCategory' : 'app.core.catalog.searchLabel'), autocomplete: 'off'});
+    const search = el('input', {id: 'catalog-search', type: 'search', class: 'input', value: state.catalogSearch.database || '', placeholder: t('app.core.catalog.searchPlaceholder'), 'aria-label': t('app.core.catalog.searchLabel'), autocomplete: 'off'});
     const draw = () => {
         const query = search.value.trim().toLocaleLowerCase();
-        const matching = tables().filter(table => table.name.toLocaleLowerCase().includes(query)
-            || workspaceTableName(table.name, routeName).toLocaleLowerCase().includes(query));
+        const matching = tables().filter(table => table.name.toLocaleLowerCase().includes(query));
         list.replaceChildren(...matching.map(table => registerSelection(el('button', {
             class: 'catalog-item' + (table.name === state.table ? ' active' : ''),
             type: 'button', title: table.name + (table.comment ? ' — ' + table.comment : ''),
             'aria-current': table.name === state.table ? 'true' : null,
             on: {click: () => selectWorkspaceTable(table.name, routeName)},
-        }, icon(table.type === 'view' ? 'layers' : 'table'), el('span', {class: 'catalog-item-name'}, workspaceTableName(table.name, routeName)),
+        }, icon(table.type === 'view' ? 'layers' : 'table'), el('span', {class: 'catalog-item-name'}, table.name),
         el('span', {class: 'catalog-item-count'}, number(table.columns))),
         {kind: 'control', key: 'catalog:' + JSON.stringify(table.name), label: table.name, table: table.name, purpose: 'openTable'})));
         if (!matching.length) list.append(el('p', {class: 'catalog-empty'}, t('app.core.catalog.noMatches')));
@@ -999,24 +1033,45 @@ function selectWorkspaceTable(name, view = state.databaseView) {
     contextContent.querySelector('.catalog-item.active')?.focus({preventScroll: true});
 }
 
-function workspaceTableName(name, view = route().name) {
-    return view === 'verkennen' && getExplorerMode() === 'guided' ? friendlyName(name) : name;
+function databaseTools() {
+    if (!supports('phpmyadmin') && !supports('snapshots')) return null;
+    const menu = el('details', {class: 'database-tools', id: 'database-tools'});
+    const summary = el('summary', {'aria-label': t('app.navigation.tools')}, icon('settings'), t('app.navigation.tools'));
+    const actions = el('div', {class: 'database-tools-menu'});
+    const native = (tool, label, symbol) => button(t(label), () => { menu.open = false; databaseModal.open('', tool); },
+        {className: 'database-tool-action', kind: 'ghost', symbol, 'data-database-tool': tool});
+    if (supports('phpmyadmin')) actions.append(native('import', 'app.navigation.import', 'download'), native('export', 'app.navigation.export', 'external'));
+    if (supports('snapshots')) actions.append(el('a', {class: 'database-tool-action', href: routeHash('experimenten'),
+        'data-database-tool': 'backups', on: {click: () => { menu.open = false; }}}, icon('clock'), t('app.navigation.backups')));
+    menu.append(summary, actions);
+    menu.addEventListener('keydown', event => { if (event.key === 'Escape') { menu.open = false; summary.focus(); event.stopPropagation(); } });
+    return menu;
 }
 
 function databaseHeading(view) {
-    const modeLinks = el('nav', {class: 'database-views', 'aria-label': t('app.navigation.views')}, databaseViews.map(name =>
-        registerSelection(el('a', {class: 'database-view' + (name === view ? ' active' : ''), href: databaseHash(name), 'data-database-view': name,
-            'aria-current': name === view ? 'page' : null}, t(routes[name].labelKey)),
-        {kind: 'control', key: 'view:' + name, label: t(routes[name].labelKey), purpose: 'changeView', table: state.table})));
-    const explorer = button(t('app.navigation.tables'), openWorkspaceContext, {id: 'workspace-explorer-open', symbol: 'table',
+    const schemaFamily = view === 'schema' || view === 'structuur';
+    const modeLinks = el('nav', {class: 'database-views', 'aria-label': t('app.navigation.views')}, databasePrimaryViews.map(name => {
+        const active = name === view || name === 'schema' && schemaFamily;
+        return registerSelection(el('a', {class: 'database-view' + (active ? ' active' : ''), href: databaseHash(name), 'data-database-view': name,
+            'aria-current': active ? 'page' : null}, t(routes[name].labelKey)),
+            {kind: 'control', key: 'view:' + name, label: t(routes[name].labelKey), purpose: 'changeView', table: state.table});
+    }));
+    const explorer = view === 'verkennen' ? null : button(t('app.navigation.tables'), openWorkspaceContext, {id: 'workspace-explorer-open', symbol: 'table',
         'aria-label': t('app.navigation.open'), 'aria-controls': 'workspace-context', 'aria-expanded': String(isExplorerOpen())});
-    explorer.hidden = isExplorerOpen();
-    registerSelection(explorer, {kind: 'control', key: 'database:explorer', label: t('app.navigation.tables'), purpose: 'openNavigation'});
+    if (explorer) {
+        explorer.hidden = isExplorerOpen();
+        registerSelection(explorer, {kind: 'control', key: 'database:explorer', label: t('app.navigation.tables'), purpose: 'openNavigation'});
+    }
+    const schemaLinks = schemaFamily ? el('nav', {class: 'schema-view-options', 'aria-label': t('app.navigation.schemaViews')},
+        el('a', {class: 'schema-view-option' + (view === 'structuur' ? ' active' : ''), href: databaseHash('structuur'),
+            'data-database-view': 'structuur', 'aria-current': view === 'structuur' ? 'page' : null}, t('app.navigation.tableDetails')),
+        el('a', {class: 'schema-view-option' + (view === 'schema' ? ' active' : ''), href: databaseHash('schema'),
+            'data-schema-view': 'schema', 'aria-current': view === 'schema' ? 'page' : null}, t('app.navigation.diagram'))) : null;
     return el('header', {class: 'page-heading database-heading'},
-        el('div', {class: 'database-heading-main'}, el('h1', {}, t('app.navigation.database')), explorer),
+        el('div', {class: 'database-heading-main'}, el('h1', {}, t('app.navigation.database')), el('div', {class: 'database-heading-actions'}, explorer, databaseTools())),
         el('div', {class: 'database-viewbar'}, modeLinks,
-            el('p', {class: 'database-selection'}, el('span', {}, t(view === 'verkennen' && getExplorerMode() === 'guided' ? 'app.explorerGuide.selectedCategory' : 'app.navigation.selected')),
-                el('code', {class: 'database-selected-table', id: 'database-selected-table', title: state.table}, state.table ? workspaceTableName(state.table, view) : t('app.navigation.emptySelection')))));
+            el('p', {class: 'database-selection'}, el('span', {}, t('app.navigation.selected')),
+                el('code', {class: 'database-selected-table', id: 'database-selected-table'}, state.table || t('app.navigation.emptySelection')))), schemaLinks);
 }
 
 function databaseContext(view, scope) {
@@ -1065,6 +1120,67 @@ function tableHeader(table, tab) {
             ? button(tab === 'structure' ? t('app.core.table.openStructure') : t('app.core.table.openBrowse'), () => databaseModal.open(table.name, tab), {className: 'button-small', symbol: 'database'}) : null));
 }
 
+function openRecordMap(table, key = null) {
+    if (!supports('record_map')) return;
+    state.table = table;
+    if (key) state.recordMapState.pendingRecord = {table, key: {...key}};
+    go('verkennen', {table});
+}
+
+function renderRecordMap(scope) {
+    page.append(databaseHeading('verkennen'));
+    const root = el('section', {class: 'record-map-workspace'});
+    page.append(root);
+    const pending = state.recordMapState.pendingRecord;
+    delete state.recordMapState.pendingRecord;
+    const map = mountRecordMap(root, {
+        state: state.recordMapState, tables: tables(), scopeKey: scope.database, initialTable: state.table,
+        signal: scope.signal, live: scope.live, companion,
+        onTableChange: table => {
+            if (!scope.live()) return;
+            state.table = table;
+            history.replaceState(null, '', databaseHash('verkennen'));
+            page.querySelector('.database-heading')?.replaceWith(databaseHeading('verkennen'));
+            syncWorkspaceNavigation();
+        },
+        onSelectRecord: node => {
+            if (!scope.live()) return;
+            state.selectedRecord = node ? {table: node.table, key: {...node.key}} : null;
+            companion.select(node ? {database: scope.database, table: node.table, key: {...node.key}, guided: true} : null);
+        },
+        onOpenTable: (table, key) => {
+            if (!scope.live()) return;
+            state.selectedRecord = {table, key: {...key}};
+            state.table = table;
+            go('gegevens', {table});
+        },
+    });
+    scope.recordMap = map;
+    scope.cleanup.push(() => map.destroy());
+    if (pending) map.selectRecord(pending);
+}
+
+async function selectedSourceRecord(root, table, scope) {
+    const selected = state.selectedRecord;
+    if (!selected || selected.table !== table || !supports('record_map')) return;
+    const panel = el('section', {class: 'card', id: 'selected-source-record', 'aria-label': t('app.mapEntry.sourceRecord')},
+        el('div', {class: 'card-body'}, el('h3', {}, t('app.mapEntry.sourceRecord')), loading()));
+    root.prepend(panel);
+    try {
+        const data = await request('record-map', {params: {database: scope.database},
+            body: {table, key: selected.key}, signal: scope.signal});
+        if (!scope.live() || state.selectedRecord !== selected || !panel.isConnected) return;
+        const node = data.focus;
+        panel.replaceChildren(el('div', {class: 'card-body'}, el('h3', {}, t('app.mapEntry.sourceRecord')),
+            el('p', {}, el('code', {}, node.table), ' · ', node.label),
+            dataTable(node.columns.map(column => ({key: column.name, label: column.name})), [node.row]),
+            button(t('app.mapEntry.openRecord'), () => openRecordMap(node.table, node.key), {symbol: 'network', className: 'button-small'}),
+            button(t('app.mapEntry.clearSource'), () => { state.selectedRecord = null; panel.remove(); }, {kind: 'ghost', className: 'button-small'})));
+    } catch (error) {
+        if (error.name !== 'AbortError' && scope.live()) panel.replaceChildren(errorPanel(error));
+    }
+}
+
 function noTables() {
     return empty(t('app.core.table.emptyTitle'), t('app.core.table.emptyHelp'),
         supports('phpmyadmin') ? button(t('app.core.table.openDatabase'), () => databaseModal.open('', 'sql'), {kind: 'primary', symbol: 'database'}) : null);
@@ -1084,6 +1200,8 @@ async function renderData(scope) {
     const workspace = el('section', {class: 'table-workspace'});
     const card = registerSelection(el('div', {class: 'card'}, tableHeader(table, 'browse')),
         () => tableSelection(table, state.structureData.get(table.name)));
+    if (supports('record_map')) card.querySelector('.table-heading-actions').append(button(t('app.mapEntry.open'),
+        () => openRecordMap(table.name), {symbol: 'network', className: 'button-small', 'data-open-record-map': table.name}));
     if (supports('write') && table.type !== 'view') card.querySelector('.table-heading-actions').prepend(button(t('app.databases.addRow'), () => rowEditor.open({table: table.name, mode: 'insert'}), {id: 'add-row', kind: 'primary', symbol: 'plus', className: 'button-small'}));
     const search = el('input', {id: 'data-search', type: 'search', class: 'input', value: viewState.search, placeholder: t('app.core.data.searchPlaceholder'), 'aria-label': t('app.core.data.searchLabel'), autocomplete: 'off'});
     const size = el('select', {id: 'data-page-size', class: 'input select', 'aria-label': t('app.core.data.pageSize')},
@@ -1134,7 +1252,9 @@ async function renderData(scope) {
                     button(t('app.databases.edit'), () => rowEditor.open({table: table.name, key, mode: 'edit'}),
                         {id: 'row-edit-' + index, className: 'button-small', 'data-row-action': 'edit', 'aria-label': t('app.databases.editLabel', {table: table.name})}),
                     button(t('app.databases.remove'), () => rowEditor.open({table: table.name, key, mode: 'delete'}),
-                        {id: 'row-delete-' + index, className: 'button-small row-delete', 'data-row-action': 'delete', 'aria-label': t('app.databases.removeLabel', {table: table.name})}));
+                        {id: 'row-delete-' + index, className: 'button-small row-delete', 'data-row-action': 'delete', 'aria-label': t('app.databases.removeLabel', {table: table.name})}),
+                    button(t('app.mapEntry.openRecord'), () => openRecordMap(table.name, key),
+                        {className: 'button-small', symbol: 'network', 'data-row-map': index}));
             }});
             result.replaceChildren(dataTable(columns, data.rows, {
                 emptyMessage: search.value ? t('app.core.data.filteredEmpty') : t('app.core.data.empty'),
@@ -1184,6 +1304,7 @@ async function renderData(scope) {
     workspace.append(card);
     if (supports('write')) workspace.append(el('p', {class: 'table-caption'}, t('app.databases.help')));
     workspace.append(sql);
+    selectedSourceRecord(workspace, table.name, scope);
     page.append(workspace);
     await load();
 }
@@ -1275,7 +1396,7 @@ async function renderSchema(scope) {
                 state.table = name;
                 history.replaceState(null, '', databaseHash('schema'));
                 document.getElementById('database-selected-table').textContent = name;
-                document.querySelectorAll('[data-database-view]').forEach(link => { link.href = databaseHash(link.dataset.databaseView); });
+                document.querySelectorAll('[data-database-view], [data-schema-view]').forEach(link => { link.href = databaseHash(link.dataset.databaseView || link.dataset.schemaView); });
                 syncWorkspaceNavigation();
             },
         });
@@ -1289,53 +1410,9 @@ async function renderSchema(scope) {
     }
 }
 
-async function renderExplore(scope) {
-    page.append(databaseHeading('verkennen'));
-    contextContent.append(catalog('verkennen'));
-    const workspace = el('section', {id: 'record-explorer-workspace'}, loading(t('app.explorer.loading')));
-    page.append(workspace);
-    const selectRootTable = name => {
-        if (!scope.live() || !tables().some(table => table.name === name)) return;
-        state.table = name;
-        history.replaceState(null, '', databaseHash('verkennen'));
-        document.getElementById('database-selected-table').textContent = workspaceTableName(name, 'verkennen');
-        document.getElementById('database-selected-table').title = name;
-        document.querySelector('.database-selection > span').textContent = t(getExplorerMode() === 'guided' ? 'app.explorerGuide.selectedCategory' : 'app.navigation.selected');
-        document.querySelectorAll('[data-database-view]').forEach(link => { link.href = databaseHash(link.dataset.databaseView); });
-        contextContent.replaceChildren(catalog('verkennen'));
-        syncWorkspaceNavigation();
-    };
-    try {
-        // On a direct first visit, start with a table that connects to others.
-        // Tab changes and explicit table links retain the user's selection.
-        if (!route().params.has('table') && !state.recordExploreView.table) {
-            const schema = state.schemaData || await request('schema', {params: {database: scope.database}, signal: scope.signal});
-            if (!scope.live()) return;
-            state.schemaData = schema;
-            const incoming = new Map(schema.tables.map(table => [table.name, 0]));
-            for (const table of schema.tables) for (const key of table.foreign_keys || []) {
-                if ((!key.referenced_schema || key.referenced_schema === schemaName()) && incoming.has(key.referenced_table)) {
-                    incoming.set(key.referenced_table, incoming.get(key.referenced_table) + 1);
-                }
-            }
-            const candidates = schema.tables.filter(table => table.type !== 'view' && table.columns.some(column => column.primary));
-            candidates.sort((a, b) => incoming.get(b.name) - incoming.get(a.name) || a.name.localeCompare(b.name));
-            if (candidates[0]) selectRootTable(candidates[0].name);
-        }
-        if (!scope.live()) return;
-        const explorer = mountRecordExplorer(workspace, {database: scope.database, tables: tables(),
-            companion,
-            initialTable: state.table, state: state.recordExploreView, signal: scope.signal,
-            isLive: scope.live, onSelectTable: selectRootTable, onExperienceChange: () => selectRootTable(state.table)});
-        scope.cleanup.push(() => explorer.destroy());
-    } catch (error) {
-        if (error.name !== 'AbortError' && scope.live()) workspace.replaceChildren(errorPanel(error, () => render()));
-    }
-}
-
 async function renderResearch(scope) {
     page.append(heading(t('app.core.research.eyebrow'), t('app.core.research.title'), t('app.core.research.help'),
-        [button(t('app.core.research.fullEditor'), () => databaseModal.open(state.table, 'sql'), {symbol: 'external'})]));
+        [button(t('app.core.research.fullEditor'), () => databaseModal.open(state.table, 'sql'), {symbol: 'external'}), databaseTools()]));
     if (!state.queryDraft) state.queryDraft = defaultSql();
     const result = el('div', {class: 'query-result'});
     const editor = el('textarea', {id: 'sql-editor', class: 'sql-editor', spellcheck: 'false', autocapitalize: 'off', autocomplete: 'off', 'aria-label': t('app.core.research.sqlLabel')}, state.queryDraft);
@@ -1612,10 +1689,11 @@ async function renderResearch(scope) {
                 // finally block releases the mutation lock. Remember its logical
                 // opener so it can receive focus after it becomes enabled.
                 replacementOpenerId = focusFallback()?.id || null;
-                await refreshBootstrap(false, {preserveFocus: true, focusFallback});
+                await refreshBootstrap(false, {preserveFocus: true, focusFallback, invalidateRecordMap: true, allRecordMaps: true});
             }
         } catch (error) {
             if (error.name !== 'AbortError' && scope.live() && revision === state.queryRevision && editor.value === sql) {
+                if (!body.design) invalidateCanvasSources({allMaria: true});
                 state.queryError = error;
                 drawResult();
             }
@@ -1718,8 +1796,11 @@ async function renderResearch(scope) {
 }
 
 async function renderExperiments(scope) {
-    page.append(heading(t('app.core.experiments.eyebrow'), t('app.core.experiments.title'), t('app.core.experiments.help'),
-        [button(t('app.core.experiments.openWindow'), () => databaseModal.open(state.table, 'sql'), {symbol: 'database'})]));
+    const opener = button(t('app.navigation.snapshots'), openWorkspaceContext, {id: 'workspace-explorer-open', symbol: 'clock',
+        'aria-label': t('app.navigation.show'), 'aria-controls': 'workspace-context', 'aria-expanded': String(isExplorerOpen())});
+    opener.hidden = isExplorerOpen();
+    page.append(heading(t('app.navigation.tools'), t('app.navigation.backups'), t('app.core.experiments.help'),
+        [opener, el('a', {class: 'button button-secondary', href: databaseHash(state.databaseView)}, icon('database'), t('app.navigation.database')), databaseTools()]));
     const list = el('div', {class: 'snapshot-list'});
     const snapshotIndex = el('nav', {class: 'snapshot-index', 'aria-label': t('app.navigation.snapshots')});
     contextContent.append(snapshotIndex);
@@ -1807,6 +1888,7 @@ async function renderExperiments(scope) {
         restoreButton.disabled = true;
         createButton.disabled = true;
         state.restoring = true;
+        invalidateCanvasSources();
         state.snapshotError = null;
         syncRestoreControls();
         if (databaseModal.dialog.open) databaseModal.dialog.close();
@@ -1814,7 +1896,7 @@ async function renderExperiments(scope) {
         try {
             const result = await request('restore-snapshot', {params: {database}, body: {id: snapshot.id, confirmation}});
             toast(localized(result, 'message') || t('app.core.experiments.restored'));
-            await refreshBootstrap(false);
+            await refreshBootstrap(false, {invalidateRecordMap: true});
         } catch (error) {
             state.snapshotError = error;
             if (scope.live()) status.replaceChildren(errorPanel(error));

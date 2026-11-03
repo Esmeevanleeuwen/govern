@@ -20,12 +20,20 @@ page.on('pageerror', error => errors.push(error.message));
 page.on('request', request => {
     const url = new URL(request.url());
     if (url.pathname !== '/api.php') return;
-    if (request.method() !== 'GET') mutations.push(url.searchParams.get('action'));
+    if (request.method() !== 'GET' && url.searchParams.get('action') !== 'record-map') mutations.push(url.searchParams.get('action'));
     if (url.searchParams.get('action') === 'explore') recordRequests.push(Object.fromEntries(url.searchParams));
 });
 const publicKey = 'postgres:govern_pg:public', archiveKey = 'postgres:govern_pg:archive';
 const bookmark = (database, table) => new URL('/workspace.php#verkennen?' + new URLSearchParams({database, table}), base).href;
-const ready = () => page.waitForFunction(() => document.querySelector('[data-record-explorer]')?.getAttribute('aria-busy') === 'false');
+const ready = async () => {
+    await page.locator('[data-flexible-explorer]').waitFor();
+    if (!await page.locator('[data-record-node][aria-pressed="true"]').count()) {
+        if (!await page.locator('#record-map-sources').isVisible()) await page.locator('#record-map-sources-toggle').click();
+        const first = page.locator('#record-map-records [data-map-record]').first();
+        await first.waitFor(); await first.click();
+    }
+    await page.locator('#explorer-open-window').waitFor();
+};
 const countWindows = count => page.waitForFunction(count => document.querySelectorAll('dialog.record-window[open]').length === count, count);
 const fitsViewport = locator => locator.evaluate(element => {
     const box = element.getBoundingClientRect();
@@ -46,11 +54,16 @@ const screenshot = async name => {
 try {
     const initialResponse = page.waitForResponse(response => {
         const url = new URL(response.url());
-        return url.pathname === '/api.php' && url.searchParams.get('action') === 'explore'
+        return url.pathname === '/api.php' && url.searchParams.get('action') === 'record-map-records'
             && url.searchParams.get('table') === 'demo_organizations';
     });
     await page.goto(bookmark(publicKey, 'demo_organizations'), {waitUntil: 'networkidle'});
-    const initial = (await (await initialResponse).json()).data;
+    const initialUrl = new URL((await initialResponse).url());
+    initialUrl.searchParams.set('action', 'explore');
+    const metadataResponse = await context.request.get(initialUrl.href);
+    const metadata = await metadataResponse.json();
+    assert.ok(metadataResponse.ok() && metadata.ok, 'Read floating-window fixture metadata from the same actual scope.');
+    const initial = metadata.data;
     await ready();
     const center = initial.nodes.find(node => node.id === initial.center);
     const portal = initial.nodes.find(node => node.table === 'demo_systems' && node.key.id === '1');
@@ -68,7 +81,7 @@ try {
     assert.equal(await first.getAttribute('data-record-table'), center.table);
     assert.deepEqual(JSON.parse(await first.getAttribute('data-record-key')), center.key);
 
-    const peerLauncher = page.locator(`[data-explorer-window="${portal.id}"]`);
+    const peerLauncher = first.locator(`[data-record-window-link="${portal.id}"]`);
     await peerLauncher.focus();
     await peerLauncher.press('Enter');
     await countWindows(2);
@@ -112,7 +125,7 @@ try {
     phase = 'scope switch';
     await page.evaluate(hash => { location.hash = hash; }, new URL(bookmark(archiveKey, 'govern_pg_values')).hash);
     await ready();
-    await page.locator('#explorer-detail h3').filter({hasText: 'Archive-only row'}).waitFor();
+    await page.locator('#record-map-inspector h3').filter({hasText: 'Archive-only row'}).waitFor();
     await countWindows(2);
     for (const window of await page.locator('dialog.record-window').all()) {
         assert.equal(await window.getAttribute('data-record-scope'), publicKey);

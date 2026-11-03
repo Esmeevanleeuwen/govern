@@ -26,7 +26,7 @@ const track = page => {
     page.on('request', request => {
         const url = new URL(request.url());
         if (url.pathname !== '/api.php') return;
-        if (request.method() !== 'GET') mutations.push(url.searchParams.get('action'));
+        if (request.method() !== 'GET' && url.searchParams.get('action') !== 'record-map') mutations.push(url.searchParams.get('action'));
         if (url.searchParams.get('action') === 'explore') reads.push({page, params: Object.fromEntries(url.searchParams)});
     });
 };
@@ -34,7 +34,17 @@ context.on('page', track);
 const page = await context.newPage();
 const publicKey = 'postgres:govern_pg:public', archiveKey = 'postgres:govern_pg:archive';
 const bookmark = (database, table) => new URL('/workspace.php#verkennen?' + new URLSearchParams({database, table}), base).href;
-const ready = source => source.waitForFunction(() => document.querySelector('[data-record-explorer]')?.getAttribute('aria-busy') === 'false');
+const legacyCandidates = new Map();
+const ready = async source => {
+    await source.locator('[data-flexible-explorer]').waitFor();
+    if (!await source.locator('[data-record-node][aria-pressed="true"]').count()) {
+        const sources = source.locator('#record-map-sources');
+        if (!await sources.isVisible()) await source.locator('#record-map-sources-toggle').click();
+        const first = source.locator('#record-map-records [data-map-record]').first();
+        await first.waitFor(); await first.click();
+    }
+    await source.locator('#explorer-companion-pin').waitFor();
+};
 const opened = async source => {
     const popup = source.waitForEvent('popup');
     await source.locator('#explorer-companion-open').click();
@@ -48,7 +58,36 @@ const loadedPins = target => target.waitForFunction(() => {
     const pins = [...document.querySelectorAll('th[data-companion-record]')];
     return pins.length > 0 && pins.every(pin => pin.dataset.loading !== 'true') && document.querySelector('[data-comparison-field]');
 });
-const candidate = async (source, value) => { await source.locator('#explorer-record').selectOption(value); await ready(source); };
+const candidate = async (source, value) => {
+    const record = legacyCandidates.get(value);
+    assert.ok(record, 'The selected comparison record comes from real scoped fixture metadata.');
+    const sources = source.locator('#record-map-sources');
+    if (!await sources.isVisible()) await source.locator('#record-map-sources-toggle').click();
+    const option = source.locator('#record-map-records [data-map-record]').filter({hasText: record.label}).first();
+    await option.waitFor(); await option.click();
+    await source.waitForFunction(label => document.querySelector('#record-map-inspector h3')?.textContent === label, record.label);
+    await ready(source);
+};
+const mainResponseFor = (source, table) => source.waitForResponse(response => {
+    const url = new URL(response.url());
+    if (url.pathname !== '/api.php') return false;
+    if (url.searchParams.get('action') === 'record-map-records') return url.searchParams.get('table') === table;
+    return url.searchParams.get('action') === 'record-map' && response.request().postDataJSON()?.table === table;
+});
+const exploreMetadata = async (source, response) => {
+    const endpoint = new URL(response.url());
+    endpoint.searchParams.set('action', 'explore');
+    if (response.request().method() === 'POST') {
+        const input = response.request().postDataJSON();
+        endpoint.searchParams.set('table', input.table);
+        endpoint.searchParams.set('key', JSON.stringify(input.key));
+    }
+    const actual = await source.context().request.get(endpoint.href);
+    const payload = await actual.json();
+    assert.ok(actual.ok() && payload.ok, 'Read comparison fixture metadata from the real captured scope.');
+    for (const item of payload.data.candidates) legacyCandidates.set(item.id, item);
+    return payload.data;
+};
 const responseFor = (source, table) => source.waitForResponse(response => {
     const url = new URL(response.url());
     return url.pathname === '/api.php' && url.searchParams.get('action') === 'explore' && url.searchParams.get('table') === table;
@@ -65,9 +104,9 @@ const radarReady = (target, scope, table, id) => target.waitForFunction(({scope,
 }, {scope, table, id});
 
 try {
-    const response = responseFor(page, 'demo_systems');
+    const response = mainResponseFor(page, 'demo_systems');
     await page.goto(bookmark(publicKey, 'demo_systems'), {waitUntil: 'networkidle'});
-    const initial = (await (await response).json()).data;
+    const initial = await exploreMetadata(page, await response);
     await ready(page);
     const portal = initial.candidates.find(item => item.label === 'Resident Services Portal');
     const reporter = initial.candidates.find(item => item.label === 'Public Space Reporter');
@@ -190,15 +229,15 @@ try {
     await radarReady(companion, publicKey, 'demo_organizations', '1');
     assert.equal(await companion.locator('#companion-radar').getAttribute('data-following'), 'false',
         'Exploring a neighbour freezes a local root without replacing the main-screen selection.');
-    assert.equal(await page.locator('#explorer-record').inputValue(), reporter.id);
-    const shownOnMain = responseFor(page, 'demo_organizations');
+    assert.match(await page.locator('[data-record-node][aria-pressed="true"]').innerText(), /Public Space Reporter/);
+    const shownOnMain = mainResponseFor(page, 'demo_organizations');
     await companion.locator('#companion-radar-main').click();
-    const mainRecord = (await (await shownOnMain).json()).data;
+    const mainRecord = await exploreMetadata(page, await shownOnMain);
     await ready(page);
     assert.equal(mainRecord.nodes.find(node => node.id === mainRecord.center).key.id, '1');
-    assert.equal(await page.locator('#explorer-table').inputValue(), 'demo_organizations',
+    assert.equal(await page.locator('#record-map-table').inputValue(), 'demo_organizations',
         'Show on main screen navigates the paired workspace to the exact neighbour.');
-    const returnToSystems = responseFor(page, 'demo_systems');
+    const returnToSystems = mainResponseFor(page, 'demo_systems');
     await page.evaluate(hash => { location.hash = hash; }, new URL(bookmark(publicKey, 'demo_systems')).hash);
     await returnToSystems; await ready(page);
     await candidate(page, reporter.id);
@@ -211,7 +250,7 @@ try {
 
     phase = 'captured database scopes';
     await companion.locator('#companion-radar-freeze').click();
-    const archiveResponse = responseFor(page, 'govern_pg_values');
+    const archiveResponse = mainResponseFor(page, 'govern_pg_values');
     await page.evaluate(hash => { location.hash = hash; }, new URL(bookmark(archiveKey, 'govern_pg_values')).hash);
     await archiveResponse; await ready(page);
     assert.equal(await companion.locator('#companion-radar').getAttribute('data-radar-scope'), publicKey);
@@ -236,9 +275,9 @@ try {
     await pinCount(companion, 2);
 
     phase = 'MariaDB and exact PostgreSQL identities';
-    const mariaRead = responseFor(page, 'organizations');
+    const mariaRead = mainResponseFor(page, 'organizations');
     await page.evaluate(hash => { location.hash = hash; }, new URL(bookmark('bestuursatlas', 'organizations')).hash);
-    const mariaData = (await (await mariaRead).json()).data;
+    const mariaData = await exploreMetadata(page, await mariaRead);
     await ready(page);
     const mariaNode = mariaData.nodes.find(node => node.id === mariaData.center);
     await page.locator('#explorer-companion-pin').click();
@@ -246,13 +285,13 @@ try {
     const mariaPin = companion.locator('th[data-record-scope="bestuursatlas"]');
     assert.deepEqual(JSON.parse(await mariaPin.getAttribute('data-record-key')), mariaNode.key);
     assert.equal(await mariaPin.getAttribute('data-record-table'), 'organizations');
-    const exactRead = responseFor(page, 'govern_pg_values');
+    const exactRead = mainResponseFor(page, 'govern_pg_values');
     await page.evaluate(hash => { location.hash = hash; }, new URL(bookmark(publicKey, 'govern_pg_values')).hash);
-    const exactData = (await (await exactRead).json()).data;
+    const exactData = await exploreMetadata(page, await exactRead);
     await ready(page);
     const exact = exactData.candidates.find(node => node.key.id === '9007199254740993');
     assert.ok(exact, 'The PostgreSQL fixture includes a BIGINT beyond JavaScript safe integers.');
-    if (await page.locator('#explorer-record').inputValue() !== exact.id) await candidate(page, exact.id);
+    await candidate(page, exact.id);
     await page.locator('#explorer-companion-pin').click();
     await pinCount(companion, 4); await loadedPins(companion);
     const exactPin = companion.locator('th[data-record-scope="' + publicKey + '"][data-record-table="govern_pg_values"]');
@@ -266,7 +305,7 @@ try {
     await mariaPin.locator('[data-companion-remove]').click();
     await pinCount(companion, 2);
     await companion.locator('#companion-technical').uncheck();
-    const archiveReturn = responseFor(page, 'govern_pg_values');
+    const archiveReturn = mainResponseFor(page, 'govern_pg_values');
     await page.evaluate(hash => { location.hash = hash; }, new URL(bookmark(archiveKey, 'govern_pg_values')).hash);
     await archiveReturn; await ready(page);
 
@@ -316,7 +355,7 @@ try {
         finishRadar();
     };
     await companion.route('**/api.php?*', delayRadar);
-    const systemsResponse = responseFor(page, 'demo_systems');
+    const systemsResponse = mainResponseFor(page, 'demo_systems');
     await page.evaluate(hash => { location.hash = hash; }, new URL(bookmark(publicKey, 'demo_systems')).hash);
     await systemsResponse; await ready(page);
     // The main screen remembers its last record, so explicitly choose the delayed root.
@@ -333,7 +372,7 @@ try {
         'A delayed old root does not replace the newer selection.');
     await companion.locator('#companion-tab-compare').click();
     // Restore the archive context for the reopen assertion below.
-    const archiveAgain = responseFor(page, 'govern_pg_values');
+    const archiveAgain = mainResponseFor(page, 'govern_pg_values');
     await page.evaluate(hash => { location.hash = hash; }, new URL(bookmark(archiveKey, 'govern_pg_values')).hash);
     await archiveAgain; await ready(page);
 
@@ -379,7 +418,7 @@ try {
         const stored = await current.evaluate(() => JSON.stringify({...localStorage}));
         assert.doesNotMatch(stored, /Resident Services Portal|Public Space Reporter|Archive-only row|9007199254740993/, 'Companion record values and keys are not saved in browser preferences.');
     }
-    assert.deepEqual(mutations, [], 'Companion interactions use only read requests.');
+    assert.deepEqual(mutations, [], 'Companion and canvas interactions use only read operations.');
     assert.deepEqual(errors, [], 'No browser exceptions.');
     console.log('PASS: paired comparison desk and radar, exact values, pin deduplication, scoped refresh, follow/freeze, isolated channels, source loss, reopen, NL/EN, keyboard and mobile.');
 } catch (error) {

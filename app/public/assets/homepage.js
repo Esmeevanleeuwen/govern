@@ -4,7 +4,7 @@ import {getPreferences, updatePreferences} from './preferences.js';
 import {attachDialog} from './modal-shell.js';
 
 // Old bookmarks continue to open their database workspace, including its query.
-if (/^#(?:overzicht|gegevens|structuur|schema|onderzoeken|experimenten|instellingen)(?:\?|$)/.test(location.hash)) {
+if (/^#(?:overzicht|gegevens|structuur|schema|verkennen|verbanden|onderzoeken|experimenten|instellingen)(?:\?|$)/.test(location.hash)) {
     location.replace('/workspace.php' + location.search + location.hash);
 }
 

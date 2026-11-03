@@ -80,10 +80,16 @@ def main():
     for path in ("/phpmyadmin/", native):
         denied(path, "Guest")
 
-    code, body, _ = request("/auth-api.php?action=status")
+    code, body, session_headers = request("/auth-api.php?action=status")
     status = json.loads(body)
     check(code == 200 and status["ok"] and status["data"]["user"] is None,
           "The separate gateway test session starts as a guest")
+    # session_start() emits its own no-cache directive alongside no-store.
+    # Compare the session policy and header count, so an extra asset-only
+    # header is still detected without forbidding PHP's existing policy.
+    session_policy = cache_directives(session_headers)
+    session_header_count = len(session_headers.get_all("Cache-Control", []))
+    check("no-store" in session_policy, "Account sessions retain a no-store cache policy")
     code, body, _ = request("/auth-api.php?action=login", {
         "email": os.environ["GOVERN_TEST_EMAIL"],
         "password": os.environ["GOVERN_TEST_PASSWORD"] + "-deliberately-incorrect",
@@ -97,12 +103,14 @@ def main():
     check(session["user"]["role"] == "owner", "The dedicated approved owner signs in through the real endpoint")
     code, body, headers = request("/api.php?action=databases")
     check(code == 200 and json.loads(body)["ok"], "The approved owner can still list database connections")
-    check("no-store" in cache_directives(headers) and "no-cache" not in cache_directives(headers),
-          "The asset policy leaves the database API's no-store response unchanged")
+    check(cache_directives(headers) == session_policy
+          and len(headers.get_all("Cache-Control", [])) == session_header_count,
+          "The asset policy leaves the database API's session cache response unchanged")
     code, body, headers = request("/workspace.php")
     check(code == 200 and "app-shell" in body, "The approved owner can still load the workspace document")
-    check("no-store" in cache_directives(headers) and "no-cache" not in cache_directives(headers),
-          "The asset policy leaves the workspace's no-store response unchanged")
+    check(cache_directives(headers) == session_policy
+          and len(headers.get_all("Cache-Control", [])) == session_header_count,
+          "The asset policy leaves the workspace's session cache response unchanged")
     code, body, _ = request(native)
     check(code == 200 and "phpMyAdmin" in body, "The real gateway serves native phpMyAdmin to the approved owner")
     code, body, _ = request("/auth-api.php?action=logout", {}, session["csrf"])

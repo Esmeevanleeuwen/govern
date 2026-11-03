@@ -1,4 +1,4 @@
-import {selectWorkspaceLanguage} from './workspace-tools.mjs';
+import {selectWorkspaceLanguage, clickWorkspaceTool} from './workspace-tools.mjs';
 /**
  * Real browser check of Govern language, appearance and dashboard continuity.
  * Run against an isolated local stack seeded with Bestuursatlas.
@@ -41,6 +41,10 @@ const navigate = async route => {
         const current = await page.evaluate(() => location.hash.slice(1).split('?')[0]);
         if (!['gegevens', 'structuur', 'schema'].includes(current)) {
             await page.locator('#navigation [data-area="database"]').click();
+        }
+        if (route === 'structuur' && !await page.locator('[data-database-view="structuur"]').count()) {
+            await page.locator('[data-database-view="schema"]').click();
+            await page.locator('#schema-viewport').waitFor();
         }
         await page.locator('[data-database-view="' + route + '"]').click();
     } else await page.locator('#navigation [data-route="' + route + '"]').click();
@@ -255,7 +259,7 @@ try {
 
     // A preference change from another tab must translate the shell without
     // navigating an actively used phpMyAdmin document and losing its draft.
-    await page.locator('#open-database').click();
+    await clickWorkspaceTool(page, '#open-database');
     await page.locator('#database-dialog[open]').waitFor();
     await page.locator('.frame-message').waitFor({state: 'hidden'});
     await page.getByRole('tab', {name: 'SQL', exact: true}).click();
@@ -275,7 +279,7 @@ try {
     await sibling.close();
     await page.locator('#database-dialog').getByRole('button', {name: 'Close', exact: true}).click();
     await page.locator('#database-dialog').waitFor({state: 'hidden'});
-    await page.locator('#open-database').click();
+    await clickWorkspaceTool(page, '#open-database');
     await page.locator('.frame-message').waitFor({state: 'hidden'});
     assert.equal(new URL(await page.locator('#database-frame').getAttribute('src'), base).searchParams.get('lang'), 'en',
         'The next explicit opening uses the newly selected language.');

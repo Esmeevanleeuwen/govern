@@ -7,7 +7,8 @@ registerMessages('app.navigation', {
         tables: 'Tabellen', saved: 'Opgeslagen onderzoeken', snapshots: 'Herstelpunten',
         columns: 'Kolommen', connections: 'Verbindingen', inspector: 'Tabeldetails',
         noConnections: 'Geen gedeclareerde verwijzingen vanuit deze tabel.',
-        ready: 'Verbonden',
+        ready: 'Verbonden', explore: 'Verkennen', schemaViews: 'Schemaweergave', tableDetails: 'Tabeldetails', diagram: 'Diagram',
+        tools: 'Gereedschappen', import: 'Gegevens importeren', export: 'Gegevens exporteren', backups: 'Back-ups',
         emptySelection: 'Kies een tabel',
     },
     en: {
@@ -16,7 +17,8 @@ registerMessages('app.navigation', {
         tables: 'Tables', saved: 'Saved research', snapshots: 'Restore points',
         columns: 'Columns', connections: 'Connections', inspector: 'Table details',
         noConnections: 'No declared references from this table.',
-        ready: 'Connected',
+        ready: 'Connected', explore: 'Explore', schemaViews: 'Schema view', tableDetails: 'Table details', diagram: 'Diagram',
+        tools: 'Tools', import: 'Import data', export: 'Export data', backups: 'Backups',
         emptySelection: 'Choose a table',
     },
 });
