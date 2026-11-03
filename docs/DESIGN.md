@@ -136,6 +136,28 @@ Workspace navigation uses a slim muted scrollbar. Hide the outer document
 scrollbar while retaining document, keyboard and touch scrolling. Keep the
 database picker, add action and connection status together, including on mobile.
 
+## Second-screen companion
+
+The companion window has a Comparison desk and Relationship radar. Keep the
+same glass, typography, readable aliases and NL/EN preferences as the workspace.
+Provide a main-screen entry and a pin action alongside record selection. Let
+the user move the browser window to another monitor without a screen-permission
+prompt. Explain and recover from a blocked popup.
+
+Comparison pins keep their captured source while the main screen navigates.
+Show database/schema/table per column, limit the desk to four records and keep
+refresh/removal local to that pin. Align original field names, distinguish
+missing/NULL/empty values, and never imply equality from an incomplete preview
+or a comparison still loading. Shared links describe actual loaded references.
+Guided keeps technical identifiers optional; Detailed retains original fields.
+
+The radar follows the main selection until explicitly pinned. Local traversal
+pins its source; resuming follows the latest main selection. Keep graph nodes,
+foreign-key evidence and pin actions keyboard accessible. Show the actual scope
+and bounded-preview status. Language and appearance changes preserve pins,
+selection and active requests. A disconnected main screen leaves an offline
+status beside the loaded snapshots.
+
 ## Interactive design reference
 
 Use **EN / NL**, **Settings** and **Edit layout** to explore the design. The interactive reference remains on the Govern Page. Production screens use the real catalog, research service and restore points. Keep these written rules beside a visual reference when designing a new screen.

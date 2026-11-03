@@ -1,0 +1,13 @@
+.companion-launch-notice { margin: 0 28px 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.companion-launch-notice[hidden] { display: none; }
+.record-explorer-companion { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 14px; }
+.record-explorer-companion p { flex: 1 1 260px; margin: 0; font-size: 12px; line-height: 1.6; color: var(--muted); }
+.record-explorer-detail > #explorer-companion-pin { margin-top: 8px; }
+#open-companion[data-companion-status="connected"] { color: var(--g-accent-text); }
+@media (max-width: 600px) {
+    .companion-launch-notice { margin: 0 16px 12px; }
+    #open-companion .icon { display: block; }
+    #open-companion > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+    #open-companion { min-width: 38px; min-height: 38px; padding: 9px; }
+}
+@media (pointer: coarse) { #open-companion { min-width: 44px; min-height: 44px; } }

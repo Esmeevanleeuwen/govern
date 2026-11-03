@@ -3,6 +3,38 @@
 Stand van de controles: **3 november 2026**. Eerdere resultaten hieronder horen
 bij hun beschreven wijziging en zijn niet automatisch opnieuw uitgevoerd.
 
+## Vergelijkingsdesk en relatieradar op het tweede scherm
+
+De nieuwe begeleidende pagina gebruikt dezelfde inloggrens en alleen-lezen
+Explore-actie. Tijdelijke vensterparen wisselen alleen broncoördinaten uit;
+vergelijkingspins en radar hebben hun eigen vastgehouden bron en annuleringspad.
+
+Uitgevoerd tegen het afzonderlijke PostgreSQL-/MariaDB-testproject:
+
+- De modelproef controleert exacte samengestelde en grote sleutels, verschillende
+  schema's, de serverlimiet voor sleutelgrootte, ontbrekend/NULL/leeg, onzekere
+  previews, echte gedeelde verwijzingen en weigeren van een verkeerd antwoord.
+- De kanaalproef controleert afzonderlijke vensterparen, pinnen tijdens laden,
+  deduplicatie, berichtvolgorde, hervatten na pauze, BFCache, sluiten/herladen,
+  geblokkeerde pop-ups en expliciet herstel van een weggestuurd venster.
+- De nieuwe browserproef slaagt met een echt popupvenster en BroadcastChannel:
+  vier pins, verschillen, Guided-details, volgen/vastzetten, lokale radarstappen,
+  openen op het hoofdscherm, afzonderlijke vensterparen, MariaDB en PostgreSQL.
+  BIGINT `9007199254740993`, NUMERIC `123456789012345678901234.12`, NULL en
+  ontbrekende velden blijven exact onderscheiden. Ook retries na een 401,
+  achterhaalde antwoorden, pop-upherstel, BFCache, NL/EN en 320 px in donkere
+  weergave zijn gecontroleerd. Deze proef doet geen database-POSTs en controleert
+  dat recordinhoud en sleutels niet in browservoorkeuren worden opgeslagen.
+- Guided, Detailed, de bestaande vensterproef, werkpleknavigatie en algemene
+  frontendproef slagen. De vensterproef wacht nu op de asynchrone ResizeObserver
+  vóór de bestaande controle van de begrensde positie na een viewportwissel.
+- JavaScript-/PHP-syntax, i18n en **1.181** tweetalige berichten slagen.
+  Een anoniem verzoek naar `companion.php` verwijst naar de inlogpagina.
+
+Er zijn geen backendcontracten of databaserechten aangepast. De volledige CI,
+een fysieke tweede monitor en een Windows-browser zijn niet lokaal uitgevoerd;
+de browsercontroles gebruiken afzonderlijke Chromium-vensters.
+
 ## Navigatie en herbruikbare vensters
 
 De werkplek heeft een compactere scrollbar in de zijbalk, een verborgen

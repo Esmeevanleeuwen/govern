@@ -1,7 +1,8 @@
 # Govern
 
 Je persoonlijke werkplek om databases te bekijken, begrijpen en veranderen.
-Bestuursatlas is het eerste oefenproject. Je werkt lokaal in één browservenster.
+Bestuursatlas is het eerste oefenproject. Je werkt lokaal in je browser,
+eventueel met een begeleidend venster op een tweede scherm.
 
 ## Beginnen
 
@@ -96,6 +97,11 @@ Met **Open in venster / Open in window** kun je meerdere records naast elkaar
 bekijken. Sleep de titelbalk om ze te verplaatsen. Elk venster houdt zijn eigen
 database en record vast. De [gedeelde vensterlaag](docs/MODALS.md) houdt bediening,
 inhoud en gegevens ophalen apart voor nieuwe uitbreidingen.
+
+Met **Tweede scherm / Second screen** open je een apart browservenster voor
+je monitor. Zet maximaal vier records vast op de **Comparison desk** of laat
+de **Relationship radar** je hoofdselectie volgen. Vastgezette bronnen blijven
+staan als je verder navigeert. Zie [Een tweede scherm voor Govern](docs/COMPANION.md).
 
 Meer over configuratie, schema's en de volgende bouwfasen:
 [PostgreSQL in Govern](docs/POSTGRESQL.md).

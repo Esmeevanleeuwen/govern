@@ -5,6 +5,7 @@ import {recordPositions, visibleNeighborhood, valueText, tableColor, RECORD_WIDT
 import {friendlyName, recordLabel, connectedGroups, getExplorerMode, setExplorerMode, connectionDescription, renderExplorerGuide} from './explorer-guide.js';
 import {openRecordWindow} from './record-window.js';
 import './explorer-messages.js';
+import './companion-launch-messages.js';
 
 let instanceId = 0;
 const clamp = (value, minimum, maximum) => Math.max(minimum, Math.min(maximum, value));
@@ -18,7 +19,7 @@ const short = (text, length) => [...String(text)].length > length ? [...String(t
 
 /** Bounded, catalog-derived record neighborhoods; never a writer connection. */
 export function mountRecordExplorer(root, {database, tables = [], state = {}, initialTable,
-    signal, isLive = () => true, onSelectTable = () => {}, onExperienceChange = () => {}} = {}) {
+    signal, isLive = () => true, onSelectTable = () => {}, onExperienceChange = () => {}, companion = null} = {}) {
     const names = new Set(tables.map(table => table.name));
     const initial = names.has(initialTable) ? initialTable : names.has(state.table) ? state.table : tables[0]?.name || '';
     if (state.scope_key !== database || state.table !== initial) Object.assign(state, {
@@ -69,6 +70,10 @@ export function mountRecordExplorer(root, {database, tables = [], state = {}, in
         el('div', {class: 'record-explorer-introduction'}, el('div', {}, el('p', {class: 'eyebrow'}, t('app.explorer.eyebrow')),
             el('p', {}, t('app.explorer.introduction'))), badge(t('app.explorer.readOnly'), 'badge-blue')),
         el('div', {class: 'record-explorer-mode', role: 'group', 'aria-label': t('app.explorerGuide.modeLabel')}, guidedButton, detailedButton),
+        companion ? el('div', {class: 'record-explorer-companion'},
+            button(t('app.companionLaunch.open'), () => companion.open('compare'), {id: 'explorer-companion-open', symbol: 'monitor', className: 'button-small'}),
+            button(t('app.companionLaunch.radar'), () => companion.open('radar'), {id: 'explorer-companion-radar', symbol: 'network', className: 'button-small'}),
+            el('p', {}, t('app.companionLaunch.hint'))) : null,
         el('div', {class: 'record-explorer-controls'}, tableField, recordField, searchField, refresh), errorRoot, summary, guideRoot, relationPanel,
         el('div', {class: 'record-explorer-layout'}, el('div', {class: 'record-explorer-main'}, graphCard, recordsRoot), drawer), limitsRoot);
     root.replaceChildren(shell); graphRoot.append(loading(t('app.explorer.loading')));
@@ -316,7 +321,11 @@ export function mountRecordExplorer(root, {database, tables = [], state = {}, in
                 if (!busy) openRecordWindow({database, table: node.table, key: node.key, guided: guided()});
             }, {symbol: 'external', className: 'icon-button', 'data-explorer-window': node.id});
             openWindow.querySelector('span').className = 'sr-only';
-            const row = el('tr', {'data-explorer-row': node.id}, el('td', {}, el('div', {class: 'record-explorer-row-actions'}, recordButton, openWindow)), el('td', {class: 'record-explorer-table-name'}, categoryName(node.table)),
+            const pin = companion ? button(t('app.companionLaunch.pinRecord', {label: itemName(node)}), () => {
+                if (!busy && live()) companion.pin({database, table: node.table, key: node.key, guided: guided()});
+            }, {symbol: 'pin', className: 'icon-button', 'data-explorer-pin': node.id}) : null;
+            if (pin) pin.querySelector('span').className = 'sr-only';
+            const row = el('tr', {'data-explorer-row': node.id}, el('td', {}, el('div', {class: 'record-explorer-row-actions'}, recordButton, openWindow, pin)), el('td', {class: 'record-explorer-table-name'}, categoryName(node.table)),
                 el('td', {}, number(visible.edges.filter(edge => edge.source === node.id || edge.target === node.id).length)));
             body.append(row); rows.set(node.id, row);
         }
@@ -340,6 +349,8 @@ export function mountRecordExplorer(root, {database, tables = [], state = {}, in
     }
     function updateSelection() {
         if (!data) return;
+        const selectedRecord = data.nodes.find(node => node.id === state.selected);
+        if (live()) companion?.select(selectedRecord ? {database, table: selectedRecord.table, key: selectedRecord.key, guided: guided()} : null);
         const selectedEdge = data.edges.find(edge => edge.id === state.selectedEdge);
         for (const [id, element] of nodeElements) {
             const selected = id === state.selected && !selectedEdge;
@@ -375,7 +386,10 @@ export function mountRecordExplorer(root, {database, tables = [], state = {}, in
             button(t(node.id === data.center ? guided() ? 'app.explorerGuide.alreadyFocus' : 'app.explorer.alreadyFocus' : guided() ? 'app.explorerGuide.follow' : 'app.explorer.expand'), () => load(node.table, node.key, true, true),
                 {id: 'explorer-expand', symbol: 'network', disabled: busy || node.id === data.center}),
             button(t('app.recordWindow.open'), () => openRecordWindow({database, table: node.table, key: node.key, guided: guided()}),
-                {id: 'explorer-open-window', symbol: 'external', disabled: busy}));
+                {id: 'explorer-open-window', symbol: 'external', disabled: busy}),
+            companion ? button(t('app.companionLaunch.pin'), () => {
+                if (!busy && live()) companion.pin({database, table: node.table, key: node.key, guided: guided()});
+            }, {id: 'explorer-companion-pin', symbol: 'pin', disabled: busy}) : null);
         if (guided()) {
             const identifiers = new Set(Object.keys(node.key).filter(name => /(^id$|_id$|^uuid$)/i.test(name)));
             for (const edge of data.edges) {
@@ -424,7 +438,10 @@ export function mountRecordExplorer(root, {database, tables = [], state = {}, in
             el('p', {class: 'small muted'}, t('app.explorer.limitsValues', {nodes: data.limits.max_nodes, edges: data.limits.max_edges, neighbors: data.limits.per_relation})),
             reasons.length ? el('ul', {}, reasons.filter(code => hasMessage('app.explorer.omitted.' + code)).map(code => el('li', {}, t('app.explorer.omitted.' + code)))) : null);
     }
-    function destroy() { destroyed = true; controller?.abort(); pointer = null; signal?.removeEventListener('abort', destroy); }
+    function destroy() {
+        if (destroyed) return;
+        destroyed = true; controller?.abort(); pointer = null; signal?.removeEventListener('abort', destroy);
+    }
     const ready = initial ? load(initial, state.rootKey) : Promise.resolve();
     if (!initial) { graphRoot.replaceChildren(empty(t('app.explorer.emptyTitle'), t('app.explorer.emptyHelp'))); setBusy(false); }
     updateExperience(); updateViewport(); return {destroy, ready};

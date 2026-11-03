@@ -184,6 +184,11 @@ try {
     assert.equal(await shell.isVisible(), true);
     await page.setViewportSize({width: 320, height: 800});
     await page.waitForFunction(() => document.documentElement.scrollWidth <= innerWidth);
+    // ResizeObserver constrains the fixed window on the next rendering turn.
+    await page.waitForFunction(() => {
+        const box = document.getElementById('window-smoke').getBoundingClientRect();
+        return box.left >= -1 && box.top >= -1 && box.right <= innerWidth + 1 && box.bottom <= innerHeight + 1;
+    });
     assert.equal(await fitsViewport(shell), true, 'Moved windows remain reachable after a viewport resize.');
     await screenshot('record-window-mobile');
     await shell.locator('.modal-shell-close').click();

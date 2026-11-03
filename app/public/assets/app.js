@@ -8,6 +8,7 @@ import {getPreferences, updatePreferences, resetAppearance, subscribePreferences
 import {createDashboardLayout} from './dashboard-layout.js';
 import {mountSchemaVisualizer} from './schema-visualizer.js';
 import {mountRecordExplorer} from './record-explorer.js';
+import {createWorkspaceCompanion} from './companion-workspace.js';
 import {friendlyName, getExplorerMode} from './explorer-guide.js';
 import {registerSelection} from './selection-registry.js';
 import {SelectionPointer} from './selection-pointer.js';
@@ -118,6 +119,16 @@ let currentScope;
 let bootstrapController;
 let routeVersion = 0;
 let recordSnapshotId = 0;
+const companion = createWorkspaceCompanion({onSelect: async context => {
+    if (databaseBusy() || state.switchingDatabase) { toast(t('app.databases.busy'), 'error'); return; }
+    if (context.database !== getDatabase()) await switchDatabase(context.database);
+    if (context.database !== getDatabase() || databaseBusy()) return;
+    if (!tables().some(table => table.name === context.table)) { toast(t('app.companionLaunch.unavailable'), 'error'); return; }
+    state.table = context.table;
+    Object.assign(state.recordExploreView, {scope_key: context.database, table: context.table, rootKey: context.key,
+        search: '', selected: '', selectedEdge: '', enabledRelations: null, zoom: 1, pan: {x: 0, y: 0}});
+    go('verkennen', {table: context.table});
+}});
 
 const aiWorkspace = createAiWorkspace({getDatabase,
     onOpenSql: async (sql, {database}) => {
@@ -354,6 +365,7 @@ async function switchDatabase(database, {fromHash = false} = {}) {
     if (!supports('ai')) aiWorkspace.close({restoreFocus: false});
     if (supports('ai')) aiWorkspace.setDatabase(database);
     state.switchingDatabase = true; openDatabase.disabled = true;
+    companion.select(null);
     if (selectionPointer.dialog.open) selectionPointer.dialog.close();
     selectionPointer.modalItems = []; selectionPointer.selected.clear(); selectionPointer.setOn(false);
     const params = requestedTable ? {table: requestedTable} : (state.table ? {table: state.table} : {});
@@ -678,6 +690,7 @@ async function refreshBootstrap(notify = false, {preserveFocus = false, focusFal
 
 function render() {
     const location = route();
+    if (location.name !== 'verkennen') companion.select(null);
     if (!state.bootstrap && location.name !== 'instellingen') {
         if (state.connectionError) page.replaceChildren(heading(t('app.core.connection.eyebrow'), t('app.core.connection.title'), t('app.core.connection.help')), errorPanel(state.connectionError, () => refreshBootstrap()));
         return;
@@ -1304,6 +1317,7 @@ async function renderExplore(scope) {
         }
         if (!scope.live()) return;
         const explorer = mountRecordExplorer(workspace, {database: scope.database, tables: tables(),
+            companion,
             initialTable: state.table, state: state.recordExploreView, signal: scope.signal,
             isLive: scope.live, onSelectTable: selectRootTable, onExperienceChange: () => selectRootTable(state.table)});
         scope.cleanup.push(() => explorer.destroy());

@@ -26,6 +26,7 @@ $governUser = \Govern\Web::user();
     <link rel="stylesheet" href="/assets/ai-workspace.css">
     <link rel="stylesheet" href="/assets/modal-shell.css">
     <link rel="stylesheet" href="/assets/record-window.css">
+    <link rel="stylesheet" href="/assets/companion-launch.css">
     <script type="module" src="/assets/app.js"></script>
     <script type="module" src="/assets/workspace-account.js"></script>
 </head>
@@ -63,6 +64,7 @@ $governUser = \Govern\Web::user();
                     <strong id="breadcrumb-current" class="sr-only">Overzicht</strong>
                 </div>
                 <div class="topbar-actions">
+                    <button id="open-companion" class="button button-secondary button-small" type="button" aria-label="Tweede scherm" data-i18n-aria="app.companionLaunch.open"><span data-i18n="app.companionLaunch.open">Tweede scherm</span></button>
                     <a class="button button-secondary button-small" id="workspace-account" href="/account.php" target="_blank" rel="noopener"><span id="workspace-account-label">Account</span></a>
                     <button id="ai-toggle" class="button button-secondary button-small" type="button" data-selection-ui="" aria-controls="ai-workspace-panel" aria-expanded="false" aria-label="AI-assistent" data-i18n-aria="app.ai.toggle" title="AI-assistent" data-i18n-title="app.ai.toggle"><span class="ai-toggle-label" data-i18n="app.ai.toggle">AI-assistent</span></button>
                     <label class="language-picker"><span id="language-icon" aria-hidden="true"></span><select id="language-select" aria-label="Taal" data-i18n-aria="app.settings.language"><option value="nl">NL</option><option value="en">EN</option></select></label>
@@ -71,6 +73,7 @@ $governUser = \Govern\Web::user();
                     <button id="open-database" class="button button-secondary" type="button" disabled><span data-i18n="app.shell.openDatabase">Database openen</span></button>
                 </div>
             </header>
+            <div id="companion-launch-notice" class="notice companion-launch-notice" role="status" hidden></div>
             <main id="main-content" tabindex="-1">
                 <div id="global-notice"></div>
                 <div id="page"><div class="loading-state" role="status"><span class="spinner"></span><span data-i18n="app.shell.loading">Je werkplek wordt geladen…</span></div></div>

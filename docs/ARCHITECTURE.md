@@ -158,6 +158,23 @@ blokkerende vensters met bevroren context, eigen AbortSignal en opruiming per
 laadcyclus. `record-window.js` koppelt die laag aan de bestaande Explore-GET en
 valideert scope, tabel en exacte sleutel. Zie [Vensters en modalinhoud](MODALS.md).
 
+### Begeleidend tweede scherm
+
+`companion.php` gebruikt dezelfde HTML-inloggrens en biedt een apart venster
+met een vergelijkingsdesk en relatieradar. `companion-channel.js` koppelt één
+werkplektab aan één begeleidend venster via een willekeurig tijdelijk kanaal.
+Alleen gevalideerde broncoördinaten gaan over dit kanaal; recordgegevens worden
+apart via de bestaande alleen-lezen Explore-GET geladen. Er zijn geen nieuwe
+API-acties, SQL-rechten of blijvende recordopslag.
+
+`companion-model.js` controleert scope, tabel en volledige tekstsleutel van elk
+antwoord. Identiteit bevat ook database en schema. De desk houdt maximaal vier
+bronnen vast met een eigen annuleringssignaal en revisie per record. De radar
+heeft onafhankelijk volgen/vastzetten en annuleert achterhaalde antwoorden.
+Vergelijking onderscheidt ontbrekende velden, NULL, lege tekst en onzekere
+previews; gedeelde verbindingen matchen alleen exacte geladen recordidentiteiten.
+Zie [Een tweede scherm voor Govern](COMPANION.md) voor bediening en lifecycle.
+
 ### Bestaande MariaDB-werkplek
 
 De geselecteerde werkdatabase is de bron voor zowel Govern als phpMyAdmin.

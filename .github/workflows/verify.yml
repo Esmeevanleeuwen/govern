@@ -105,6 +105,8 @@ jobs:
           node tests/record-explorer-unit.mjs
           node tests/explorer-guide-unit.mjs
           node tests/modal-geometry-unit.mjs
+          node tests/companion-model-unit.mjs
+          node tests/companion-channel-unit.mjs
           npm install --no-save --ignore-scripts --prefix "$RUNNER_TEMP/govern-browser" playwright@1.62.1
           export PLAYWRIGHT_MODULE="$RUNNER_TEMP/govern-browser/node_modules/playwright"
           BROWSER_BIN="$(command -v google-chrome)"
@@ -120,6 +122,7 @@ jobs:
             tests/record-explorer-smoke.mjs \
             tests/explorer-guide-smoke.mjs \
             tests/modal-windows-smoke.mjs \
+            tests/companion-smoke.mjs \
             tests/database-import-smoke.mjs \
             tests/frontend-smoke.mjs \
             tests/query-builder-smoke.mjs \
