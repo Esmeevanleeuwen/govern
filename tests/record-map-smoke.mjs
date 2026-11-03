@@ -181,9 +181,9 @@ try {
     assert.equal(await page.locator('#record-map-table').inputValue(), 'zz_record_map_projects');
     await ensureSources();
     await page.locator('#record-map-table').selectOption('zz_record_map_people');
-    await page.locator('[data-record-node="' + info.focus.id + '"]').focus();
-    await page.locator('[data-record-node="' + info.focus.id + '"]').press('Enter');
-    const refreshSource = () => inspection.getByRole('button', {name: 'Read source again', exact: true});
+    await page.locator('[data-record-node="' + info.focus.id + '"]').click();
+    await inspection.locator('[data-map-connections-for="' + info.focus.id + '"]').waitFor({state: 'visible'});
+    const refreshSource = () => inspection.locator('[data-map-refresh-record="' + info.focus.id + '"]');
     await reveal(refreshSource());
     let reread = mapResponse('mariadb', undefined);
     await refreshSource().click();

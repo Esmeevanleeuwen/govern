@@ -655,7 +655,8 @@ export function mountRecordMap(root, {state = {}, tables = [], scopeKey = '', in
                 el('div', {class: 'record-map-actions'},
                     smallButton(t('app.recordWindow.open'), () => openWindow(node), {id: 'explorer-open-window', symbol: 'external', disabled: Boolean(inspecting)}),
                     companion ? smallButton(t('app.companionLaunch.pin'), () => pinComparison(node), {id: 'explorer-companion-pin', symbol: 'pin', disabled: Boolean(inspecting)}) : null,
-                    button(text('refreshRecord'), () => refreshNode(node), {symbol: 'refresh', className: 'button-small', disabled: Boolean(inspecting)})));
+                    button(text('refreshRecord'), () => refreshNode(node), {symbol: 'refresh', className: 'button-small',
+                        'data-map-refresh-record': node.id, disabled: Boolean(inspecting)})));
             inspectorBody.append(heading, list, viewActions, more,
                 el('details', {class: 'record-map-technical', 'data-map-technical': ''},
                 el('summary', {title: text('technicalSummary')}, text('technical')),
