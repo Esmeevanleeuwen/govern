@@ -3,6 +3,26 @@
 Stand van de controles: **3 november 2026**. Eerdere resultaten hieronder horen
 bij hun beschreven wijziging en zijn niet automatisch opnieuw uitgevoerd.
 
+## Vernieuwde vormgeving van de startpagina
+
+De publieke HTML en echte modules zijn in Chromium nagekeken in Nederlands en
+Engels op 1440, 1024, 768, 375 en 320 px. De controle omvat de zwevende navigatie,
+de voorbeeldwerkplek, gekoppelde voorbeeldrecords, Gereedschap, de uitklapbare
+functie-uitleg en vragen, en de installatiehulp. De bestaande publieke stappen
+uit `homepage-auth-smoke.mjs` zijn uitgebreid voor de demoknop en het openen van
+de functie-uitleg via een directe gidslink.
+
+Gerichte controles behandelen toetsenbordbediening, focus na Escape, leesbare
+gekozen tabs, scrollen binnen het schema/de tabellen, geen horizontale
+pagina-overloop en minder beweging/transparantie. De schermen zijn visueel
+nagekeken. JavaScript-syntax, i18n, alle **1.438** tweetalige berichten en
+`git diff --check` slagen. De voorbeelden vragen geen private database-API's op.
+
+Dit zijn publieke browsercontroles via een lokale statische server. De
+accountbackend, databasehandelingen, Windows zelf en andere browserengines zijn
+bij deze vormgevingswijziging niet lokaal opnieuw uitgevoerd. De volledige
+CI-uitslag hoort bij de betreffende commit.
+
 ## Startpagina met uitleg over de gezamenlijke werkplek
 
 De publieke pagina is met de echte HTML, CSS en JavaScriptmodules in Chromium

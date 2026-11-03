@@ -1,6 +1,6 @@
 # Govern UX and UI design
 
-**Design baseline 1.8.** Govern is a personal, local workspace for exploring, understanding and changing databases. This guide defines its brand, visual system, behaviour and the process for adding features without disrupting existing work.
+**Design baseline 1.9.** Govern is a personal, local workspace for exploring, understanding and changing databases. This guide defines its brand, visual system, behaviour and the process for adding features without disrupting existing work.
 
 The agreed visual direction is layered glass, soft shadows, custom colour and no hard decorative borders. Dutch and English are equal interface languages. The detailed rules below are the target for implementation; the interactive preview is a visual reference. The production modules implement the core language, appearance and layout controls; the future chart example remains a proposal.
 
@@ -12,6 +12,27 @@ oversized sans serif typography, the existing open geometric mark, and the
 application's actual lagoon/sage palette. Subtle lavender and pale gold ambient
 light support the same pearl glass materials as the workspace. A dark sample
 workspace provides contrast within the light marketing canvas.
+
+The landing page uses a floating, sticky glass header with anchor offsets that
+keep headings visible below it. The hero pairs a clear registration action with
+**Try the demo**, leading directly to the interactive preview. Connected glass
+record illustrations are decorative and hidden from assistive technology.
+Use the local system font, a restrained type scale, generous spacing and shared
+surface/shadow tokens; no external font or UI dependency is needed.
+
+The preview has its own heading, readable controls and explicit selected states.
+The sample SQL card sits outside the workspace instead of covering its content.
+At narrow widths all four preview tabs remain visible in a two-column layout;
+dense tables and the schema scroll inside their own region with a visible hint.
+Keep important controls at least 44 px high and retain their keyboard behaviour.
+
+The capability guide uses varied card widths, shared outline icons and short
+summaries. The complete instructions remain in native **How to use it**
+disclosures. A guide link opens its destination's disclosure. Section links,
+numbered Explore steps and a separate FAQ make the longer page easy to scan.
+Use solid reading surfaces for long content rather than adding more blur layers.
+Reduced motion, reduced transparency, forced colours and 320 px layouts remain
+part of the same design, rather than separate versions of the page.
 
 The product preview is labelled **Illustrative workspace · sample data**.
 Its Records, Explore, Table details and Schema controls explore a small fictional

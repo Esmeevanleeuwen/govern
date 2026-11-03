@@ -64,6 +64,11 @@ try {
     await noOverflow(page, 'The desktop homepage must not overflow the viewport.');
     await shot(page, 'homepage-desktop');
 
+    await page.locator('.home-demo-link').click();
+    assert.equal(new URL(page.url()).hash, '#product', 'Try the demo opens the interactive product preview.');
+    await page.waitForFunction(() => document.querySelector('#product').getBoundingClientRect().top
+        >= document.querySelector('.home-header').getBoundingClientRect().bottom);
+
     // These are actual public sample controls, not mocked database API responses.
     await page.locator('#home-tab-data').click();
     await page.locator('#home-demo-panel .home-demo-table').waitFor();
@@ -92,6 +97,9 @@ try {
     assert.equal(await page.locator('.home-preview-tools').getAttribute('open'), '');
     await page.locator('.home-preview-tools a[href="#guide-windows"]').click();
     assert.equal(new URL(page.url()).hash, '#guide-windows');
+    assert.equal(await page.locator('#guide-windows .home-card-details').evaluate(node => node.open), true,
+        'Following a feature link opens its full instructions.');
+    assert.equal(await page.locator('#guide-windows [data-home-i18n="windowsBody"]').isVisible(), true);
     assert.equal(await page.locator('.home-guide-steps > li').count(), 3);
     assert.equal(await page.locator('.home-guide-grid > article').count(), 6);
     assert.equal(await page.locator('.home-faq details').count(), 3);

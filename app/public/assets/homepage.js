@@ -105,6 +105,7 @@ function element(tag, text, className) {
 
 function renderSample({announce = false} = {}) {
     if (!panel || !schema) return;
+    $('.home-preview').dataset.previewMode = view;
     $$('[data-home-view]').forEach(button => {
         const selected = button.dataset.homeView === view;
         button.setAttribute('aria-selected', String(selected));
@@ -224,6 +225,12 @@ $$('[data-home-os]').forEach(button => {
 $('#home-install-kind')?.addEventListener('change', () => setOperatingSystem(os));
 const previewTools = $('.home-preview-tools');
 previewTools?.querySelectorAll('a').forEach(link => link.addEventListener('click', () => {previewTools.open = false;}));
+// A guide link reveals the complete explanation at its destination.
+$$('a[href^="#guide-"]').forEach(link => link.addEventListener('click', () => {
+    const target = document.getElementById(link.hash.slice(1));
+    const details = target?.querySelector('.home-card-details');
+    if (details) details.open = true;
+}));
 document.addEventListener('click', event => {
     if (previewTools?.open && !previewTools.contains(event.target)) previewTools.open = false;
 });
