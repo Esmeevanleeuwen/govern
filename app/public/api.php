@@ -4,6 +4,7 @@ declare(strict_types=1);
 require_once dirname(__DIR__) . '/src/bootstrap.php';
 
 use Govern\ApiException;
+use Govern\Auth;
 use Govern\BackupService;
 use Govern\BackupException;
 use Govern\BackupInputException;
@@ -11,6 +12,7 @@ use Govern\Catalog;
 use Govern\Config;
 use Govern\Database;
 use Govern\DatabaseScope;
+use Govern\ConnectionScope;
 use Govern\Http;
 use Govern\MaintenanceLock;
 use Govern\Messages;
@@ -21,26 +23,36 @@ use Govern\SavedQueries;
 use Govern\AiService;
 use Govern\DatabaseProvisioner;
 use Govern\ImportInspection;
+use Govern\RecordExplorer;
 
 try {
     $baseConfig = Config::fromEnvironment();
     $csrf = Http::start($baseConfig);
     $action = Http::text($_GET, 'action');
+    // Readiness never accepts a caller-selected schema or enumerates databases.
+    if ($action === 'health') {
+        Http::get();
+        (new Database($baseConfig))->reader()->query('SELECT 1')->fetchColumn();
+        Http::json(['status' => 'ok']);
+    }
+    (new Auth())->requireUser();
     $posts = ['build-query', 'query', 'save-query', 'delete-query', 'create-snapshot', 'restore-snapshot', 'insert-row', 'update-row', 'delete-row', 'ai-context', 'ai-chat', 'prepare-database'];
     $input = in_array($action, $posts, true) ? Http::post($csrf) : [];
     if (!in_array($action, $posts, true)) {
         Http::get();
     }
-    $scope = new DatabaseScope($baseConfig);
+    $scope = new ConnectionScope($baseConfig);
     if ($action === 'databases') Http::json(['databases' => $scope->databases(), 'default_database' => $baseConfig['name'],
         'can_create' => (new DatabaseProvisioner())->isAvailable()]);
-    $selectedDatabase = Http::text($_GET, 'database', false) ?: $baseConfig['name'];
-    $config = $scope->select($selectedDatabase);
+    $config = $scope->selectRequest(Http::text($_GET, 'database', false),
+        array_key_exists('connection', $_GET) ? Http::text($_GET, 'connection', false) : null,
+        array_key_exists('schema', $_GET) ? Http::text($_GET, 'schema', false) : null);
+    ConnectionScope::requireAction($config, $action);
     if ($action === 'prepare-database') {
         $lock = new MaintenanceLock($config['maintenance_dir']);
         $prepared = (new DatabaseProvisioner())->prepare($input);
         // Permissions changed: discard the catalog cached before provisioning.
-        $freshScope = new DatabaseScope($baseConfig);
+        $freshScope = new ConnectionScope($baseConfig);
         Http::json([...$prepared, 'databases' => $freshScope->databases(), 'default_database' => $baseConfig['name']],
             $prepared['created'] ? 201 : 200);
     }
@@ -84,11 +96,17 @@ try {
     }
     if ($action === 'bootstrap') {
         $data = ['csrf' => $csrf, 'databases' => $scope->databases(), 'default_database' => $baseConfig['name'],
-            'can_create_database' => (new DatabaseProvisioner())->isAvailable(),
-            'database' => ['name' => $config['name'], 'version' => null, 'status' => 'unavailable', 'available' => false],
+            'can_create_database' => $config['engine'] === 'mariadb' && (new DatabaseProvisioner())->isAvailable(),
+            'scope_key' => $config['scope_key'], 'capabilities' => ConnectionScope::capabilities($config),
+            'database' => ['name' => $config['name'], 'connection' => $config['connection'], 'engine' => $config['engine'],
+                'schema' => $config['schema'] ?? $config['name'], 'scope_key' => $config['scope_key'],
+                'version' => null, 'status' => 'unavailable', 'available' => false],
             'stats' => ['tables' => 0, 'views' => 0, 'rows_estimate' => 0], 'tables' => []];
         try {
             $lock = new MaintenanceLock($config['maintenance_dir']);
+            if ($config['engine'] === 'postgres' && !in_array($config['schema'], $database->schemaNames(), true)) {
+                throw ApiException::fromCode('postgres_schema_unavailable', 503);
+            }
             $data['tables'] = $catalog->tables();
             $data['database']['version'] = $database->reader()->getAttribute(PDO::ATTR_SERVER_VERSION);
             $data['database']['status'] = 'ready';
@@ -120,6 +138,17 @@ try {
         return $data;
     };
     switch ($action) {
+        case 'explore':
+            $keyText = Http::text($_GET, 'key', false);
+            $key = null;
+            if ($keyText !== '') {
+                if (strlen($keyText) > RecordExplorer::KEY_BYTES) throw ApiException::fromCode('explore_key_invalid', 422);
+                try { $decodedKey = json_decode($keyText, false, 16, JSON_THROW_ON_ERROR); }
+                catch (\JsonException) { throw ApiException::fromCode('explore_key_invalid', 422); }
+                if (!$decodedKey instanceof \stdClass) throw ApiException::fromCode('explore_key_invalid', 422);
+                $key = get_object_vars($decodedKey);
+            }
+            Http::json((new RecordExplorer($database))->explore(Http::text($_GET, 'table'), $key));
         case 'ai-context':
             Http::json((new AiService($database))->previewContext($input));
         case 'ai-chat':
@@ -143,9 +172,6 @@ try {
             Http::json($recordResponse((new RowEditor($database))->update($input)));
         case 'delete-row':
             Http::json($recordResponse((new RowEditor($database))->delete($input)));
-        case 'health':
-            $database->reader()->query('SELECT 1')->fetchColumn();
-            Http::json(['status' => 'ok']);
         case 'browse':
             Http::json($recordResponse($catalog->browse(Http::text($_GET, 'table'), Http::integer($_GET, 'page', 1), Http::integer($_GET, 'page_size', 25), Http::text($_GET, 'q', false))));
         case 'structure':

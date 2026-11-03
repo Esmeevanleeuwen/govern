@@ -1,0 +1,22 @@
+/* Window behaviour is shared; feature modules own the contents. */
+.govern-window[open] { position: fixed; }
+.modal-drag-handle { cursor: grab; touch-action: none; }
+.modal-drag-handle:focus-visible { outline: 2px solid var(--g-accent); outline-offset: -4px; }
+.modal-drag-handle :is(button, a, input, select, textarea, summary) { cursor: pointer; }
+.govern-window.is-dragging, .govern-window.is-dragging .modal-drag-handle { cursor: grabbing; user-select: none; }
+html[data-window-dragging] iframe { pointer-events: none; }
+.modal-shell { width: min(520px, calc(100vw - 24px)); max-width: calc(100vw - 24px); max-height: calc(100dvh - 24px); border-radius: 23px; overflow: hidden; }
+.modal-shell[open] { display: flex; flex-direction: column; }
+.modal-shell-header { display: flex; align-items: flex-start; gap: 16px; padding: 19px 21px; background: var(--g-glass); flex-shrink: 0; }
+.modal-shell-heading { min-width: 0; flex: 1; }
+.modal-shell-title { font-size: 16px; line-height: 1.5; overflow-wrap: anywhere; }
+.modal-shell-description { margin: 5px 0 0; font-size: 12px; line-height: 1.6; color: var(--muted); overflow-wrap: anywhere; }
+.modal-shell-close { flex: 0 0 auto; font-size: 23px; line-height: 1; }
+.modal-shell-body { min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 21px; scrollbar-width: thin; }
+.modal-shell-status { color: var(--muted); font-size: 13px; line-height: 1.7; }
+.modal-shell-status .button { margin-top: 12px; }
+@media (max-width: 600px) {
+    .modal-shell { width: calc(100vw - 16px); max-width: calc(100vw - 16px); max-height: calc(100dvh - 16px); border-radius: 18px; }
+    .modal-shell-header { padding: 15px 16px; gap: 10px; }
+    .modal-shell-body { padding: 16px; }
+}

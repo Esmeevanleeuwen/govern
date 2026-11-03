@@ -1,4 +1,6 @@
+import {clickWorkspaceTool, selectWorkspaceLanguage} from './workspace-tools.mjs';
 /** Inspect real database data and arbitrary interface elements without activating them. */
+import {authenticatedContext} from './auth-session.mjs';
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 import {mkdir} from 'node:fs/promises';
@@ -13,7 +15,7 @@ const screenshots = process.env.SCREENSHOTS_DIR;
 if (screenshots) await mkdir(screenshots, {recursive: true});
 const browser = await chromium.launch({headless: true, args,
     ...(process.env.BROWSER_BIN ? {executablePath: process.env.BROWSER_BIN} : {})});
-const context = await browser.newContext({locale: 'nl-NL', viewport: {width: 1440, height: 1100}});
+const context = await authenticatedContext(browser, base, {locale: 'nl-NL', viewport: {width: 1440, height: 1100}});
 const page = await context.newPage();
 const errors = [];
 const mutations = [];
@@ -42,7 +44,7 @@ const shot = async name => {
     if (screenshots) await page.screenshot({path: path.join(screenshots, 'selection-' + name + '.png'), fullPage: true});
 };
 const openSelected = async () => {
-    await page.locator('#selection-pointer-count').click();
+    await clickWorkspaceTool(page, '#selection-pointer-count');
     if (!await dialog.isVisible()) {
         await tag.waitFor();
         await more.click();
@@ -55,7 +57,7 @@ const stateOfCanvas = () => page.locator('.schema-world').evaluate(world => ({
 }));
 
 try {
-    await page.goto(new URL('/#gegevens?table=organizations', base).href, {waitUntil: 'networkidle'});
+    await page.goto(new URL('/workspace.php#gegevens?table=organizations', base).href, {waitUntil: 'networkidle'});
     await page.locator('.table-workspace .data-table tbody tr').nth(1).waitFor();
     const dataTable = page.locator('.table-workspace .data-table');
     const nameIndex = await dataTable.locator('thead th').evaluateAll(cells => cells.findIndex(cell => cell.textContent.trim() === 'name'));
@@ -68,7 +70,7 @@ try {
     assert.equal(await firstCell.getAttribute('data-selection-kind'), 'cell', 'Browse cells have their exact database context.');
     assert.equal(await rows.nth(0).getAttribute('data-selection-kind'), 'row', 'The parent record is independently inspectable.');
 
-    await toggle.click();
+    await clickWorkspaceTool(page, '#selection-pointer-toggle');
     assert.equal(await toggle.getAttribute('aria-pressed'), 'true');
     await firstCell.click();
     await count(1);
@@ -79,9 +81,10 @@ try {
     await secondCell.click({modifiers: ['Shift']});
     await count(2);
     const beforeRefresh = bootstrapRequests.length;
-    await page.locator('#refresh-app').click();
+    await page.locator('#open-database').click();
     await count(1);
-    assert.equal(bootstrapRequests.length, beforeRefresh, 'Selecting Refresh must not refresh the application.');
+    assert.equal(await page.locator('#database-dialog').isVisible(), false, 'Inspecting Open database must not open phpMyAdmin.');
+    assert.equal(bootstrapRequests.length, beforeRefresh, 'Inspecting a workspace action must not refresh the application.');
     const hash = await page.evaluate(() => location.hash);
     await page.locator('#navigation [data-area="research"]').click();
     await count(1);
@@ -94,8 +97,8 @@ try {
 
     // Restart the pointer to establish a fresh dwell timer, independent of the
     // clicks above. Hover alone never changes the one-item selection.
-    await toggle.click();
-    await toggle.click();
+    await clickWorkspaceTool(page, '#selection-pointer-toggle');
+    await clickWorkspaceTool(page, '#selection-pointer-toggle');
     await firstCell.click();
     await firstCell.hover();
     await page.waitForTimeout(2400);
@@ -118,7 +121,7 @@ try {
     adjacentKey);
     assert.ok((await page.locator('#selection-pointer-name').innerText()).includes(adjacentValue), 'The second dwell reveals the second element without another mouse movement.');
     await count(1);
-    await page.locator('#selection-pointer-count').click();
+    await clickWorkspaceTool(page, '#selection-pointer-count');
     assert.ok((await page.locator('#selection-pointer-name').innerText()).includes(firstValue), 'The selection shortcut restores the selected cell tag.');
     await more.click();
     await page.locator('#selection-pointer-dialog[open]').waitFor();
@@ -143,8 +146,8 @@ try {
     // the selected records or their raw text.
     const languagePage = await context.newPage();
     languagePage.on('pageerror', error => errors.push(error.message));
-    await languagePage.goto(new URL('/#instellingen', base).href, {waitUntil: 'networkidle'});
-    await languagePage.locator('#language-select').selectOption('en');
+    await languagePage.goto(new URL('/workspace.php#instellingen', base).href, {waitUntil: 'networkidle'});
+    await selectWorkspaceLanguage(languagePage, 'en');
     await page.waitForFunction(() => document.documentElement.lang === 'en');
     await page.locator('#selection-pointer-dialog[open]').waitFor();
     await count(2);
@@ -197,7 +200,7 @@ try {
     await page.locator('#schema-viewport').waitFor();
     await page.locator('#schema-table-panel [data-schema-select="organizations"]').click();
     await page.locator('#schema-actual').click();
-    await toggle.click();
+    await clickWorkspaceTool(page, '#selection-pointer-toggle');
     const header = page.locator('[data-schema-header="organizations"]');
     await header.scrollIntoViewIfNeeded();
     const beforeDrag = await stateOfCanvas();
@@ -221,8 +224,8 @@ try {
 
     // An unregistered heading is still inspectable. Keyboard users can reach
     // an inspection through the pointer controls without waiting for hover.
-    await toggle.click();
-    await toggle.focus();
+    await clickWorkspaceTool(page, '#selection-pointer-toggle');
+    await page.locator('#workspace-tools-toggle').focus();
     await page.keyboard.press('ArrowDown');
     await page.keyboard.press('Enter');
     await count(1);
@@ -239,7 +242,7 @@ try {
         element.textContent = value;
         document.querySelector('#page').prepend(element);
     }, hostile);
-    await toggle.click();
+    await clickWorkspaceTool(page, '#selection-pointer-toggle');
     await page.locator('#selection-test-text').click();
     await openSelected();
     assert.ok((await dialog.innerText()).includes(hostile), 'Arbitrary text is shown literally in its explanation.');
@@ -259,7 +262,7 @@ try {
         element.addEventListener('click', () => { window.selectionDisabledActivated = true; });
         document.querySelector('#page').prepend(element);
     });
-    await toggle.click();
+    await clickWorkspaceTool(page, '#selection-pointer-toggle');
     const disabled = page.locator('#selection-test-disabled');
     await disabled.scrollIntoViewIfNeeded();
     const disabledBox = await disabled.boundingBox();
@@ -280,7 +283,7 @@ try {
     });
     await page.setViewportSize({width: 320, height: 900});
     await noOverflow('320px selection controls');
-    await toggle.click();
+    await clickWorkspaceTool(page, '#selection-pointer-toggle');
     await page.locator('.database-heading h1').click();
     await openSelected();
     await noOverflow('320px explanation');
@@ -299,7 +302,7 @@ try {
     scriptPage.on('request', request => {
         if (request.method() === 'POST') scriptPosts.push({url: request.url(), body: request.postDataJSON()});
     });
-    await scriptPage.goto(new URL('/#onderzoeken', base).href, {waitUntil: 'networkidle'});
+    await scriptPage.goto(new URL('/workspace.php#onderzoeken', base).href, {waitUntil: 'networkidle'});
     const runScript = async sql => {
         await scriptPage.locator('#sql-editor').fill(sql);
         const pending = scriptPage.waitForResponse(response => {
@@ -331,9 +334,9 @@ try {
     assert.equal(resultMeta.snapshot, true, 'Free SQL result cells are snapshots.');
     assert.equal(resultMeta.table, undefined, 'A query alias must not invent a source table.');
     assert.deepEqual(resultMeta.primaryKey, [], 'A query result must not invent a record key.');
-    await scriptPage.locator('#selection-pointer-toggle').click();
+    await clickWorkspaceTool(scriptPage, '#selection-pointer-toggle');
     await secondResultCell.click();
-    await scriptPage.locator('#selection-pointer-count').click();
+    await clickWorkspaceTool(scriptPage, '#selection-pointer-count');
     const reviewedTag = scriptPage.locator('#selection-pointer-tag');
     await reviewedTag.waitFor();
     // Explicit review keeps More reachable while the pointer crosses the

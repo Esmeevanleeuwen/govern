@@ -1,5 +1,6 @@
 import {t, getLanguage, hasMessage} from './i18n.js';
 import './ui-messages.js';
+import {accountRequest} from './session.js';
 
 let token = '';
 let database = '';
@@ -8,6 +9,20 @@ let database = '';
 export function setDatabase(value) { database = typeof value === 'string' ? value : ''; }
 export function getDatabase() { return database; }
 
+/** A workspace key also identifies the PostgreSQL schema; names stay unmodified. */
+export function databaseScope(value = database) {
+    if (typeof value !== 'string') throw translatedError('api.failed');
+    if (!value.startsWith('postgres:')) return {database: value};
+    const parts = value.split(':');
+    if (parts.length !== 3) throw translatedError('api.failed');
+    let name;
+    let schema;
+    try { name = decodeURIComponent(parts[1]); schema = decodeURIComponent(parts[2]); }
+    catch { throw translatedError('api.failed'); }
+    if (!name || !schema || /[\u0000-\u001f\u007f]/u.test(name + schema)) throw translatedError('api.failed');
+    return {connection: 'postgres', database: name, schema};
+}
+
 export function setCsrf(value) {
     token = value || '';
 }
@@ -15,7 +30,12 @@ export function setCsrf(value) {
 export function endpoint(action, params = {}) {
     const url = new URL('/api.php', window.location.origin);
     url.searchParams.set('action', action);
-    for (const [key, value] of Object.entries({database, ...params})) {
+    // Resolve the captured workspace, rather than whichever connection is now active.
+    const {database: selected = database, connection, schema, ...rest} = params;
+    const scope = databaseScope(selected);
+    if (connection !== undefined && connection !== '' && connection !== (scope.connection || 'mariadb')
+        || schema !== undefined && schema !== '' && schema !== scope.schema) throw translatedError('api.failed');
+    for (const [key, value] of Object.entries({...scope, ...rest})) {
         if (value !== undefined && value !== null && value !== '') url.searchParams.set(key, String(value));
     }
     return url.pathname + url.search;
@@ -23,6 +43,12 @@ export function endpoint(action, params = {}) {
 
 export async function request(action, {params, body, signal} = {}) {
     const url = endpoint(action, params);
+    // After signing in again, obtain the rotated token before the user's next
+    // explicit write. Never replay a database mutation automatically.
+    if (body !== undefined && !token) {
+        const session = await accountRequest('status');
+        token = session.csrf;
+    }
     let response;
     try {
         response = await fetch(url, {
@@ -45,6 +71,8 @@ export async function request(action, {params, body, signal} = {}) {
         throw translatedError('api.unreadable');
     }
     if (!response.ok || !payload.ok) {
+        if (response.status === 401 || payload.error_code === 'csrf_invalid') token = '';
+        if (response.status === 401 && typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('govern:authrequired'));
         const key = payload.error_code ? 'error.' + payload.error_code : null;
         const error = translatedError(key, payload.error_params, payload.error_i18n?.[getLanguage()] || payload.error);
         error.status = response.status;

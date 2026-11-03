@@ -1,6 +1,181 @@
 # Architectuur
 
+## Startpagina en installatieaccounts
+
+`app/public/index.php` toont de publieke, responsive startpagina uit
+`homepage.php`. `homepage.js` verzorgt vertalingen, de expliciet als voorbeeld
+gemarkeerde databaseweergaven en de Docker-installatiedialoog. De voorbeelden
+zijn gewone lokale schermgegevens; ze maken geen databaseverbinding en voeren
+geen SQL uit. Oude werkplekhashes en hun queryparameters worden naar
+`workspace.php` doorgestuurd, zodat bestaande links hun betekenis behouden.
+
+`workspace.php` bevat de bestaande applicatieshell en vraagt vóór uitvoer
+`Web::user()` om een goedgekeurde gebruiker. `Web.php` gebruikt dezelfde
+`Http::start()`- en `Auth`-grens als de API. Zonder sessie volgt een redirect naar
+inloggen; bij onbeschikbare accountopslag blijft de werkplek gesloten.
+`auth.php` toont inloggen en registreren; `account.php` toont het lokale account,
+uitloggen en alleen voor de eigenaar de openstaande toegangsverzoeken.
+
+`Auth.php` bewaart accounts en pogingenlimieten met PDO SQLite in
+`AUTH_DIR/accounts.sqlite`, standaard `/var/lib/govern/auth`, in het afzonderlijke
+`account_data`-volume. De map is alleen toegankelijk voor de webservergebruiker;
+de bestanden worden privé aangemaakt. Deze opslag staat buiten de webroot,
+werkdatabases, schema-exports en SQL-herstelpunten. PHP's sessiecookie blijft
+HttpOnly en SameSite Strict, met Secure bij HTTPS. Aanmelden en afmelden
+vernieuwen sessie-ID en CSRF-token. De sessie heeft een absolute bovengrens van
+twaalf uur; elke toegangscontrole leest actuele rol en status uit de accountopslag.
+
+De eerste registratie wordt onder een `BEGIN IMMEDIATE`-transactie eigenaar.
+Een gedeeltelijke unieke index staat slechts één eigenaar toe. Elke latere
+registratie is `pending`, zonder toegang, totdat de eigenaar die aanvraag
+goedkeurt. De database bewaart uitsluitend Argon2id-wachtwoordhashes. Login en
+registratie verbruiken blijvende, begrensde pogingenvakken; ruwe inlognamen en
+IP-adressen worden niet in de throttle-sleutels bewaard. Dubbele registratie
+krijgt dezelfde openbare uitkomst als een wachtende aanvraag.
+
+Dit is installatiebrede toegang, geen gebruikersspecifieke databasescheiding.
+Elke goedgekeurde gebruiker krijgt dezelfde bestaande databasefuncties en
+MariaDB-rechten. Er is geen mailverificatie, herstelmail, wachtwoordreset of
+account-/apparaatsynchronisatie. De loopbackbinding blijft gelden; deze
+authenticatie is geen claim dat het platform klaar is voor openbare hosting.
+
+`auth-api.php` biedt het kleine accountcontract. `api.php` behandelt alleen de
+vaste, minimale database-readinesscontrole zonder login; alle andere routes
+vergen een goedgekeurde gebruiker vóór databasescope en gegevenswerk. De health-
+route negeert een opgegeven database en gebruikt de vaste startconfiguratie.
+Nginx controleert ieder `/phpmyadmin/`-verzoek met een interne `auth_request`
+naar `auth-check.php`. Dat geldt ook voor uploads, downloads en AJAX-verzoeken;
+een nog geldige native phpMyAdmin-cookie geeft zonder Govern-sessie geen toegang.
+
+Alleen de HTML-paginagrens staat een cross-site GET voor een documentnavigatie
+toe. Daardoor opent een werkpleklink vanuit een andere website zonder onjuiste
+503. De API houdt zijn afzonderlijke cross-sitegrens en Origin/CSRF-controles.
+`Web` logt de stabiele foutcode en bewaart de HTTP-status van een `ApiException`.
+Nginx laat assets bij ieder gebruik hervalideren; API/HTML-cachebeleid blijft
+afkomstig van de bestaande PHP-antwoorden.
+
+Beide startbestanden voeren na `docker compose up --wait` eerst `nginx -t` en
+daarna `nginx -s reload` in de gateway uit. Een gewijzigd bind-mounted bestand
+zou bestaande workers anders niet bijwerken. Bij start-/configuratie-/reloadfouten
+stoppen de scripts de gateway, zonder volumes te verwijderen, zodat oudere
+toegangsregels niet actief achterblijven.
+
 ## Actuele databases, herbruikbare schermen
+
+### Optionele PostgreSQL-verbinding
+
+De PostgreSQL-uitbreiding bouwt voort op de startpagina en installatieaccounts
+uit PR #16. Ze voegt een tweede SQL-engine toe aan dezelfde werkplek, zonder
+een tweede tabelverkenner of schemadiagram. De eerste bouwfase is alleen lezen:
+tabellen, kolommen, sleutels, relaties, records en zoeken binnen de gekozen tabel.
+
+`Database` blijft de gedeelde facade en kiest `MariaDbAdapter` of
+`PostgresAdapter`. `Catalog` kiest overeenkomstig `MariaDbCatalog` of
+`PostgresCatalog`; beide geven dezelfde metadata aan de bestaande schermen.
+MySQL-DSN's, sessie-instellingen, identifierquoting en catalogusvragen blijven
+bij de MariaDB-adapter. PostgreSQL gebruikt PDO PostgreSQL, een verbinding met
+één database, expliciet gequote schemanamen en zijn eigen catalogusvragen.
+
+`ConnectionScope` combineert de bestaande `DatabaseScope` met de optionele
+PostgreSQL-configuratie. Alleen de server bepaalt host en leesaccount.
+Ieder verzoek bevat de verbinding, database en het schema. De PostgreSQL-kiezer
+toont alleen de geconfigureerde database en de schema's uit `PG_SCHEMAS`;
+de werkelijke leesbaarheid wordt met het leesaccount gecontroleerd. Een
+ontbrekend of ontoegankelijk schema blijft herkenbaar als niet beschikbaar.
+
+De browser bewaart voor PostgreSQL een volledige `scope_key` met database én
+schema. Daardoor delen gelijknamige tabellen geen cache, selectie, concept of
+diagramindeling. MariaDB houdt zijn bestaande databasesleutel en oude links.
+Een wissel annuleert oude leesacties en laat late antwoorden uit de vorige
+scope buiten de huidige weergave.
+
+De capabilityvelden in bootstrap sturen de zichtbare bediening. De API weigert
+voor PostgreSQL alle acties buiten bootstrap, catalogus, structuur, bladeren en records verkennen;
+de writer- en vrije-SQL-verbinding weigeren eveneens. Er wordt geen MariaDB-
+snapshot-, query-, import- of AI-service op een PostgreSQL-scope aangeroepen.
+phpMyAdmin blijft de officiële MariaDB-toepassing en wordt niet als
+PostgreSQL-beheerder gepresenteerd.
+
+Het optionele Compose-profiel `postgres` gebruikt een eigen datavolume en een
+eenmalige leesrechtenservice. Alleen PostgreSQL en die opstartservice ontvangen
+het bootstrapwachtwoord; de webapp ontvangt uitsluitend de lezergegevens.
+De startbestanden schakelen het profiel in bij `PG_ENABLED=1` en bewaren
+bestaande wachtwoorden en volumes. Zie [POSTGRESQL.md](POSTGRESQL.md) voor de
+configuratie en de grens van deze eerste bouwfase.
+
+### Records verkennen
+
+`RecordExplorer.php` leest dezelfde genormaliseerde catalogus als de bestaande
+schermen. De nieuwe GET-actie `explore` bouwt een begrensde buurt rond één echt
+record met een primaire of volledige, niet-nullbare unieke sleutel. Alle
+recordvragen lopen via de reader van de gekozen adapter. Kolomnamen en relaties
+komen uit de actuele catalogus; waarden worden gebonden en tabellen zijn binnen
+het geselecteerde schema gekwalificeerd.
+
+Het antwoord scheidt exacte identiteit en foreign-keywaarden van verkorte
+weergavevelden. Een stabiele node-ID bevat verbinding, database, schema, tabel
+en volledige sleutel. Een edge bevat de echte bron- en doelvelden en waarden.
+Er worden geen relaties afgeleid uit gelijkende namen en er wordt niet buiten
+de geselecteerde scope gezocht. Tabellen zonder bruikbare sleutel en externe
+verwijzingen blijven herkenbaar overgeslagen.
+
+`record-explorer.js` koppelt een SVG-grafiek, recordlijst en uitleg binnen de
+bestaande Database-werkplek. Alleen lezen is een servergrens en een UI-keuze;
+de PostgreSQL-writer blijft ontoegankelijk. De route `#verkennen` gebruikt
+dezelfde tabellenkiezer, taal, materialen en databasewisseling. Tijdelijke
+selectie en filters staan per scope in `recordExploreView`; annulering en
+scopecontrole verhinderen dat een oud antwoord een nieuwe werkplek vervangt.
+
+Vaste aantals-, preview- en tijdgrenzen begrenzen iedere vraag. Het scherm
+beschrijft de geladen buurt en haar beperkingen; verder verkennen vraagt een
+nieuwe buurt op. Er is geen blijvende index, aparte grafiekdatabase of nieuwe
+frameworklaag nodig.
+
+### Begeleide kijkmodus
+
+`explorer-guide.js` voegt boven dezelfde recordverkenner een begeleide
+presentatielaag toe. Vaste vraagknoppen filteren de al geladen records, tonen
+de uitleg van een echte edge of halen via de bestaande GET-actie een nieuwe
+buurt op. Aantallen gebruiken verschillende node-ID's; parallelle verwijzingen
+tellen hetzelfde item niet dubbel. Er is geen AI-interpretatie of vrije SQL.
+
+Leesbare aliassen veranderen alleen de weergave van schema-identifiers.
+Bronlabels, exacte sleutels, edge-richting en queryparameters blijven behouden.
+Technische details zijn op verzoek beschikbaar; Detailed herstelt de originele
+bediening met dezelfde tijdelijke selectie en filters. Beide modi gebruiken
+dezelfde scope- en annuleringscontroles.
+
+De browservoorkeur `govern.explorer.mode.v1` bevat uitsluitend `guided` of
+`detailed`. Bij geblokkeerde opslag blijft de keuze voor deze pagina in geheugen.
+Records, sleutels en antwoorden worden hiervoor niet in localStorage gezet.
+
+### Gedeelde vensterlaag
+
+`modal-shell.js` beheert stapeling, slepen, focus, buitenklik en annulering los
+van inhoud en gegevensbronnen. `attachDialog` vult native dialogen aan met
+behoud van cancel- en opslagcontroles. `createModal` maakt ook meerdere niet
+blokkerende vensters met bevroren context, eigen AbortSignal en opruiming per
+laadcyclus. `record-window.js` koppelt die laag aan de bestaande Explore-GET en
+valideert scope, tabel en exacte sleutel. Zie [Vensters en modalinhoud](MODALS.md).
+
+### Begeleidend tweede scherm
+
+`companion.php` gebruikt dezelfde HTML-inloggrens en biedt een apart venster
+met een vergelijkingsdesk en relatieradar. `companion-channel.js` koppelt één
+werkplektab aan één begeleidend venster via een willekeurig tijdelijk kanaal.
+Alleen gevalideerde broncoördinaten gaan over dit kanaal; recordgegevens worden
+apart via de bestaande alleen-lezen Explore-GET geladen. Er zijn geen nieuwe
+API-acties, SQL-rechten of blijvende recordopslag.
+
+`companion-model.js` controleert scope, tabel en volledige tekstsleutel van elk
+antwoord. Identiteit bevat ook database en schema. De desk houdt maximaal vier
+bronnen vast met een eigen annuleringssignaal en revisie per record. De radar
+heeft onafhankelijk volgen/vastzetten en annuleert achterhaalde antwoorden.
+Vergelijking onderscheidt ontbrekende velden, NULL, lege tekst en onzekere
+previews; gedeelde verbindingen matchen alleen exacte geladen recordidentiteiten.
+Zie [Een tweede scherm voor Govern](COMPANION.md) voor bediening en lifecycle.
+
+### Bestaande MariaDB-werkplek
 
 De geselecteerde werkdatabase is de bron voor zowel Govern als phpMyAdmin.
 Govern vraagt de catalogus op en bouwt daar zijn verkenner uit. Een nieuwe tabel verschijnt na
@@ -97,7 +272,7 @@ De gedeelde phpMyAdmin-opslag blijft in de oorspronkelijke `DB_NAME`-database.
 
 ## Database toevoegen en SQL importeren
 
-De knop naast de databasekiezer opent een eigen, kleine dialoog. Een bestaande
+De actie in Gereedschap opent een eigen, kleine dialoog. Een bestaande
 database kiezen gebruikt de normale wisselstroom. Een naam voorbereiden gebruikt
 `POST prepare-database` met CSRF en de expliciete huidige databasescope. Het
 antwoord bevat de voorbereide naam, of die nieuw was, en de opnieuw uitgelezen
@@ -295,6 +470,16 @@ verwijdert ook de scrollhandler. De bestaande zoomknoppen en toetsen blijven
 beschikbaar.
 
 ## Vormgeving
+
+`workspace-tools.js` verplaatst de bestaande werkplekbediening naar één
+gegroepeerde popover. IDs, handlers, rechten, disabled/hidden-toestand en
+actieve hulpmiddelen blijven bij de oorspronkelijke DOM-elementen. De
+databasekiezer en primaire phpMyAdmin-knop blijven in de bovenbalk. De
+non-modale popover gebruikt native focus en buitenklik, met een fallback voor
+browsers zonder Popover API. Sluiten vóór een handeling geeft nieuwe dialogen
+een zichtbare opener; de selectieaanwijzer gebruikt dezelfde Tools-knop als
+focusroute wanneer zijn eigen bediening verborgen is. Er is geen extra
+voorkeurenopslag, databaseactie of wijziging van de rechten.
 
 Govern gebruikt een open g als merk, systeemlettertypen en glasvlakken met brede,
 zachte schaduwen. Het standaardaccent is Lagoon; de gebruiker kan een ander

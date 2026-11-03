@@ -1,6 +1,7 @@
 # API contract — Govern
 
-Personal local workbench. All endpoints are `GET/POST /api.php?action=...`, JSON.
+Personal local workbench. Database endpoints are `GET/POST /api.php?action=...`,
+and installation-account endpoints are `GET/POST /auth-api.php?action=...`, JSON.
 Success envelope `{ "ok": true, "data": ... }`. A failure keeps the existing
 `error` string and adds stable localization fields, with the same HTTP status:
 
@@ -17,20 +18,181 @@ Success envelope `{ "ok": true, "data": ... }`. A failure keeps the existing
 }
 ```
 
-All POST requests use JSON and header `X-CSRF-Token` from bootstrap. PHP session cookie, same origin only.
-One MySQL/MariaDB server, multiple selectable databases and live schema discovery.
+All POST requests use JSON and header `X-CSRF-Token` from authenticated bootstrap
+or account status. PHP session cookie, same origin only. Except fixed database
+readiness, every database API route requires an approved installation account.
+One MySQL/MariaDB server with multiple selectable databases, plus an optional
+server-configured PostgreSQL connection with a selected database and allowlisted schemas.
 The optional local Ollama connection is disabled by default; only the separate AI
 endpoints can call that configured provider. Ordinary database operations and
 selection explanations do not require a model.
 
+## Installation accounts and HTML routes
+
+`GET /` renders the public homepage and its clearly labelled fictional product
+preview. `GET /workspace.php` requires an approved account and renders the
+existing workspace. Legacy workspace hashes entered at `/` retain their hash
+and database parameter when forwarded to `/workspace.php`. `/auth.php?mode=login`
+and `?mode=register` render the account forms; `/account.php` requires login and
+contains account/logout controls and owner-only approval controls. HTML page
+guards redirect unauthenticated requests with 303; JSON routes return 401.
+
+Workspace and account HTML pages accept a cross-site GET only for a top-level
+document navigation (`Sec-Fetch-Mode: navigate`, `Sec-Fetch-Dest: document`).
+This permits opening a local workspace link from another site. It does not
+relax API, Origin, Host or CSRF checks; cross-site fetches, embeds and POSTs
+remain rejected. Browser assets under `/assets/` require cache revalidation so
+updated modules do not keep sending an older database-selection format.
+
+All account endpoints use the ordinary success/error envelope and bilingual
+error fields. Public user records are
+`{id:integer,name,email,role:"owner"|"member",status:"active"|"pending",created_at}`;
+they never include a password hash. The request `action` is a URL parameter.
+
+| Method / account action | Input | Successful data |
+| --- | --- | --- |
+| GET `status` | None | `{csrf,user:PublicUser|null,has_owner:boolean}` |
+| POST `register` | `{name,email,password}` | 201 `{csrf,user:PublicUser|null,registration:"active"|"pending"}` |
+| POST `login` | `{email,password}` | `{csrf,user:PublicUser}` |
+| POST `logout` | `{}` | `{csrf,user:null}` |
+| GET `requests` | None; owner required | `{users:PublicUser[]}` with up to 100 pending requests |
+| POST `approve` | `{user_id:integer}`; owner required | `{user:PublicUser}` |
+
+Registration atomically makes the first account the active owner and signs it
+in. Later accounts stay pending; supplied role/status properties grant nothing.
+Duplicate email registration has the same public pending response. Only the
+owner can approve a pending member. Approved accounts deliberately share access
+to this installation's existing work databases; they do not create isolated
+tenants or private schemas. A correct password for a pending account returns
+403 `auth_pending`; incorrect or unknown credentials return the same 401
+`auth_credentials_invalid`. Owner-only actions return 403
+`auth_owner_required`; missing/expired login returns 401 `auth_required`.
+
+Passwords contain 12–128 UTF-8 characters and at most 512 bytes, without NUL;
+they are hashed using Argon2id. Login rate limits are 60 attempts per peer and
+10 per normalized email over 15 minutes; registration allows 15 attempts per
+peer over one hour. Counters persist in SQLite using hashed bucket keys.
+The gateway is the PHP peer in Docker, so its peer limit is shared by this
+local installation. A full bucket returns 429 `auth_rate_limited` and a
+`Retry-After` header. Account input validation uses stable `auth_*` error codes.
+
+`Http::start()` checks host/origin and creates the Strict, HttpOnly session
+cookie; Secure follows HTTPS. Every account mutation requires the current
+session's CSRF header. Login and logout rotate both session ID and CSRF token:
+clients must retain the returned token or reload status before their next
+mutation. A logged-in session is valid for at most 43,200 seconds, and access
+checks re-read status/role from server storage. Failure to open that storage
+returns 503 `auth_unavailable`, never a guest bypass.
+
+`AUTH_DIR=/var/lib/govern/auth` stores `accounts.sqlite` in the separate
+`account_data` Docker volume, outside public files and work-database exports.
+PHP PDO SQLite and Argon2id support are required. Email is only an account
+identifier: email verification, email delivery and password-reset/recovery
+endpoints are not implemented. Bindings/allowed hosts remain loopback-only;
+these accounts do not make this configuration an internet service.
+
+Nginx protects every native `/phpmyadmin/` route with internal
+`/_govern_auth` → `/auth-check.php`. An approved session returns 204; missing
+login returns 401, and failed checks deny access. The gateway converts missing
+login to an explicit 302 redirect to `/auth.php?mode=login`. The internal location
+cannot be requested directly. Native uploads/downloads and direct links receive
+the same check; official phpMyAdmin remains the actual application.
+
 ## Database scope
+
+### Optional PostgreSQL connection
+
+The default connection remains `mariadb`. PostgreSQL requests specify
+`connection=postgres&database=<configured database>&schema=<configured schema>`
+on every scoped API URL. Missing `database`/`schema` parameters use that
+connection's configured defaults. The browser cannot submit a hostname, port,
+role or password. Unknown connections, databases and schemas return 403
+`database_not_available`; selecting a scope does not grant access.
+
+For compatibility with cached API modules from before PostgreSQL support,
+`database` may contain the complete server-issued `postgres:<database>:<schema>`
+workspace key when both `connection` and `schema` parameters are absent. Its
+percent-encoded identifiers pass through the same configured scope validation.
+Malformed keys and packed keys combined with explicit connection/schema
+parameters return 403 `database_not_available`. Normal authentication, CSRF
+and PostgreSQL capability checks still apply.
+
+`GET databases` remains an installation-wide list. Each entry retains
+`name` and `available`, and adds `connection`, `engine`, `schema`, `scope_key`
+and `label`. MariaDB scope keys remain the exact database name. PostgreSQL keys
+are `postgres:` + RFC 3986 percent-encoded database + `:` + percent-encoded schema.
+The UI stores this complete key in its per-tab selection, state caches, diagram
+layout and bookmarks. API requests expand it into separate connection/database/
+schema parameters, so equal table names in separate schemas stay independent.
+Only names from `PG_DATABASE` and `PG_SCHEMAS` are listed for PostgreSQL;
+configured schemas that cannot be read remain visible with `available:false`.
+
+PostgreSQL supports only authenticated GET actions `bootstrap`, `schema`,
+`structure`, `browse` and `explore`, alongside the global `databases` action. Normal HTTP
+method and CSRF validation still apply. Every other scoped PostgreSQL action
+returns 403 `postgres_read_only` before the corresponding service is invoked.
+This includes arbitrary SQL, row editing, saved queries, snapshots, import
+inspection/database creation, context export and AI. These controls are also
+unavailable in the UI; the server guard remains authoritative.
+
+Bootstrap adds top-level `scope_key` and `capabilities`, and database fields
+`connection`, `engine`, `schema` and `scope_key`. PostgreSQL capabilities
+`browse`, `structure`, `schema`, `explore` are true; `write`, `query`, `saved_queries`,
+`snapshots`, `phpmyadmin`, `import`, `create_database`, `ai`, `context` are false.
+The normalized catalog/browse response retains the existing table, column and
+relationship fields. PostgreSQL browse returns no editable row identities;
+`row_keys` contain null and `key_columns` is empty. Schema responses use
+`database` for the selected schema namespace and `database_name` for the real
+PostgreSQL database, keeping external-schema foreign keys distinguishable.
+Structure can leave `create_sql` empty rather than inventing a full table DDL.
+
+### Read-only record exploration
+
+`GET explore` accepts a catalog `table` and an optional `key` containing a JSON
+object with the record's complete primary or non-nullable unique key. Ordinary
+connection/database/schema scoping, account access and GET-only checks apply.
+The service uses the database reader for both engines and accepts no SQL.
+Keys are limited to 2,048 encoded JSON bytes so generated GET requests remain
+usable; oversized or unsupported stored identities are explicitly omitted.
+
+The response contains `scope_key`, `table`, `center` (a node ID or null),
+`candidates` for the starting-record picker, `nodes`, `edges`, `relations`,
+`limits`, `partial`, `omitted` and `elapsed_ms`. Each node carries an opaque,
+scope-specific stable `id`, `table`, `label`, exact `key`, preview `values` and
+`truncated` flag. Preview values are never used as record identity.
+
+Edges point from the referencing record to the referenced record. Each includes
+its source/target node IDs, foreign-key `name`, source/target tables, ordered
+`columns`/`referenced_columns`, and matching `source_values`/`target_values`.
+Only catalog-declared foreign keys within the selected schema are followed.
+The evidence describes database references, not a claim of causal influence.
+
+Each response covers one starting record and one hop of incoming/outgoing
+neighbors. Fixed limits are 25 starting candidates, 15 neighbors per relation,
+12 relations, 60 nodes and 120 edges. `partial` and `omitted` describe skipped
+or bounded content; the response is not a full-database graph or total count.
+Keyless tables/views produce an empty graph and an explicit omission. Malformed
+keys return 422 and a requested record that no longer exists returns 404.
+Exact key and relationship scalars are serialized as text by the engine before
+PDO conversion, preserving adjacent DOUBLE values as separate identities.
+
+The browser keeps graph selection, filters and focus in temporary per-scope
+view state. Switching database/schema aborts pending reads and ignores their
+late responses. This feature performs no row, schema, privilege or account
+mutation and does not enable the PostgreSQL SQL editor.
+
+The public `health` action continues to check only the fixed MariaDB startup
+connection. PostgreSQL readiness appears in its authenticated bootstrap data;
+an unavailable optional PostgreSQL connection does not become a health target.
+
+### Existing MariaDB scope
 
 Every scoped endpoint accepts the URL parameter `database=<exact name>`, on GET
 and POST alike. The request body does not change the target database. Omitting
 the parameter retains `DB_NAME` for older clients and links. There is no mutable
 server-session selection; two browser tabs can use different databases safely.
 
-`GET databases` returns `{databases:[{name,available}],default_database,can_create}` without
+`GET databases` returns `{databases:[{name,available,...}],default_database,can_create}` without
 requiring a selected database connection. Available names are the intersection
 of the writer's and reader's live `SHOW DATABASES` results, excluding
 `information_schema`, `mysql`, `performance_schema` and `sys`. `DB_NAME` and
@@ -161,7 +323,9 @@ interface and future feature rules.
 - GET `ai-status`: actual optional local-provider configuration and readiness; see the AI contract below.
 - POST `ai-context` `{scope?,message?,targets?,route?}`: bounded schema/UI context, or local project passages when `scope:"project"`; without table records.
 - POST `ai-chat` `{scope?,message,targets?,route?,language?,history?}`: schema explanation and optional SQL proposal, or cited project explanation; never executes a proposal.
-- GET `health`: `{status:"ok"}` when selected DB readable; no credentials/errors disclosed.
+- GET `health`: unauthenticated `{status:"ok"}` when the fixed base-configuration
+  database is readable. Caller-supplied `database` does not change that check.
+  This route does not enumerate accessible schemas or disclose credentials.
 
 ## Optional local AI
 
@@ -650,7 +814,7 @@ format or hidden builder state in the database.
 ## Ownership
 
 Backend owns `app/src/*` and `app/public/api.php`, except BackupService.php.
-Frontend owns `app/public/index.php`, `app/public/assets/*`.
+Frontend owns the public page templates, `workspace.php`, and `app/public/assets/*`.
 Infrastructure owns Docker files, compose.yaml, bootstrap scripts, app/src/BackupService.php.
 Root owns database seed, docs, integration tests, review and GitHub.
 
@@ -708,7 +872,7 @@ transport. The service has no HTTP listener, published port, SQL execution
 endpoint or file-import channel. Missing setup leaves ordinary browsing usable
 and returns the bounded helper error through the normal API envelope.
 
-PHP8.4+, PDO MySQL, native PHP classes and ES modules, no build framework. Namespace `Govern`, small explicit bootstrap loading or autoloader. Config class `Config::fromEnvironment(): array`. BackupService `__construct(array $config)`, `list(): array`, `create(string $label): array`, `restore(string $id,string $confirmation): array`, `download(string $id): array` returning `{path,filename}`. Backup service verifies files/checksums, invokes clients using argv arrays, credentials only private temporary file. No shell command concatenation.
+PHP8.4+, PDO MySQL and PDO SQLite, Argon2id support, native PHP classes and ES modules, no build framework. Namespace `Govern`, small explicit bootstrap loading or autoloader. Config class `Config::fromEnvironment(): array`. BackupService `__construct(array $config)`, `list(): array`, `create(string $label): array`, `restore(string $id,string $confirmation): array`, `download(string $id): array` returning `{path,filename}`. Backup service verifies files/checksums, invokes clients using argv arrays, credentials only private temporary file. No shell command concatenation.
 
 ## phpMyAdmin integration
 

@@ -5,11 +5,13 @@ namespace Govern;
 
 final class Http
 {
-    public static function start(array $config): string
+    public static function start(array $config, bool $allowPageNavigation = false): string
     {
         header('Cache-Control: no-store');
         header('X-Content-Type-Options: nosniff');
         header('Referrer-Policy: same-origin');
+        header('X-Frame-Options: SAMEORIGIN');
+        header("Content-Security-Policy: frame-ancestors 'self'; base-uri 'self'; form-action 'self'");
         $authority = (string) ($_SERVER['HTTP_HOST'] ?? '');
         $parts = parse_url('http://' . $authority);
         $host = strtolower(trim((string) ($parts['host'] ?? ''), '[]'));
@@ -17,7 +19,12 @@ final class Http
         if ($host === '' || !in_array($host, $allowed, true) || isset($parts['user']) || isset($parts['pass'])) {
             throw ApiException::fromCode('host_not_allowed', 403);
         }
-        if (($_SERVER['HTTP_SEC_FETCH_SITE'] ?? '') === 'cross-site') {
+        // Following a link to an HTML page is safe. This exception is enabled
+        // only by Web; JSON APIs and embedded/cross-site fetches stay closed.
+        $pageNavigation = $allowPageNavigation && ($_SERVER['REQUEST_METHOD'] ?? '') === 'GET'
+            && ($_SERVER['HTTP_SEC_FETCH_MODE'] ?? '') === 'navigate'
+            && ($_SERVER['HTTP_SEC_FETCH_DEST'] ?? '') === 'document';
+        if (($_SERVER['HTTP_SEC_FETCH_SITE'] ?? '') === 'cross-site' && !$pageNavigation) {
             throw ApiException::fromCode('same_window_required', 403);
         }
         if (isset($_SERVER['HTTP_ORIGIN'])) {

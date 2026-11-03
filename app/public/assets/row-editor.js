@@ -1,6 +1,7 @@
 import {request} from './api.js';
 import {t, getLanguage} from './i18n.js';
 import {el, button, icon, errorText, confirmAction} from './ui.js';
+import {attachDialog} from './modal-shell.js';
 import './row-editor-messages.js';
 
 const message = (key, params) => t('app.rowEditor.' + key, params);
@@ -75,6 +76,7 @@ export function createRowEditor({getDatabase, onBusy = () => {}, onSaved = () =>
         current = null;
         if (state.dialog.open) state.dialog.close();
         state.dialog.remove();
+        state.shell?.destroy();
         onBusy(false);
         const opener = state.opener?.isConnected ? state.opener : document.getElementById(state.openerId);
         if (opener && !opener.disabled) opener.focus({preventScroll: true});
@@ -324,6 +326,7 @@ export function createRowEditor({getDatabase, onBusy = () => {}, onSaved = () =>
         });
         current = state;
         document.body.append(dialog);
+        state.shell = attachDialog(dialog, {handle: header});
         onBusy(true);
         translate(state);
         dialog.showModal();

@@ -7,6 +7,10 @@ import {t, getLanguage, setLanguage} from './i18n.js';
 import {getPreferences, updatePreferences, resetAppearance, subscribePreferences} from './preferences.js';
 import {createDashboardLayout} from './dashboard-layout.js';
 import {mountSchemaVisualizer} from './schema-visualizer.js';
+import {mountRecordExplorer} from './record-explorer.js';
+import {createWorkspaceCompanion} from './companion-workspace.js';
+import {createWorkspaceTools} from './workspace-tools.js';
+import {friendlyName, getExplorerMode} from './explorer-guide.js';
 import {registerSelection} from './selection-registry.js';
 import {SelectionPointer} from './selection-pointer.js';
 import {createRowEditor} from './row-editor.js';
@@ -15,6 +19,7 @@ import './app-messages.js';
 import './workspace-messages.js';
 import './navigation-messages.js';
 import './database-messages.js';
+import './postgres-messages.js';
 
 setLanguage(getPreferences().language);
 
@@ -23,6 +28,7 @@ const routes = {
     gegevens: {labelKey: 'app.route.data', icon: 'table'},
     structuur: {labelKey: 'app.route.structure', icon: 'layers'},
     schema: {labelKey: 'app.route.schema', icon: 'network'},
+    verkennen: {labelKey: 'app.explorer.title', icon: 'network'},
     onderzoeken: {labelKey: 'app.route.research', icon: 'search'},
     experimenten: {labelKey: 'app.route.experiments', icon: 'flask'},
     instellingen: {labelKey: 'app.route.settings', icon: 'settings'},
@@ -58,6 +64,7 @@ const state = {
     snapshotError: null,
     schemaData: null,
     schemaView: {},
+    recordExploreView: {},
     databaseView: 'gegevens',
     contextOpen: {database: true, research: true, experiments: true},
     structureData: new Map(),
@@ -79,20 +86,30 @@ const navigation = document.getElementById('navigation');
 const workspaceContext = document.getElementById('workspace-context');
 const contextContent = document.getElementById('workspace-context-content');
 const panelToggle = document.getElementById('workspace-panel-toggle');
-const databaseViews = ['gegevens', 'structuur', 'schema'];
+const databaseViews = ['gegevens', 'structuur', 'schema', 'verkennen'];
 const databaseSelect = document.getElementById('database-select');
 const manageDatabases = document.getElementById('manage-databases');
 const aiToggle = document.getElementById('ai-toggle');
 const databaseCache = new Map();
 const databaseStateKeys = ['bootstrap', 'table', 'queryDraft', 'queryName', 'queryNotes', 'queryId', 'queryResult', 'queryRevision',
     'queryDesign', 'builderDraft', 'builderOpen', 'dataViews', 'catalogSearch', 'snapshotLabel', 'savedQueries', 'queryDirty',
-    'connectionError', 'queryError', 'querySaveError', 'snapshotError', 'schemaData', 'schemaView', 'databaseView',
+    'connectionError', 'queryError', 'querySaveError', 'snapshotError', 'schemaData', 'schemaView', 'recordExploreView', 'databaseView',
     'contextOpen', 'structureData', 'inspectorExpanded', 'explorerScroll'];
 const emptyDatabaseState = () => ({bootstrap: null, table: '', queryDraft: '', queryName: '', queryNotes: '', queryId: null,
     queryResult: null, queryRevision: 0, queryDesign: null, builderDraft: null, builderOpen: true, dataViews: new Map(),
     catalogSearch: {}, snapshotLabel: '', savedQueries: null, queryDirty: false, connectionError: null, queryError: null,
-    querySaveError: null, snapshotError: null, schemaData: null, schemaView: {}, databaseView: 'gegevens',
+    querySaveError: null, snapshotError: null, schemaData: null, schemaView: {}, recordExploreView: {}, databaseView: 'gegevens',
     contextOpen: {database: true, research: true, experiments: true}, structureData: new Map(), inspectorExpanded: {}, explorerScroll: {}});
+const scopeKey = item => item.scope_key || item.name;
+const schemaName = () => state.bootstrap?.database?.schema || state.bootstrap?.database?.name || '';
+function supports(capability) {
+    if (state.bootstrap?.capabilities?.[capability] !== undefined) return state.bootstrap.capabilities[capability] === true;
+    return !getDatabase().startsWith('postgres:') || ['browse', 'structure', 'schema', 'explore'].includes(capability);
+}
+function unavailableFeature() {
+    return el('section', {'data-capability-unavailable': ''}, notice(t('app.postgres.unavailable')),
+        button(t('app.postgres.browse'), () => go('gegevens'), {symbol: 'table'}));
+}
 let knownDatabases = [];
 let databaseRevision = 0;
 let storedDatabase = '';
@@ -103,6 +120,16 @@ let currentScope;
 let bootstrapController;
 let routeVersion = 0;
 let recordSnapshotId = 0;
+const companion = createWorkspaceCompanion({onSelect: async context => {
+    if (databaseBusy() || state.switchingDatabase) { toast(t('app.databases.busy'), 'error'); return; }
+    if (context.database !== getDatabase()) await switchDatabase(context.database);
+    if (context.database !== getDatabase() || databaseBusy()) return;
+    if (!tables().some(table => table.name === context.table)) { toast(t('app.companionLaunch.unavailable'), 'error'); return; }
+    state.table = context.table;
+    Object.assign(state.recordExploreView, {scope_key: context.database, table: context.table, rootKey: context.key,
+        search: '', selected: '', selectedEdge: '', enabledRelations: null, zoom: 1, pan: {x: 0, y: 0}});
+    go('verkennen', {table: context.table});
+}});
 
 const aiWorkspace = createAiWorkspace({getDatabase,
     onOpenSql: async (sql, {database}) => {
@@ -117,6 +144,7 @@ const aiWorkspace = createAiWorkspace({getDatabase,
 });
 aiToggle.prepend(icon('sparkles'));
 aiToggle.addEventListener('click', () => {
+    if (!supports('ai')) return;
     if (aiWorkspace.isOpen) { aiWorkspace.close(); return; }
     const options = aiContextOptions([...selectionPointer.selected.values()]);
     if (selectionPointer.selected.size > 0) options.scope = 'database';
@@ -186,7 +214,7 @@ document.getElementById('database-picker-icon').append(icon('database'));
 databaseSelect.addEventListener('change', () => switchDatabase(databaseSelect.value));
 document.getElementById('language-select').addEventListener('change', event => changePreference({language: event.target.value}));
 openDatabase.prepend(icon('database'));
-openDatabase.addEventListener('click', () => databaseModal.open(state.table, 'browse'));
+openDatabase.addEventListener('click', () => { if (supports('phpmyadmin')) databaseModal.open(state.table, 'browse'); });
 refreshButton.append(icon('refresh'));
 refreshButton.addEventListener('click', () => refreshBootstrap(true));
 document.getElementById('context-export').prepend(icon('download'));
@@ -251,7 +279,8 @@ function syncWorkspaceNavigation() {
     const expanded = hasContext && state.contextOpen[area];
     workspaceContext.hidden = !hasContext || !isExplorerOpen();
     sidebar.classList.toggle('has-context', expanded);
-    document.getElementById('workspace-context-title').textContent = t({database: 'app.navigation.tables', research: 'app.navigation.saved', experiments: 'app.navigation.snapshots'}[area] || 'app.shell.workspace');
+    document.getElementById('workspace-context-title').textContent = t(area === 'database' && route().name === 'verkennen' && getExplorerMode() === 'guided'
+        ? 'app.explorerGuide.categories' : {database: 'app.navigation.tables', research: 'app.navigation.saved', experiments: 'app.navigation.snapshots'}[area] || 'app.shell.workspace');
     panelToggle.setAttribute('aria-expanded', String(expanded));
     panelToggle.setAttribute('aria-label', t('app.navigation.hide'));
     const workspaceOpener = document.getElementById('workspace-explorer-open');
@@ -267,6 +296,7 @@ function syncWorkspaceNavigation() {
     }
     document.querySelector('.rail-brand').href = routeHash('overzicht');
     for (const link of document.querySelectorAll('#navigation [data-area], #settings-link')) {
+        link.hidden = link.dataset.area === 'research' && !supports('query') || link.dataset.area === 'experiments' && !supports('snapshots');
         const active = link.dataset.area === area;
         link.classList.toggle('active', active);
         if (active) link.setAttribute('aria-current', 'page'); else link.removeAttribute('aria-current');
@@ -295,12 +325,20 @@ function databaseBusy() { return state.databaseManagerOpen || databaseOperations
 function syncDatabasePicker() {
     const selected = getDatabase();
     const options = [...knownDatabases];
-    if (selected && !options.some(item => item.name === selected)) options.unshift({name: selected, available: false});
-    databaseSelect.replaceChildren(...options.map(item => el('option', {value: item.name, selected: item.name === selected},
-        item.available === false ? t('app.databases.unavailable', {name: item.name}) : item.name)));
+    if (selected && !options.some(item => scopeKey(item) === selected)) options.unshift({name: selected, available: false});
+    databaseSelect.replaceChildren(...options.map(item => el('option', {value: scopeKey(item), selected: scopeKey(item) === selected},
+        item.available === false ? t('app.databases.unavailable', {name: item.label || item.name}) : item.label || item.name)));
     databaseSelect.disabled = !options.length || databaseBusy() || state.switchingDatabase;
     manageDatabases.disabled = !state.bootstrap || databaseBusy() || state.switchingDatabase;
-    document.getElementById('context-export').href = endpoint('context');
+    const contextExport = document.getElementById('context-export');
+    if (supports('context')) contextExport.href = endpoint('context');
+    else contextExport.removeAttribute('href');
+    contextExport.hidden = !supports('context');
+    contextExport.setAttribute('aria-disabled', String(!supports('context')));
+    aiToggle.disabled = !supports('ai');
+    aiToggle.hidden = !supports('ai');
+    const selectionAi = document.getElementById('selection-ask-ai');
+    if (selectionAi) { selectionAi.hidden = !supports('ai'); selectionAi.disabled = !supports('ai'); }
 }
 
 function rememberDatabase() {
@@ -325,8 +363,10 @@ async function switchDatabase(database, {fromHash = false} = {}) {
     Object.assign(state, databaseCache.get(database) || emptyDatabaseState());
     databaseRevision += 1;
     setDatabase(database); rememberDatabase();
-    aiWorkspace.setDatabase(database);
+    if (!supports('ai')) aiWorkspace.close({restoreFocus: false});
+    if (supports('ai')) aiWorkspace.setDatabase(database);
     state.switchingDatabase = true; openDatabase.disabled = true;
+    companion.select(null);
     if (selectionPointer.dialog.open) selectionPointer.dialog.close();
     selectionPointer.modalItems = []; selectionPointer.selected.clear(); selectionPointer.setOn(false);
     const params = requestedTable ? {table: requestedTable} : (state.table ? {table: state.table} : {});
@@ -378,7 +418,7 @@ const selectionPointer = new SelectionPointer({
         const schema = state.schemaData || {database, tables: tables().map(table => ({...table,
             columns: state.structureData.get(table.name)?.columns || [],
             foreign_keys: state.structureData.get(table.name)?.foreign_keys || []})), partial: true};
-        return {database, tables: tables(), schema, route: route().name};
+        return {database, tables: tables(), schema, route: route().name, capabilities: {query: supports('query')}};
     },
     onAction: action => {
         if (action.type === 'query' && typeof action.sql === 'string') return openResearch(action.sql);
@@ -386,8 +426,10 @@ const selectionPointer = new SelectionPointer({
             go(action.type === 'structure' ? 'structuur' : 'gegevens', {table: action.table});
         }
     },
-    onAskAi: items => aiWorkspace.open({...aiContextOptions(items), scope: 'database'}),
+    onAskAi: items => { if (supports('ai')) aiWorkspace.open({...aiContextOptions(items), scope: 'database'}); },
 });
+
+createWorkspaceTools();
 
 function aiContextOptions(items = []) {
     if (items.length > 8) toast(t('app.ai.selectionLimited'));
@@ -414,6 +456,8 @@ function localizeShell() {
     document.querySelectorAll('[data-i18n-aria]').forEach(node => node.setAttribute('aria-label', t(node.dataset.i18nAria)));
     document.querySelectorAll('[data-i18n-title]').forEach(node => node.title = t(node.dataset.i18nTitle));
     document.getElementById('language-select').value = getLanguage();
+    openDatabase.setAttribute('aria-label', t('app.shell.openDatabase'));
+    openDatabase.title = t('app.shell.openDatabase');
     if (state.connectionError) document.getElementById('connection-state').replaceChildren(el('span', {class: 'status-dot offline'}), el('span', {}, t('app.core.connection.offline')));
     else if (state.bootstrap) document.getElementById('connection-state').replaceChildren(el('span', {class: 'status-dot ' + (state.bootstrap.database.status === 'unavailable' ? 'offline' : '')}), el('span', {}, t(state.bootstrap.database.status === 'unavailable' ? 'app.core.connection.offline' : 'app.navigation.ready')));
     const current = routes[route().name];
@@ -506,8 +550,8 @@ function columnSelection(table, column, data) {
 
 function relationshipSelection(table, key) {
     const relationship = {name: key.name, sourceTable: table.name, targetTable: key.referenced_table,
-        targetSchema: key.referenced_schema || state.bootstrap?.database?.name,
-        external: Boolean(key.referenced_schema && key.referenced_schema !== state.bootstrap?.database?.name),
+        targetSchema: key.referenced_schema || schemaName(),
+        external: Boolean(key.referenced_schema && key.referenced_schema !== schemaName()),
         pairs: key.columns.map((source, index) => ({source, target: key.referenced_columns[index]}))};
     return {kind: 'relationship', key: 'relationship:' + JSON.stringify([table.name, key.name, relationship.targetSchema, key.referenced_table]),
         label: key.name, table: table.name, relationship};
@@ -527,6 +571,7 @@ function defaultSql(table = state.table || tables()[0]?.name) {
 }
 
 async function openResearch(sql) {
+    if (!supports('query')) { toast(t('app.postgres.unavailable')); return false; }
     const revision = databaseRevision;
     if (!await mayReplaceResearch() || revision !== databaseRevision) return false;
     state.queryRevision += 1;
@@ -551,10 +596,15 @@ function renderConnectionNotice() {
     globalNotice.replaceChildren();
     if (state.connectionError && state.bootstrap) globalNotice.append(errorPanel(state.connectionError, () => refreshBootstrap()));
     else if (state.bootstrap?.warning) globalNotice.append(notice(t('app.core.connection.warningRecovery', {warning: localized(state.bootstrap, 'warning')}), 'notice-warning'));
+    if (!supports('write')) {
+        const readOnly = notice(t('app.postgres.readOnly'));
+        readOnly.setAttribute('data-postgres-read-only', '');
+        globalNotice.append(readOnly);
+    }
 }
 
 function syncRestoreControls() {
-    openDatabase.disabled = state.restoring || state.switchingDatabase || !state.bootstrap || databaseModal.database !== getDatabase();
+    openDatabase.disabled = !supports('phpmyadmin') || state.restoring || state.switchingDatabase || !state.bootstrap || databaseModal.database !== getDatabase();
     document.getElementById('language-select').disabled = state.restoring;
     menuToggle.disabled = state.restoring;
     refreshButton.disabled = state.restoring;
@@ -578,29 +628,32 @@ async function refreshBootstrap(notify = false, {preserveFocus = false, focusFal
     try {
         const data = await request('bootstrap', {params: {database}, signal: controller.signal});
         if (controller.signal.aborted || revision !== databaseRevision || bootstrapController !== controller) return;
-        setDatabase(data.database.name); rememberDatabase();
-        aiWorkspace.setDatabase(data.database.name);
+        const selectedScope = data.scope_key || data.database.scope_key || data.database.name;
+        setDatabase(selectedScope); rememberDatabase();
         knownDatabases = data.databases || [{name: data.database.name, available: data.database.status !== 'unavailable'}];
         history.replaceState(null, '', routeHash(route().name, Object.fromEntries(route().params)));
         state.bootstrap = data;
+        if (!supports('ai')) aiWorkspace.close({restoreFocus: false});
+        else aiWorkspace.setDatabase(selectedScope);
         databaseManager.refresh();
         state.connectionError = null;
         state.savedQueries = null;
         state.schemaData = null;
         state.structureData.clear();
         setCsrf(data.csrf);
-        if (!databaseModal.dialog.open) databaseModal.configure(data.database.name, data.tables || [], knownDatabases);
-        openDatabase.disabled = state.restoring;
+        if (!databaseModal.dialog.open && supports('phpmyadmin')) databaseModal.configure(data.database.name, data.tables || [], knownDatabases.filter(item => item.connection !== 'postgres'));
+        openDatabase.disabled = !supports('phpmyadmin') || state.restoring;
         syncDatabasePicker();
         const ready = data.database.status !== 'unavailable';
         document.getElementById('connection-state').replaceChildren(
             el('span', {class: 'status-dot ' + (ready ? '' : 'offline')}),
             el('span', {title: data.database.name}, t(ready ? 'app.navigation.ready' : 'app.core.connection.offline')));
-        document.getElementById('footer-database').textContent = data.database.name + (data.database.version ? ' · ' + data.database.version : '');
+        const selectedLabel = knownDatabases.find(item => scopeKey(item) === selectedScope)?.label || data.database.name;
+        document.getElementById('footer-database').textContent = selectedLabel + (data.database.version ? ' · ' + data.database.version : '');
         const workspaceName = document.getElementById('workspace-database');
         workspaceName.removeAttribute('data-i18n');
-        workspaceName.textContent = data.database.name;
-        workspaceName.title = data.database.name;
+        workspaceName.textContent = selectedLabel;
+        workspaceName.title = selectedLabel;
         renderConnectionNotice();
         const active = preserveFocus ? (document.activeElement === document.body
             ? focusFallback?.() || document.activeElement : document.activeElement) : null;
@@ -634,7 +687,7 @@ async function refreshBootstrap(notify = false, {preserveFocus = false, focusFal
         if (revision === databaseRevision && bootstrapController === controller) {
             bootstrapController = null; state.switchingDatabase = false;
             refreshButton.disabled = state.restoring;
-            openDatabase.disabled = state.restoring || !state.bootstrap || databaseModal.database !== getDatabase();
+            openDatabase.disabled = !supports('phpmyadmin') || state.restoring || !state.bootstrap || databaseModal.database !== getDatabase();
             syncDatabasePicker();
         }
     }
@@ -642,6 +695,7 @@ async function refreshBootstrap(notify = false, {preserveFocus = false, focusFal
 
 function render() {
     const location = route();
+    if (location.name !== 'verkennen') companion.select(null);
     if (!state.bootstrap && location.name !== 'instellingen') {
         if (state.connectionError) page.replaceChildren(heading(t('app.core.connection.eyebrow'), t('app.core.connection.title'), t('app.core.connection.help')), errorPanel(state.connectionError, () => refreshBootstrap()));
         return;
@@ -667,7 +721,12 @@ function render() {
     renderConnectionNotice();
     page.replaceChildren();
     contextContent.replaceChildren();
-    const views = {overzicht: renderOverview, gegevens: renderData, structuur: renderStructure, schema: renderSchema, onderzoeken: renderResearch, experimenten: renderExperiments, instellingen: renderSettings};
+    const views = {overzicht: renderOverview, gegevens: renderData, structuur: renderStructure, schema: renderSchema, verkennen: renderExplore, onderzoeken: renderResearch, experimenten: renderExperiments, instellingen: renderSettings};
+    if (location.name === 'onderzoeken' && !supports('query') || location.name === 'experimenten' && !supports('snapshots')
+        || location.name === 'verkennen' && !supports('explore')) {
+        page.append(unavailableFeature());
+        return;
+    }
     Promise.resolve(views[location.name](scope)).catch(error => {
         if (error.name !== 'AbortError' && scope.live()) page.append(errorPanel(error, () => render()));
     });
@@ -693,7 +752,7 @@ function renderOverview(scope) {
         el('div', {}, heroTitle, el('p', {}, t('app.dashboard.heroHelp')),
             el('div', {class: 'hero-actions'},
                 button(t('app.dashboard.explore'), () => go('gegevens'), {kind: 'primary', symbol: 'arrow'}),
-                button(t('app.dashboard.build'), () => openResearch(defaultSql()), {kind: 'ghost'}))),
+                supports('query') ? button(t('app.dashboard.build'), () => openResearch(defaultSql()), {kind: 'ghost'}) : null)),
         el('div', {class: 'hero-visual', 'aria-hidden': 'true'}, el('div', {class: 'hero-lens'}))));
     page.append(el('div', {class: 'stats-grid'}, [
         ['tablesStat', data.stats.tables], ['viewsStat', data.stats.views], ['rowsStat', data.stats.rows_estimate],
@@ -807,6 +866,10 @@ function renderOverview(scope) {
 }
 
 function appendDashboardContent(block, id, scope) {
+    if (id === 'overview.research' && !supports('saved_queries') || id === 'overview.restore' && !supports('snapshots')) {
+        block.append(el('div', {class: 'card-body'}, el('p', {}, t('app.postgres.unavailable'))));
+        return;
+    }
     if (id === 'overview.tables') {
         const featured = [...tables()].sort((a, b) => Number(b.rows_estimate || 0) - Number(a.rows_estimate || 0)).slice(0, 4);
         const list = el('div', {class: 'home-table-list'});
@@ -834,7 +897,7 @@ function appendDashboardContent(block, id, scope) {
             if (error.name !== 'AbortError' && scope.live() && content.isConnected) content.replaceChildren(errorPanel(error));
         });
     } else if (id === 'overview.learning') {
-        block.append(el('div', {class: 'card-body'}, [['stepExplore', 'gegevens'], ['stepConnect', 'structuur'], ['stepQuery', 'onderzoeken']].map(([key, target], i) =>
+        block.append(el('div', {class: 'card-body'}, [['stepExplore', 'gegevens'], ['stepConnect', 'structuur'], ['stepQuery', 'onderzoeken']].filter(([, target]) => target !== 'onderzoeken' || supports('query')).map(([key, target], i) =>
             el('button', {class: 'home-table-item', type: 'button', on: {click: () => go(target)}}, el('span', {class: 'step-number'}, String(i + 1)), el('span', {}, t('app.dashboard.' + key))))));
     } else if (id === 'overview.restore') {
         block.append(el('div', {class: 'card-body'}, el('p', {}, t('app.dashboard.restoreHelp')),
@@ -896,7 +959,7 @@ function renderSettings() {
         el('div', {}, badge(t('app.settings.previewBadge')), el('h2', {}, t('app.dashboard.title')), el('p', {}, t('app.settings.previewHelp')),
             button(t('app.dashboard.explore'), () => go('gegevens'), {kind: 'primary', symbol: 'arrow'}))),
         el('div', {class: 'card-body'}, el('h3', {}, t('app.settings.preview'))));
-    page.append(el('div', {class: 'settings-grid'}, el('div', {class: 'card'}, language, appearance, layout, aiWorkspace.renderSettings()),
+    page.append(el('div', {class: 'settings-grid'}, el('div', {class: 'card'}, language, appearance, layout, supports('ai') ? aiWorkspace.renderSettings() : null),
         el('aside', {class: 'settings-aside'}, preview, brand,
             button(t('app.settings.reset'), () => { const result = resetAppearance(); syncSettingControls(); preferenceFeedback(result.saved); }, {kind: 'ghost', className: 'settings-reset', id: 'reset-appearance'}))),
         el('p', {id: 'preferences-status', class: 'settings-status', role: 'status', 'aria-live': 'polite'}));
@@ -904,16 +967,18 @@ function renderSettings() {
 
 function catalog(routeName) {
     const list = el('div', {class: 'catalog-list'});
-    const search = el('input', {id: 'catalog-search', type: 'search', class: 'input', value: state.catalogSearch.database || '', placeholder: t('app.core.catalog.searchPlaceholder'), 'aria-label': t('app.core.catalog.searchLabel'), autocomplete: 'off'});
+    const guided = routeName === 'verkennen' && getExplorerMode() === 'guided';
+    const search = el('input', {id: 'catalog-search', type: 'search', class: 'input', value: state.catalogSearch.database || '', placeholder: t(guided ? 'app.explorerGuide.findCategory' : 'app.core.catalog.searchPlaceholder'), 'aria-label': t(guided ? 'app.explorerGuide.findCategory' : 'app.core.catalog.searchLabel'), autocomplete: 'off'});
     const draw = () => {
         const query = search.value.trim().toLocaleLowerCase();
-        const matching = tables().filter(table => table.name.toLocaleLowerCase().includes(query));
+        const matching = tables().filter(table => table.name.toLocaleLowerCase().includes(query)
+            || workspaceTableName(table.name, routeName).toLocaleLowerCase().includes(query));
         list.replaceChildren(...matching.map(table => registerSelection(el('button', {
             class: 'catalog-item' + (table.name === state.table ? ' active' : ''),
             type: 'button', title: table.name + (table.comment ? ' — ' + table.comment : ''),
             'aria-current': table.name === state.table ? 'true' : null,
             on: {click: () => selectWorkspaceTable(table.name, routeName)},
-        }, icon(table.type === 'view' ? 'layers' : 'table'), el('span', {class: 'catalog-item-name'}, table.name),
+        }, icon(table.type === 'view' ? 'layers' : 'table'), el('span', {class: 'catalog-item-name'}, workspaceTableName(table.name, routeName)),
         el('span', {class: 'catalog-item-count'}, number(table.columns))),
         {kind: 'control', key: 'catalog:' + JSON.stringify(table.name), label: table.name, table: table.name, purpose: 'openTable'})));
         if (!matching.length) list.append(el('p', {class: 'catalog-empty'}, t('app.core.catalog.noMatches')));
@@ -934,6 +999,10 @@ function selectWorkspaceTable(name, view = state.databaseView) {
     contextContent.querySelector('.catalog-item.active')?.focus({preventScroll: true});
 }
 
+function workspaceTableName(name, view = route().name) {
+    return view === 'verkennen' && getExplorerMode() === 'guided' ? friendlyName(name) : name;
+}
+
 function databaseHeading(view) {
     const modeLinks = el('nav', {class: 'database-views', 'aria-label': t('app.navigation.views')}, databaseViews.map(name =>
         registerSelection(el('a', {class: 'database-view' + (name === view ? ' active' : ''), href: databaseHash(name), 'data-database-view': name,
@@ -946,8 +1015,8 @@ function databaseHeading(view) {
     return el('header', {class: 'page-heading database-heading'},
         el('div', {class: 'database-heading-main'}, el('h1', {}, t('app.navigation.database')), explorer),
         el('div', {class: 'database-viewbar'}, modeLinks,
-            el('p', {class: 'database-selection'}, el('span', {}, t('app.navigation.selected')),
-                el('code', {class: 'database-selected-table', id: 'database-selected-table'}, state.table || t('app.navigation.emptySelection')))));
+            el('p', {class: 'database-selection'}, el('span', {}, t(view === 'verkennen' && getExplorerMode() === 'guided' ? 'app.explorerGuide.selectedCategory' : 'app.navigation.selected')),
+                el('code', {class: 'database-selected-table', id: 'database-selected-table', title: state.table}, state.table ? workspaceTableName(state.table, view) : t('app.navigation.emptySelection')))));
 }
 
 function databaseContext(view, scope) {
@@ -978,7 +1047,7 @@ function drawTableInspector(inspector, table, data) {
         registerSelection(el('div', {}, el('code', {}, column.name), el('small', {}, column.type)), columnSelection(table, column, data))))));
     const keys = data.foreign_keys || [];
     inspector.append(details('connections', t('app.navigation.connections'), keys.length ? el('div', {class: 'workspace-connection-list'}, keys.map(key => {
-        const external = key.referenced_schema && key.referenced_schema !== state.bootstrap.database.name;
+        const external = key.referenced_schema && key.referenced_schema !== schemaName();
         const available = !external && tables().some(item => item.name === key.referenced_table);
         const content = [icon('link'), el('span', {}, el('code', {}, (external ? key.referenced_schema + '.' : '') + key.referenced_table),
             el('small', {}, key.columns.join(', ') + ' → ' + key.referenced_columns.join(', ')),
@@ -992,13 +1061,13 @@ function drawTableInspector(inspector, table, data) {
 function tableHeader(table, tab) {
     return el('div', {class: 'table-heading'},
         el('div', {}, el('div', {class: 'table-heading-title'}, el('h2', {}, table.name), badge(table.type === 'view' ? t('app.core.table.viewBadge') : t('app.core.table.tableBadge'), table.type === 'view' ? 'badge-blue' : 'badge-green'))),
-        el('div', {class: 'table-heading-actions'},
-            button(tab === 'structure' ? t('app.core.table.openStructure') : t('app.core.table.openBrowse'), () => databaseModal.open(table.name, tab), {className: 'button-small', symbol: 'database'})));
+        el('div', {class: 'table-heading-actions'}, supports('phpmyadmin')
+            ? button(tab === 'structure' ? t('app.core.table.openStructure') : t('app.core.table.openBrowse'), () => databaseModal.open(table.name, tab), {className: 'button-small', symbol: 'database'}) : null));
 }
 
 function noTables() {
     return empty(t('app.core.table.emptyTitle'), t('app.core.table.emptyHelp'),
-        button(t('app.core.table.openDatabase'), () => databaseModal.open('', 'sql'), {kind: 'primary', symbol: 'database'}));
+        supports('phpmyadmin') ? button(t('app.core.table.openDatabase'), () => databaseModal.open('', 'sql'), {kind: 'primary', symbol: 'database'}) : null);
 }
 
 async function renderData(scope) {
@@ -1015,7 +1084,7 @@ async function renderData(scope) {
     const workspace = el('section', {class: 'table-workspace'});
     const card = registerSelection(el('div', {class: 'card'}, tableHeader(table, 'browse')),
         () => tableSelection(table, state.structureData.get(table.name)));
-    if (table.type !== 'view') card.querySelector('.table-heading-actions').prepend(button(t('app.databases.addRow'), () => rowEditor.open({table: table.name, mode: 'insert'}), {id: 'add-row', kind: 'primary', symbol: 'plus', className: 'button-small'}));
+    if (supports('write') && table.type !== 'view') card.querySelector('.table-heading-actions').prepend(button(t('app.databases.addRow'), () => rowEditor.open({table: table.name, mode: 'insert'}), {id: 'add-row', kind: 'primary', symbol: 'plus', className: 'button-small'}));
     const search = el('input', {id: 'data-search', type: 'search', class: 'input', value: viewState.search, placeholder: t('app.core.data.searchPlaceholder'), 'aria-label': t('app.core.data.searchLabel'), autocomplete: 'off'});
     const size = el('select', {id: 'data-page-size', class: 'input select', 'aria-label': t('app.core.data.pageSize')},
         [25, 50, 100].map(value => el('option', {value, selected: value === viewState.pageSize}, String(value))));
@@ -1056,7 +1125,7 @@ async function renderData(scope) {
             };
             const actionKey = Symbol('row-actions');
             const exactKeys = new Map(data.rows.map((row, index) => [row, {key: data.row_keys?.[index], index}]));
-            const editableRows = table.type !== 'view' && (data.key_columns || []).length > 0;
+            const editableRows = supports('write') && table.type !== 'view' && (data.key_columns || []).length > 0;
             const columns = data.columns.map(column => ({key: column.name, label: column.name}));
             if (editableRows) columns.push({key: actionKey, label: t('app.databases.actions'), className: 'row-actions-cell', render: (_value, row) => {
                 const {key, index} = exactKeys.get(row);
@@ -1083,7 +1152,7 @@ async function renderData(scope) {
                     },
                 },
             }));
-            if (!editableRows) result.append(notice(t(table.type === 'view' ? 'app.databases.viewFallback' : 'app.databases.fallback')),
+            if (!editableRows && supports('phpmyadmin')) result.append(notice(t(table.type === 'view' ? 'app.databases.viewFallback' : 'app.databases.fallback')),
                 button(t('app.databases.openEditor'), () => databaseModal.open(table.name, 'browse'), {className: 'button-small', symbol: 'database'}));
             if (localized(data, 'notice')) result.append(notice(localized(data, 'notice')));
             const pages = Math.max(1, Math.ceil(Number(data.total) / Number(data.page_size)));
@@ -1112,7 +1181,9 @@ async function renderData(scope) {
         el('div', {class: 'search-field'}, icon('search'), search),
         el('div', {class: 'table-toolbar-right'}, el('span', {class: 'small muted'}, t('app.core.data.rows')), size)),
         result, pagination);
-    workspace.append(card, el('p', {class: 'table-caption'}, t('app.databases.help')), sql);
+    workspace.append(card);
+    if (supports('write')) workspace.append(el('p', {class: 'table-caption'}, t('app.databases.help')));
+    workspace.append(sql);
     page.append(workspace);
     await load();
 }
@@ -1157,13 +1228,14 @@ async function renderStructure(scope) {
     if (!keys.length) relations.append(notice(t('app.core.structure.noRelationships')));
     keys.forEach(foreignKey => {
         const target = foreignKey.referenced_table;
+        const targetAvailable = (!foreignKey.referenced_schema || foreignKey.referenced_schema === schemaName()) && tables().some(item => item.name === target);
         const join = foreignKey.columns.map((column, index) => 'a.' + quoteIdentifier(column) + ' = b.' + quoteIdentifier(foreignKey.referenced_columns[index])).join('\n  AND ');
         const query = 'SELECT a.*, b.*\nFROM ' + quoteIdentifier(table.name) + ' AS a\nJOIN ' + quoteIdentifier(target) + ' AS b\n  ON ' + join + '\nLIMIT 20;';
         relations.append(registerSelection(el('div', {class: 'relation-card'}, icon('link'),
             el('div', {class: 'relation-content'}, el('p', {}, foreignKey.columns.join(', ') + ' → ' + target + '.' + foreignKey.referenced_columns.join(', ')),
                 el('small', {}, foreignKey.name)),
-            button(t('app.core.structure.view'), () => go('structuur', {table: target}), {kind: 'ghost', className: 'button-small'}),
-            button(t('app.core.structure.researchJoin'), () => openResearch(query), {className: 'button-small', symbol: 'code'})), relationshipSelection(table, foreignKey)));
+            button(t('app.core.structure.view'), () => go('structuur', {table: target}), {kind: 'ghost', className: 'button-small', disabled: !targetAvailable}),
+            supports('query') ? button(t('app.core.structure.researchJoin'), () => openResearch(query), {className: 'button-small', symbol: 'code'}) : null), relationshipSelection(table, foreignKey)));
     });
     workspace.append(relations);
     const indexes = el('section', {class: 'structure-section'}, el('h3', {}, t('app.core.structure.indexes')));
@@ -1177,7 +1249,7 @@ async function renderStructure(scope) {
         el('p', {}, t('app.core.structure.definitionHelp')),
         el('pre', {class: 'code-block'}, el('code', {}, data.create_sql)),
         button(t('app.core.structure.copyDefinition'), () => copyText(data.create_sql), {kind: 'ghost', className: 'button-small', symbol: 'copy'}));
-    workspace.append(ddl);
+    workspace.append(data.create_sql ? ddl : notice(t('app.postgres.definitionUnavailable')));
 }
 
 async function renderSchema(scope) {
@@ -1193,7 +1265,7 @@ async function renderSchema(scope) {
         }
         state.schemaView.selected = state.table;
         const visualizer = mountSchemaVisualizer(workspace, {
-            data: state.schemaData,
+            data: {...state.schemaData, scope_key: scope.database},
             state: state.schemaView,
             onRefresh: () => refreshBootstrap(true),
             contextRoot: contextContent,
@@ -1214,6 +1286,50 @@ async function renderSchema(scope) {
             workspace.replaceChildren(errorPanel(error, () => render()));
             contextContent.replaceChildren(errorPanel(error, () => render()));
         }
+    }
+}
+
+async function renderExplore(scope) {
+    page.append(databaseHeading('verkennen'));
+    contextContent.append(catalog('verkennen'));
+    const workspace = el('section', {id: 'record-explorer-workspace'}, loading(t('app.explorer.loading')));
+    page.append(workspace);
+    const selectRootTable = name => {
+        if (!scope.live() || !tables().some(table => table.name === name)) return;
+        state.table = name;
+        history.replaceState(null, '', databaseHash('verkennen'));
+        document.getElementById('database-selected-table').textContent = workspaceTableName(name, 'verkennen');
+        document.getElementById('database-selected-table').title = name;
+        document.querySelector('.database-selection > span').textContent = t(getExplorerMode() === 'guided' ? 'app.explorerGuide.selectedCategory' : 'app.navigation.selected');
+        document.querySelectorAll('[data-database-view]').forEach(link => { link.href = databaseHash(link.dataset.databaseView); });
+        contextContent.replaceChildren(catalog('verkennen'));
+        syncWorkspaceNavigation();
+    };
+    try {
+        // On a direct first visit, start with a table that connects to others.
+        // Tab changes and explicit table links retain the user's selection.
+        if (!route().params.has('table') && !state.recordExploreView.table) {
+            const schema = state.schemaData || await request('schema', {params: {database: scope.database}, signal: scope.signal});
+            if (!scope.live()) return;
+            state.schemaData = schema;
+            const incoming = new Map(schema.tables.map(table => [table.name, 0]));
+            for (const table of schema.tables) for (const key of table.foreign_keys || []) {
+                if ((!key.referenced_schema || key.referenced_schema === schemaName()) && incoming.has(key.referenced_table)) {
+                    incoming.set(key.referenced_table, incoming.get(key.referenced_table) + 1);
+                }
+            }
+            const candidates = schema.tables.filter(table => table.type !== 'view' && table.columns.some(column => column.primary));
+            candidates.sort((a, b) => incoming.get(b.name) - incoming.get(a.name) || a.name.localeCompare(b.name));
+            if (candidates[0]) selectRootTable(candidates[0].name);
+        }
+        if (!scope.live()) return;
+        const explorer = mountRecordExplorer(workspace, {database: scope.database, tables: tables(),
+            companion,
+            initialTable: state.table, state: state.recordExploreView, signal: scope.signal,
+            isLive: scope.live, onSelectTable: selectRootTable, onExperienceChange: () => selectRootTable(state.table)});
+        scope.cleanup.push(() => explorer.destroy());
+    } catch (error) {
+        if (error.name !== 'AbortError' && scope.live()) workspace.replaceChildren(errorPanel(error, () => render()));
     }
 }
 

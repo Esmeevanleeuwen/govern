@@ -1,8 +1,179 @@
 # Govern UX and UI design
 
-**Design baseline 1.7.** Govern is a personal, local workspace for exploring, understanding and changing databases. This guide defines its brand, visual system, behaviour and the process for adding features without disrupting existing work.
+**Design baseline 1.8.** Govern is a personal, local workspace for exploring, understanding and changing databases. This guide defines its brand, visual system, behaviour and the process for adding features without disrupting existing work.
 
 The agreed visual direction is layered glass, soft shadows, custom colour and no hard decorative borders. Dutch and English are equal interface languages. The detailed rules below are the target for implementation; the interactive preview is a visual reference. The production modules implement the core language, appearance and layout controls; the future chart example remains a proposal.
+
+## Public homepage and account journey
+
+The homepage at `/` introduces Govern with **Your data. Your next idea.** and
+an invitation to help shape the project: **Be here at the beginning.** Use
+oversized sans serif typography, the existing open geometric mark, and the
+application's actual lagoon/sage palette. Subtle lavender and pale gold ambient
+light support the same pearl glass materials as the workspace. A dark sample
+workspace provides contrast within the light marketing canvas.
+
+The product preview is labelled **Illustrative workspace · sample data**.
+Its Data, Structure and Schema controls explore a small fictional store; the
+preview never executes SQL or connects to a visitor's work databases. Do not
+make its sample counts or example queries look like real installation results.
+The setup dialog offers Windows and macOS/Linux instructions and copy feedback.
+Project, documentation and setup links remain real navigation actions.
+
+**Start exploring / Make it your workspace** opens registration for this
+installation. **Log in** opens the shared account form in login mode. Account
+screens support EN/NL, labelled fields, browser autofill, password visibility,
+password confirmation, keyboard-operated mode tabs, disabled pending controls,
+nearby errors and retry. Preserve entered data after a rejected request; never
+store a password in browser storage. Use at least twelve characters and a
+clear 12–128-character hint rather than invented strength claims.
+
+Registration explains the real access boundary. The first account owns this
+installation and signs in immediately. Every later request waits for the owner;
+show that outcome explicitly, without suggesting access or email verification
+has been completed. Approved users share the same permitted work databases.
+An account is not a private database, hosted cloud workspace or new tenant.
+
+`/account.php` shows the escaped name/email, local role and shared-database
+boundary, a route into `/workspace.php`, and logout. Owners additionally see
+pending requests, refresh, and explicit approval controls with a statement of
+the database access being granted. Members do not receive owner controls.
+Logout uses the authenticated POST endpoint and returns to the public entry.
+The workspace keeps an account link without replacing its existing navigation.
+
+The real workspace is now served from `/workspace.php`, behind the same
+server-side session gate as data APIs and official phpMyAdmin. Preserve old
+workspace hashes and database parameters when forwarding links from `/`.
+Homepage, auth and account controls reuse the application's language mechanism
+and visual vocabulary; ordinary schema, SQL, layout and preference flows retain
+their existing responsibilities. Account syncing, email delivery and password
+reset are not part of this delivery.
+
+Responsive layouts keep the headline, primary action and account fields
+readable at 320 px. Dense sample tables stay within their own region. Keep
+visible focus, dialog focus return, sensible reading order, labelled non-colour
+states, and reduced-motion/reduced-transparency fallbacks. No invented users,
+testimonials, live collaboration or adoption statistics belong in this story.
+
+## PostgreSQL in the existing workspace
+
+Use the same table list, record browser, structure details and schema canvas
+for both SQL engines. The database picker identifies PostgreSQL entries with
+their database and schema as well as the engine name, for example
+**govern_pg · public · PostgreSQL**. Keep identical table names in separate
+schemas visually and functionally scoped to their selected entry.
+
+Show a short localized notice that this PostgreSQL version supports browsing
+only. Make unsupported row editing, arbitrary SQL, research, restore points,
+phpMyAdmin/import, context export and AI unavailable rather than opening
+MariaDB tools against the selected PostgreSQL scope. These limits belong next
+to the affected task; keep the existing shared navigation and visual tokens.
+Do not create a separate PostgreSQL-themed UI or duplicate the table screens.
+
+Switching between engines preserves each complete scope's table, search and
+diagram state. Cached data and delayed responses from another scope must never
+replace the visible selection. A configured but unreadable schema uses the
+same honest unavailable state as other connection failures.
+
+## Record exploration
+
+The shared Database area adds **Explore / Verkennen** beside Data, Structure
+and Schema. Schema shows table definitions; Explore shows actual keyed records
+and the declared references between them. Use a bounded neighborhood centered
+on one chosen record, a synchronized record list, and a nearby explanation
+panel. Selection and relationship filters change the view only.
+
+Keep the current record visibly distinct, provide keyboard alternatives for
+graph nodes and edges, and show non-colour selection states in the record list.
+The explanation names the exact source and referenced fields/values instead
+of inventing a semantic or causal relationship. Scope, loaded counts, truncation
+and skipped relationships remain visible. A partial neighborhood must never
+look like a complete graph of the database.
+
+Keep search, relationship choices and the selected record when changing
+language or appearance. A database/schema change owns separate view state and
+invalidates old network callbacks. On compact screens stack graph, records
+and explanation within the viewport; controls retain readable labels and focus.
+
+## Guided record exploration
+
+Explore defaults to **Guided / Stap voor stap** for coworkers who need no code.
+Keep the same graph, records, explanation and read-only API. Label the starting
+controls as category/item choices and offer questions derived from the loaded
+neighborhood: show all loaded links, show a category, explain a real connection,
+or follow a linked item. Counts refer to distinct loaded neighboring records.
+
+Use readable aliases for schema identifiers, with original names, complete keys
+and FK evidence available under **Technical details**. Do not rewrite record
+text or infer business meaning such as ownership or causality from field names.
+The plain explanation describes the actual stored reference.
+
+**Detailed / Details** restores the technical controls without changing the
+root, filters, selected item or database scope. Persist only the mode preference
+in the browser, with an in-memory fallback when storage is unavailable. Guided
+question actions remain keyboard accessible and fit a 320 px viewport.
+
+## Shared windows
+
+Keep window chrome separate from content and data loading. The shared modal
+shell owns dragging, viewport bounds, stacking, outside dismissal and focus;
+feature modules configure their captured context, requests and rendering. See
+[window configuration](MODALS.md).
+
+Explore offers independent read-only record windows for comparison. A window
+keeps its original database/schema and exact key when the workspace navigates.
+Show that source explicitly and refresh only on request. Clicking a peer brings
+it forward; opening another window preserves existing peers. Clicking outside
+all windows or pressing Escape closes the top window. Drag the titlebar or use
+Alt+Arrow keys. Window bodies scroll while their headers remain reachable.
+
+Editing and confirmation dialogs remain blocking and preserve existing dirty
+form and in-flight save guards through the shared cancel route. The desktop AI
+panel remains docked. Its mobile modal follows outside dismissal. Never reload
+the phpMyAdmin iframe to update window chrome, position, language or theme.
+
+Workspace navigation uses a slim muted scrollbar. Hide the outer document
+scrollbar while retaining document, keyboard and touch scrolling. Keep the
+database picker and connection status together, including on mobile. Database
+creation and import remain available in the compact Tools menu.
+
+## Compact workspace header
+
+Keep the database picker and Open database visible in one compact row. Group
+secondary actions in a labelled Tools disclosure: exploration, database tools
+and preferences. The panel shows full action labels, native language selection
+and the current disabled/hidden states. On narrow screens use accessible icon
+buttons in the header and retain full labels inside the panel. Keep connection
+status as an inline dot with its text available to assistive technology and a
+tooltip. Active tools have a small header indicator.
+
+Use a nonmodal popover, with outside/Escape dismissal, natural Tab navigation
+and a visible focus route back to Tools. Opening a dialog or assistant closes
+the menu before activating the original control. Language changes preserve
+the open panel and current work. Preserve the original control nodes and
+listeners; relocating presentation must not change scope or capabilities.
+
+## Second-screen companion
+
+The companion window has a Comparison desk and Relationship radar. Keep the
+same glass, typography, readable aliases and NL/EN preferences as the workspace.
+Provide a main-screen entry and a pin action alongside record selection. Let
+the user move the browser window to another monitor without a screen-permission
+prompt. Explain and recover from a blocked popup.
+
+Comparison pins keep their captured source while the main screen navigates.
+Show database/schema/table per column, limit the desk to four records and keep
+refresh/removal local to that pin. Align original field names, distinguish
+missing/NULL/empty values, and never imply equality from an incomplete preview
+or a comparison still loading. Shared links describe actual loaded references.
+Guided keeps technical identifiers optional; Detailed retains original fields.
+
+The radar follows the main selection until explicitly pinned. Local traversal
+pins its source; resuming follows the latest main selection. Keep graph nodes,
+foreign-key evidence and pin actions keyboard accessible. Show the actual scope
+and bounded-preview status. Language and appearance changes preserve pins,
+selection and active requests. A disconnected main screen leaves an offline
+status beside the loaded snapshots.
 
 ## Interactive design reference
 
@@ -61,6 +232,11 @@ Use the system sans serif stack for the interface and monospace for SQL, identif
 Use a shared spacing scale of **4, 8, 12, 16, 24 and 32 px**. Card padding is normally 20 to 24 px; page spacing is 24 to 32 px. Use about 20 px corner radii for panels, 12 px for controls and pill shapes only for compact selectors. Size adjustments belong in shared tokens.
 
 Use small, consistent outline icons with labels for important actions. Decorative artwork carries no essential information. Motion is brief, normally 120 to 180 ms, and limited to meaningful state changes. Disable nonessential motion when reduced motion is requested.
+
+The overview's decorative glass lens uses a slow float and an independent front
+layer rotation. Animate transforms only, preserving its layout and existing
+glass materials. This ambient motion runs only with `prefers-reduced-motion:
+no-preference`; reduced motion keeps the original static shape.
 
 Apple is a reference for material depth and hierarchy; Govern keeps its own identity. See [Apple’s materials guidance](https://developer.apple.com/design/human-interface-guidelines/materials).
 
@@ -224,8 +400,8 @@ theme and language updates; only explicit tool navigation loads another page.
 
 ### Add a database and import SQL
 
-Keep one compact, labelled create/import action beside the shared database
-selector. It opens a focused glass dialog rather than another permanent sidebar.
+Keep one labelled create/import action in the Tools menu beside the shared
+database selector. It opens a focused glass dialog.
 The dialog offers existing database choice and import, plus a name field for a
 new database. Keep the selected target visible in every action; changing the
 name must not silently change the active workspace before the request succeeds.

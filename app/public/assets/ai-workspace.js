@@ -1,6 +1,7 @@
 import {request} from './api.js';
 import {el, icon, button, errorText, confirmAction, copyText} from './ui.js';
 import {t, getLanguage} from './i18n.js';
+import {attachDialog} from './modal-shell.js';
 import './ai-messages.js';
 
 const text = (key, params) => t('app.ai.' + key, params);
@@ -76,6 +77,7 @@ export function createAiWorkspace({getDatabase, onOpenSql = async () => false, o
     el('div', {class: 'ai-composer'}, promptLabel, prompt, el('div', {class: 'ai-composer-footer'}, promptHint,
         el('div', {class: 'ai-message-actions'}, searchButton, stopButton, sendButton))), footer);
     document.body.append(panel);
+    const shell = attachDialog(panel, {draggable: false, outside: () => panel.matches(':modal')});
 
     function active() {
         const scope = scopes.get(database) || 'database';
@@ -501,7 +503,7 @@ export function createAiWorkspace({getDatabase, onOpenSql = async () => false, o
             for (const state of databases.values()) abort(state);
             window.removeEventListener('govern:languagechange', languageChange);
             narrow.removeEventListener('change', sizeChange);
-            close(); panel.remove(); settingViews.clear(); databases.clear(); scopes.clear();
+            close(); shell.destroy(); panel.remove(); settingViews.clear(); databases.clear(); scopes.clear();
         },
     };
 }

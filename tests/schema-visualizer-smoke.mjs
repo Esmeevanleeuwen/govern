@@ -1,8 +1,10 @@
+import {selectWorkspaceLanguage} from './workspace-tools.mjs';
 /**
  * Schema visualizer integration against a disposable local Govern stack.
  * Uses the same Playwright environment as the other browser tests. This test
  * reads metadata only; edge-case catalogs are intercepted browser fixtures.
  */
+import {authenticatedContext} from './auth-session.mjs';
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 import {mkdir} from 'node:fs/promises';
@@ -17,7 +19,7 @@ const screenshots = process.env.SCREENSHOTS_DIR;
 if (screenshots) await mkdir(screenshots, {recursive: true});
 const browser = await chromium.launch({headless: true, args: browserArgs,
     ...(process.env.BROWSER_BIN ? {executablePath: process.env.BROWSER_BIN} : {})});
-const context = await browser.newContext({locale: 'nl-NL', viewport: {width: 1440, height: 1100}});
+const context = await authenticatedContext(browser, base, {locale: 'nl-NL', viewport: {width: 1440, height: 1100}});
 const page = await context.newPage();
 const errors = [];
 const track = page => page.on('pageerror', error => errors.push(error.message));
@@ -34,7 +36,7 @@ const shot = async (page, name) => {
     }
 };
 const load = async (page, hash = '#schema') => {
-    await page.goto(new URL('/' + hash, base).href, {waitUntil: 'networkidle'});
+    await page.goto(new URL('/workspace.php' + hash, base).href, {waitUntil: 'networkidle'});
     await page.locator('#schema-search').waitFor({state: 'attached'});
 };
 const ensureExplorer = async (current = page) => {
@@ -197,8 +199,8 @@ try {
     await page.locator('#schema-help-open').click();
     const languagePage = await context.newPage();
     track(languagePage);
-    await languagePage.goto(new URL('/#instellingen', base).href, {waitUntil: 'networkidle'});
-    await languagePage.locator('#language-select').selectOption('en');
+    await languagePage.goto(new URL('/workspace.php#instellingen', base).href, {waitUntil: 'networkidle'});
+    await selectWorkspaceLanguage(languagePage, 'en');
     await page.waitForFunction(() => document.documentElement.lang === 'en');
     await page.locator('#schema-help-dialog[open]').waitFor();
     assert.equal(await page.locator('#schema-help-dialog').count(), 1, 'A live language change cannot leave duplicate guide dialogs.');
@@ -213,7 +215,7 @@ try {
     await page.waitForFunction(() => !document.querySelector('#schema-help-dialog')?.open
         && document.activeElement?.id === 'schema-help-open', undefined, {timeout: 5000});
     assert.equal(await page.locator('#schema-help-open').evaluate(button => button === document.activeElement), true);
-    await languagePage.locator('#language-select').selectOption('nl');
+    await selectWorkspaceLanguage(languagePage, 'nl');
     await page.waitForFunction(() => document.documentElement.lang === 'nl');
     await languagePage.close();
     await page.locator('#schema-help-open').click();
@@ -306,9 +308,9 @@ try {
     await page.keyboard.press('Enter');
     assert.equal(await page.locator('#workspace-explorer-open').getAttribute('aria-expanded'), 'false',
         'A table selection respects a deliberately collapsed panel.');
-    await page.locator('#language-select').selectOption('en');
+    await selectWorkspaceLanguage(page, 'en');
     assert.equal(await page.locator('#workspace-explorer-open').getAttribute('aria-expanded'), 'false', 'Language retains a collapsed panel.');
-    await page.locator('#language-select').selectOption('nl');
+    await selectWorkspaceLanguage(page, 'nl');
     await page.locator('#workspace-explorer-open').click();
     assert.equal(await page.locator('#schema-table-panel').isVisible(), true, 'Reopening restores the explorer.');
     assert.match(await page.locator('#schema-selected').innerText(), new RegExp(table.name), 'Reopening retains the selected-table details.');
@@ -383,7 +385,12 @@ try {
     await searchFor(table.name);
     await header.focus();
     const viewportBeforeLanguage = await page.locator('.schema-world').evaluate(element => element.style.transform);
-    await page.locator('#language-select').selectOption('en');
+    // Use the sibling preferences flow so opening Tools does not deliberately
+    // move focus away from the table whose focus continuity is under test.
+    const focusLanguagePage = await context.newPage();
+    track(focusLanguagePage);
+    await focusLanguagePage.goto(new URL('/workspace.php#instellingen', base).href, {waitUntil: 'networkidle'});
+    await selectWorkspaceLanguage(focusLanguagePage, 'en');
     await page.waitForFunction(() => document.documentElement.lang === 'en');
     await page.locator('#schema-search').waitFor();
     assert.equal(await page.locator('#schema-search').inputValue(), table.name, 'Language keeps the filter.');
@@ -394,6 +401,7 @@ try {
     assert.equal(await page.locator('#schema-neighborhood').isChecked(), true);
     assert.match(await page.locator('#schema-selected').innerText(), new RegExp(table.name), 'Language keeps selection.');
     assert.equal((await page.locator('#page').innerText()).includes('app.schema.'), false, 'No untranslated keys leak.');
+    await focusLanguagePage.close();
     await page.reload({waitUntil: 'networkidle'});
     await page.locator('#schema-search').waitFor();
     assert.deepEqual(await position(table.name), moved, 'Positions are restored on reload.');
@@ -423,14 +431,14 @@ try {
     await page.locator('.structure-section').first().waitFor();
 
     // Navigating to the diagram does not replace research in progress.
-    await page.goto(new URL('/#onderzoeken', base).href);
+    await page.goto(new URL('/workspace.php#onderzoeken', base).href);
     await page.locator('#sql-editor').waitFor();
     const draft = 'SELECT 42 AS kept_schema_draft;';
     await page.locator('#sql-editor').fill(draft);
     await load(page);
     await page.locator('#settings-link').click();
     await page.locator('#preference-theme').selectOption('dark');
-    await page.goto(new URL('/#schema', base).href);
+    await page.goto(new URL('/workspace.php#schema', base).href);
     await page.locator('#schema-search').waitFor();
     await searchFor('organizations');
     await selectTable('organizations');
@@ -445,7 +453,7 @@ try {
     await shot(page, 'selection-dark-en');
     await page.locator('#settings-link').click();
     await page.locator('#preference-reduceTransparency').check();
-    await page.goto(new URL('/#schema', base).href);
+    await page.goto(new URL('/workspace.php#schema', base).href);
     await page.locator('#schema-search').waitFor();
     assert.equal(await page.locator('.schema-node, .schema-node-header, #schema-viewport').evaluateAll(nodes =>
         nodes.every(element => getComputedStyle(element).backdropFilter === 'none')), true,
@@ -457,7 +465,7 @@ try {
                 style.getPropertyValue('border-' + side + '-style') !== 'none' &&
                 !['transparent', 'rgba(0, 0, 0, 0)'].includes(style.getPropertyValue('border-' + side + '-color'));
         })).map(element => element.className)), [], 'Schema surfaces have no hard decorative borders.');
-    await page.goto(new URL('/#onderzoeken', base).href);
+    await page.goto(new URL('/workspace.php#onderzoeken', base).href);
     await page.locator('#sql-editor').waitFor();
     assert.equal(await page.locator('#sql-editor').inputValue(), draft, 'Schema/settings navigation retains research.');
 

@@ -134,7 +134,7 @@ export function explainSelection(rawItems, context = {}) {
         actions.push({type:'structure', label:message('openStructure', {table}), table}, {type:'data', label:message('openData', {table}), table});
     }
     const recordItems = items.filter(item => ['row','cell'].includes(item.meta.kind));
-    if (items.length && recordItems.length === items.length && tables.length === 1 && recordItems.every(item => recordKey(item.meta)
+    if (context.capabilities?.query !== false && items.length && recordItems.length === items.length && tables.length === 1 && recordItems.every(item => recordKey(item.meta)
         && JSON.stringify(item.meta.primaryKey) === JSON.stringify(recordItems[0].meta.primaryKey))) {
         const unique = [...new Map(recordItems.map(item => [recordKey(item.meta),item.meta])).values()];
         // Each disjunct preserves the full key; never construct independent IN lists for composite keys.

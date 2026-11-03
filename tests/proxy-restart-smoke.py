@@ -6,6 +6,7 @@ only the two web containers, temporarily allocates extra network endpoints,
 and verifies that the unchanged gateway resolves their changed IP addresses.
 """
 import argparse
+import http.cookiejar
 import json
 import os
 from pathlib import Path
@@ -16,6 +17,8 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
+
+from auth_http import ensure_authenticated
 
 
 def main():
@@ -53,12 +56,17 @@ def main():
             raise RuntimeError("Refusing to change a container outside the confirmed project")
         return value
 
+    client = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
+
     def request(path):
-        with urllib.request.urlopen(base + path, timeout=4) as response:
+        with client.open(base + path, timeout=4) as response:
             return response.status, response.read().decode("utf-8", errors="replace")
 
     def routes_work():
-        status, html = request("/")
+        # PHP sessions can be lost when the app container is recreated; the
+        # persistent account remains and must log in again through the real API.
+        ensure_authenticated(client, base)
+        status, html = request("/workspace.php")
         if status != 200 or 'id="database-select"' not in html:
             return False
         status, body = request("/api.php?action=health")
