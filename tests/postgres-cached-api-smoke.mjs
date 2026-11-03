@@ -46,6 +46,17 @@ try {
     assert.equal((await bootstrap.json()).data.database.connection, 'postgres');
     await page.goto(bookmark('gegevens', publicKey, 'govern_pg_values'), {waitUntil: 'networkidle'});
     await loaded(publicKey, 'literal%_value');
+    await page.evaluate(async database => {
+        const {openRecordWindow} = await import('/assets/record-window.js');
+        openRecordWindow({database, table: 'govern_pg_values', key: {id: '9007199254740993'}});
+    }, publicKey);
+    const recordWindow = page.locator('dialog.record-window').last();
+    await recordWindow.locator('.record-window-content').waitFor();
+    assert.equal(await recordWindow.getAttribute('data-record-scope'), publicKey);
+    assert.ok((await recordWindow.locator('.record-window-scope').textContent()).includes('public'),
+        'A new record window decodes its captured scope while the pre-upgrade request module is cached.');
+    assert.ok((await recordWindow.textContent()).includes('literal%_value'), 'The old client still reads the exact captured record.');
+    await recordWindow.locator('.modal-shell-close').click();
     assert.equal(await page.locator('#open-database').isDisabled(), true);
     await page.goto(bookmark('schema', publicKey), {waitUntil: 'networkidle'});
     await page.locator('[data-schema-node="govern_pg_child"]').waitFor();

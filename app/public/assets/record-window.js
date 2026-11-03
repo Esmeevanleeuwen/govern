@@ -1,4 +1,5 @@
-import {request, databaseScope} from './api.js';
+import {request} from './api.js';
+import {parseConnectionScope} from './connection-scope.js';
 import {el, button, badge, notice} from './ui.js';
 import {t} from './i18n.js';
 import {createModal} from './modal-shell.js';
@@ -25,7 +26,7 @@ export function openRecordWindow({database, table, key, guided = true}) {
             el('dd', {class: value === null ? 'null-value' : ''}, valueText(value)))));
 
     function scopeLabel() {
-        const scope = databaseScope(context.database);
+        const scope = parseConnectionScope(context.database);
         return scope.connection === 'postgres'
             ? text('postgresScope', scope) : text('scope', scope);
     }

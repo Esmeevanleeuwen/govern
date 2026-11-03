@@ -1,4 +1,5 @@
-import {request, databaseScope} from './api.js';
+import {request} from './api.js';
+import {parseConnectionScope} from './connection-scope.js';
 import {t} from './i18n.js';
 
 export const MAX_PINNED_RECORDS = 4;
@@ -23,7 +24,7 @@ export function captureRecordContext(value) {
             || field.includes('\0') || !wellFormed(field))) return null;
         const key = Object.fromEntries(entries);
         if (keyBytes(key) > KEY_BYTES) return null;
-        const scope = databaseScope(value.database);
+        const scope = parseConnectionScope(value.database);
         if (!identifier(scope.database) || (scope.schema !== undefined && !identifier(scope.schema))) return null;
         return Object.freeze({database: value.database, table: value.table, key: Object.freeze(key), guided: value.guided !== false});
     } catch { return null; }

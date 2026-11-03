@@ -142,6 +142,7 @@ services:
     volumes:
       - ./app/public:/var/www/public:ro
       - ./app/src:/var/www/src:ro
+      - ./app/importers:/var/www/importers:ro
       - ./app:/opt/govern/project/app:ro
       - ./docs:/opt/govern/project/docs:ro
       - ./docker/database/20-govern.sql:/var/www/workbench.sql:ro

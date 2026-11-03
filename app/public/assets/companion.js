@@ -1,5 +1,5 @@
 import {el, icon, button, badge, empty, errorText} from './ui.js';
-import {databaseScope} from './api.js';
+import {parseConnectionScope} from './connection-scope.js';
 import {getLanguage, setLanguage, t} from './i18n.js';
 import {getPreferences, updatePreferences, subscribePreferences} from './preferences.js';
 import {friendlyName, recordLabel} from './explorer-guide.js';
@@ -55,7 +55,7 @@ const radar = mountCompanionRadar(radarRoot, {
 let onlyDifferences = false, showTechnicalFields = false;
 
 function sourceLabel(context) {
-    const scope = databaseScope(context.database);
+    const scope = parseConnectionScope(context.database);
     return message(scope.connection === 'postgres' ? 'postgresSource' : 'source', scope);
 }
 function labelFor(pin) {

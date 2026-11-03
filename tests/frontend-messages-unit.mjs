@@ -63,4 +63,3 @@ setLanguage('nl');
 assert.equal(t('app.core.research.run'), 'Query uitvoeren');
 
 console.log(`PASS: ${Object.keys(messages.nl).length} bilingual messages, ${usedKeys.size} frontend/shell keys and interpolation parity.`);
-

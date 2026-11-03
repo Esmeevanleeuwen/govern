@@ -4,6 +4,9 @@ Je persoonlijke werkplek om databases te bekijken, begrijpen en veranderen.
 Bestuursatlas is het eerste oefenproject. Je werkt lokaal in je browser,
 eventueel met een begeleidend venster op een tweede scherm.
 
+Deze versie verenigt de losse feature- en updatebranches. Zie de
+[integratiebeschrijving](docs/INTEGRATION.md) voor de opgenomen functies en controles.
+
 ## Beginnen
 
 Installeer en start Docker Desktop. Download deze repository en pak de map uit.

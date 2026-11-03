@@ -10,10 +10,10 @@ extra monitor is handig; twee browservensters naast elkaar werken ook.
 2. Klik op **Tweede scherm / Second screen** en verplaats het nieuwe
    browservenster naar je monitor.
 3. Kies een record en klik op **Vastzetten om te vergelijken / Pin to comparison**,
-   of gebruik het pin-icoon naast een record in de lijst.
+   vanuit de inspecteur van het canvas.
 4. Zet maximaal vier records naast elkaar. **Alleen verschillen / Only
-   differences** filtert bekende verschillen. In Guided blijven technische
-   velden optioneel; Detailed toont de oorspronkelijke velden.
+   differences** filtert bekende verschillen. Technische velden kun je in de
+   vergelijking afzonderlijk zichtbaar maken.
 5. De verversknop haalt dezelfde bron opnieuw op. De sluitknop verwijdert
    alleen de vergelijking, nooit het database-record.
 
@@ -35,7 +35,7 @@ houdt de huidige bron vast. Kies een knooppunt of een record in de lijst voor
 zijn waarden; klik op een verbinding voor de echte foreign-key-kolommen en waarden.
 
 Vanuit de radar kun je een record aan de desk toevoegen, lokaal verder verkennen
-of expliciet op het hoofdscherm openen. Lokaal verkennen zet de radar vast;
+of expliciet in het canvas op het hoofdscherm openen. Lokaal verkennen zet de radar vast;
 **Selectie volgen** hervat bij de laatste hoofdselectie. Gebruik zoomknoppen,
 passend maken, slepen en pijltoetsen voor grotere buurten. De grafiek vermeldt de
 bestaande Explore-begrenzingen en leidt geen zakelijke betekenis af uit links.
@@ -61,7 +61,8 @@ opnieuw inloggen en expliciet opnieuw laden.
 
 - `companion-channel.js`: tijdelijk vensterpaar, handshake, volgorde en status;
   geen records of accounts in browseropslag.
-- `companion-workspace.js` en `record-explorer.js`: ingang, selectie en pinacties.
+- `companion-workspace.js`, `app.js` en `record-map.js`: ingang, canvasselectie
+  en pinacties. De losse recordvensters hergebruiken `record-explorer.js`.
 - `companion-model.js`: exacte bronidentiteit, gevalideerd laden, vergelijking
   en gedeelde geladen verbindingen. Grote sleutels blijven tekst.
 - `companion.php` en `companion.js`: dezelfde HTML-inloggrens, desk en tijdelijke pins.

@@ -1,6 +1,7 @@
 import {t, getLanguage, hasMessage} from './i18n.js';
 import './ui-messages.js';
 import {accountRequest} from './session.js';
+import {parseConnectionScope} from './connection-scope.js';
 
 let token = '';
 let database = '';
@@ -11,16 +12,7 @@ export function getDatabase() { return database; }
 
 /** A workspace key also identifies the PostgreSQL schema; names stay unmodified. */
 export function databaseScope(value = database) {
-    if (typeof value !== 'string') throw translatedError('api.failed');
-    if (!value.startsWith('postgres:')) return {database: value};
-    const parts = value.split(':');
-    if (parts.length !== 3) throw translatedError('api.failed');
-    let name;
-    let schema;
-    try { name = decodeURIComponent(parts[1]); schema = decodeURIComponent(parts[2]); }
-    catch { throw translatedError('api.failed'); }
-    if (!name || !schema || /[\u0000-\u001f\u007f]/u.test(name + schema)) throw translatedError('api.failed');
-    return {connection: 'postgres', database: name, schema};
+    return parseConnectionScope(value);
 }
 
 export function setCsrf(value) {

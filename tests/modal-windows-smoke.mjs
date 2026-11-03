@@ -28,9 +28,11 @@ const bookmark = (database, table) => new URL('/workspace.php#verkennen?' + new 
 const ready = async () => {
     await page.locator('[data-flexible-explorer]').waitFor();
     if (!await page.locator('[data-record-node][aria-pressed="true"]').count()) {
-        if (!await page.locator('#record-map-sources').isVisible()) await page.locator('#record-map-sources-toggle').click();
+        if (!await page.locator('#record-map-sources').isVisible()) {
+            const toggle = page.locator('#record-map-sources-toggle'); await toggle.focus(); await toggle.press('Enter');
+        }
         const first = page.locator('#record-map-records [data-map-record]').first();
-        await first.waitFor(); await first.click();
+        await first.waitFor(); await first.focus(); await first.press('Enter');
     }
     await page.locator('#explorer-open-window').waitFor();
 };

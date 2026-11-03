@@ -75,6 +75,12 @@ try {
 
     // A new schema starts with its own source list, selection and questions.
     await page.goto(bookmark(archiveKey, 'govern_pg_values'), {waitUntil: 'networkidle'});
+    // A hash-only navigation completes before the asynchronous schema switch.
+    // Wait for the new canvas before toggling its source panel.
+    await page.waitForFunction(({scope, table}) =>
+        document.querySelector('#database-select')?.value === scope
+        && document.querySelector('#record-map-table')?.value === table,
+    {scope: archiveKey, table: 'govern_pg_values'});
     await chooseTable('govern_pg_values');
     const archiveId = await selectSeed('Archive-only row');
     assert.equal(await page.locator('[data-record-node]').count(), 1);

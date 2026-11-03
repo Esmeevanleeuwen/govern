@@ -1,6 +1,6 @@
 import {el, button, icon, errorText} from './ui.js';
 import {t} from './i18n.js';
-import {databaseScope} from './api.js';
+import {parseConnectionScope} from './connection-scope.js';
 import {captureRecordContext, recordContextId, loadCompanionRecord} from './companion-model.js';
 import {friendlyName, recordLabel} from './explorer-guide.js';
 import {recordPositions, tableColor, valueText, RECORD_WIDTH, RECORD_HEIGHT} from './record-explorer-model.js';
@@ -77,7 +77,7 @@ export function mountCompanionRadar(root, {onPin = () => {}, onSelect, onFollowi
         for (const control of [zoomOut, zoomIn, fit]) control.disabled = !record || pending;
         if (context) {
             shell.dataset.radarScope = context.database; shell.dataset.radarTable = context.table; shell.dataset.radarKey = JSON.stringify(context.key);
-            const scope = databaseScope(context.database);
+            const scope = parseConnectionScope(context.database);
             source.textContent = text(scope.connection === 'postgres' ? 'postgresSource' : 'source', scope);
         } else {
             delete shell.dataset.radarScope; delete shell.dataset.radarTable; delete shell.dataset.radarKey; source.textContent = '';

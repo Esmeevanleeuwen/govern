@@ -39,9 +39,11 @@ const ready = async source => {
     await source.locator('[data-flexible-explorer]').waitFor();
     if (!await source.locator('[data-record-node][aria-pressed="true"]').count()) {
         const sources = source.locator('#record-map-sources');
-        if (!await sources.isVisible()) await source.locator('#record-map-sources-toggle').click();
+        if (!await sources.isVisible()) {
+        const toggle = source.locator('#record-map-sources-toggle'); await toggle.focus(); await toggle.press('Enter');
+    }
         const first = source.locator('#record-map-records [data-map-record]').first();
-        await first.waitFor(); await first.click();
+        await first.waitFor(); await first.focus(); await first.press('Enter');
     }
     await source.locator('#explorer-companion-pin').waitFor();
 };
@@ -62,9 +64,11 @@ const candidate = async (source, value) => {
     const record = legacyCandidates.get(value);
     assert.ok(record, 'The selected comparison record comes from real scoped fixture metadata.');
     const sources = source.locator('#record-map-sources');
-    if (!await sources.isVisible()) await source.locator('#record-map-sources-toggle').click();
+    if (!await sources.isVisible()) {
+        const toggle = source.locator('#record-map-sources-toggle'); await toggle.focus(); await toggle.press('Enter');
+    }
     const option = source.locator('#record-map-records [data-map-record]').filter({hasText: record.label}).first();
-    await option.waitFor(); await option.click();
+    await option.waitFor(); await option.focus(); await option.press('Enter');
     await source.waitForFunction(label => document.querySelector('#record-map-inspector h3')?.textContent === label, record.label);
     await ready(source);
 };
@@ -305,9 +309,13 @@ try {
     await mariaPin.locator('[data-companion-remove]').click();
     await pinCount(companion, 2);
     await companion.locator('#companion-technical').uncheck();
-    const archiveReturn = mainResponseFor(page, 'govern_pg_values');
+    // Returning to an already loaded scope restores its canvas without a new read.
     await page.evaluate(hash => { location.hash = hash; }, new URL(bookmark(archiveKey, 'govern_pg_values')).hash);
-    await archiveReturn; await ready(page);
+    await page.waitForFunction(scope => document.querySelector('#database-select')?.value === scope
+        && !document.querySelector('#database-select').disabled && document.querySelector('[data-flexible-explorer]'), archiveKey);
+    await ready(page);
+    assert.equal(await page.locator('#record-map-inspector h3').first().textContent(), 'Archive-only row',
+        'Returning to a cached schema restores its own selected record.');
 
     phase = 'failed captured pin and retry';
     const archiveRequest = url => url.pathname === '/api.php' && url.searchParams.get('action') === 'explore'

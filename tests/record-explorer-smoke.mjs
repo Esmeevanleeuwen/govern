@@ -1,4 +1,4 @@
-import {selectWorkspaceLanguage} from './workspace-tools.mjs';
+import {selectWorkspaceLanguage, clickWorkspaceTool} from './workspace-tools.mjs';
 /** Flexible canvas interaction against real, isolated record-map fixtures. */
 import assert from 'node:assert/strict';
 import {exploreHarness} from './explore-helpers.mjs';
@@ -133,7 +133,7 @@ try {
     await h.screenshot('flexible-explore-expanded');
     const beforeRefresh = await position(first.id);
     const refreshed = mapResponse('mariadb', undefined, first.key);
-    await page.locator('#refresh-app').click();
+    await clickWorkspaceTool(page, '#refresh-app');
     await refreshed;
     await node(first.id).waitFor();
     assert.equal(await outer(first.id).getAttribute('data-pinned'), 'true', 'Global refresh keeps the pinned presentation state.');

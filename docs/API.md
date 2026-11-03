@@ -996,8 +996,10 @@ Snapshots are real SQL exports, not container volume snapshots. Restoring overwr
 
 `POST dataset-preview` and `POST dataset-import` are exceptions to the JSON request
 body convention: they accept multipart FormData with a single `file` upload.
-Both require the ordinary `X-CSRF-Token`, same-origin session and explicit
-`database` URL scope. They return the usual JSON envelope. The PHP upload limit is
+Both require an approved installation account, the ordinary `X-CSRF-Token`,
+same-origin session and explicit `database` URL scope. They are MariaDB-only;
+PostgreSQL returns 403 `postgres_read_only` before parsing or committing a file.
+They return the usual JSON envelope. The PHP upload limit is
 16 MB (18 MB multipart envelope); ordinary JSON POST remains limited to 1 MB.
 
 Preview returns `{database,sha256,datasets:[{index,name,count,columns,rows,
@@ -1019,4 +1021,5 @@ resolved through the catalog. Values always use bound parameters.
 
 Stable errors: `dataset_upload`, `dataset_invalid`, `dataset_unavailable`,
 `dataset_name`, `dataset_changed`, `dataset_exists`, plus ordinary CSRF/database
-errors. Native SQL imports remain a separate phpMyAdmin capability.
+errors. SQL files use the separate native SQL preflight/execution flow or the
+official phpMyAdmin import.
