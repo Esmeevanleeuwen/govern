@@ -25,6 +25,7 @@ use Govern\DatabaseProvisioner;
 use Govern\ImportInspection;
 use Govern\RecordExplorer;
 use Govern\RecordMap;
+use Govern\NativeImport;
 
 try {
     $baseConfig = Config::fromEnvironment();
@@ -37,7 +38,7 @@ try {
         Http::json(['status' => 'ok']);
     }
     (new Auth())->requireUser();
-    $posts = ['build-query', 'query', 'save-query', 'delete-query', 'create-snapshot', 'restore-snapshot', 'insert-row', 'update-row', 'delete-row', 'ai-context', 'ai-chat', 'prepare-database', 'record-map'];
+    $posts = ['build-query', 'query', 'save-query', 'delete-query', 'create-snapshot', 'restore-snapshot', 'insert-row', 'update-row', 'delete-row', 'ai-context', 'ai-chat', 'prepare-database', 'record-map', 'native-import-preview', 'native-import-execute'];
     $input = in_array($action, $posts, true) ? Http::post($csrf) : [];
     if (!in_array($action, $posts, true)) {
         Http::get();
@@ -87,6 +88,15 @@ try {
     if ($action === 'import-inspection') {
         $lock = new MaintenanceLock($config['maintenance_dir']);
         Http::json((new ImportInspection($database, $catalog))->inspect());
+    }
+    if ($action === 'native-import-preview' || $action === 'native-import-execute') {
+        $lock = new MaintenanceLock($config['maintenance_dir'], $action === 'native-import-execute');
+        $import = new NativeImport($database, $catalog, $config);
+        $sql = Http::text($input, 'sql');
+        if ($action === 'native-import-preview') {
+            Http::json($import->preview($sql));
+        }
+        Http::json($import->execute($sql, Http::text($input, 'preview_token'), Http::text($input, 'confirmation')));
     }
     if ($action === 'ai-status') Http::json((new AiService($database))->status());
     // Project search reads approved local files, never the database catalog.

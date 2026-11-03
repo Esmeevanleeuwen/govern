@@ -287,6 +287,18 @@ Accounts zijn installatiebreed, geen tenants. De pogingenlimieten, sessies en
 eigenaar-goedkeuring bewijzen geen geschiktheid voor openbare hosting. Mail-
 verificatie, wachtwoordreset, herstelmail en privéschema's per gebruiker zijn
 niet geïmplementeerd. De configuratie blijft uitsluitend op loopback bereikbaar.
+## Eerste eigen import: nieuwe controles
+
+`tests/native_import_unit.php` controleert de bestandsgrens, UTF-8,
+lege invoer en binding van database, bestand en catalogus aan de voorcontrole-token.
+De bestaande browserproef `tests/database-import-smoke.mjs` controleert aanvullend
+een echte eigen import in een afzonderlijke testdatabase, herstel van de actieve
+database en nacontrole op inhoud. De bestaande phpMyAdmin-import blijft apart
+getest. Ook de CSRF-beveiliging en bevestiging blijven onderdeel van deze route.
+
+Er is hier geen lokale Docker-stack uitgevoerd; CI moet de volledige nieuwe
+integratietest nog bevestigen. Een geslaagde SQL-uitvoer bewijst niet dat alle
+records of verwijzingen van een externe dataset inhoudelijk compleet zijn.
 
 ## Databases toevoegen en echte SQL-import
 

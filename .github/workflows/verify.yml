@@ -56,6 +56,7 @@ jobs:
           docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/backend_unit.php
           docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/postgres_scope_unit.php
           docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/sql_script_unit.php
+          docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/native_import_unit.php
           docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/backup_unit.php
           docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/backend_localization.php
           docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/ai_unit.php

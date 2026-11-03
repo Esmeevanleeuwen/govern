@@ -40,9 +40,14 @@ beperking van de werkplek.
   Maak ontbrekende databases aan en verleen alleen rechten per exacte naam.
   Geen globale grants; escape `_` in databasepatronen. Bestaande gegevens en
   accountwachtwoorden blijven behouden, ook bij herhalen na een gedeeltelijke fout.
-- Gebruik voor SQL-bestanden de echte phpMyAdmin-import. Houd de gekozen database
-  zichtbaar, ververs de catalogus bij terugkeer en beloof geen algemene rollback
-  voor DDL of imports. Een model mag de databaseaanmaak niet als vrije tool krijgen.
+- De beperkte eigen SQL-import (maximaal 256 KiB UTF-8) gebruikt dezelfde SQL-parser
+  en uitvoerder als Onderzoeken. Bewaar geen SQL-bestanden, toon voor- en nacontrole,
+  eis bevestiging van de exacte databasenaam en neem vooraf bij bestaande
+  tabellen/views, ook interne `_govern_`-objecten een herstelpunt onder de exclusieve onderhoudslock.
+  Een import is geen SQL-sandbox: `USE` kan andere reeds toegestane databases raken.
+  Voor grotere bestanden blijft de echte phpMyAdmin-import beschikbaar. Beloof
+  nooit een algemene rollback of sluitende inhoudelijke controle. Geef AI geen
+  import- of databaseaanmaaktool.
 - Gebruik voor direct wijzigen de volledige primaire sleutel of een volledige
   unieke sleutel zonder NULL-velden of prefixindex. Lees de echte rij opnieuw;
   verkorte browsewaarden zijn nooit een schrijfbron. Behoud exacte getallen,
