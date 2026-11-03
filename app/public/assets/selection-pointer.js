@@ -279,6 +279,9 @@ export class SelectionPointer {
     }
 
     review() {
+        // A presentation refresh may have replaced the selected DOM node since
+        // the observer's last frame. Rebind only the same registered identity.
+        this.reconcile();
         const visible = [...this.selected.values()].findLast(item => item.node.isConnected && item.node.getClientRects().length && !item.node.closest('[hidden],[inert]'));
         if (visible && this.on) {
             this.hideTag();

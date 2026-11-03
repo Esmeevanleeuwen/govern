@@ -336,6 +336,9 @@ try {
     assert.deepEqual(resultMeta.primaryKey, [], 'A query result must not invent a record key.');
     await clickWorkspaceTool(scriptPage, '#selection-pointer-toggle');
     await secondResultCell.click();
+    await selectWorkspaceLanguage(scriptPage, 'nl');
+    assert.equal(await scriptTables.nth(1).locator('tbody td').getAttribute('data-selection-key'), resultMeta.key,
+        'Changing presentation through Tools preserves the identity of the same loaded SQL result.');
     await clickWorkspaceTool(scriptPage, '#selection-pointer-count');
     const reviewedTag = scriptPage.locator('#selection-pointer-tag');
     await reviewedTag.waitFor();
@@ -354,6 +357,19 @@ try {
         'A keyless SQL result cannot offer a guessed table route or selection query.');
     await scriptPage.keyboard.press('Escape');
     await scriptPage.keyboard.press('Escape');
+    await runScript('SELECT 1 AS first_value; SELECT 2 AS second_value;');
+    const repeatedResultCell = scriptTables.nth(1).locator('tbody td');
+    await repeatedResultCell.waitFor();
+    assert.notEqual(await repeatedResultCell.getAttribute('data-selection-key'), resultMeta.key,
+        'Executing the identical SQL again creates a distinct snapshot instead of reusing the previous selection.');
+    await clickWorkspaceTool(scriptPage, '#selection-pointer-toggle');
+    await clickWorkspaceTool(scriptPage, '#selection-pointer-count');
+    await scriptDialog.waitFor();
+    assert.equal(await reviewedTag.isVisible(), false,
+        'An older snapshot remains an explanation rather than attaching to an equal-valued new result.');
+    assert.match(await scriptDialog.innerText(), /second_value/);
+    await scriptPage.keyboard.press('Escape');
+    await scriptPage.keyboard.press('Escape');
     const absentTable = '__govern_missing_selection_smoke_' + Date.now();
     const partial = await runScript('SELECT 1 AS before_error; SELECT * FROM `' + absentTable + '`; SELECT 3 AS not_run;');
     assert.equal(partial.statements.length, 1);
@@ -363,10 +379,10 @@ try {
     assert.deepEqual(await scriptTables.locator('th').allTextContents(), ['before_error']);
     assert.deepEqual(await scriptTables.locator('td').allTextContents(), ['1']);
     assert.match(await scriptPage.locator('.query-result .notice-error').innerText(), /(?:statement|opdracht) 2/i);
-    assert.equal(scriptPosts.length, 2);
+    assert.equal(scriptPosts.length, 3);
     assert.ok(scriptPosts.every(request => new URL(request.url).searchParams.get('action') === 'query'
         && typeof request.body.sql === 'string' && request.body.sql.startsWith('SELECT ')),
-    'The script compatibility probes only send the two explicit read-only SQL scripts.');
+    'The script compatibility probes only send the three explicit read-only SQL scripts.');
     await scriptPage.close();
     assert.deepEqual(errors, [], 'The selection flow has no uncaught browser errors.');
     console.log('PASS: arbitrary UI/data selection, Shift toggle, three-second tags, parent path, exact and combined explanations, modal focus, language continuity, safe text, schema input separation and mobile appearance.');

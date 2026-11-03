@@ -122,6 +122,7 @@ let currentScope;
 let bootstrapController;
 let routeVersion = 0;
 let recordSnapshotId = 0;
+const queryResultSnapshots = new WeakMap();
 const companion = createWorkspaceCompanion({onSelect: async context => {
     if (databaseBusy() || state.switchingDatabase) { toast(t('app.databases.busy'), 'error'); return; }
     if (context.database !== getDatabase()) await switchDatabase(context.database);
@@ -1555,7 +1556,10 @@ async function renderResearch(scope) {
         }
     });
     const resultTable = (data, label = t('app.core.research.resultTitle')) => {
-        const snapshot = ++recordSnapshotId;
+        // Presentation remounts keep this response's identity. A new execution
+        // returns a different object even when all of its values are equal.
+        if (!queryResultSnapshots.has(data)) queryResultSnapshots.set(data, ++recordSnapshotId);
+        const snapshot = queryResultSnapshots.get(data);
         const resultRow = (record, index) => ({kind: 'row', key: 'query-result:' + snapshot + ':' + index,
             label, record, snapshot: true, primaryKey: [], truncated: Boolean(data.truncated)});
         return dataTable(data.columns, data.rows, {
