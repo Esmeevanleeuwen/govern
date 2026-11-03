@@ -72,6 +72,17 @@ const viewportState = current => current.locator('#schema-viewport').evaluate(ca
 });
 const closeTo = (actual, expected, label, tolerance = .002) => assert.ok(Math.abs(actual - expected) < tolerance,
     label + ': ' + actual + ' versus ' + expected);
+const canvasAppearance = sceneSelector => page.locator(sceneSelector).evaluate(scene => {
+    const surface = getComputedStyle(scene);
+    const grid = getComputedStyle(scene.querySelector('.workspace-canvas-viewport'));
+    const tools = getComputedStyle(document.querySelector('.workspace-canvas-toolbar'));
+    return {
+        surface: surface.backgroundImage, color: surface.backgroundColor,
+        radius: surface.borderRadius, height: surface.height, shadow: surface.boxShadow,
+        grid: grid.backgroundImage, gridSize: grid.backgroundSize,
+        tools: {color: tools.backgroundColor, radius: tools.borderRadius, shadow: tools.boxShadow},
+    };
+});
 
 try {
     await load(page);
@@ -90,6 +101,13 @@ try {
     assert.ok(schema.tables.every(table => !Object.hasOwn(table, 'rows') && !Object.hasOwn(table, 'create_sql')),
         'Visualizer metadata contains no table records or unnecessary DDL.');
     assert.equal(await page.locator('[data-schema-node]').count(), schema.tables.length);
+    const schemaAppearance = await canvasAppearance('.schema-scene');
+    await page.locator('[data-database-view="verkennen"]').click();
+    await page.locator('.record-map-scene').waitFor();
+    assert.deepEqual(await canvasAppearance('.record-map-scene'), schemaAppearance,
+        'Switching between Schema and Explore preserves the canvas material, grid, sizing and toolbar style.');
+    await page.locator('[data-database-view="schema"]').click();
+    await page.locator('#schema-search').waitFor({state: 'attached'});
     const renderedColumns = await page.locator('[data-schema-node]').evaluateAll(nodes =>
         nodes.map(node => ({name: node.dataset.schemaNode,
             columns: [...node.querySelectorAll('[data-schema-column]')].map(column => column.dataset.schemaColumn)})));

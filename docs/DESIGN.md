@@ -406,6 +406,16 @@ those groups together above the canvas, with consistent alignment and wrapping.
 Zoom controls must not cover table fields or move below a large diagram.
 Put table/relationship counts and the PK/FK legend in a compact canvas footer.
 
+Schema and Explore share the canvas material in `canvas-workspace.css`: the same
+accent/violet glow, low-contrast 22 px dot grid, elevation, corner radii and
+660 px height (630 px on compact screens). Both use the available workspace
+width and the same compact Database heading. Panning moves each grid with its
+diagram. Tables and records use opaque shared panel material with a clear
+selected state, and their local toolbars use the same surface, spacing and
+control states. Theme, reduced transparency and forced colours apply to both.
+Schema keeps its grouped toolbar above the diagram and its persistent table
+explorer; its table positions, selected table and navigation remain intact.
+
 ### Record canvas
 
 Use the unified Explore behaviour above. Start from one actual record and

@@ -734,6 +734,7 @@ function render() {
     if (location.name !== 'verkennen') companion.select(null);
     if (/^#verbanden(?:\?|$)/.test(window.location.hash)) history.replaceState(null, '', routeHash('verkennen', Object.fromEntries(location.params)));
     page.classList.toggle('explore-page', location.name === 'verkennen');
+    page.classList.toggle('canvas-page', location.name === 'verkennen' || location.name === 'schema');
     if (!state.bootstrap && location.name !== 'instellingen') {
         if (state.connectionError) page.replaceChildren(heading(t('app.core.connection.eyebrow'), t('app.core.connection.title'), t('app.core.connection.help')), errorPanel(state.connectionError, () => refreshBootstrap()));
         return;

@@ -215,6 +215,7 @@ De onderdelen hebben een kleine, duidelijke taak:
 | `query-builder.js` | Het tijdelijke visuele queryontwerp en de toegepaste versie |
 | `schema-model.js` en `schema-visualizer.js` | Live relaties, diagramindeling en interactieve schemaverkenning |
 | `record-map.js`, `record-map.css` en `record-map-messages.js` | Eén Explore-canvas, bronbibliotheek, vragen en inspecteur |
+| `canvas-workspace.css` | Gedeelde canvasachtergrond, puntraster, afmetingen, kaarten en werkbalkmaterialen voor Schema en Explore |
 | `record-map-model.js` | Scoped recordidentiteit, selectie en lokale canvaspresentatie met begrensde Undo |
 | `RecordMap.php` | Alleen-lezen recordkeuze, inspectie en gepagineerde expansie van echte foreign keys |
 | `RecordExplorer.php` | Het behouden `GET explore`-contract voor bestaande clients |
@@ -501,6 +502,15 @@ Schema groepeert tabeldetails (`#structuur`) en het diagram (`#schema`) onder
 het diagram worden geselecteerd. Vanuit het diagram blijven Records en
 tabeldetails bereikbaar voor de gekozen tabel. De visualizer gebruikt dezelfde glasmaterialen, vertaalsleutels
 en instellingen als de andere schermen.
+
+Schema plaatst het diagram in een afzonderlijke `schema-scene`, zodat de
+achtergrondgloed losstaat van het verschuivende puntraster. Schema en Explore
+gebruiken dezelfde `workspace-canvas-scene`, `workspace-canvas-viewport` en
+`workspace-canvas-toolbar`-stijlen uit `canvas-workspace.css`. Dat bestand wordt
+na de afzonderlijke componentstijlen geladen. Dezelfde tokens regelen hoogte,
+afronding, schaduw en kleur in licht/donker en met minder transparantie. De
+transformatie van de schemaviewport werkt ook de rasterpositie bij. Dit wijzigt
+geen catalogusvragen, recordsleutels, opgeslagen posities of databasegegevens.
 
 `GET schema` haalt de metadata in drie gebonden catalogusqueries op via de
 leesverbinding. Alleen gedeclareerde foreign keys leveren verbindingen op;

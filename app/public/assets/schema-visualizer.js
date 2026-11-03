@@ -102,13 +102,13 @@ export function mountSchemaVisualizer(root, {data, state = {}, contextRoot, onSe
     }, {
         id: 'schema-refresh', symbol: 'refresh', 'aria-label': t('app.schema.refresh'),
     }) : null;
-    const toolbar = el('div', {class: 'schema-toolbar', role: 'group', 'aria-label': t('app.schema.panelTitle')},
+    const toolbar = el('div', {class: 'schema-toolbar workspace-canvas-toolbar', role: 'group', 'aria-label': t('app.schema.panelTitle')},
         group('app.schema.groupDisplay', 'schema-display-controls', el('label', {class: 'schema-filter'}, neighborhood, t('app.schema.neighborhood')), columnsToggle),
         group('app.schema.groupLayout', 'schema-layout-controls', button(t('app.schema.arrangeShort'), reset, {id: 'schema-reset', symbol: 'layout', 'aria-label': t('app.schema.arrangeLabel')})),
         zoomControls,
         group('app.schema.groupSupport', 'schema-support-controls', refreshButton, areaHelp.button));
     const help = el('p', {id: 'schema-interaction-help', class: 'small muted schema-help'}, t('app.schema.interactionHelp'));
-    const canvas = el('div', {id: 'schema-viewport', class: 'schema-viewport', role: 'region', tabindex: '0', 'aria-label': t('app.schema.canvas'), 'aria-describedby': 'schema-interaction-help schema-canvas-help'});
+    const canvas = el('div', {id: 'schema-viewport', class: 'schema-viewport workspace-canvas-viewport', role: 'region', tabindex: '0', 'aria-label': t('app.schema.canvas'), 'aria-describedby': 'schema-interaction-help schema-canvas-help'});
     for (const [control, purpose] of [[search, 'schemaSearch'], [zoomOut, 'schemaZoom'], [zoomIn, 'schemaZoom'],
         [fitButton, 'schemaFit'], [columnsToggle, 'schemaColumns'], [neighborhood, 'schemaConnections'],
         [refreshButton, 'schemaRefresh'], [toolbar.querySelector('#schema-reset'), 'schemaArrange'],
@@ -127,7 +127,8 @@ export function mountSchemaVisualizer(root, {data, state = {}, contextRoot, onSe
     const tablePanel = el('section', {id: 'schema-table-panel', 'aria-label': t('app.schema.tables')},
         el('label', {class: 'schema-explorer-search'}, el('span', {class: 'sr-only'}, t('app.schema.search')), search), count, index);
     if (contextRoot) contextRoot.replaceChildren(tablePanel, selected);
-    const layout = el('div', {class: 'schema-layout schema-unified-layout'}, el('div', {class: 'schema-board'}, canvas,
+    const scene = el('div', {class: 'schema-scene workspace-canvas-scene'}, canvas);
+    const layout = el('div', {class: 'schema-layout schema-unified-layout'}, el('div', {class: 'schema-board'}, scene,
         el('p', {id: 'schema-canvas-help', class: 'sr-only'}, t('app.schema.canvasHelp'))));
     const noMatches = el('div', {class: 'schema-no-matches', hidden: true}, el('p', {}, t('app.schema.noMatches')),
         button(t('app.schema.showAll'), () => { state.neighborhood = false; neighborhood.checked = false; draw(); fit(); }));
@@ -191,6 +192,7 @@ export function mountSchemaVisualizer(root, {data, state = {}, contextRoot, onSe
     function transform() {
         const {x, y, zoom} = state.viewport;
         world.style.transform = `translate(${x}px, ${y}px) scale(${zoom})`;
+        canvas.style.backgroundPosition = `${x % 22}px ${y % 22}px`;
         zoomValue.textContent = Math.round(zoom * 100) + '%';
         zoomOut.disabled = zoom <= .12;
         zoomIn.disabled = zoom >= 1.75;

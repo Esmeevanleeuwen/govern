@@ -3,6 +3,28 @@
 Stand van de controles: **3 november 2026**. Eerdere resultaten hieronder horen
 bij hun beschreven wijziging en zijn niet automatisch opnieuw uitgevoerd.
 
+## Gelijke canvasvormgeving voor Schema en Explore
+
+De echte frontendmodules zijn met vaste, geïsoleerde voorbeeldmetadata en
+records in Chromium gecontroleerd. De berekende achtergrond, puntraster,
+afmetingen, afronding, schaduw en werkbalkmaterialen zijn tussen beide
+weergaven gelijk in Nederlands/Engels, licht/donker en op 1440, 768 en 320 px.
+Geselecteerde kaarten houden een zichtbare accentmarkering. Het raster volgt
+het verschuiven van de tekening.
+
+Tabelkeuze, zoeken, verbindingsfilter, kolommen, zoomknoppen, wielzoom,
+toetsenbordverschuiving, passend maken, Help met focusherstel, verversen en de
+Explore-selectie/panelen slagen. Ook minder transparantie, systeemcontrast,
+aanraakdoelen van 44 px en een leeg schema zijn gecontroleerd. Geen
+JavaScriptfouten of private databaseverzoeken. De bestaande schema-browserproef
+bevat nu een controle van de gedeelde vormgeving bij het wisselen van weergave.
+
+De schemamodel- en navigatieproeven (**26** en **21** controles), recordkaart-
+en canvasmodelproeven, JavaScript-syntax, vertalingen en `git diff --check`
+slagen. De lokale browsercontrole gebruikt de echte modules met fixtures;
+de PHP/databasekoppeling is hierbij niet lokaal opnieuw uitgevoerd. De
+volledige CI-uitslag hoort bij de betreffende commit.
+
 ## Vernieuwde vormgeving van de startpagina
 
 De publieke HTML en echte modules zijn in Chromium nagekeken in Nederlands en

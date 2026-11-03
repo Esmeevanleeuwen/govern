@@ -56,7 +56,7 @@ export function mountRecordMap(root, {state = {}, tables = [], scopeKey = '', in
     const questions = el('details', {class: 'record-map-popover', id: 'record-map-questions'}, el('summary', {}, text('questions')), questionList);
     const status = el('p', {class: 'record-map-status sr-only', role: 'status', 'aria-live': 'polite'});
     const zoomValue = el('output', {'aria-label': text('map')});
-    const viewport = el('div', {class: 'record-map-viewport', tabindex: '0', 'aria-label': text('map'), 'aria-describedby': 'record-map-help'});
+    const viewport = el('div', {class: 'record-map-viewport workspace-canvas-viewport', tabindex: '0', 'aria-label': text('map'), 'aria-describedby': 'record-map-help'});
     const world = el('div', {class: 'record-map-world'});
     const svg = svgElement('svg', {class: 'record-map-svg', role: 'group', 'aria-label': text('map')});
     const nodesRoot = el('div', {class: 'record-map-nodes'});
@@ -96,10 +96,10 @@ export function mountRecordMap(root, {state = {}, tables = [], scopeKey = '', in
     const minimap = el('button', {type: 'button', class: 'record-map-minimap', 'aria-label': text('fit'), on: {click: fit}}, minimapSvg);
     const accessibleNodes = el('div', {id: 'record-map-node-list'}), accessibleEdges = el('div', {class: 'record-map-edge-list'});
     const accessible = el('details', {class: 'record-map-accessible-list'}, el('summary', {}, text('recordList')), accessibleNodes, accessibleEdges);
-    const scene = el('section', {class: 'record-map-scene', 'aria-label': text('map')}, viewport, canvasEmpty, sceneHeading, quick, picker, inspector,
+    const scene = el('section', {class: 'record-map-scene workspace-canvas-scene', 'aria-label': text('map')}, viewport, canvasEmpty, sceneHeading, quick, picker, inspector,
         selectionBar, dock, minimap, el('div', {class: 'record-map-canvas-caption'}, summary, el('span', {id: 'record-map-help'}, text('canvasHelp'))));
     const shell = el('section', {class: 'record-map record-map-canvas', 'data-flexible-explorer': '', 'data-layout': state.layout || 'manual'},
-        el('div', {class: 'record-map-toolbar'}, el('p', {class: 'record-map-side-help'}, text('partial')),
+        el('div', {class: 'record-map-toolbar workspace-canvas-toolbar'}, el('p', {class: 'record-map-side-help'}, text('partial')),
             el('div', {class: 'record-map-tools'}, sourcesToggle, filters, questions,
                 companion ? smallButton(t('app.companionLaunch.open'), () => companion.open('compare'), {id: 'explorer-companion-open', symbol: 'monitor'}) : null,
                 companion ? smallButton(t('app.companionLaunch.radar'), () => companion.open('radar'), {id: 'explorer-companion-radar', symbol: 'network'}) : null,

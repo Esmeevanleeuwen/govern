@@ -822,7 +822,7 @@ input[type="color"]::-moz-color-swatch { border: 0; border-radius: 6px; }
 .schema-constraint-name { font-size: 12px; overflow-wrap: anywhere; color: var(--muted); }
 .schema-pairs { list-style: none; padding: 0; margin: 0; display: grid; gap: 4px; font-size: 12px; overflow-wrap: anywhere; }
 .schema-board { min-width: 0; }
-.schema-viewport { height: min(70vh, 760px); min-height: 440px; overflow: hidden; position: relative; border-radius: 20px; background: radial-gradient(circle at 1px 1px, var(--g-muted) .65px, transparent 1px) 0 0 / 22px 22px, var(--g-glass); box-shadow: var(--g-input-depth); touch-action: none; cursor: grab; isolation: isolate; }
+.schema-viewport { overflow: hidden; position: relative; touch-action: none; cursor: grab; }
 .schema-viewport.is-panning { cursor: grabbing; }
 .schema-world { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform; }
 .schema-lines { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; color: var(--g-accent-text); }
@@ -854,10 +854,10 @@ input[type="color"]::-moz-color-swatch { border: 0; border-radius: 6px; }
 .schema-legend .badge { font-size: 12px; }
 .schema-legend span:nth-child(2) { margin-right: 12px; }
 .schema-storage { margin-top: 12px; }
-@supports not (backdrop-filter: blur(1px)) { .schema-node, .schema-node-header, .schema-viewport, .schema-no-matches { background: var(--g-panel); } }
-:root[data-reduce-transparency="true"] .schema-node, :root[data-reduce-transparency="true"] .schema-node-header, :root[data-reduce-transparency="true"] .schema-viewport, :root[data-reduce-transparency="true"] .schema-no-matches { background: var(--g-panel); backdrop-filter: none; -webkit-backdrop-filter: none; }
+@supports not (backdrop-filter: blur(1px)) { .schema-node, .schema-node-header, .schema-no-matches { background: var(--g-panel); } }
+:root[data-reduce-transparency="true"] .schema-node, :root[data-reduce-transparency="true"] .schema-node-header, :root[data-reduce-transparency="true"] .schema-no-matches { background: var(--g-panel); backdrop-filter: none; -webkit-backdrop-filter: none; }
 @media (max-width: 1100px) { .schema-layout { grid-template-columns: 200px minmax(0, 1fr); gap: 12px; } .schema-aside { padding: 14px; } }
-@media (max-width: 700px) { .schema-layout { grid-template-columns: minmax(0, 1fr); } .schema-aside { max-height: none; } .schema-index { max-height: 150px; grid-template-columns: repeat(2, minmax(0, 1fr)); } .schema-selected { margin-top: 16px; } .schema-viewport { height: 58vh; min-height: 380px; } .schema-zoom-controls { flex-wrap: wrap; } .schema-toolbar > .button { font-size: 12px; } .schema-zoom-controls .button { min-height: 44px; } }
+@media (max-width: 700px) { .schema-layout { grid-template-columns: minmax(0, 1fr); } .schema-aside { max-height: none; } .schema-index { max-height: 150px; grid-template-columns: repeat(2, minmax(0, 1fr)); } .schema-selected { margin-top: 16px; } .schema-zoom-controls { flex-wrap: wrap; } .schema-toolbar > .button { font-size: 12px; } .schema-zoom-controls .button { min-height: 44px; } }
 @media (forced-colors: active) { .schema-node, .schema-viewport { background: Canvas; box-shadow: none; backdrop-filter: none; outline: 1px solid CanvasText; } .schema-node.is-selected { outline: 3px solid Highlight; } .schema-node-header { background: Canvas; color: CanvasText; } .schema-edge, .schema-edge.is-highlighted { stroke: CanvasText; opacity: 1; } .schema-edge.is-muted { opacity: .6; } .schema-endpoint { fill: CanvasText; } }
 
 /* Persistent schema tools open one adjacent context panel. */
