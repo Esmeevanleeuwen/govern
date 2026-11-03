@@ -1,6 +1,7 @@
 import {request} from './api.js';
 import {t} from './i18n.js';
 import {el, button, errorText} from './ui.js';
+import {attachDialog} from './modal-shell.js';
 import './database-messages.js';
 import './postgres-messages.js';
 
@@ -66,6 +67,7 @@ export function createDatabaseManager({getDatabase, getDatabases, canCreate, isB
         el('footer', {class: 'database-manager-footer'}, cancel));
     dialog.append(form);
     document.body.append(dialog);
+    attachDialog(dialog, {handle: dialog.querySelector('.database-manager-heading')});
 
     function updateControls() {
         const selected = getDatabases().find(item => workspaceKey(item) === existing.value);

@@ -3,6 +3,37 @@
 Stand van de controles: **3 november 2026**. Eerdere resultaten hieronder horen
 bij hun beschreven wijziging en zijn niet automatisch opnieuw uitgevoerd.
 
+## Navigatie en herbruikbare vensters
+
+De werkplek heeft een compactere scrollbar in de zijbalk, een verborgen
+document-scrollbar met behoud van scrollen, een bijgewerkte databasekiezer en
+een gedeelde vensterlaag. Explore opent onafhankelijke alleen-lezen
+recordvensters; bestaande native dialogen behouden hun annuleringscontroles.
+
+Uitgevoerd tegen het afzonderlijke PostgreSQL-/MariaDB-testproject:
+
+- De navigatieproef slaagt. Visueel gecontroleerd op 1440, 1024, 768, 375 en
+  320 px, met werkende PageDown, donkere weergave en verminderde transparantie.
+- De bestaande browserproeven voor Guided, Detailed, werkplek, selectie,
+  schemahulp, AI en homepage/accounts slagen.
+- De nieuwe vensterproef slaagt met echte records: meerdere vensters, focus en
+  stapeling, slepen en Alt+pijltoetsen, buitenklik/Escape, 320 px, terugkeer van
+  focus, behoud van de oorspronkelijke scope, weigeren van een verkeerd
+  schema-antwoord, annuleren van late antwoorden en de bevestiging bij
+  onopgeslagen rijwijzigingen. Laad-/foutteksten en de werkende retryknop
+  vertalen zonder opnieuw te laden. Deze proef doet geen database-POSTs.
+- De importproef heeft een echt SQL-bestand via officiële phpMyAdmin geïmporteerd
+  en de ontstane tabellen, verwijzing en exacte records opnieuw gelezen. Ook
+  lopende databaseaanmaak en het behoud van een actief importformulier bij
+  taalwisseling zijn gecontroleerd.
+- De nieuwe geometrieproef en de bestaande record-/guide-modelproeven slagen,
+  evenals i18n, **1.072** tweetalige berichten en JavaScript-/PHP-syntaxcontroles
+  voor de gewijzigde componenten. Een onafhankelijke bronreview vond geen
+  blokkerende defecten; laad-, fout- en retryteksten vertalen nu ook ter plekke.
+
+Deze wijziging raakt geen backendcontract of databaserechten. De volledige
+CI-workflow en een echte Windows-browser zijn niet lokaal opnieuw uitgevoerd.
+
 ## Guided / Stap voor stap voor collega's
 
 De recordverkenner heeft nu een standaard begeleide kijkmodus met categorieën,

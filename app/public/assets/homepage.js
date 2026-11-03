@@ -1,6 +1,7 @@
 import './homepage-messages.js';
 import {getLanguage, setLanguage, t} from './i18n.js';
 import {getPreferences, updatePreferences} from './preferences.js';
+import {attachDialog} from './modal-shell.js';
 
 // Old bookmarks continue to open their database workspace, including its query.
 if (/^#(?:overzicht|gegevens|structuur|schema|onderzoeken|experimenten|instellingen)(?:\?|$)/.test(location.hash)) {
@@ -144,12 +145,8 @@ $$('[data-home-open]').forEach(button => button.addEventListener('click', () => 
     dialog.showModal();
 }));
 $$('.home-dialog').forEach(dialog => {
+    attachDialog(dialog, {handle: dialog.querySelector('.home-dialog-header') || dialog.querySelector('h2')});
     dialog.addEventListener('close', () => {dialogOpener?.focus(); dialogOpener = null;});
-    dialog.addEventListener('click', event => {
-        if (event.target !== dialog) return;
-        const rect = dialog.getBoundingClientRect();
-        if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) dialog.close();
-    });
 });
 
 $$('[data-home-os]').forEach(button => {

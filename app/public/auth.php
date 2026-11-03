@@ -17,6 +17,7 @@ header("Content-Security-Policy: frame-ancestors 'self'; base-uri 'self'; form-a
     <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
     <link rel="stylesheet" href="/assets/styles.css">
     <link rel="stylesheet" href="/assets/auth.css">
+    <link rel="stylesheet" href="/assets/modal-shell.css">
     <script type="module" src="/assets/account.js"></script>
 </head>
 <body class="account-body" data-account-page="auth">

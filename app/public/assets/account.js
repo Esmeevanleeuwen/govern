@@ -2,6 +2,7 @@ import './account-messages.js';
 import {t, setLanguage, getLanguage} from './i18n.js';
 import {getPreferences, updatePreferences} from './preferences.js';
 import {accountRequest} from './session.js';
+import {attachDialog} from './modal-shell.js';
 
 const page = document.body.dataset.accountPage;
 const form = document.querySelector('#account-form');
@@ -213,8 +214,11 @@ function approveDialog(user, opener) {
         try { await accountRequest('approve', {user_id: user.id}); dialog.close(); showNotice('approved', 'success'); await loadRequests(); }
         catch (error) { dialog.close(); showError(error); }
     });
-    dialog.addEventListener('close', () => { dialog.remove(); if (opener.isConnected) opener.focus(); }, {once: true});
-    actions.append(cancel, approve); dialog.append(heading, text, actions); document.body.append(dialog); dialog.showModal(); cancel.focus();
+    actions.append(cancel, approve); dialog.append(heading, text, actions); document.body.append(dialog);
+    const shell = attachDialog(dialog, {handle: heading});
+    dialog.addEventListener('cancel', event => { if (approve.disabled) event.preventDefault(); });
+    dialog.addEventListener('close', () => { shell.destroy(); dialog.remove(); if (opener.isConnected) opener.focus(); }, {once: true});
+    dialog.showModal(); cancel.focus();
 }
 
 document.querySelector('#reload-requests')?.addEventListener('click', loadRequests);

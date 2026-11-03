@@ -149,6 +149,15 @@ De browservoorkeur `govern.explorer.mode.v1` bevat uitsluitend `guided` of
 `detailed`. Bij geblokkeerde opslag blijft de keuze voor deze pagina in geheugen.
 Records, sleutels en antwoorden worden hiervoor niet in localStorage gezet.
 
+### Gedeelde vensterlaag
+
+`modal-shell.js` beheert stapeling, slepen, focus, buitenklik en annulering los
+van inhoud en gegevensbronnen. `attachDialog` vult native dialogen aan met
+behoud van cancel- en opslagcontroles. `createModal` maakt ook meerdere niet
+blokkerende vensters met bevroren context, eigen AbortSignal en opruiming per
+laadcyclus. `record-window.js` koppelt die laag aan de bestaande Explore-GET en
+valideert scope, tabel en exacte sleutel. Zie [Vensters en modalinhoud](MODALS.md).
+
 ### Bestaande MariaDB-werkplek
 
 De geselecteerde werkdatabase is de bron voor zowel Govern als phpMyAdmin.

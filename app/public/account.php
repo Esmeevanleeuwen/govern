@@ -14,6 +14,7 @@ $escape = static fn (string $text): string => htmlspecialchars($text, ENT_QUOTES
     <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
     <link rel="stylesheet" href="/assets/styles.css">
     <link rel="stylesheet" href="/assets/auth.css">
+    <link rel="stylesheet" href="/assets/modal-shell.css">
     <script type="module" src="/assets/account.js"></script>
 </head>
 <body class="account-body" data-account-page="account">

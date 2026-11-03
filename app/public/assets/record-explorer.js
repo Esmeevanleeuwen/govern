@@ -3,6 +3,7 @@ import {el, icon, button, badge, loading, empty, errorPanel, notice, number} fro
 import {t, hasMessage} from './i18n.js';
 import {recordPositions, visibleNeighborhood, valueText, tableColor, RECORD_WIDTH, RECORD_HEIGHT} from './record-explorer-model.js';
 import {friendlyName, recordLabel, connectedGroups, getExplorerMode, setExplorerMode, connectionDescription, renderExplorerGuide} from './explorer-guide.js';
+import {openRecordWindow} from './record-window.js';
 import './explorer-messages.js';
 
 let instanceId = 0;
@@ -311,7 +312,11 @@ export function mountRecordExplorer(root, {database, tables = [], state = {}, in
                 'aria-pressed': 'false', on: {click: () => selectNode(node.id)}}, el('span', {class: 'record-explorer-color-dot', 'data-color': tableColor(node.table)}),
                 el('span', {}, el('strong', {}, itemName(node)), guided() ? null : el('small', {class: 'record-explorer-key'}, Object.entries(node.key || {}).map(([key, value]) => key + '=' + valueText(value)).join(' · '))),
                 node.id === data.center ? badge(t(guided() ? 'app.explorerGuide.focus' : 'app.explorer.focus')) : null);
-            const row = el('tr', {'data-explorer-row': node.id}, el('td', {}, recordButton), el('td', {class: 'record-explorer-table-name'}, categoryName(node.table)),
+            const openWindow = button(t('app.recordWindow.openRecord', {label: itemName(node)}), () => {
+                if (!busy) openRecordWindow({database, table: node.table, key: node.key, guided: guided()});
+            }, {symbol: 'external', className: 'icon-button', 'data-explorer-window': node.id});
+            openWindow.querySelector('span').className = 'sr-only';
+            const row = el('tr', {'data-explorer-row': node.id}, el('td', {}, el('div', {class: 'record-explorer-row-actions'}, recordButton, openWindow)), el('td', {class: 'record-explorer-table-name'}, categoryName(node.table)),
                 el('td', {}, number(visible.edges.filter(edge => edge.source === node.id || edge.target === node.id).length)));
             body.append(row); rows.set(node.id, row);
         }
@@ -368,7 +373,9 @@ export function mountRecordExplorer(root, {database, tables = [], state = {}, in
         drawer.setAttribute('data-explorer-selected', node.id);
         drawer.append(el('p', {class: 'record-explorer-detail-table'}, categoryName(node.table)), el('h3', {tabindex: '-1'}, itemName(node)),
             button(t(node.id === data.center ? guided() ? 'app.explorerGuide.alreadyFocus' : 'app.explorer.alreadyFocus' : guided() ? 'app.explorerGuide.follow' : 'app.explorer.expand'), () => load(node.table, node.key, true, true),
-                {id: 'explorer-expand', symbol: 'network', disabled: busy || node.id === data.center}));
+                {id: 'explorer-expand', symbol: 'network', disabled: busy || node.id === data.center}),
+            button(t('app.recordWindow.open'), () => openRecordWindow({database, table: node.table, key: node.key, guided: guided()}),
+                {id: 'explorer-open-window', symbol: 'external', disabled: busy}));
         if (guided()) {
             const identifiers = new Set(Object.keys(node.key).filter(name => /(^id$|_id$|^uuid$)/i.test(name)));
             for (const edge of data.edges) {

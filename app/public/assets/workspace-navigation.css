@@ -1,4 +1,19 @@
 /* One glass navigation surface: area rail, object explorer, independent workspace. */
+/* Keep document scrolling available without showing a second scrollbar beside
+   the independently scrollable navigation and data regions. */
+.workspace-document, .workspace-page { scrollbar-width: none; }
+.workspace-document::-webkit-scrollbar, .workspace-page::-webkit-scrollbar { display: none; width: 0; height: 0; }
+.unified-sidebar :is(.navigation-rail, .workspace-context-content, .catalog-list) {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--g-muted) 38%, transparent) transparent;
+}
+.unified-sidebar :is(.navigation-rail, .workspace-context-content, .catalog-list)::-webkit-scrollbar { width: 4px; height: 4px; }
+.unified-sidebar :is(.navigation-rail, .workspace-context-content, .catalog-list)::-webkit-scrollbar-track { background: transparent; }
+.unified-sidebar :is(.navigation-rail, .workspace-context-content, .catalog-list)::-webkit-scrollbar-thumb {
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--g-muted) 38%, transparent);
+}
+.unified-sidebar :is(.navigation-rail, .workspace-context-content, .catalog-list)::-webkit-scrollbar-thumb:hover { background: var(--g-accent-text); }
 .sidebar.unified-sidebar {
     --rail-width: 88px;
     --context-width: 260px;
@@ -47,11 +62,19 @@
 .workspace-related code { font-size: 12px; overflow-wrap: anywhere; }
 .workspace-related small { display: block; color: var(--muted); font-size: 11px; overflow-wrap: anywhere; }
 .workspace-related .icon { width: 15px; height: 15px; margin-top: 3px; }
-.topbar-brand { font-size: 23px; font-weight: 650; letter-spacing: -.8px; }
-.topbar-project { min-width: 0; }
+.workspace-page .topbar { flex-wrap: wrap; gap: 14px 20px; }
+.topbar-brand { font-size: 23px; font-weight: 650; letter-spacing: -.8px; flex: none; }
+.topbar-project { min-width: 0; max-width: 100%; }
 .topbar-project > strong { display: block; font-size: 12px; font-weight: 500; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.topbar-project .connection-card { font-size: 11px; margin: 1px 0 0; }
-.topbar-location { min-width: 0; }
+.topbar-project .connection-card { font-size: 12px; margin: 5px 0 0 11px; gap: 6px; line-height: 1.3; }
+.topbar-project .database-picker-group { gap: 3px; padding: 3px; border-radius: 16px; background: linear-gradient(145deg, var(--g-shine), transparent), var(--g-frost); box-shadow: var(--g-control-depth); }
+.topbar-project .database-picker-group .database-picker { flex: 1; max-width: 340px; min-height: 36px; padding: 2px 8px 2px 4px; gap: 9px; border-radius: 12px; background: transparent; box-shadow: none; }
+.topbar-project .database-picker-group .database-picker select { width: 100%; max-width: none; min-height: 32px; font-size: 13px; font-weight: 500; text-overflow: ellipsis; }
+.topbar-project #database-picker-icon { width: 28px; height: 28px; flex: none; display: grid; place-items: center; border-radius: 9px; background: var(--g-soft); }
+.topbar-project #database-picker-icon .icon { color: var(--g-accent-text); }
+.topbar-project .database-manager-toggle { width: 36px; height: 36px; min-width: 36px; min-height: 36px; padding: 8px; border-radius: 12px; background: var(--g-glass); color: var(--g-accent-text); }
+.topbar-project .database-manager-toggle:hover:not(:disabled) { background: var(--g-soft); }
+.topbar-location { min-width: 0; max-width: 100%; }
 .topbar-actions { flex: 0 1 auto; flex-wrap: wrap; }
 .page-heading.database-heading { display: flex; flex-direction: column; align-items: stretch; gap: 15px; margin-bottom: 18px; }
 .database-heading-main { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
@@ -96,7 +119,10 @@
     .workspace-context { padding-right: 12px; }
     .workspace-context-heading h2 { font-size: 16px; }
     .workspace-context-heading .icon-button { width: 34px; min-width: 34px; }
-    .topbar-project { display: none; }
+    .workspace-page .topbar-location { flex-wrap: wrap; flex: 1 1 100%; gap: 8px 12px; }
+    .topbar-project { display: block; flex: 1 1 220px; }
+    .topbar-project .database-picker-group .database-picker { max-width: none; }
+    .topbar-project .database-picker-group .database-picker select { font-size: 16px; }
     .database-viewbar { flex-wrap: wrap; gap: 10px; }
     .database-viewbar > .database-views { flex: 1 1 100%; }
     .database-selection { justify-content: flex-start; }
@@ -107,6 +133,8 @@
     .topbar-location { flex: 1 1 auto; }
     .topbar-actions { gap: 3px; }
     .topbar-actions > .button { padding: 9px 10px; }
+    .topbar-actions #ai-toggle { min-width: 38px; }
+    .topbar-actions #ai-toggle .icon { display: block; }
     .page-heading.database-heading { gap: 12px; margin-bottom: 15px; }
     .database-heading h1 { font-size: 24px; }
     .database-views { width: 100%; }
@@ -117,8 +145,13 @@
 }
 @media (pointer: coarse) {
     .workspace-context .catalog-item, .workspace-related, .snapshot-index-item, .database-view, .workspace-context-heading .icon-button { min-height: 44px; }
+    .topbar-project .database-manager-toggle { min-width: 44px; min-height: 44px; }
+    .topbar-project .database-picker-group .database-picker { min-height: 44px; }
+    .topbar-actions #ai-toggle { min-width: 44px; min-height: 44px; }
 }
 @media (forced-colors: active) {
     .database-view.active { outline: 2px solid Highlight; }
     .sidebar.unified-sidebar { background: Canvas; box-shadow: none; }
+    .unified-sidebar :is(.navigation-rail, .workspace-context-content, .catalog-list) { scrollbar-color: auto; }
+    .topbar-project .database-picker-group { outline: 1px solid ButtonText; }
 }

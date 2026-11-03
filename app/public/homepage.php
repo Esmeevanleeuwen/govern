@@ -8,6 +8,7 @@
     <title>Govern — Your data. Your next idea.</title>
     <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
     <link rel="stylesheet" href="/assets/homepage.css">
+    <link rel="stylesheet" href="/assets/modal-shell.css">
     <script type="module" src="/assets/homepage.js"></script>
 </head>
 <body class="home-page">

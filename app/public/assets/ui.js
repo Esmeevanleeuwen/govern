@@ -1,5 +1,6 @@
 import {t, getLocale, getLanguage, hasMessage} from './i18n.js';
 import {registerSelection} from './selection-registry.js';
+import {attachDialog} from './modal-shell.js';
 import './ui-messages.js';
 
 export function el(tag, attributes = {}, ...children) {
@@ -205,11 +206,13 @@ export function sqlDisclosure(sql, params) {
     return details;
 }
 
+let confirmationId = 0;
 export function confirmAction({title, description, requiredText, confirmLabel = t('ui.confirm'), danger = false}) {
     return new Promise(resolve => {
         const opener = document.activeElement;
         const openerId = opener?.id;
-        const dialog = el('dialog', {class: 'confirm-dialog', 'aria-labelledby': 'confirmation-title'});
+        const titleId = 'confirmation-title-' + ++confirmationId;
+        const dialog = el('dialog', {class: 'confirm-dialog', 'aria-labelledby': titleId});
         const form = el('form', {method: 'dialog'});
         const submit = el('button', {class: 'button button-' + (danger ? 'danger' : 'primary'), type: 'submit'}, confirmLabel);
         const field = requiredText !== undefined
@@ -217,7 +220,7 @@ export function confirmAction({title, description, requiredText, confirmLabel = 
             : null;
         let confirmed = false;
         form.append(el('div', {class: 'confirm-symbol ' + (danger ? 'danger-text' : '')}, icon(danger ? 'refresh' : 'info')),
-            el('h2', {id: 'confirmation-title'}, title), el('p', {}, description));
+            el('h2', {id: titleId}, title), el('p', {}, description));
         if (field) {
             submit.disabled = true;
             form.append(el('label', {class: 'field-label'}, t('ui.confirmLabel', {value: requiredText}), field));
@@ -239,6 +242,8 @@ export function confirmAction({title, description, requiredText, confirmLabel = 
         }, {once: true});
         dialog.append(form);
         document.body.append(dialog);
+        const shell = attachDialog(dialog, {handle: form.querySelector('h2')});
+        dialog.addEventListener('close', () => shell.destroy(), {once: true});
         dialog.showModal();
         (field || form.querySelector('button')).focus();
     });

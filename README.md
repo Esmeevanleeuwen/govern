@@ -92,6 +92,11 @@ De standaardmodus **Guided / Stap voor stap** helpt collega's met categorieën,
 items en vraagknoppen. Je hoeft geen SQL of recordsleutels in te voeren.
 **Detailed / Details** toont dezelfde gegevens met hun technische informatie.
 
+Met **Open in venster / Open in window** kun je meerdere records naast elkaar
+bekijken. Sleep de titelbalk om ze te verplaatsen. Elk venster houdt zijn eigen
+database en record vast. De [gedeelde vensterlaag](docs/MODALS.md) houdt bediening,
+inhoud en gegevens ophalen apart voor nieuwe uitbreidingen.
+
 Meer over configuratie, schema's en de volgende bouwfasen:
 [PostgreSQL in Govern](docs/POSTGRESQL.md).
 

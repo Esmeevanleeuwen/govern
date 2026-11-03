@@ -3,6 +3,7 @@ import './modal-messages.js';
 import './database-messages.js';
 import {el, icon, button, badge} from './ui.js';
 import {ImportInspectionPanel} from './import-inspection.js';
+import {attachDialog} from './modal-shell.js';
 
 const routes = {
     browse: {table: '/sql', database: '/database/structure'},
@@ -78,6 +79,7 @@ export class DatabaseModal {
             this.onClose?.();
         });
         document.body.append(this.dialog);
+        this.shell = attachDialog(this.dialog, {handle: this.dialog.querySelector('.database-dialog-header')});
     }
 
     /** Translate the shell without reloading an active phpMyAdmin form or SQL draft. */
@@ -268,6 +270,7 @@ export class DatabaseModal {
     }
 
     toggleExpanded() {
+        this.shell.resetPosition();
         const expanded = this.dialog.classList.toggle('expanded');
         this.expand.replaceChildren(icon(expanded ? 'collapse' : 'expand'));
         this.expand.setAttribute('aria-pressed', String(expanded));

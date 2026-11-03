@@ -113,6 +113,29 @@ root, filters, selected item or database scope. Persist only the mode preference
 in the browser, with an in-memory fallback when storage is unavailable. Guided
 question actions remain keyboard accessible and fit a 320 px viewport.
 
+## Shared windows
+
+Keep window chrome separate from content and data loading. The shared modal
+shell owns dragging, viewport bounds, stacking, outside dismissal and focus;
+feature modules configure their captured context, requests and rendering. See
+[window configuration](MODALS.md).
+
+Explore offers independent read-only record windows for comparison. A window
+keeps its original database/schema and exact key when the workspace navigates.
+Show that source explicitly and refresh only on request. Clicking a peer brings
+it forward; opening another window preserves existing peers. Clicking outside
+all windows or pressing Escape closes the top window. Drag the titlebar or use
+Alt+Arrow keys. Window bodies scroll while their headers remain reachable.
+
+Editing and confirmation dialogs remain blocking and preserve existing dirty
+form and in-flight save guards through the shared cancel route. The desktop AI
+panel remains docked. Its mobile modal follows outside dismissal. Never reload
+the phpMyAdmin iframe to update window chrome, position, language or theme.
+
+Workspace navigation uses a slim muted scrollbar. Hide the outer document
+scrollbar while retaining document, keyboard and touch scrolling. Keep the
+database picker, add action and connection status together, including on mobile.
+
 ## Interactive design reference
 
 Use **EN / NL**, **Settings** and **Edit layout** to explore the design. The interactive reference remains on the Govern Page. Production screens use the real catalog, research service and restore points. Keep these written rules beside a visual reference when designing a new screen.

@@ -1,5 +1,6 @@
 import {el, icon, button} from './ui.js';
 import {t} from './i18n.js';
+import {attachDialog} from './modal-shell.js';
 import {describeSelection, selectionAncestors, registeredSelections} from './selection-registry.js';
 import {explainSelection} from './selection-content.js';
 import './selection-messages.js';
@@ -353,6 +354,7 @@ export class SelectionPointer {
             el('header', {class: 'selection-pointer-dialog-head'}, el('div', {}, this.title, this.scope), this.close), this.body,
             el('footer', {class: 'selection-pointer-dialog-foot'}, this.askAi, this.back));
         document.body.append(this.dialog);
+        this.dialogShell = attachDialog(this.dialog, {handle: '.selection-pointer-dialog-head'});
         this.dialog.addEventListener('close', () => {
             this.hideTag();
             const fallback = this.selected.size ? this.count : this.toggle;
@@ -369,10 +371,6 @@ export class SelectionPointer {
                 event.preventDefault(); (event.shiftKey ? last : first)?.focus({preventScroll: true});
             }
         });
-        let outside = false;
-        const isOutside = event => { const b = this.dialog.getBoundingClientRect(); return event.target === this.dialog && (event.clientX < b.left || event.clientX > b.right || event.clientY < b.top || event.clientY > b.bottom); };
-        this.dialog.addEventListener('pointerdown', event => { outside = isOutside(event); });
-        this.dialog.addEventListener('click', event => { if (outside && isOutside(event)) this.dialog.close(); outside = false; });
     }
 
     openMore(items) {
@@ -411,6 +409,7 @@ export class SelectionPointer {
         clearTimeout(this.dwell); clearTimeout(this.hideTimer); cancelAnimationFrame(this.reconcileFrame);
         this.root.classList.remove('selection-pointer-active');
         if (this.dialog.open) this.dialog.close();
+        this.dialogShell.destroy();
         for (const node of [this.controlGroup, this.hint, this.overlay, this.tag, this.dialog, this.live]) node.remove();
     }
 }
