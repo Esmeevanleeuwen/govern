@@ -47,6 +47,21 @@ const ready = async source => {
     }
     await source.locator('#explorer-companion-pin').waitFor();
 };
+/** Wait for the actual restored canvas, including cached selections with no request. */
+const navigateCanvas = async (source, scope, table, selectedId = null) => {
+    await source.evaluate(hash => { location.hash = hash; }, new URL(bookmark(scope, table)).hash);
+    await source.waitForFunction(({scope, table}) => document.querySelector('#database-select')?.value === scope
+        && !document.querySelector('#database-select').disabled && document.querySelector('[data-flexible-explorer]')
+        && document.querySelector('#record-map-table')?.value === table, {scope, table});
+    await ready(source);
+    if (selectedId) {
+        await source.waitForFunction(id => [...document.querySelectorAll('[data-record-node][aria-pressed="true"]')]
+            .some(node => node.dataset.recordNode === id), selectedId);
+        assert.equal(await source.locator('[data-record-node][aria-pressed="true"]').count(), 1,
+            'Returning to a cached canvas restores one exact selected record.');
+    }
+    await source.locator('#explorer-companion-pin:not([disabled])').waitFor();
+};
 const opened = async source => {
     const popup = source.waitForEvent('popup');
     await source.locator('#explorer-companion-open').click();
@@ -241,9 +256,7 @@ try {
     assert.equal(mainRecord.nodes.find(node => node.id === mainRecord.center).key.id, '1');
     assert.equal(await page.locator('#record-map-table').inputValue(), 'demo_organizations',
         'Show on main screen navigates the paired workspace to the exact neighbour.');
-    const returnToSystems = mainResponseFor(page, 'demo_systems');
-    await page.evaluate(hash => { location.hash = hash; }, new URL(bookmark(publicKey, 'demo_systems')).hash);
-    await returnToSystems; await ready(page);
+    await navigateCanvas(page, publicKey, 'demo_systems');
     await candidate(page, reporter.id);
     await companion.locator('#companion-radar-follow').click();
     await radarReady(companion, publicKey, 'demo_systems', '5');
@@ -254,9 +267,9 @@ try {
 
     phase = 'captured database scopes';
     await companion.locator('#companion-radar-freeze').click();
-    const archiveResponse = mainResponseFor(page, 'govern_pg_values');
-    await page.evaluate(hash => { location.hash = hash; }, new URL(bookmark(archiveKey, 'govern_pg_values')).hash);
-    await archiveResponse; await ready(page);
+    await navigateCanvas(page, archiveKey, 'govern_pg_values');
+    const archiveRecordId = await page.locator('[data-record-node][aria-pressed="true"]').getAttribute('data-record-node');
+    assert.ok(archiveRecordId, 'Remember the exact record identity of the archive canvas.');
     assert.equal(await companion.locator('#companion-radar').getAttribute('data-radar-scope'), publicKey);
     await companion.locator('#companion-radar-follow').click();
     await radarReady(companion, archiveKey, 'govern_pg_values', '1');
@@ -309,11 +322,7 @@ try {
     await mariaPin.locator('[data-companion-remove]').click();
     await pinCount(companion, 2);
     await companion.locator('#companion-technical').uncheck();
-    // Returning to an already loaded scope restores its canvas without a new read.
-    await page.evaluate(hash => { location.hash = hash; }, new URL(bookmark(archiveKey, 'govern_pg_values')).hash);
-    await page.waitForFunction(scope => document.querySelector('#database-select')?.value === scope
-        && !document.querySelector('#database-select').disabled && document.querySelector('[data-flexible-explorer]'), archiveKey);
-    await ready(page);
+    await navigateCanvas(page, archiveKey, 'govern_pg_values', archiveRecordId);
     assert.equal(await page.locator('#record-map-inspector h3').first().textContent(), 'Archive-only row',
         'Returning to a cached schema restores its own selected record.');
 
@@ -363,9 +372,7 @@ try {
         finishRadar();
     };
     await companion.route('**/api.php?*', delayRadar);
-    const systemsResponse = mainResponseFor(page, 'demo_systems');
-    await page.evaluate(hash => { location.hash = hash; }, new URL(bookmark(publicKey, 'demo_systems')).hash);
-    await systemsResponse; await ready(page);
+    await navigateCanvas(page, publicKey, 'demo_systems');
     // The main screen remembers its last record, so explicitly choose the delayed root.
     await candidate(page, portal.id);
     await deadline(radarWaiting, 'No delayed radar read.');
@@ -380,9 +387,9 @@ try {
         'A delayed old root does not replace the newer selection.');
     await companion.locator('#companion-tab-compare').click();
     // Restore the archive context for the reopen assertion below.
-    const archiveAgain = mainResponseFor(page, 'govern_pg_values');
-    await page.evaluate(hash => { location.hash = hash; }, new URL(bookmark(archiveKey, 'govern_pg_values')).hash);
-    await archiveAgain; await ready(page);
+    await navigateCanvas(page, archiveKey, 'govern_pg_values', archiveRecordId);
+    assert.equal(await page.locator('#record-map-inspector h3').first().textContent(), 'Archive-only row',
+        'Late radar reads leave the restored archive selection intact.');
 
     await companion.setViewportSize({width: 320, height: 800});
     await companion.waitForFunction(() => document.documentElement.scrollWidth <= innerWidth);

@@ -11,7 +11,7 @@ branchehoofden. Hun geschiedenis blijft behouden via mergecommits:
 | Ontwikkellijn | Vastgelegd hoofd | Opgenomen functies |
 | --- | --- | --- |
 | `feature/animated-overview-orb` | `54441ea` | Accounts, PostgreSQL, voorbeelddata, recordverkenning, losse vensters, tweede scherm, Gereedschap en beweging in Overzicht |
-| `feature/flexible-explore-workspace` | `2f8854e` | Flexibel canvas, begeleide vragen, recordkaarten en brononderbouwing van verbindingen |
+| `feature/flexible-explore-workspace` | `4df4178` | Flexibel canvas, begeleide vragen, recordkaarten en brononderbouwing van verbindingen |
 | `feature/native-sql-import-preflight` | `898f0f9` | Eigen SQL-import met voorcontrole, exclusieve onderhoudslock, herstelpunt en nacontrole |
 | `feature/dataset-file-import` | `16c04c6` | CSV/TXT, XLSX en JSON bekijken en importeren in MariaDB |
 
@@ -21,6 +21,8 @@ branchehoofden. Hun geschiedenis blijft behouden via mergecommits:
   vergelijking en de radar op het tweede scherm bereikbaar. Een selectie uit
   dat tweede scherm keert terug naar het actuele canvas met dezelfde database,
   hetzelfde schema en de exacte recordsleutel.
+  De nieuwe vensters gebruiken een onafhankelijke scopeparser, zodat ook een
+  browser met het oude gecachete API-bestand de werkplek kan blijven openen.
 - De homepage en accountcontrole blijven de ingang. De datasetimport werkt
   vanuit het ingelogde werkvenster en verstuurt multipartverzoeken met de
   vastgelegde databasescope en actuele CSRF-token.
