@@ -14,12 +14,13 @@ const browser = await chromium.launch({headless: true,
     ...(process.env.BROWSER_BIN ? {executablePath: process.env.BROWSER_BIN} : {})});
 const context = await authenticatedContext(browser, base, {locale: 'en-GB', viewport: {width: 1440, height: 1000}});
 const page = await context.newPage();
-const errors = [], unsupported = [];
+const errors = [], unsupported = [], postgresPhpMyAdmin = [];
 page.on('pageerror', error => errors.push(error.message));
 page.on('request', request => {
     const url = new URL(request.url());
     if (url.pathname === '/api.php' && url.searchParams.get('connection') === 'postgres'
         && ['queries', 'save-query', 'build-query'].includes(url.searchParams.get('action'))) unsupported.push(url.href);
+    if (url.pathname.startsWith('/phpmyadmin/') && url.searchParams.get('db')?.startsWith('postgres:')) postgresPhpMyAdmin.push(url.href);
 });
 const scope = 'postgres:govern_pg:public';
 const stamp = Date.now().toString(16);
@@ -68,16 +69,59 @@ const openImports = async () => {
     await page.locator('[data-database-tool="import"]').click();
     await page.locator('#native-import-file').waitFor();
     assert.equal(await page.locator('#database-select').isDisabled(), true);
-    assert.equal(await page.locator('#modal-database').isDisabled(), true);
+    assert.equal(await page.locator('#modal-database').isEnabled(), true);
+    assert.equal(await page.locator('#modal-database').isVisible(), true);
     assert.equal(await page.locator('#database-frame').isVisible(), false);
     assert.equal(await page.locator('#database-tab-sql').isVisible(), false);
 };
-let snapshot;
+let snapshot, releaseImport;
 try {
     await page.goto(href('gegevens', 'govern_pg_values'), {waitUntil: 'networkidle'});
     const before = await browse('govern_pg_values');
     assert.equal(before.rows.find(row => row.id === originalKey).label, 'literal%_value');
     const archiveBefore = await api('browse', {schema: 'archive', table: 'govern_pg_values'});
+
+    // Both engines stay available inside one modal; changing its target must
+    // discard the previous file preflight instead of moving its token.
+    const sources = (await api('bootstrap')).databases;
+    const maria = sources.find(item => item.connection === 'mariadb' && item.available !== false);
+    assert.ok(maria, 'The isolated stack has a MariaDB scope for engine switching.');
+    const expectedChoices = sources.map(item => item.scope_key || item.name).sort();
+    await openImports();
+    assert.deepEqual(await page.locator('#modal-database optgroup').evaluateAll(groups => groups.map(group => group.label)), ['MariaDB', 'PostgreSQL']);
+    assert.deepEqual(await page.locator('#modal-database option').evaluateAll(options => options.map(option => option.value).sort()), expectedChoices);
+    await page.locator('#native-import-file').setInputFiles({name: 'scope-check.sql', mimeType: 'text/plain', buffer: Buffer.from('SELECT 1;')});
+    const scopePreview = waitApi('native-import-preview');
+    await page.locator('#native-import-preview').click();
+    const scopePlan = await read(await scopePreview);
+    await page.locator('#native-import-confirm').fill(scopePlan.confirmation);
+    await page.locator('#modal-database').selectOption(maria.scope_key || maria.name);
+    await page.frameLocator('#database-frame').locator('#input_import_file').waitFor();
+    await page.locator('#database-tab-sql').click();
+    const pmaSql = page.frameLocator('#database-frame').locator('#sqlquery');
+    await pmaSql.waitFor({state: 'attached'});
+    const pmaDraft = "SELECT 'keep the MariaDB SQL draft';";
+    await pmaSql.evaluate(async (node, draft) => {
+        if (document.readyState !== 'complete') await new Promise(resolve => window.addEventListener('load', resolve, {once: true}));
+        document.querySelector('.CodeMirror')?.CodeMirror?.setValue(draft);
+        node.value = draft;
+        window.governDraftRetained = draft;
+    }, pmaDraft);
+    await page.evaluate(async () => (await import('/assets/i18n.js')).setLanguage('nl'));
+    assert.equal(await pmaSql.inputValue(), pmaDraft, 'Language changes retain the real phpMyAdmin form.');
+    assert.equal(await pmaSql.evaluate(node => document.querySelector('.CodeMirror')?.CodeMirror?.getValue() ?? node.value), pmaDraft);
+    assert.equal(await pmaSql.evaluate(() => window.governDraftRetained), pmaDraft, 'Language changes do not reload the iframe.');
+    assert.deepEqual(await page.locator('#modal-database option').evaluateAll(options => options.map(option => option.value).sort()), expectedChoices);
+    await page.locator('#modal-database').selectOption(scope);
+    assert.equal(await page.locator('#database-tab-import').getAttribute('aria-selected'), 'true', 'MariaDB SQL becomes native import when entering PostgreSQL.');
+    assert.equal(await page.locator('#database-frame').getAttribute('src'), 'about:blank');
+    assert.equal(await page.locator('#native-import-file').evaluate(node => node.files.length), 0);
+    assert.equal(await page.locator('#native-import-confirm').inputValue(), '');
+    assert.equal(await page.locator('#native-import-run').isDisabled(), true);
+    await page.locator('.database-dialog-header .modal-tools button').last().click();
+    await page.locator('#database-dialog').waitFor({state: 'hidden'});
+    await page.waitForFunction(value => document.querySelector('#database-select')?.value === value && !document.querySelector('#database-select').disabled, scope);
+    await page.evaluate(async () => (await import('/assets/i18n.js')).setLanguage('en'));
 
     await page.goto(href('experimenten'), {waitUntil: 'networkidle'});
     await page.locator('#snapshot-label').fill(marker);
@@ -119,9 +163,24 @@ try {
     assert.equal(await page.locator('#native-import-file').evaluate(input => input.files.length), 1);
     assert.equal(await page.locator('#native-import-run').isEnabled(), true);
     await page.evaluate(async () => (await import('/assets/i18n.js')).setLanguage('en'));
+    let importStarted;
+    const started = new Promise(resolve => { importStarted = resolve; });
+    const gate = new Promise(resolve => { releaseImport = resolve; });
+    const importRoute = url => url.pathname === '/api.php' && url.searchParams.get('action') === 'native-import-execute';
+    const holdImport = async route => { importStarted(); await gate; await route.continue(); };
+    await page.route(importRoute, holdImport);
     const imported = waitApi('native-import-execute');
     await page.locator('#native-import-run').click();
+    await started;
+    assert.equal(await page.locator('#modal-database').isDisabled(), true, 'An actual pending import holds its complete target.');
+    await page.locator('#modal-database').evaluate((node, value) => { node.value = value; node.dispatchEvent(new Event('change', {bubbles: true})); }, maria.scope_key || maria.name);
+    assert.equal(await page.locator('#modal-database').inputValue(), scope, 'A programmatic change also cannot redirect an active write.');
+    await page.keyboard.press('Escape');
+    assert.equal(await page.locator('#database-dialog').isVisible(), true);
+    releaseImport(); releaseImport = null;
     const native = await read(await imported);
+    await page.unroute(importRoute, holdImport);
+    await page.locator('#modal-database:not([disabled])').waitFor();
     assert.equal(native.completed, true);
     assert.ok(native.safety_snapshots.some(point => point.schema === 'public'));
     assert.ok(native.safety_snapshots.some(point => point.schema === 'archive'));
@@ -162,9 +221,11 @@ try {
     for (const name of [sqlTable, importTable, csvTable]) assert.equal(boot.tables.some(table => table.name === name), false, 'Restore removes objects created after the point.');
     assert.deepEqual((await api('browse', {schema: 'archive', table: 'govern_pg_values'})).rows, archiveBefore.rows, 'Restoring public leaves archive records untouched.');
     assert.deepEqual(unsupported, [], 'Free SQL never calls PostgreSQL saved-query or builder APIs.');
+    assert.deepEqual(postgresPhpMyAdmin, [], 'PostgreSQL scopes never reach phpMyAdmin.');
     assert.deepEqual(errors, [], 'No browser JavaScript exceptions.');
     console.log('PASS: PostgreSQL Free SQL, native SQL/CSV import, scoped archive download and real schema restore/readback in Dutch/mobile.');
 } finally {
+    releaseImport?.();
     // The successful restore removes the test's own tables and row edit. A failed
     // restore deliberately keeps its diagnostic state in this isolated database.
     await context.close();

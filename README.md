@@ -174,6 +174,14 @@ daarvoor `.env` niet aan te passen:
    typ de exacte databasenaam en kies **Import uitvoeren**. Bekijk daarna de nacontrole.
    Gebruik voor grotere of complexe dumps de officiële phpMyAdmin-import eronder.
 
+De databasekiezer in het importvenster groepeert MariaDB en PostgreSQL. Je kunt
+daar tussen bestaande ingeschakelde databases en schema's wisselen. Het gekozen
+doel staat bij de import; de bevestiging moet exact dat doel bevatten. Een naam
+typen in het bevestigingsveld maakt of kiest geen database. Kies een ander doel
+vóór de bestandscontrole: wisselen wist de eerdere voorcontrole en bevestiging.
+Tijdens een lopende import blijft de keuze vaststaan. PostgreSQL gebruikt de
+eigen importweergave; phpMyAdmin hoort bij MariaDB.
+
 De tab **Import** toont vóór het uploaden hoeveel tabellen, views, relaties en records al
 bestaan. Na een SQL-import vergelijkt Govern de actuele structuur en
 rijaantallen met de voorcontrole. Onder **Tabellen en inhoudelijke volledigheid**

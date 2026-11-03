@@ -12,3 +12,11 @@
 
 @media (max-width: 820px) { .topbar-project { display: block; } .topbar-project .connection-card { display: none; } }
 .modal-database-select { max-width: 200px; width: auto; }
+.database-dialog .modal-database { display: flex; min-width: 0; max-width: 340px; flex: 1; }
+.database-dialog .modal-database-select { min-width: 0; width: 100%; max-width: 100%; }
+.modal-source-hint { margin: 0; padding: 0 23px 10px; flex-shrink: 0; line-height: 1.5; }
+@media (max-width: 600px) {
+    .database-dialog .database-context { grid-template-columns: minmax(0, 1fr); }
+    .database-dialog .modal-database { max-width: 100%; }
+    .modal-source-hint { padding: 0 13px 8px; }
+}

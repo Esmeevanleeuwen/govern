@@ -22,13 +22,15 @@ export class ImportInspectionPanel {
         this.ownPlan = null;
         this.ownHeading = el('h4', {}, t('imports.ownTitle'));
         this.ownDescription = el('p', {class: 'small muted'}, t('imports.ownDescription'));
-        this.ownScope = el('p', {class: 'small muted', hidden: true});
+        this.ownScope = el('p', {id: 'native-import-target', class: 'field-hint', hidden: true});
         this.ownFile = el('input', {id: 'native-import-file', type: 'file', accept: '.sql,text/plain', class: 'input'});
         this.ownFileLabel = el('label', {class: 'field-label', for: 'native-import-file'}, t('imports.ownChoose'));
         this.ownPreviewButton = button(t('imports.ownPreview'), () => this.previewOwn(),
             {id: 'native-import-preview', symbol: 'search', className: 'button-small'});
         this.ownConfirmLabel = el('label', {class: 'field-label', for: 'native-import-confirm'}, t('imports.ownConfirm'));
-        this.ownConfirm = el('input', {id: 'native-import-confirm', type: 'text', autocomplete: 'off', class: 'input'});
+        this.ownConfirm = el('input', {id: 'native-import-confirm', type: 'text', autocomplete: 'off', class: 'input',
+            'aria-describedby': 'native-import-target native-import-confirm-help'});
+        this.ownConfirmHelp = el('p', {id: 'native-import-confirm-help', class: 'field-hint', role: 'status', 'aria-live': 'polite'});
         this.ownRunButton = button(t('imports.ownRun'), () => this.executeOwn(),
             {id: 'native-import-run', symbol: 'play', kind: 'primary', className: 'button-small'});
         this.ownStatus = el('p', {role: 'status', 'aria-live': 'polite', class: 'small muted'});
@@ -36,7 +38,7 @@ export class ImportInspectionPanel {
         this.ownPanel = el('section', {class: 'native-import'},
             this.ownHeading, this.ownDescription, this.ownScope, this.ownFileLabel, this.ownFile,
             el('div', {class: 'database-manager-actions'}, this.ownPreviewButton),
-            this.ownConfirmLabel, this.ownConfirm,
+            this.ownConfirmLabel, this.ownConfirm, this.ownConfirmHelp,
             el('div', {class: 'database-manager-actions'}, this.ownRunButton),
             this.ownStatus, this.ownError);
         this.ownFile.addEventListener('change', () => {
@@ -83,10 +85,22 @@ export class ImportInspectionPanel {
     }
 
     ownControls() {
-        this.ownFile.disabled = this.ownWorking;
-        this.ownPreviewButton.disabled = this.ownWorking || !this.ownFile.files?.length;
-        this.ownConfirm.disabled = this.ownWorking || !this.ownPlan;
-        this.ownRunButton.disabled = this.ownWorking || !this.ownPlan || this.ownConfirm.value !== this.target();
+        const busy = this.ownWorking || this.submitted;
+        this.ownFile.disabled = busy;
+        this.ownPreviewButton.disabled = busy || !this.ownFile.files?.length;
+        this.ownConfirm.disabled = busy || !this.ownPlan;
+        this.ownRunButton.disabled = busy || !this.ownPlan || this.ownConfirm.value !== this.target();
+        const target = this.database ? this.target() : '';
+        const mismatch = Boolean(this.ownPlan && this.ownConfirm.value && this.ownConfirm.value !== target);
+        this.ownConfirm.setAttribute('aria-invalid', String(mismatch));
+        this.ownScope.hidden = !target;
+        if (target) {
+            this.ownScope.textContent = t('imports.ownTarget', {engine: this.isPostgres() ? 'PostgreSQL' : 'MariaDB', target});
+            this.ownConfirmLabel.textContent = t('imports.ownConfirmExact', {target});
+            this.ownConfirm.placeholder = target;
+            const help = t(mismatch ? 'imports.ownConfirmMismatch' : 'imports.ownConfirmHelp', {target});
+            if (this.ownConfirmHelp.textContent !== help) this.ownConfirmHelp.textContent = help;
+        } else this.ownConfirmHelp.textContent = '';
     }
 
     ownFailure(error) {
@@ -98,7 +112,7 @@ export class ImportInspectionPanel {
 
     async previewOwn() {
         const file = this.ownFile.files?.[0];
-        if (!file || this.ownWorking || !this.database) return;
+        if (!file || this.ownWorking || this.submitted || !this.database) return;
         const epoch = this.ownEpoch;
         const database = this.database;
         this.ownPlan = null;
@@ -139,7 +153,7 @@ export class ImportInspectionPanel {
 
     async executeOwn() {
         const plan = this.ownPlan;
-        if (!plan || this.ownWorking || !this.database || this.ownConfirm.value !== this.target()) return;
+        if (!plan || this.ownWorking || this.submitted || !this.database || this.ownConfirm.value !== this.target()) return;
         const epoch = this.ownEpoch;
         const database = this.database;
         this.ownWorking = true; this.onBusy?.(true);
@@ -210,27 +224,36 @@ export class ImportInspectionPanel {
     }
 
     close() {
+        const wasBusy = this.ownWorking || this.submitted;
         this.ownEpoch++;
         this.ownPlan = null;
         this.ownSql = '';
         this.ownWorking = false;
         this.ownExecuting = false;
+        this.submitted = false;
         this.ownControls();
         this.version++;
         this.database = '';
         this.panel.hidden = true;
-        this.submitted = false;
+        if (wasBusy) this.onBusy?.(false);
     }
 
     submittedFile() {
         if (!this.database || this.submitted) return;
         this.submitted = true;
+        this.ownPlan = null;
+        this.ownSql = '';
+        this.ownConfirm.value = '';
+        this.ownControls();
+        this.onBusy?.(true);
         this.summary.textContent = t('imports.uploading');
     }
 
     finishedFile(error = '') {
         if (!this.submitted || !this.database) return;
         this.submitted = false;
+        this.ownControls();
+        this.onBusy?.(false);
         this.nativeError = String(error).slice(0, 500);
         this.refresh('after');
     }
@@ -318,10 +341,8 @@ export class ImportInspectionPanel {
         if (!this.ownError.hidden && this.ownCurrentError) this.ownError.textContent = errorText(this.ownCurrentError);
         this.ownHeading.textContent = t('imports.ownTitle');
         this.ownDescription.textContent = t(this.isPostgres() ? 'imports.ownDescriptionPostgres' : 'imports.ownDescription');
-        this.ownScope.hidden = !this.isPostgres();
-        this.ownScope.textContent = this.target();
         this.ownFileLabel.textContent = t('imports.ownChoose');
-        this.ownConfirmLabel.textContent = t(this.isPostgres() ? 'imports.ownConfirmPostgres' : 'imports.ownConfirm');
+        this.ownControls();
         this.ownPreviewButton.querySelector('span').textContent = t('imports.ownPreview');
         this.ownRunButton.querySelector('span').textContent = t('imports.ownRun');
         this.title.textContent = t('imports.title');
