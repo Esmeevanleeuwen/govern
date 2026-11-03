@@ -3,6 +3,27 @@
 Stand van de controles: **3 november 2026**. Eerdere resultaten hieronder horen
 bij hun beschreven wijziging en zijn niet automatisch opnieuw uitgevoerd.
 
+## Startpagina met uitleg over de gezamenlijke werkplek
+
+De publieke pagina is met de echte HTML, CSS en JavaScriptmodules in Chromium
+gecontroleerd via een afzonderlijke lokale statische server. De publieke stappen
+uit `homepage-auth-smoke.mjs` slagen: Records, Tabeldetails, Schema en de nieuwe
+recordverkenning met bijpassende voorbeeldsleutels en zichtbaar bronbewijs,
+het voorbeeldmenu Gereedschap, uitleg en vragen, en de installatiehulp voor
+nieuwe en bestaande checkouts op Windows en macOS/Linux.
+
+Nederlands en Engels zijn gecontroleerd op 1440, 768 en 320 px, inclusief
+toetsenbordbediening, focus na Escape, mobiele menupositie en behoud van de
+voorbeeldselectie en installatiemodus bij taalwisseling. Er zijn geen
+JavaScriptfouten of verzoeken naar private database-API's waargenomen. De
+schermen zijn visueel nagekeken. JavaScript-syntax, i18n en alle **1.422**
+tweetalige berichten slagen; `git diff --check` eveneens.
+
+Deze controle oefent de publieke leervoorbeelden, geen PHP-accountbackend of
+echte databasehandelingen. De bestaande accountstappen van de browsersuite
+blijven behouden voor de volledige CI. Windows PowerShell zelf is niet lokaal
+uitgevoerd; de installatiehulp toont opdrachten en voert ze niet uit.
+
 ## Gezamenlijke feature- en updateversie
 
 De integratie is lokaal gecontroleerd in een afzonderlijk Docker-project met

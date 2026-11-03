@@ -53,6 +53,11 @@ try {
     const visitor = await browser.newContext({locale: 'en-GB', viewport: {width: 1440, height: 1000}});
     const page = await visitor.newPage();
     trackErrors(page);
+    const publicApiRequests = [];
+    const trackPublicRequest = request => {
+        if (new URL(request.url()).pathname.endsWith('api.php')) publicApiRequests.push(request.url());
+    };
+    page.on('request', trackPublicRequest);
     await page.goto(new URL('/', base).href, {waitUntil: 'networkidle'});
     assert.deepEqual(await page.locator('#home-title > span').allTextContents(), ['Your data.', 'Your next idea.']);
     assert.equal(await page.locator('.home-schema-card').count(), 4);
@@ -75,22 +80,47 @@ try {
     await page.keyboard.press('ArrowLeft');
     assert.equal(await page.locator('#home-tab-structure').getAttribute('aria-selected'), 'true');
 
+    // The record sample demonstrates actual linked sample values, independently
+    // from the schema preview and without requesting private database content.
+    await page.locator('#home-tab-explore').click();
+    await page.locator('[data-home-record-table="users"][data-home-record-id="1"]').click();
+    assert.equal(await page.locator('[data-home-table="users"]').getAttribute('aria-pressed'), 'true');
+    await page.locator('.home-record-evidence summary').click();
+    assert.match(await page.locator('.home-record-evidence').textContent(), /user_id/);
+    assert.match(await page.locator('.home-record-evidence').textContent(), /users\.id/);
+    await page.locator('.home-preview-tools summary').click();
+    assert.equal(await page.locator('.home-preview-tools').getAttribute('open'), '');
+    await page.locator('.home-preview-tools a[href="#guide-windows"]').click();
+    assert.equal(new URL(page.url()).hash, '#guide-windows');
+    assert.equal(await page.locator('.home-guide-steps > li').count(), 3);
+    assert.equal(await page.locator('.home-guide-grid > article').count(), 6);
+    assert.equal(await page.locator('.home-faq details').count(), 3);
+    await page.locator('.home-faq details').first().locator('summary').click();
+    assert.equal(await page.locator('.home-faq details').first().getAttribute('open'), '');
+
     await page.locator('[data-home-open="setup"]').first().click();
     const setup = page.locator('#home-setup-dialog');
     await page.locator('#home-setup-dialog[open]').waitFor();
     await page.locator('[data-home-os="windows"]').click();
     assert.match(await page.locator('#home-commands').textContent(), /\.\\start\.cmd$/);
-    assert.match(await page.locator('#home-commands').textContent(), /git clone https:\/\/github\.com\/Esmeevanleeuwen\/govern\.git/);
+    assert.match(await page.locator('#home-commands').textContent(), /git clone --branch integrate\/all-govern-updates https:\/\/github\.com\/Esmeevanleeuwen\/govern\.git/);
+    await page.locator('#home-install-kind').selectOption('existing');
+    assert.equal(await page.locator('#home-setup-existing').isVisible(), true);
+    assert.match(await page.locator('#home-commands').textContent(), /git fetch origin/);
+    assert.match(await page.locator('#home-commands').textContent(), /git switch integrate\/all-govern-updates/);
+    assert.match(await page.locator('#home-commands').textContent(), /git pull --ff-only origin integrate\/all-govern-updates/);
     await page.locator('[data-home-os="unix"]').click();
     assert.match(await page.locator('#home-commands').textContent(), /sh start\.sh$/);
+    await page.locator('#home-install-kind').selectOption('new');
+    assert.equal(await page.locator('#home-setup-existing').isVisible(), false);
     await page.keyboard.press('Escape');
     await setup.waitFor({state: 'hidden'});
 
     await page.locator('#home-language').selectOption('nl');
     assert.deepEqual(await page.locator('#home-title > span').allTextContents(), ['Jouw data.', 'Jouw volgende idee.']);
-    assert.equal(await page.locator('#home-tab-data').textContent(), 'Gegevens');
-    for (const width of [360, 1440]) {
-        await page.setViewportSize({width, height: width === 360 ? 844 : 1000});
+    assert.equal(await page.locator('#home-tab-data').textContent(), 'Records');
+    for (const width of [320, 768, 1440]) {
+        await page.setViewportSize({width, height: width === 320 ? 844 : 1000});
         await noOverflow(page, 'The Dutch homepage must fit at ' + width + 'px.');
     }
     await page.setViewportSize({width: 360, height: 844});
@@ -100,8 +130,10 @@ try {
     await noOverflow(page, 'Scrolling the sample data must stay within the mobile preview.');
     await shot(page, 'homepage-mobile-nl');
     await page.locator('#home-language').selectOption('en');
-    assert.equal(await page.locator('#home-tab-data').textContent(), 'Data');
+    assert.equal(await page.locator('#home-tab-data').textContent(), 'Records');
     await noOverflow(page, 'The English homepage must fit at 360px.');
+    page.off('request', trackPublicRequest);
+    assert.deepEqual(publicApiRequests, [], 'The public sample and guide never request private database APIs.');
 
     // Follow the real call to action, then exercise the form in both layouts.
     await page.locator('.home-hero a[href="/auth.php?mode=register"]').click();

@@ -15,6 +15,7 @@ const panel = $('#home-demo-panel');
 const schema = panel?.firstElementChild;
 let view = 'schema';
 let selectedTable = 'users';
+let selectedRecord = '1';
 let os = /Mac|Linux/i.test(navigator.platform || '') && !/Win/i.test(navigator.platform || '') ? 'unix' : 'windows';
 let dialogOpener = null;
 
@@ -38,6 +39,63 @@ const tables = Object.freeze({
     },
 });
 
+// These are the fictional store's declared column pairs, never inferred links.
+const sampleRelations = [
+    {child: 'orders', field: 'user_id', parent: 'users'},
+    {child: 'order_items', field: 'order_id', parent: 'orders'},
+    {child: 'order_items', field: 'product_id', parent: 'products'},
+];
+
+function renderRecordSample() {
+    const source = tables[selectedTable];
+    const record = source.rows.find(row => row[0] === selectedRecord) || source.rows[0];
+    selectedRecord = record[0];
+    const wrap = element('div', undefined, 'home-record-preview');
+    wrap.append(element('h3', message('recordPreviewTitle')), element('p', message('recordPreviewHint'), 'home-demo-table-note'));
+    const root = element('article', undefined, 'home-record-root');
+    root.append(element('small', message('currentRecord')), element('h4', selectedTable + ' #' + selectedRecord));
+    const fields = element('dl');
+    source.columns.forEach(([field], index) => fields.append(element('dt', field), element('dd', record[index])));
+    root.append(fields);
+    const links = [], evidence = [];
+    for (const relation of sampleRelations) {
+        if (relation.child !== selectedTable && relation.parent !== selectedTable) continue;
+        const outgoing = relation.child === selectedTable;
+        const relatedTable = outgoing ? relation.parent : relation.child;
+        const value = record[outgoing ? source.columns.findIndex(column => column[0] === relation.field) : 0];
+        const index = outgoing ? 0 : tables[relatedTable].columns.findIndex(column => column[0] === relation.field);
+        for (const row of tables[relatedTable].rows.filter(row => row[index] === value)) {
+            const button = element('button', undefined, 'home-record-link');
+            button.type = 'button';
+            button.dataset.homeRecordTable = relatedTable;
+            button.dataset.homeRecordId = row[0];
+            const nameIndex = tables[relatedTable].columns.findIndex(column => column[0] === 'name');
+            const caption = nameIndex >= 0 ? row[nameIndex] : tables[relatedTable].columns[1][0] + ' = ' + row[1];
+            button.append(element('strong', relatedTable + ' #' + row[0]), element('span', caption));
+            button.addEventListener('click', () => {
+                selectedTable = relatedTable;
+                selectedRecord = row[0];
+                renderSample({announce: true});
+                panel.focus({preventScroll: true});
+            });
+            links.push(button);
+            evidence.push(relation.child + '.' + relation.field + ' = ' + relation.parent + '.id · ' + value + ' = ' + value);
+        }
+    }
+    const neighbors = element('div', undefined, 'home-record-neighbors');
+    neighbors.append(element('h4', message('linkedRecords')), ...links);
+    if (!links.length) neighbors.append(element('p', message('noSampleLinks')));
+    const graph = element('div', undefined, 'home-record-graph');
+    graph.append(root, neighbors);
+    const details = element('details', undefined, 'home-record-evidence');
+    details.append(element('summary', message('connectionEvidence')));
+    const list = element('ul');
+    for (const match of new Set(evidence)) list.append(element('li', match));
+    details.append(list);
+    wrap.append(graph, details, element('p', message('dataNote'), 'home-demo-table-note'));
+    return wrap;
+}
+
 function element(tag, text, className) {
     const node = document.createElement(tag);
     if (text !== undefined) node.textContent = text;
@@ -58,6 +116,8 @@ function renderSample({announce = false} = {}) {
     if (view === 'schema') {
         panel.replaceChildren(schema);
         $$('[data-schema-table]').forEach(card => card.dataset.selected = String(card.dataset.schemaTable === selectedTable));
+    } else if (view === 'explore') {
+        panel.replaceChildren(renderRecordSample());
     } else {
         const source = tables[selectedTable];
         const wrap = element('div', undefined, 'home-demo-table-wrap');
@@ -107,7 +167,13 @@ function setOperatingSystem(next) {
     });
     $('#home-command-panel').setAttribute('aria-labelledby', 'home-os-' + os);
     $('#home-terminal-name').textContent = os === 'windows' ? 'PowerShell' : 'Terminal';
-    $('#home-commands').textContent = 'git clone https://github.com/Esmeevanleeuwen/govern.git\ncd govern\n' + (os === 'windows' ? '.\\start.cmd' : 'sh start.sh');
+    const existing = $('#home-install-kind').value === 'existing';
+    $('#home-setup-existing').hidden = !existing;
+    const branch = 'integrate/all-govern-updates';
+    const commands = existing
+        ? 'git fetch origin\ngit switch ' + branch + '\ngit pull --ff-only origin ' + branch + '\n'
+        : 'git clone --branch ' + branch + ' https://github.com/Esmeevanleeuwen/govern.git\ncd govern\n';
+    $('#home-commands').textContent = commands + (os === 'windows' ? '.\\start.cmd' : 'sh start.sh');
     $('#home-copy-status').textContent = '';
 }
 
@@ -130,11 +196,13 @@ $$('[data-home-table]').forEach(button => button.addEventListener('click', () =>
     const next = button.dataset.homeTable;
     if (!Object.hasOwn(tables, next)) return;
     selectedTable = next;
+    selectedRecord = tables[next].rows[0][0];
     renderSample({announce: true});
 }));
 $('#home-sample-table')?.addEventListener('change', event => {
     if (!Object.hasOwn(tables, event.target.value)) return;
     selectedTable = event.target.value;
+    selectedRecord = tables[selectedTable].rows[0][0];
     renderSample({announce: true});
 });
 
@@ -152,6 +220,18 @@ $$('.home-dialog').forEach(dialog => {
 $$('[data-home-os]').forEach(button => {
     button.addEventListener('click', () => setOperatingSystem(button.dataset.homeOs));
     button.addEventListener('keydown', event => tabNavigation(event, '[data-home-os]', next => setOperatingSystem(next.dataset.homeOs)));
+});
+$('#home-install-kind')?.addEventListener('change', () => setOperatingSystem(os));
+const previewTools = $('.home-preview-tools');
+previewTools?.querySelectorAll('a').forEach(link => link.addEventListener('click', () => {previewTools.open = false;}));
+document.addEventListener('click', event => {
+    if (previewTools?.open && !previewTools.contains(event.target)) previewTools.open = false;
+});
+document.addEventListener('keydown', event => {
+    if (event.key !== 'Escape' || !previewTools?.open) return;
+    previewTools.open = false;
+    previewTools.querySelector('summary').focus();
+    event.preventDefault();
 });
 $('#home-copy-commands')?.addEventListener('click', async () => {
     const commands = $('#home-commands');

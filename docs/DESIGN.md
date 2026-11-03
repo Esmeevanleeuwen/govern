@@ -14,10 +14,26 @@ light support the same pearl glass materials as the workspace. A dark sample
 workspace provides contrast within the light marketing canvas.
 
 The product preview is labelled **Illustrative workspace · sample data**.
-Its Data, Structure and Schema controls explore a small fictional store; the
-preview never executes SQL or connects to a visitor's work databases. Do not
-make its sample counts or example queries look like real installation results.
-The setup dialog offers Windows and macOS/Linux instructions and copy feedback.
+Its Records, Explore, Table details and Schema controls explore a small fictional
+store. Explore follows explicit sample foreign-key values between records and
+shows the matching columns and values. It is a small learning example, separate
+from the production canvas, and never executes SQL or connects to work databases.
+Do not make sample counts or example queries look like installation results.
+The preview's Tools disclosure links to explanations of the real workspace tools.
+
+**How it works** introduces Sources, record selection, expanding connections and
+source evidence, followed by canvas controls and a guide to Records/Schema,
+record windows and second-screen comparison/radar, both Tools entry points,
+imports, SQL/restore points and optional local AI. Explain the difference between
+table structure and record relationships, the read-only canvas, temporary work,
+installation accounts and PostgreSQL's current read-only capabilities. Keep the
+longer control reference and common questions in keyboard-accessible disclosures.
+
+The setup dialog offers new-installation and existing-checkout commands for
+Windows PowerShell and macOS/Linux, with copy feedback. Both use the combined
+`integrate/all-govern-updates` branch while it is awaiting merge into `main`.
+Existing-checkout instructions retain `.env` and Docker volumes. Update the
+commands and documentation links together if the release branch changes.
 Project, documentation and setup links remain real navigation actions.
 
 **Start exploring / Make it your workspace** opens registration for this
