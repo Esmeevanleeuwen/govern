@@ -90,7 +90,8 @@ $assert(count($self['nodes']) === 1 && count($self['edges']) === 1 && $self['edg
 $selfAgain = $service->explore([...$rootInput, 'relation' => $selfLink['id']]);
 $assert($selfAgain['edges'][0]['id'] === $self['edges'][0]['id'], 'Repeated expansion has stable relationship identity.');
 $floatCast = $engine === 'postgres' ? 'TEXT' : 'CHAR';
-$floatExpected = $database->reader()->query('SELECT CAST(id AS ' . $floatCast . ') FROM zz_record_map_float_parent ORDER BY id')->fetchAll(PDO::FETCH_COLUMN);
+$floatTable = $database->quoteIdentifier($database->schemaName()) . '.' . $database->quoteIdentifier('zz_record_map_float_parent');
+$floatExpected = $database->reader()->query('SELECT CAST(id AS ' . $floatCast . ') FROM ' . $floatTable . ' ORDER BY id')->fetchAll(PDO::FETCH_COLUMN);
 $floatNodes = $service->records('zz_record_map_float_parent')['nodes'];
 $assert(count($floatNodes) === 2 && array_map(static fn (array $node): string => $node['key']->id, $floatNodes) === $floatExpected,
     'Adjacent DOUBLE identities retain the engine serialization rather than rounded PDO conversions.');
