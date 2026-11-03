@@ -1,7 +1,7 @@
 import {selectWorkspaceLanguage, clickWorkspaceTool} from './workspace-tools.mjs';
 /** Flexible canvas interaction against real, isolated record-map fixtures. */
 import assert from 'node:assert/strict';
-import {exploreHarness} from './explore-helpers.mjs';
+import {exploreHarness, bounded} from './explore-helpers.mjs';
 
 const h = await exploreHarness();
 const {page, inspector, node, api, bookmark, ensureSources, selectSeed, mapResponse} = h;
@@ -26,6 +26,10 @@ const drag = async (locator, dx, dy) => {
     await page.mouse.move(x, y); await page.mouse.down();
     await page.mouse.move(x + dx, y + dy, {steps: 8}); await page.mouse.up();
 };
+const withinPanel = (control, panel) => control.evaluate((element, selector) => {
+    const box = element.getBoundingClientRect(), frame = element.closest(selector).getBoundingClientRect();
+    return box.top >= frame.top && box.bottom <= frame.bottom && box.left >= frame.left && box.right <= frame.right;
+}, panel);
 try {
     const info = await api('record-map', {database: 'bestuursatlas'}, rootInput);
     const incoming = info.relations.find(item => item.constraint === 'zz_record_map_project_lead' && item.direction === 'incoming');
@@ -117,6 +121,11 @@ try {
     await waitPosition(first.id, beforeKeyboard);
     await node(first.id).press('Enter');
     await inspector.locator('h3').filter({hasText: first.label}).waitFor();
+    await inspector.locator('[data-map-technical] > summary').click();
+    await inspector.locator('.record-map-panel-body').evaluate(body => { body.scrollTop = body.scrollHeight; });
+    assert.equal(await withinPanel(page.locator('#record-map-inspector-close'), '#record-map-inspector'), true,
+        'Scrolling record evidence keeps the inspector close control reachable.');
+    await inspector.locator('.record-map-panel-body').evaluate(body => { body.scrollTop = 0; });
     const sourceRead = page.waitForRequest(request => {
         const url = new URL(request.url());
         return url.pathname === '/api.php' && url.searchParams.get('action') === 'record-map'
@@ -126,6 +135,65 @@ try {
     assert.deepEqual((await sourceRead).postDataJSON().key, first.key, 'Opening Data passes the complete composite record key.');
     await page.locator('#selected-source-record .data-table').waitFor();
     assert.ok((await page.locator('#selected-source-record').textContent()).includes(first.label));
+    const sourceCard = page.locator('#selected-source-record');
+    const recordsCard = page.locator('#selected-source-record + .card');
+    await recordsCard.locator('.data-table').waitFor();
+    const sourceGap = () => sourceCard.evaluate(source =>
+        source.nextElementSibling.getBoundingClientRect().top - source.getBoundingClientRect().bottom);
+    assert.ok(await sourceGap() >= 24, 'The selected source and complete record table are visually separate.');
+    await h.screenshot('records-source-spacing');
+
+    const originalSearch = await page.locator('#data-search').inputValue();
+    const originalRows = await recordsCard.locator('.data-table').innerText();
+    let releaseBrowse, markBrowseHeld, markBrowseHandled;
+    const browseHeld = new Promise(resolve => { markBrowseHeld = resolve; });
+    const browseReleased = new Promise(resolve => { releaseBrowse = resolve; });
+    const browseHandled = new Promise(resolve => { markBrowseHandled = resolve; });
+    const browseMatcher = url => url.pathname === '/api.php' && url.searchParams.get('action') === 'browse'
+        && url.searchParams.get('table') === first.table;
+    const holdBrowse = async route => {
+        try {
+            const response = await route.fetch();
+            markBrowseHeld(); await browseReleased;
+            await route.fulfill({response});
+        } finally { markBrowseHandled(); }
+    };
+    await page.route(browseMatcher, holdBrowse);
+    try {
+        const immediatelyBusy = await page.locator('#data-search').evaluate(input => {
+            input.value = 'no_matching_record_layout_check';
+            input.dispatchEvent(new Event('input', {bubbles: true}));
+            return Boolean(document.querySelector('#selected-source-record + .card .data-table')?.closest('[inert][aria-busy="true"]'));
+        });
+        assert.equal(immediatelyBusy, true, 'Typing immediately disables stale row actions, before the search debounce expires.');
+        await bounded(browseHeld);
+        assert.equal(await recordsCard.locator('.data-table').innerText(), originalRows,
+            'The existing rows remain readable while the next search response is pending.');
+        assert.equal(await recordsCard.locator('.data-table').evaluate(table => Boolean(table.closest('[inert][aria-busy="true"]'))), true,
+            'Rows from the previous search cannot trigger stale record actions.');
+        assert.equal(await recordsCard.locator('.table-pagination button').evaluateAll(buttons => buttons.every(button => button.disabled)), true,
+            'Pagination cannot compete with a pending search.');
+        assert.match(await page.locator('.data-update-status').innerText(), /Updating records/);
+    } finally {
+        releaseBrowse();
+        await bounded(browseHandled);
+        await page.unroute(browseMatcher, holdBrowse);
+    }
+    await page.waitForFunction(() => document.querySelector('.data-update-status')?.textContent === '');
+    const restoredBrowse = page.waitForResponse(response => browseMatcher(new URL(response.url())));
+    await page.locator('#data-search').fill(originalSearch);
+    await restoredBrowse;
+    await page.waitForFunction(() => document.querySelector('.data-update-status')?.textContent === '');
+    assert.equal(await recordsCard.locator('.data-table').evaluate(table => Boolean(table.closest('[inert]'))), false);
+    await page.setViewportSize({width: 320, height: 860});
+    assert.ok(await sourceGap() >= 24, 'The selected source also has clear separation on a narrow screen.');
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true,
+        'Both Records tables scroll inside their cards at 320px.');
+    await page.setViewportSize({width: 1440, height: 1000});
+    await sourceCard.locator('.selected-source-actions .button').last().click();
+    assert.equal(await sourceCard.count(), 0);
+    assert.equal(await page.locator('#data-search').evaluate(input => input === document.activeElement), true,
+        'Dismissing source context returns keyboard focus to record search.');
     await page.locator('[data-database-view="verkennen"]').click();
     await page.locator('#record-map-layout').waitFor();
     assert.equal(await page.locator('[data-record-node]').count(), 3, 'Data and Explore share the selected record without discarding the canvas.');
@@ -142,8 +210,24 @@ try {
     assert.equal(await page.locator('#record-map-undo').isDisabled(), true, 'Canvas Undo cannot revive pre-refresh record snapshots.');
     await h.screenshot('flexible-explore-desktop');
 
+    await ensureSources();
+    assert.equal(await inspector.isVisible(), true, 'The wide canvas can show both context panels.');
+    await page.locator('#record-map-search').focus();
+    await page.setViewportSize({width: 1000, height: 1000});
+    await page.waitForFunction(() => [...document.querySelectorAll('.record-map-panel')].filter(panel => !panel.hidden).length === 1);
+    assert.equal(await page.locator('.record-map-panel').evaluateAll(panels => panels.filter(panel => !panel.hidden).length), 1,
+        'Resizing to a narrow canvas closes the peer panel before the panels overlap.');
+    assert.equal(await sourcePanel.isVisible(), true, 'The source panel with keyboard focus survives the resize.');
+    assert.equal(await page.locator('#record-map-search').evaluate(input => input === document.activeElement), true,
+        'Resizing does not discard keyboard focus from source search.');
+
     await page.setViewportSize({width: 360, height: 860});
     await ensureSources();
+    await page.locator('#record-map-records').evaluate(list => { list.scrollTop = list.scrollHeight; });
+    assert.equal(await withinPanel(page.locator('#record-map-search'), '#record-map-sources'), true,
+        'Browsing source rows keeps record search reachable in the compact drawer.');
+    assert.equal(await withinPanel(page.locator('#record-map-sources-close'), '#record-map-sources'), true,
+        'The compact source drawer always keeps its close control reachable.');
     await page.locator('#record-map-sources-close').click();
     await node(first.id).focus(); await node(first.id).press('Enter');
     await inspector.waitFor({state: 'visible'});
