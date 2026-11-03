@@ -30,7 +30,7 @@ def main():
             raise AssertionError(description)
         checks += 1
 
-    def request(action, payload=None, parameters=None, *, authenticated=True, token=True):
+    def request(action, payload=None, parameters=None, *, authenticated=True, token=True, upload=False):
         query = {key: value for key, value in {"action": action, **scope, **(parameters or {})}.items()
                  if value is not None}
         headers = {"Accept": "application/json", "Accept-Language": "en"}
@@ -38,6 +38,13 @@ def main():
         if payload is not None:
             data = json.dumps(payload).encode()
             headers.update({"Content-Type": "application/json"})
+            if token:
+                headers["X-CSRF-Token"] = csrf
+        if upload:
+            boundary = "govern-import-capability-check"
+            data = ("--" + boundary + '\r\nContent-Disposition: form-data; name="file"; filename="scope.csv"'
+                    + '\r\nContent-Type: text/csv\r\n\r\nname\r\nScoped import\r\n--' + boundary + "--\r\n").encode()
+            headers["Content-Type"] = "multipart/form-data; boundary=" + boundary
             if token:
                 headers["X-CSRF-Token"] = csrf
         req = urllib.request.Request(base + "/api.php?" + urllib.parse.urlencode(query), data=data, headers=headers)
@@ -118,10 +125,22 @@ def main():
         ("save-query", {"name": "unsupported", "sql": "SELECT 1"}), ("delete-query", {"id": 1}),
         ("create-snapshot", {"label": "unsupported"}), ("restore-snapshot", {"id": "unsupported", "confirmation": "govern_pg"}),
         ("prepare-database", {"name": "unsupported"}), ("ai-context", {}), ("ai-chat", {}),
+        ("native-import-preview", {"sql": "SELECT 1"}),
+        ("native-import-execute", {"sql": "SELECT 1", "preview_token": "0" * 64, "confirmation": "govern_pg"}),
     ]:
         status, result = request(action, payload)
         check(status == 403 and result.get("error_code") == "postgres_read_only", "PostgreSQL rejects unsupported POST " + action)
         check(set(result.get("error_i18n", {})) == {"nl", "en"}, "Capability errors remain bilingual")
+    for action in ["dataset-preview", "dataset-import"]:
+        status, result = request(action, upload=True, authenticated=False)
+        check(status == 401 and result.get("error_code") == "auth_required",
+              "Multipart import requires an approved account before inspecting uploads")
+        status, result = request(action, upload=True, token=False)
+        check(status == 403 and result.get("error_code") == "csrf_invalid",
+              "Multipart import preserves CSRF validation")
+        status, result = request(action, upload=True)
+        check(status == 403 and result.get("error_code") == "postgres_read_only",
+              "PostgreSQL rejects multipart " + action + " before MariaDB-specific parsing or writing")
     status, result = request("query", {"sql": "SELECT 1"}, token=False)
     check(status == 403 and result.get("error_code") == "csrf_invalid", "CSRF checks still precede unsupported mutation handling")
     status, result = request("bootstrap", parameters={"schema": "pg_catalog"})

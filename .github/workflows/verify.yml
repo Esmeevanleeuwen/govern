@@ -14,7 +14,7 @@ concurrency:
 jobs:
   compose:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 40
     env:
       DB_DATABASES: bestuursatlas,govern_multi_test
       GOVERN_TEST_SECOND_DATABASE: govern_multi_test
@@ -47,6 +47,8 @@ jobs:
           docker compose --profile postgres exec -T postgres sh -c 'test "$POSTGRES_DB" = govern_pg && exec psql --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" --set ON_ERROR_STOP=1' < tests/postgres-fixture.sql
       - name: PostgreSQL sample data and repeat loading
         run: python3 tests/postgres-demo-integration.py --confirm-project=govern --confirm-database=govern_pg
+      - name: Dataset readers
+        run: python3 tests/dataset-readers.py
       - name: PHP syntax
         run: |
           docker compose exec -T app sh -c 'find /var/www/src /var/www/public -name "*.php" -exec php -l {} \;'
@@ -83,6 +85,8 @@ jobs:
           docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" -e GOVERN_TEST_SECOND_DATABASE app /workspace/tests/multidatabase-row-integration.php --confirm-database=bestuursatlas --confirm-second-database=govern_multi_test
           docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" -e GOVERN_TEST_SECOND_DATABASE app /workspace/tests/ai-integration.php --confirm-database=bestuursatlas
           docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/database-provisioning-integration.php --confirm-database=bestuursatlas
+      - name: Tabular dataset integration
+        run: docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/dataset-import-integration.php --confirm-database=bestuursatlas
       - name: Backup and recovery integration
         run: docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/backup_integration.php --confirm-database=bestuursatlas
       - name: Prepare explicitly isolated record-map fixtures
@@ -137,6 +141,7 @@ jobs:
             tests/explorer-guide-smoke.mjs \
             tests/modal-windows-smoke.mjs \
             tests/companion-smoke.mjs \
+            tests/dataset-import-smoke.mjs \
             tests/database-import-smoke.mjs \
             tests/frontend-smoke.mjs \
             tests/query-builder-smoke.mjs \

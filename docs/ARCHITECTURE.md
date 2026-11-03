@@ -774,3 +774,43 @@ Werk de ontwerpdocumentatie en het API-contract in dezelfde wijziging bij.
 - [MariaDB SQL-exports](https://mariadb.com/docs/server/clients-and-utilities/backup-restore-and-import-clients/mariadb-dump)
 - [Ollama chat-API](https://docs.ollama.com/api/chat)
 - [Ollama-modelstatus](https://docs.ollama.com/api/tags)
+
+
+## Gedeelde import voor tabelbestanden
+
+De taak begint in Database openen → Bestanden importeren: lokaal bestand kiezen,
+voorvertonen, werkblad en bestemming controleren, expliciet bevestigen, importeren
+naar de zichtbare database en terugkeren naar de gewone live tabelverkenner.
+`DatasetImportPanel` bewaart tijdelijke bestands- en formulierconcepten per database.
+Taalwisselen behoudt het concept. Tijdens een verzoek blokkeren sluiten, tabwisselen
+en databasewisselen. Verzoeken houden hun oorspronkelijke database vast.
+
+`tabular.py` leest XLSX via de standaard ZIP/XML-lezer, CSV/TSV/TXT via `csv` en JSON
+via `json`/`decimal`. Geen netwerk, macro's, formule-evaluatie of uitgepakte paden.
+Elke lezer levert dezelfde beschrijving met kolommen, exacte tekstwaarden, NULL,
+rijaantallen en kwaliteitskenmerken. Een nieuwe lezer kan dat contract hergebruiken.
+Python draait als afzonderlijk lokaal proces zonder databasecredentials als argumenten.
+De procesomgeving is geërfd, maar de lezer gebruikt geen configuratie of netwerk.
+Bestandsgrootte, archiefinhoud, kolommen, rijen, CPU en procesgeheugen zijn begrensd.
+
+`DatasetImport` controleert de upload en voert alleen de door de gebruiker gekozen
+schrijfhandeling uit. Voorbeeld en import lezen het bestand onafhankelijk opnieuw.
+De SHA-256 uit het voorbeeld moet gelijk blijven. Beide routes controleren de gewone
+host-, origin-, sessie-, CSRF- en databasescopegrens. De lezer loopt vóór het nemen
+van de gedeelde onderhoudslock. Import zelf deelt de lock met andere appverzoeken.
+
+Nieuwe tabelnamen gebruiken een begrensde ASCII-regel. De tabel wordt eerst onder
+een willekeurige interne naam gevuld en pas daarna zonder overwrite hernoemd.
+Een fout ruimt alleen deze stagingtabel op. Bij een procescrash kan een interne
+stagingtabel achterblijven. Bestaande tabellen komen uit de catalogus en moeten
+InnoDB gebruiken, passende tekstkolommen hebben en hetzelfde structuurfingerprint
+houden. Een metadata-lock houdt hun structuur vast tijdens het transactionele
+invoegen. Een rijfout draait de volledige append terug. Externe SQL kan daarnaast
+actief blijven. Er is geen algemene undo of automatische deduplicatie; ook een
+expliciete tweede append voegt opnieuw toe. Een verloren HTTP-antwoord moet de
+gebruiker eerst via de tabel controleren.
+
+De voorbeeldgrafiek gebruikt alleen twintig voorbeeldrijen en zegt dat zichtbaar.
+Deze fase maakt geen relaties op grond van kolomnamen, geen blijvende grafieken en
+geen geografische weergave. De bestaande catalogus toont geïmporteerde tabellen na
+sluiten van het databasevenster. SQL blijft bij officiële phpMyAdmin.

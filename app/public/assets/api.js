@@ -49,16 +49,17 @@ export async function request(action, {params, body, signal} = {}) {
         const session = await accountRequest('status');
         token = session.csrf;
     }
+    const multipart = typeof FormData !== 'undefined' && body instanceof FormData;
     let response;
     try {
         response = await fetch(url, {
             method: body === undefined ? 'GET' : 'POST',
             headers: body === undefined ? {'Accept': 'application/json', 'Accept-Language': getLanguage()} : {
-                'Accept': 'application/json', 'Accept-Language': getLanguage(), 'Content-Type': 'application/json', 'X-CSRF-Token': token,
+                'Accept': 'application/json', 'Accept-Language': getLanguage(), ...(multipart ? {} : {'Content-Type': 'application/json'}), 'X-CSRF-Token': token,
             },
             credentials: 'same-origin',
             signal,
-            ...(body === undefined ? {} : {body: JSON.stringify(body)}),
+            ...(body === undefined ? {} : {body: multipart ? body : JSON.stringify(body)}),
         });
     } catch (error) {
         if (error.name === 'AbortError') throw error;

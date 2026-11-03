@@ -1,0 +1,16 @@
+.dataset-import {padding: 24px; overflow: auto; min-height: 0; flex: 1;}
+.dataset-import[hidden] {display: none;}
+.dataset-import h3 {margin-top: 0;}
+.dataset-import p {overflow-wrap: anywhere;}
+.dataset-field {display: grid; gap: 8px; margin: 16px 0; max-width: 620px;}
+.dataset-field label {font-weight: 600;}
+.dataset-scroll {overflow: auto; max-height: 360px; margin: 16px 0;}
+.dataset-scroll table {width: 100%; border-collapse: collapse;}
+.dataset-scroll th, .dataset-scroll td {padding: 10px; text-align: left; max-width: 380px; overflow-wrap: anywhere; vertical-align: top;}
+.dataset-scroll th {white-space: nowrap;}
+.dataset-bar {display: grid; grid-template-columns: minmax(70px, 1fr) minmax(50px, 2fr) 32px; gap: 12px; align-items: center; margin: 8px 0;}
+.dataset-bar span {overflow-wrap: anywhere;}
+.dataset-bar meter {width: 100%;}
+@media (max-width: 600px) {.dataset-import {padding: 12px;} .database-tabs {overflow-x: auto;}}
+
+.database-frame-panel[hidden] {display: none;}

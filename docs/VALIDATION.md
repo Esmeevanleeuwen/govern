@@ -734,3 +734,26 @@ Een lopende SQL-opdracht in een afzonderlijk phpMyAdmin-venster wordt daarmee
 niet stilgezet. Rond zulke opdrachten af voordat je een herstelpunt maakt of
 terugzet. Een volledige databaseherstelactie bestaat uit meerdere stappen;
 een gewone SQL-transactie kan die niet als geheel ongedaan maken.
+
+
+## Tabelbestanden importeren — 3 november 2026
+
+Lokaal uitgevoerd: negen Python-lezerproeven (CSV met quotes/regeleinden/UTF-8,
+exacte JSON-getallen en NULL, dubbele rijen, ongeldige vormen, groottelimieten,
+ZIP zonder extractie en XLSX met datums, ontbrekende cellen en formulecache).
+Het aangeleverde media-Excelbestand is gelezen als één werkblad met 46 rijen,
+vijf kolommen en nul volledig dubbele rijen. De inhoud is niet in Git opgenomen.
+JavaScript-syntaxis en de tweetalige berichtencontrole slagen lokaal.
+
+PHP en Docker zijn in de bewerkingsomgeving niet beschikbaar. PHP-syntaxis,
+MariaDB-transacties en het echte browserpad zijn daar niet uitgevoerd.
+`tests/dataset-import-integration.php` en `tests/dataset-import-smoke.mjs` zijn
+voor dat pad toegevoegd aan de geïsoleerde GitHub Actions-workflow; hun uitslag
+moet bij de PR worden gecontroleerd. De backendproef controleert nieuw aanmaken,
+exact teruglezen, overwrite-afwijzing, append, schemaconflict en transactieherstel
+bij een te lange waarde. De browserproef controleert upload, preview, taalwissel
+met conceptbehoud, import, API-teruglezing, ontbrekende CSRF en afsluiten.
+
+Herhalen: `python3 tests/dataset-readers.py`; voer de PHP-proef uitsluitend uit
+in een geïsoleerde testdatabase met `--confirm-database=<naam>` en de browserproef
+uitsluitend met `GOVERN_UI_WRITE_TESTS=1`. Productiedata worden niet gebruikt.

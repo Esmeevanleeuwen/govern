@@ -21,6 +21,7 @@ $governUser = \Govern\Web::user();
     <link rel="stylesheet" href="/assets/database-workspace.css">
     <link rel="stylesheet" href="/assets/row-editor.css">
     <link rel="stylesheet" href="/assets/database-manager.css">
+    <link rel="stylesheet" href="/assets/dataset-import.css">
     <link rel="stylesheet" href="/assets/ai-workspace.css">
     <link rel="stylesheet" href="/assets/modal-shell.css">
     <link rel="stylesheet" href="/assets/record-explorer.css">
