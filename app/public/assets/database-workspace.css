@@ -20,3 +20,14 @@
     .database-dialog .modal-database { max-width: 100%; }
     .modal-source-hint { padding: 0 13px 8px; }
 }
+
+/* A selected source is a separate context card above the complete record table. */
+#selected-source-record { margin-bottom: 24px; }
+.selected-source-body { display: grid; gap: 16px; min-width: 0; }
+.selected-source-body > p { margin: 0; font-size: 13px; overflow-wrap: anywhere; }
+.selected-source-body > .table-scroll { border-radius: 12px; }
+.selected-source-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.selected-source-actions .button { white-space: normal; }
+.row-actions .button { white-space: nowrap; flex-shrink: 0; }
+.data-update-status:empty { display: none; }
+.table-toolbar-right { flex-wrap: wrap; justify-content: flex-end; }

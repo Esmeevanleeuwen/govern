@@ -1170,21 +1170,27 @@ function renderRecordMap(scope) {
 async function selectedSourceRecord(root, table, scope) {
     const selected = state.selectedRecord;
     if (!selected || selected.table !== table || !supports('record_map')) return;
-    const panel = el('section', {class: 'card', id: 'selected-source-record', 'aria-label': t('app.mapEntry.sourceRecord')},
-        el('div', {class: 'card-body'}, el('h3', {}, t('app.mapEntry.sourceRecord')), loading()));
+    const body = el('div', {class: 'card-body selected-source-body'}, loading());
+    const panel = el('section', {class: 'card', id: 'selected-source-record', 'aria-labelledby': 'selected-source-title'},
+        el('div', {class: 'card-header'}, el('h2', {id: 'selected-source-title'}, t('app.mapEntry.sourceRecord')), icon('network')), body);
     root.prepend(panel);
     try {
         const data = await request('record-map', {params: {database: scope.database},
             body: {table, key: selected.key}, signal: scope.signal});
         if (!scope.live() || state.selectedRecord !== selected || !panel.isConnected) return;
         const node = data.focus;
-        panel.replaceChildren(el('div', {class: 'card-body'}, el('h3', {}, t('app.mapEntry.sourceRecord')),
+        body.replaceChildren(
             el('p', {}, el('code', {}, node.table), ' · ', node.label),
             dataTable(node.columns.map(column => ({key: column.name, label: column.name})), [node.row]),
-            button(t('app.mapEntry.openRecord'), () => openRecordMap(node.table, node.key), {symbol: 'network', className: 'button-small'}),
-            button(t('app.mapEntry.clearSource'), () => { state.selectedRecord = null; panel.remove(); }, {kind: 'ghost', className: 'button-small'})));
+            el('div', {class: 'selected-source-actions'},
+                button(t('app.mapEntry.openRecord'), () => openRecordMap(node.table, node.key), {symbol: 'network', className: 'button-small'}),
+                button(t('app.mapEntry.clearSource'), () => {
+                    state.selectedRecord = null;
+                    document.getElementById('data-search')?.focus({preventScroll: true});
+                    panel.remove();
+                }, {kind: 'ghost', className: 'button-small'})));
     } catch (error) {
-        if (error.name !== 'AbortError' && scope.live()) panel.replaceChildren(errorPanel(error));
+        if (error.name !== 'AbortError' && scope.live()) body.replaceChildren(errorPanel(error));
     }
 }
 
@@ -1216,6 +1222,7 @@ async function renderData(scope) {
     registerSelection(search, {kind: 'control', key: 'data:search', label: t('app.core.data.searchLabel'), table: table.name, purpose: 'searchRecords'});
     registerSelection(size, {kind: 'control', key: 'data:page-size', label: t('app.core.data.pageSize'), table: table.name, purpose: 'pageSize'});
     const result = el('div');
+    const updateStatus = el('span', {class: 'data-update-status small muted', role: 'status', 'aria-live': 'polite'});
     const pagination = el('div', {class: 'table-pagination'});
     const sql = el('div');
     let currentPage = viewState.page;
@@ -1223,13 +1230,18 @@ async function renderData(scope) {
     let requestId = 0;
     let rowController;
     scope.cleanup.push(() => { clearTimeout(timer); rowController?.abort(); });
+    const setUpdating = () => {
+        result.setAttribute('aria-busy', 'true');
+        result.inert = true;
+        updateStatus.textContent = t('app.databases.updating');
+        pagination.querySelectorAll('button').forEach(control => { control.disabled = true; });
+    };
     const load = async () => {
         rowController?.abort();
         rowController = new AbortController();
         const id = ++requestId;
-        result.replaceChildren(loading());
-        pagination.replaceChildren();
-        sql.replaceChildren();
+        if (!result.querySelector('.data-table')) result.replaceChildren(loading());
+        setUpdating();
         try {
             const data = await request('browse', {params: {database: scope.database, table: table.name, page: currentPage, page_size: size.value, q: search.value.trim()}, signal: rowController.signal});
             if (!scope.live() || id !== requestId) return;
@@ -1294,21 +1306,36 @@ async function renderData(scope) {
                     button(t('app.core.data.previous'), () => { currentPage -= 1; load(); }, {disabled: currentPage <= 1}),
                     el('span', {}, currentPage + ' / ' + pages),
                     button(t('app.core.data.next'), () => { currentPage += 1; load(); }, {disabled: currentPage >= pages})));
-            sql.append(sqlDisclosure(data.sql, data.params));
+            sql.replaceChildren(sqlDisclosure(data.sql, data.params));
         } catch (error) {
-            if (error.name !== 'AbortError' && scope.live() && id === requestId) result.replaceChildren(errorPanel(error, load));
+            if (error.name !== 'AbortError' && scope.live() && id === requestId) {
+                result.replaceChildren(errorPanel(error, load));
+                pagination.replaceChildren();
+                sql.replaceChildren();
+            }
+        } finally {
+            if (scope.live() && id === requestId) {
+                result.setAttribute('aria-busy', 'false');
+                result.inert = false;
+                updateStatus.textContent = '';
+            }
         }
     };
     search.addEventListener('input', () => {
         viewState.search = search.value;
         viewState.page = 1;
+        currentPage = 1;
+        // Invalidate the old search immediately, including during the debounce.
+        requestId++;
+        rowController?.abort();
+        setUpdating();
         clearTimeout(timer);
-        timer = setTimeout(() => { currentPage = 1; load(); }, 300);
+        timer = setTimeout(load, 300);
     });
-    size.addEventListener('change', () => { currentPage = 1; viewState.page = 1; viewState.pageSize = Number(size.value); load(); });
+    size.addEventListener('change', () => { clearTimeout(timer); currentPage = 1; viewState.page = 1; viewState.pageSize = Number(size.value); load(); });
     card.append(el('div', {class: 'table-toolbar'},
         el('div', {class: 'search-field'}, icon('search'), search),
-        el('div', {class: 'table-toolbar-right'}, el('span', {class: 'small muted'}, t('app.core.data.rows')), size)),
+        el('div', {class: 'table-toolbar-right'}, updateStatus, el('span', {class: 'small muted'}, t('app.core.data.rows')), size)),
         result, pagination);
     workspace.append(card);
     if (supports('write') && table.type !== 'view' && table.row_editable !== false) workspace.append(el('p', {class: 'table-caption'}, t('app.databases.help')));
