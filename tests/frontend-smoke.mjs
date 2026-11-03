@@ -176,7 +176,7 @@ try {
     await page.getByRole('tab', {name: 'SQL', exact: true}).focus();
     await page.keyboard.press('ArrowLeft');
     assert.equal(await page.getByRole('tab', {name: 'Structure', exact: true}).getAttribute('aria-selected'), 'true');
-    await switchModalTab(page, 'Export');
+    await switchModalTab(page, 'Exporteren');
     const exportUrl = new URL(modalDocument(page).url());
     assert.ok(['/table/export', '/database/export'].includes(exportUrl.searchParams.get('route')),
         'Export opens the real native phpMyAdmin export form.');

@@ -438,7 +438,8 @@ export function mountRecordMap(root, {state = {}, tables = [], scopeKey = '', in
                 if (relationErrors.has(key)) showError(relationErrors.get(key), entry, () => expand(node, relation));
                 list.append(entry);
             }
-            inspectorBody.append(list, el('details', {class: 'record-map-technical', 'data-map-technical': ''}, el('summary', {}, text('technical')), el('h4', {}, text('key')), valuesList(node.key),
+            inspectorBody.append(list, el('details', {class: 'record-map-technical', 'data-map-technical': ''}, el('summary', {}, text('technical')),
+                el('h4', {}, text('chooseTable')), el('code', {}, node.table), el('h4', {}, text('key')), valuesList(node.key),
                 el('h4', {}, text('values')), valuesList(node.row),
                 node.truncated ? el('p', {class: 'record-map-side-help'}, text('preview')) : null));
         } else {
@@ -446,9 +447,9 @@ export function mountRecordMap(root, {state = {}, tables = [], scopeKey = '', in
             if (!edge) return;
             const source = state.nodes.get(edge.source), target = state.nodes.get(edge.target);
             inspectorBody.append(el('div', {class: 'record-map-inspector-heading'},
-                el('span', {class: 'record-map-tag'}, text('declared')), el('h3', {}, edge.constraint || text('relationship'))),
+                el('span', {class: 'record-map-tag'}, text('declared')), el('h3', {}, text('relationship'))),
                 el('p', {class: 'record-map-side-help'}, text('explanation')),
-                valuesList({[text('source')]: edge.source_table, [text('target')]: edge.target_table}));
+                valuesList({[text('source')]: source?.label || edge.source_table, [text('target')]: target?.label || edge.target_table}));
             const pairs = el('section', {class: 'record-map-evidence'}, el('h4', {}, text('sourceValues')));
             const columns = edge.evidence?.column_pairs || (edge.source_columns || []).map((name, index) =>
                 ({source: name, target: edge.target_columns?.[index]}));
@@ -460,12 +461,12 @@ export function mountRecordMap(root, {state = {}, tables = [], scopeKey = '', in
             const actions = el('div', {class: 'record-map-actions'});
             if (source) actions.append(button(source.label, () => chooseNode(source), {className: 'button-small', 'data-map-edge-source': source.id}));
             if (target && target.id !== source?.id) actions.append(button(target.label, () => chooseNode(target), {className: 'button-small', 'data-map-edge-target': target.id}));
-            inspectorBody.append(pairs, actions);
-            if (edge.evidence?.sql) inspectorBody.append(el('div', {class: 'record-map-evidence'},
-                el('details', {'data-map-sql': '', 'data-map-technical': ''}, el('summary', {}, text('evidence')),
-                    el('pre', {}, el('code', {}, edge.evidence.sql)),
+            const technical = el('details', {class: 'record-map-technical', 'data-map-sql': '', 'data-map-technical': ''},
+                el('summary', {}, text('technical')), el('h4', {}, text('constraint')), el('code', {}, edge.constraint), pairs);
+            if (edge.evidence?.sql) technical.append(el('h4', {}, text('evidence')), el('pre', {}, el('code', {}, edge.evidence.sql)),
                     el('p', {class: 'small muted'}, text('params')),
-                    el('pre', {}, el('code', {}, JSON.stringify(edge.evidence.params || {}, null, 2))))));
+                    el('pre', {}, el('code', {}, JSON.stringify(edge.evidence.params || {}, null, 2))));
+            inspectorBody.append(actions, technical);
         }
         if (focusedRelation) [...inspectorBody.querySelectorAll('[data-record-relation]')]
             .find(item => item.dataset.recordRelation === focusedRelation)?.focus({preventScroll: true});
