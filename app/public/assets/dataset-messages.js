@@ -1,6 +1,7 @@
 import {registerMessages} from './i18n.js';
 registerMessages('dataset', {
     nl: {
+        confirmationPostgres: 'Typ database.schema om te importeren',
         title: 'Bestanden importeren', description: 'Excel (.xlsx), CSV, TSV, TXT, JSON of ZIP met deze bestanden. Alles wordt lokaal verwerkt.',
         file: 'Bestand kiezen', preview: 'Importvoorbeeld bekijken', sheet: 'Tabel of werkblad', table: 'Nieuwe tabelnaam',
         mode: 'Bestemming', create: 'Nieuwe tabel maken', append: 'Toevoegen aan bestaande tabel', target: 'Bestaande tabel',
@@ -19,6 +20,7 @@ registerMessages('dataset', {
         cached: '{count} formule-uitkomsten uit het bestand gebruikt; deze kunnen verouderd zijn.',
     },
     en: {
+        confirmationPostgres: 'Type database.schema to import',
         title: 'Import files', description: 'Excel (.xlsx), CSV, TSV, TXT, JSON or a ZIP containing these files. Everything is processed locally.',
         file: 'Choose file', preview: 'Preview import', sheet: 'Table or worksheet', table: 'New table name',
         mode: 'Destination', create: 'Create new table', append: 'Append to existing table', target: 'Existing table',

@@ -79,14 +79,9 @@ $archiveConfig = $scope->select('govern_pg', 'postgres', 'archive');
 $assert($publicConfig['schema'] === 'public' && $archiveConfig['schema'] === 'archive', 'Each request resolves its own connection and schema.');
 $assert(ConnectionScope::scopeKey('postgres', 'govern_pg', 'public') !== ConnectionScope::scopeKey('postgres', 'govern_pg', 'archive'), 'Frontend cache identities distinguish schemas.');
 $assert($database->writer()->query('SELECT current_user')->fetchColumn() === $config['user'], 'Row writes use the separately configured writer.');
-foreach (['scriptConnection'] as $method) {
-    try {
-        $database->$method();
-        throw new RuntimeException('PostgreSQL writer was exposed.');
-    } catch (ApiException $exception) {
-        $assert($exception->status === 403 && $exception->errorCode === 'postgres_read_only', 'Unsupported writer entry points fail explicitly.');
-    }
-}
+$sqlSession = $database->scriptConnection();
+$assert($sqlSession->query('SELECT current_user')->fetchColumn() === $config['sql_user'], 'Free SQL uses its separate scoped login.');
+$assert($sqlSession !== $database->scriptConnection(), 'Every free SQL run receives a fresh session.');
 
 // A fresh direct connection proves the role's grants independently of the
 // adapter's read-only session setting and of the API's capability checks.

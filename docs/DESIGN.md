@@ -47,12 +47,12 @@ source evidence, followed by canvas controls and a guide to Records/Schema,
 record windows and second-screen comparison/radar, both Tools entry points,
 imports, SQL/restore points and optional local AI. Explain the difference between
 table structure and record relationships, the read-only canvas, temporary work,
-installation accounts and PostgreSQL's current read-only capabilities. Keep the
+installation accounts and PostgreSQL's SQL, import and schema-backup capabilities. Keep the
 longer control reference and common questions in keyboard-accessible disclosures.
 
 The setup dialog offers new-installation and existing-checkout commands for
-Windows PowerShell and macOS/Linux, with copy feedback. Both use the combined
-`integrate/all-govern-updates` branch while it is awaiting merge into `main`.
+Windows PowerShell and macOS/Linux, with copy feedback. Both use the current
+`main` branch.
 Existing-checkout instructions retain `.env` and Docker volumes. Update the
 commands and documentation links together if the release branch changes.
 Project, documentation and setup links remain real navigation actions.
@@ -345,8 +345,9 @@ Keep primary actions visible without hover. Check the layout at 320 px, tablet w
   - **Schema:** secondary **Table details / Tabeldetails** and **Diagram** views.
     Table details show columns, keys, relationships and definitions. Diagram
     shows the live whole-database table/foreign-key structure.
-  - **Tools:** existing phpMyAdmin Import/Export actions and Backups. Keep
-    capabilities explicit, including PostgreSQL's unavailable write tools.
+  - **Tools:** import and Backups, plus official phpMyAdmin actions for MariaDB.
+    PostgreSQL uses native SQL/file imports and schema backups; keep engine
+    capabilities explicit.
     Backup creation, download and recovery use the existing restore-point flow;
     old `#experimenten` bookmarks remain reachable.
 
@@ -711,6 +712,12 @@ an exact statement count before execution. Database grants determine which SQL
 can run. File import controls and server administration remain separate official
 tool capabilities rather than claims made by the query editor.
 
+For PostgreSQL, reuse the SQL editor with engine-correct quoted/qualified
+examples and explicit role-grant limits. Hide the visual builder, saved-query
+form and phpMyAdmin shortcut until those paths exist for that engine. Explain
+that client commands and COPY STDIN/STDOUT are unavailable, and that NOTICE
+messages are not collected. Keep plain results/error diagnostics as text.
+
 Keep a complete transaction, including `COMMIT` or `ROLLBACK`, in one run. Report
 an unfinished transaction being rolled back when its session ends, and do not
 imply that committed work or DDL was undone. After execution, refresh the live
@@ -736,8 +743,25 @@ Use the existing safety export when the current database exists. During
 restoration, prevent competing app actions across all databases and show clear
 progress: free SQL can also target another allowed schema. A failure stays
 visible with a recovery path and any available safety point. Do not promise a
-universal undo: DDL is not transactional, and another phpMyAdmin window does not
-automatically follow the app's lock.
+universal undo: MariaDB DDL is not generally transactional, ordinary SQL may
+already have committed, and external clients do not automatically follow the
+app's lock. PostgreSQL schema replacement has its own atomic transaction.
+
+PostgreSQL imports reuse the native SQL/file-preview forms without displaying
+phpMyAdmin tabs, iframe, fallback or external link. Keep the captured database
+and schema visible and fixed during a modal operation. Confirm with exact
+`database.schema`. SQL preflight explains the safety snapshots for every
+configured existing schema and the possibility of already committed work after
+an error. File imports retain exact text/NULL and never silently overwrite.
+Changing language must preserve the chosen file, confirmation and preview.
+
+PostgreSQL backups explicitly name the selected schema. Label a custom archive
+as **PostgreSQL archive**, not SQL export. Restore confirms `database.schema`,
+explains replacement of later objects and standard permission normalization,
+and preserves other schemas. Unsupported objects or incoming external
+relationships produce an actionable error rather than widening restore scope.
+Retain the safety-copy recovery path; imported/native dump content is never
+presented as a privileged SQL-execution capability.
 
 ## Shared components and states
 

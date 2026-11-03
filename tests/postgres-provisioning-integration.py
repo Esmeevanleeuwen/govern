@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Check PostgreSQL role upgrades only in the disposable govern_pg database."""
 import argparse
+import json
 from pathlib import Path
 import subprocess
 
@@ -29,11 +30,13 @@ def sql(statement, role='admin'):
         'admin': '--username "$POSTGRES_USER"',
         'reader': 'PGPASSWORD="$PG_READ_PASSWORD" psql',
         'writer': 'PGPASSWORD="$PG_PASSWORD" psql',
+        'sql': 'PGPASSWORD="$PG_SQL_PASSWORD" psql',
+        'restore': 'PGPASSWORD="$PG_RESTORE_PASSWORD" psql',
     }
     if role == 'admin':
         client = 'exec psql -X -qAt ' + connection[role]
     else:
-        user = 'PG_READ_USER' if role == 'reader' else 'PG_USER'
+        user = {'reader': 'PG_READ_USER', 'writer': 'PG_USER', 'sql': 'PG_SQL_USER', 'restore': 'PG_RESTORE_USER'}[role]
         client = connection[role] + ' -X -qAt --host=127.0.0.1 --username "$' + user + '"'
     client += ' --dbname "$POSTGRES_DB" --set ON_ERROR_STOP=1'
     return subprocess.run(prefix + ['exec', '-T', 'postgres', 'sh', '-c', client],
@@ -70,8 +73,65 @@ try:
     result = sql("INSERT INTO public.govern_provision_default_probe (label) VALUES ('new default grants') RETURNING id;", 'writer')
     check(result.returncode == 0 and result.stdout.strip() == '1',
           'New administrator-owned tables and sequences inherit the scoped writer grants.')
+    check(sql('SELECT last_value FROM public.govern_provision_default_probe_id_seq;', 'reader').stdout.strip() == '1',
+          'The dump reader can inspect sequence state without mutation privileges.')
+    check(sql("SET default_transaction_read_only = off; SELECT nextval('public.govern_provision_default_probe_id_seq');", 'reader').returncode != 0,
+          'Reader sequence SELECT never grants nextval, even after disabling session read-only.')
     check(sql('TRUNCATE public.govern_provision_default_probe;', 'writer').returncode != 0,
           'An older broad default grant is narrowed to row operations on new tables.')
+
+    config = subprocess.run(prefix + ['config', '--format', 'json'], text=True, capture_output=True, cwd=root)
+    check(config.returncode == 0, 'Compose configuration remains valid with the optional tools service.')
+    services = json.loads(config.stdout)['services']
+    app_env = services['app']['environment']
+    check(not any(key in app_env for key in ['PGPASSWORD', 'PG_ADMIN_PASSWORD', 'PG_RESTORE_PASSWORD']),
+          'Neither bootstrap nor restricted restore passwords enter the web container.')
+    check('PG_SQL_PASSWORD' in app_env and 'PG_RESTORE_PASSWORD' in services['postgres-tools']['environment'],
+          'Only SQL credentials enter the app; restore credentials enter the private worker.')
+    check(sql("CREATE TABLE public.govern_provision_sql_probe (id bigserial PRIMARY KEY, label text); INSERT INTO public.govern_provision_sql_probe (label) VALUES ('sql-created');", 'sql').returncode == 0,
+          'The separate SQL identity can create and write tables in an allowed schema.')
+    check(sql('SELECT label FROM public.govern_provision_sql_probe;', 'reader').stdout.strip() == 'sql-created',
+          'New SQL-created objects immediately receive reader SELECT grants.')
+    check(sql("INSERT INTO public.govern_provision_sql_probe (label) VALUES ('row writer');", 'writer').returncode == 0,
+          'SQL-created sequences and tables immediately support the separate row writer.')
+    check(sql("CREATE TABLE archive.govern_provision_restore_probe (id bigserial PRIMARY KEY, label text); INSERT INTO archive.govern_provision_restore_probe (label) VALUES ('restricted restore');", 'restore').returncode == 0,
+          'The actual restricted restore login creates objects without administrator sessions.')
+    check(sql('SELECT label FROM archive.govern_provision_restore_probe;', 'reader').stdout.strip() == 'restricted restore',
+          'Objects created by the restricted restore login immediately receive reader grants.')
+    check(sql("INSERT INTO archive.govern_provision_restore_probe (label) VALUES ('after restore');", 'writer').returncode == 0,
+          'Restricted-owner sequences preserve separate row writer defaults.')
+    check(provision().returncode == 0, 'Restart accepts SQL and restore ownership only inside the configured schemas.')
+    for role in ['sql', 'restore']:
+        check(sql('BEGIN; CREATE TABLE public.govern_provision_fk_probe (id bigint REFERENCES archive.govern_provision_probe(id)); ROLLBACK;', role).returncode == 0,
+              'The ' + role + ' role may restore declared foreign keys across configured schemas.')
+    check(sql("BEGIN; CREATE FUNCTION public.govern_provision_trigger() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$; CREATE TRIGGER govern_provision_trigger BEFORE INSERT ON public.govern_provision_probe FOR EACH ROW EXECUTE FUNCTION public.govern_provision_trigger(); ROLLBACK;", 'sql').returncode == 0,
+          'SQL can create normal triggers in configured schemas without table ownership or administrator rights.')
+    role_switch = sql(r'''
+\getenv restorer PG_RESTORE_USER
+SET ROLE :"restorer";
+SELECT rolsuper FROM pg_roles WHERE rolname=current_user;
+RESET ROLE;
+SELECT rolsuper FROM pg_roles WHERE rolname=current_user;
+''', 'sql')
+    check(role_switch.returncode == 0 and role_switch.stdout.strip().splitlines() == ['f','f'],
+          'SQL SET/RESET ROLE never enters an administrator identity.')
+    for role in ['sql', 'restore']:
+        for statement in ['CREATE SCHEMA govern_forbidden_probe;', 'CREATE TEMP TABLE govern_forbidden_temp (id integer);',
+                          'SELECT * FROM govern_provision_excluded.probe;', 'CREATE ROLE govern_forbidden_role;']:
+            check(sql(statement, role).returncode != 0, 'The ' + role + ' login has no database/schema/admin or excluded-schema access.')
+    check(provision('-e', 'PG_SQL_PASSWORD=deliberately-different-sql-test-password').returncode != 0,
+          'An existing SQL password is never silently reset.')
+    check(sql('SELECT 1;', 'sql').stdout.strip() == '1', 'The original SQL password remains valid.')
+    check(provision('-e', 'PG_RESTORE_PASSWORD=deliberately-different-restore-test-password').returncode != 0,
+          'An existing restricted restore password is never silently reset.')
+    check(sql('SELECT 1;', 'restore').stdout.strip() == '1', 'The original restore password remains valid.')
+    check(sql(r'''
+\getenv sql_role PG_SQL_USER
+ALTER TABLE govern_provision_excluded.probe OWNER TO :"sql_role";
+''').returncode == 0, 'An isolated out-of-scope ownership fixture is installed.')
+    check(provision().returncode != 0, 'Out-of-scope SQL ownership is rejected before widening grants.')
+    check(sql('ALTER TABLE govern_provision_excluded.probe OWNER TO postgres;').returncode == 0,
+          'The isolated ownership fixture is reverted.')
     for schema in ['public', 'archive']:
         result = sql(f"INSERT INTO {schema}.govern_provision_probe (label) VALUES ('first') RETURNING id;", 'writer')
         check(result.returncode == 0 and result.stdout.strip() == '1',
@@ -96,6 +156,6 @@ try:
     check(provision('-e', 'PG_USER=postgres').returncode != 0,
           'Bootstrap credentials cannot be configured as the writer.')
 finally:
-    sql('DROP TABLE IF EXISTS public.govern_provision_default_probe; DROP TABLE public.govern_provision_probe; DROP TABLE archive.govern_provision_probe; DROP SCHEMA govern_provision_excluded CASCADE;')
+    sql('DROP TABLE IF EXISTS public.govern_provision_sql_probe; DROP TABLE IF EXISTS archive.govern_provision_restore_probe; DROP TABLE IF EXISTS public.govern_provision_default_probe; DROP TABLE public.govern_provision_probe; DROP TABLE archive.govern_provision_probe; DROP SCHEMA govern_provision_excluded CASCADE;')
 
 print(f'PostgreSQL provisioning checks: {checks} passed.')

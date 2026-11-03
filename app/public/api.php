@@ -20,6 +20,9 @@ use Govern\QueryDesigner;
 use Govern\QueryRunner;
 use Govern\RowEditor;
 use Govern\PostgresRowEditor;
+use Govern\PostgresBackupService;
+use Govern\PostgresNativeImport;
+use Govern\PostgresDatasetImport;
 use Govern\SavedQueries;
 use Govern\AiService;
 use Govern\DatabaseProvisioner;
@@ -64,7 +67,7 @@ try {
     }
     $snapshotActions = ['snapshots', 'create-snapshot', 'restore-snapshot', 'download-snapshot'];
     if (in_array($action, $snapshotActions, true)) {
-        $backup = new BackupService($config);
+        $backup = $config['engine'] === 'postgres' ? new PostgresBackupService($config) : new BackupService($config);
         if ($action === 'snapshots') {
             Http::json($backup->list());
         }
@@ -79,7 +82,7 @@ try {
         if ($stream === false) {
             throw ApiException::fromCode('snapshot_open_failed', 503);
         }
-        header('Content-Type: application/sql; charset=utf-8');
+        header('Content-Type: ' . ($config['engine'] === 'postgres' ? 'application/octet-stream' : 'application/sql; charset=utf-8'));
         header('Content-Disposition: attachment; filename="' . preg_replace('/[^A-Za-z0-9._-]/', '_', $download['filename']) . '"');
         header('Content-Length: ' . (string) filesize($download['path']));
         fpassthru($stream);
@@ -90,7 +93,7 @@ try {
     if ($datasetUpload) {
         $parsed = DatasetImport::read($file);
         $lock = new MaintenanceLock($config['maintenance_dir']);
-        $importer = new DatasetImport($database);
+        $importer = $database->engine() === 'postgres' ? new PostgresDatasetImport($database) : new DatasetImport($database);
         Http::json($action === 'dataset-preview' ? $importer->preview($parsed) : $importer->commit($parsed, $_POST));
     }
     $catalog = new Catalog($database);
@@ -101,7 +104,8 @@ try {
     }
     if ($action === 'native-import-preview' || $action === 'native-import-execute') {
         $lock = new MaintenanceLock($config['maintenance_dir'], $action === 'native-import-execute');
-        $import = new NativeImport($database, $catalog, $config);
+        $import = $database->engine() === 'postgres'
+            ? new PostgresNativeImport($database, $catalog, $config) : new NativeImport($database, $catalog, $config);
         $sql = Http::text($input, 'sql');
         if ($action === 'native-import-preview') {
             Http::json($import->preview($sql));
@@ -222,6 +226,7 @@ try {
                 Http::json((new QueryRunner($database))->executeScript(Http::text($input, 'sql'), ($input['confirm'] ?? false) === true));
             }
             if ($keys === ['design']) {
+                if ($database->engine() === 'postgres') throw ApiException::fromCode('postgres_read_only', 403);
                 $built = (new QueryDesigner($database))->compile($input['design']);
                 $result = (new QueryRunner($database))->execute($built['prepared_sql'], $built['params']);
                 $result['sql'] = $built['sql'];

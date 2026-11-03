@@ -15,22 +15,25 @@ final class PostgresAdapter implements DatabaseAdapter
 
     public function reader(): PDO
     {
-        return $this->read ??= $this->connect(true);
+        return $this->read ??= $this->connect('read');
     }
 
     public function writer(): PDO
     {
-        return $this->write ??= $this->connect(false);
+        return $this->write ??= $this->connect('write');
     }
 
-    private function connect(bool $readOnly): PDO
+    private function connect(string $kind): PDO
     {
-        $user = $this->config[$readOnly ? 'read_user' : 'user'] ?? '';
-        $password = $this->config[$readOnly ? 'read_password' : 'password'] ?? '';
+        $readOnly = $kind === 'read';
+        $user = $this->config[match ($kind) { 'read' => 'read_user', 'sql' => 'sql_user', default => 'user' }] ?? '';
+        $password = $this->config[match ($kind) { 'read' => 'read_password', 'sql' => 'sql_password', default => 'password' }] ?? '';
         if ($user === '' || $password === '') throw ApiException::fromCode('credentials_missing', 503);
-        $roleError = $readOnly ? 'reader_required' : 'postgres_writer_required';
+        $roleError = $readOnly ? 'reader_required' : ($kind === 'sql' ? 'postgres_sql_required' : 'postgres_writer_required');
         if (in_array(strtolower($user), ['root', 'postgres'], true)
-            || $user === ($this->config[$readOnly ? 'user' : 'read_user'] ?? '')) {
+            || ($kind !== 'read' && $user === ($this->config['read_user'] ?? ''))
+            || ($kind === 'read' && in_array($user, [$this->config['user'] ?? '', $this->config['sql_user'] ?? ''], true))
+            || ($kind === 'sql' && in_array($user, [$this->config['user'] ?? '', $this->config['restore_user'] ?? ''], true))) {
             throw ApiException::fromCode($roleError, 503);
         }
         $host = $this->config['host'];
@@ -58,16 +61,22 @@ final class PostgresAdapter implements DatabaseAdapter
         $pdo->exec("SET DateStyle = 'ISO, YMD'");
         $pdo->exec("SET IntervalStyle = 'postgres'");
         $pdo->exec('SET extra_float_digits = 3');
+        $pdo->exec('SET standard_conforming_strings = on');
         $pdo->exec("SET statement_timeout = '5s'");
         $pdo->exec("SET lock_timeout = '5s'");
         $pdo->exec("SET idle_in_transaction_session_timeout = '10s'");
         $pdo->exec('SET default_transaction_read_only = ' . ($readOnly ? 'on' : 'off'));
-        // Catalog and table names are always qualified; never use an editable schema search path.
-        $pdo->exec('SET search_path = pg_catalog');
+        // Only the explicit free-SQL session resolves unqualified names in the
+        // selected schema. Catalog/row services retain fully qualified names.
+        $schema = (string) ($this->config['schema'] ?? 'public');
+        if ($schema === '' || str_contains($schema, "\0")) throw ApiException::fromCode('database_not_available', 403);
+        $pdo->exec($kind === 'sql'
+            ? 'SET search_path = "' . str_replace('"', '""', $schema) . '"'
+            : 'SET search_path = pg_catalog');
         return $pdo;
     }
 
-    public function scriptConnection(): PDO { throw ApiException::fromCode('postgres_read_only', 403); }
+    public function scriptConnection(): PDO { return $this->connect('sql'); }
     public function discardReader(): void { $this->read = null; }
     public function databaseNames(): array { $this->reader(); return [$this->config['name']]; }
 

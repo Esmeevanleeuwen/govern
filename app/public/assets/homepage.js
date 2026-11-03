@@ -170,7 +170,7 @@ function setOperatingSystem(next) {
     $('#home-terminal-name').textContent = os === 'windows' ? 'PowerShell' : 'Terminal';
     const existing = $('#home-install-kind').value === 'existing';
     $('#home-setup-existing').hidden = !existing;
-    const branch = 'integrate/all-govern-updates';
+    const branch = 'main';
     const commands = existing
         ? 'git fetch origin\ngit switch ' + branch + '\ngit pull --ff-only origin ' + branch + '\n'
         : 'git clone --branch ' + branch + ' https://github.com/Esmeevanleeuwen/govern.git\ncd govern\n';

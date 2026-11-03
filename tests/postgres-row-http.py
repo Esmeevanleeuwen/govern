@@ -56,8 +56,8 @@ def main():
     val = lambda text: {'mode': 'value', 'value': text}
     status, result = request('bootstrap')
     check(status == 200 and result['data']['capabilities']['write'], 'Configured row editing advertised')
-    check(not result['data']['capabilities']['query'] and not result['data']['capabilities']['phpmyadmin'],
-          'SQL and phpMyAdmin remain unavailable for PostgreSQL')
+    check(result['data']['capabilities']['query'] and not result['data']['capabilities']['phpmyadmin'],
+          'Native SQL is available while phpMyAdmin remains MariaDB-only')
     csrf = result['data']['csrf']
     values = {'label': val('HTTP exact ' + uuid.uuid4().hex), 'amount': val('123456789012345678901234.15'),
               'nullable_text': {'mode': 'null'}, 'payload': val('00ff41'), 'default_text': {'mode': 'default'}}

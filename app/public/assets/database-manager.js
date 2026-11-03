@@ -8,9 +8,9 @@ import './postgres-messages.js';
 const text = (key, params) => t('app.databases.' + key, params);
 const workspaceKey = item => item.scope_key || item.name;
 const workspaceLabel = item => item.label || item.name;
-const canImport = item => item && item.available !== false && item.connection !== 'postgres';
+const canImport = item => item && item.available !== false;
 
-/** Prepare one named database, then use the official phpMyAdmin import flow. */
+/** Prepare a MariaDB database or open the selected engine’s import flow. */
 export function createDatabaseManager({getDatabase, getDatabases, canCreate, isBusy, onPrepared, onSelect, onImport, onBusy = () => {}}) {
     let saving = false;
     let failure = null;
@@ -79,7 +79,7 @@ export function createDatabaseManager({getDatabase, getDatabases, canCreate, isB
         createButton.disabled = createImport.disabled = saving || !canCreate() || !name.value.trim();
         close.disabled = cancel.disabled = saving;
         unavailable.hidden = canCreate();
-        unavailable.textContent = getDatabase().startsWith('postgres:') ? t('app.postgres.unavailable') : text('managerUnavailable');
+        unavailable.textContent = getDatabase().startsWith('postgres:') ? t('app.postgres.createUnavailable') : text('managerUnavailable');
         status.hidden = !saving;
         status.textContent = saving ? text('preparingDatabase') : '';
         error.hidden = !failure && !inputError;

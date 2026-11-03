@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Authenticated read-only PostgreSQL API checks against an isolated local stack."""
+"""Authenticated PostgreSQL API scope/capability checks against an isolated local stack."""
 import argparse
 import http.cookiejar
 import json
@@ -70,8 +70,8 @@ def main():
     check(status == 200 and result["data"]["rows"] == [{"id": "1", "label": "Archive-only row"}],
           "Packed keys retain schema isolation when browsing")
     status, result = request("query", {"sql": "SELECT 1"}, parameters=packed)
-    check(status == 403 and result.get("error_code") == "postgres_read_only",
-          "Compatibility requests retain the PostgreSQL read-only capability boundary")
+    check(status == 200 and result["data"]["statements"][0]["rows"] == [["1"]],
+          "Compatibility requests retain the selected PostgreSQL SQL connection")
     for invalid in ["postgres:other:public", "postgres:govern_pg:pg_catalog", "postgres:govern_pg:missing",
                     "postgres:govern_pg", "postgres::public", "postgres:govern_pg:",
                     "postgres:govern_pg:public:extra", "postgres:govern_pg:%ZZ", "postgres:govern_pg:%00"]:
@@ -87,10 +87,10 @@ def main():
           and data["database"]["connection"] == "postgres" and data["database"]["available"],
           "Bootstrap reports the actual engine, database and schema")
     check(data["scope_key"] == "postgres:govern_pg:public", "Selection carries its stable scoped identity")
-    check(all(data["capabilities"].get(name) is True for name in ["browse", "schema", "structure", "write"]),
-          "The first slice advertises its supported read operations")
-    check(all(data["capabilities"].get(name) is False for name in ["query", "saved_queries", "snapshots",
-          "phpmyadmin", "import", "create_database", "ai", "context"]), "Unsupported capabilities are explicit")
+    check(all(data["capabilities"].get(name) is True for name in ["browse", "schema", "structure", "write", "query", "snapshots", "import"]),
+          "PostgreSQL advertises its supported catalog, SQL, import and checkpoint operations")
+    check(all(data["capabilities"].get(name) is False for name in ["query_builder", "saved_queries",
+          "phpmyadmin", "create_database", "ai", "context"]), "Unsupported capabilities remain explicit")
     public_entry = next(item for item in data["databases"] if item.get("scope_key") == "postgres:govern_pg:public")
     archive_entry = next(item for item in data["databases"] if item.get("scope_key") == "postgres:govern_pg:archive")
     check(public_entry["name"] == archive_entry["name"] == "govern_pg" and public_entry["schema"] != archive_entry["schema"],
@@ -114,16 +114,13 @@ def main():
     status, result = request("structure", parameters={"table": "govern_pg_values"})
     check(status == 200 and result["data"]["create_sql"] == "", "Structure does not invent complete PostgreSQL DDL")
 
-    for action in ["queries", "snapshots", "download-snapshot", "context", "import-inspection", "ai-status"]:
+    for action in ["queries", "context", "ai-status"]:
         status, result = request(action, parameters={"table": "govern_pg_values", "id": "unavailable"})
         check(status == 403 and result.get("error_code") == "postgres_read_only", "PostgreSQL rejects unsupported GET " + action)
     for action, payload in [
-        ("query", {"sql": "SELECT 1"}), ("build-query", {"design": {}}),
+        ("query", {"design": {}}), ("build-query", {"design": {}}),
         ("save-query", {"name": "unsupported", "sql": "SELECT 1"}), ("delete-query", {"id": 1}),
-        ("create-snapshot", {"label": "unsupported"}), ("restore-snapshot", {"id": "unsupported", "confirmation": "govern_pg"}),
         ("prepare-database", {"name": "unsupported"}), ("ai-context", {}), ("ai-chat", {}),
-        ("native-import-preview", {"sql": "SELECT 1"}),
-        ("native-import-execute", {"sql": "SELECT 1", "preview_token": "0" * 64, "confirmation": "govern_pg"}),
     ]:
         status, result = request(action, payload)
         check(status == 403 and result.get("error_code") == "postgres_read_only", "PostgreSQL rejects unsupported POST " + action)
@@ -136,10 +133,10 @@ def main():
         check(status == 403 and result.get("error_code") == "csrf_invalid",
               "Multipart import preserves CSRF validation")
         status, result = request(action, upload=True)
-        check(status == 403 and result.get("error_code") == "postgres_read_only",
-              "PostgreSQL rejects multipart " + action + " before MariaDB-specific parsing or writing")
+        check((status == 200 and result.get("ok")) if action == "dataset-preview" else status == 409 and result.get("error_code") == "dataset_changed",
+              "PostgreSQL previews table files and refuses import without explicit confirmation")
     status, result = request("query", {"sql": "SELECT 1"}, token=False)
-    check(status == 403 and result.get("error_code") == "csrf_invalid", "CSRF checks still precede unsupported mutation handling")
+    check(status == 403 and result.get("error_code") == "csrf_invalid", "CSRF remains enforced for writable PostgreSQL SQL")
     status, result = request("bootstrap", parameters={"schema": "pg_catalog"})
     check(status == 403 and not result["ok"], "Unconfigured PostgreSQL namespaces are not selectable")
     status, result = request("bootstrap", parameters={"database": "postgres"})

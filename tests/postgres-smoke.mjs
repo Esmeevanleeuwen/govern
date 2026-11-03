@@ -35,7 +35,7 @@ try {
     assert.ok(await page.locator('[data-row-action="edit"]').count() > 0);
     assert.equal(await page.locator('#context-export').evaluate(link => link.hidden), true,
         'PostgreSQL disables export independently of whether Tools is open.');
-    assert.equal(await page.locator('[data-area="research"]').isVisible(), false);
+    assert.equal(await page.locator('[data-area="research"]').isVisible(), true);
     assert.equal(await page.locator('[data-area="experiments"]').isVisible(), false);
     assert.ok((await row('literal%_value').first().textContent()).includes('123456789012345678901234.12'));
     const searched = page.waitForResponse(response => {
@@ -85,10 +85,14 @@ try {
     assert.deepEqual(pairs.sort(), ['parent_id:govern_pg_parent:id', 'tenant_id:govern_pg_parent:tenant_id'].sort());
     await page.reload({waitUntil: 'networkidle'});
     assert.equal(await page.locator('#database-select').inputValue(), publicKey, 'Scoped bookmarks survive reload.');
-    for (const view of ['onderzoeken', 'experimenten']) {
-        await page.goto(bookmark(view, publicKey), {waitUntil: 'networkidle'});
-        await page.locator('[data-capability-unavailable]').waitFor();
-    }
+    await page.goto(bookmark('onderzoeken', publicKey, 'govern_pg_values'), {waitUntil: 'networkidle'});
+    await page.locator('#sql-editor').waitFor();
+    assert.equal(await page.locator('.query-builder').count(), 0);
+    assert.equal(await page.locator('#save-research').count(), 0);
+    assert.equal(await page.locator('[data-capability-unavailable]').count(), 0);
+    await page.goto(bookmark('experimenten', publicKey), {waitUntil: 'networkidle'});
+    await page.locator('#create-snapshot').waitFor();
+    assert.equal(await page.locator('[data-capability-unavailable]').count(), 0);
     await page.goto(bookmark('gegevens', 'bestuursatlas', 'organizations'), {waitUntil: 'networkidle'});
     await page.locator('#data-search').waitFor();
     assert.equal(await page.locator('#database-select').inputValue(), 'bestuursatlas');

@@ -2,6 +2,7 @@ import {t} from './i18n.js';
 import './dataset-messages.js';
 import {el, button, errorText} from './ui.js';
 import {request} from './api.js';
+import {parseConnectionScope} from './connection-scope.js';
 
 /** One draft per database, with immutable request scope and no automatic retries. */
 export class DatasetImportPanel {
@@ -16,10 +17,15 @@ export class DatasetImportPanel {
         this.draft = this.drafts.get(database);
         this.render();
     }
+    target() {
+        if (this.draft?.preview?.confirmation) return this.draft.preview.confirmation;
+        const scope = parseConnectionScope(this.database);
+        return scope.connection === 'postgres' ? scope.database + '.' + scope.schema : this.database;
+    }
     field(key, control) {
         const id = 'dataset-' + key;
         control.id = id;
-        return el('div', {class: 'dataset-field'}, el('label', {for: id}, t('dataset.' + key)), control);
+        return el('div', {class: 'dataset-field'}, el('label', {for: id}, t(key === 'confirmation' && this.database.startsWith('postgres:') ? 'dataset.confirmationPostgres' : 'dataset.' + key)), control);
     }
     render() {
         const d = this.draft;
@@ -27,9 +33,9 @@ export class DatasetImportPanel {
         const file = el('input', {type: 'file', class: 'input', accept: '.xlsx,.csv,.tsv,.txt,.json,.zip', on: {change: () => {
             d.file = file.files[0] || null; d.preview = null; d.result = null; d.error = ''; d.confirmation = ''; this.render();
         }}});
-        const previewButton = button(t('dataset.preview'), () => this.preview(), {kind: 'primary', disabled: !d.file});
+        const previewButton = button(t('dataset.preview'), () => this.preview(), {id: 'dataset-preview', kind: 'primary', disabled: !d.file});
         const content = [el('h3', {}, t('dataset.title')), el('p', {}, t('dataset.description')),
-            el('p', {}, this.database), this.field('file', file), d.file ? el('p', {}, d.file.name) : null,
+            el('p', {}, this.target()), this.field('file', file), d.file ? el('p', {}, d.file.name) : null,
             el('p', {}, t('dataset.limits')), previewButton];
         if (d.result) content.push(el('p', {role: 'status'}, t('dataset.saved', {count: d.result.imported, ...d.result})));
         if (d.error) content.push(el('p', {role: 'alert', class: 'error-text'}, d.error));
@@ -40,7 +46,7 @@ export class DatasetImportPanel {
             const mode = el('select', {class: 'input', on: {change: e => {d.mode = e.target.value; d.confirmation = ''; this.render();}}},
                 el('option', {value: 'create', selected: d.mode === 'create'}, t('dataset.create')),
                 el('option', {value: 'append', selected: d.mode === 'append', disabled: !item.targets.length}, t('dataset.append')));
-            const name = el('input', {class: 'input', value: d.name, maxlength: 64, on: {input: e => {d.name = e.target.value;}}});
+            const name = el('input', {class: 'input', value: d.name, maxlength: this.database.startsWith('postgres:') ? 63 : 64, on: {input: e => {d.name = e.target.value;}}});
             if (!item.targets.some(v => v.name === d.target)) d.target = item.targets[0]?.name || '';
             const target = el('select', {class: 'input', on: {change: e => {d.target = e.target.value;}}}, item.targets.map(v => el('option', {value: v.name, selected: v.name === d.target}, v.name)));
             content.push(this.field('sheet', sheet), el('p', {}, t('dataset.summary', {count: item.count, columns: item.columns.length, duplicates: item.duplicate_rows})),
@@ -62,9 +68,9 @@ export class DatasetImportPanel {
             };
             const group = el('select', {class: 'input', on: {change: e => draw(Number(e.target.value))}}, item.columns.map((c, i) => el('option', {value: i}, c.source || c.name)));
             draw(0);
-            content.push(this.field('chart', group), chart, el('p', {}, t('dataset.consequence', {database: this.database})));
-            const commit = button(t('dataset.import'), () => this.commit(), {kind: 'primary', disabled: d.confirmation !== this.database});
-            const confirm = el('input', {class: 'input', value: d.confirmation, autocomplete: 'off', on: {input: e => {d.confirmation = e.target.value; commit.disabled = d.confirmation !== this.database;}}});
+            content.push(this.field('chart', group), chart, el('p', {}, t('dataset.consequence', {database: this.target()})));
+            const commit = button(t('dataset.import'), () => this.commit(), {id: 'dataset-commit', kind: 'primary', disabled: d.confirmation !== this.target()});
+            const confirm = el('input', {class: 'input', value: d.confirmation, autocomplete: 'off', on: {input: e => {d.confirmation = e.target.value; commit.disabled = d.confirmation !== this.target();}}});
             content.push(this.field('confirmation', confirm), commit);
         }
         this.panel.replaceChildren(...content.filter(Boolean));

@@ -72,13 +72,13 @@ with tempfile.TemporaryDirectory(prefix='govern-postgres-start-test-') as direct
     (workspace / 'bin').mkdir()
     shutil.copy2(root / 'scripts/start.sh', workspace / 'scripts/start.sh')
     settings = workspace / '.env'
-    settings.write_text('APP_PORT=8089\nDB_PASSWORD=existing-maria-password\nPG_ENABLED=1\nPG_READ_PASSWORD=\nPG_PASSWORD=\nPG_ADMIN_PASSWORD=\n')
+    settings.write_text('APP_PORT=8089\nDB_PASSWORD=existing-maria-password\nPG_ENABLED=1\nPG_READ_PASSWORD=\nPG_PASSWORD=\nPG_SQL_PASSWORD=\nPG_RESTORE_PASSWORD=\nPG_ADMIN_PASSWORD=\n')
     docker = workspace / 'bin/docker'
     docker.write_text(fixture)
     docker.chmod(0o700)
     log = workspace / 'commands.jsonl'
     environment = {key: value for key, value in os.environ.items()
-                   if key not in {'PG_ENABLED', 'PG_READ_PASSWORD', 'PG_PASSWORD', 'PG_ADMIN_PASSWORD', 'GOVERN_START_TEST_FAILURE'}}
+                   if key not in {'PG_ENABLED', 'PG_READ_PASSWORD', 'PG_PASSWORD', 'PG_SQL_PASSWORD', 'PG_RESTORE_PASSWORD', 'PG_ADMIN_PASSWORD', 'GOVERN_START_TEST_FAILURE'}}
     environment.update({'PATH': str(workspace / 'bin') + os.pathsep + os.environ['PATH'],
                         'GOVERN_START_TEST_LOG': str(log)})
     result = subprocess.run(['sh', str(workspace / 'scripts/start.sh')], env=environment, capture_output=True, text=True)
@@ -91,8 +91,8 @@ with tempfile.TemporaryDirectory(prefix='govern-postgres-start-test-') as direct
     generated = dict(line.split('=', 1) for line in settings.read_text().splitlines() if '=' in line)
     check(generated['DB_PASSWORD'] == 'existing-maria-password', 'PostgreSQL opt-in preserves the MariaDB password.')
     check(all(len(generated[key]) == 64 and all(c in '0123456789abcdef' for c in generated[key])
-              for key in ['PG_READ_PASSWORD', 'PG_PASSWORD', 'PG_ADMIN_PASSWORD']), 'Blank PostgreSQL placeholders receive random passwords.')
-    check(all(generated[key] not in result.stdout + result.stderr for key in ['PG_READ_PASSWORD', 'PG_PASSWORD', 'PG_ADMIN_PASSWORD']),
+              for key in ['PG_READ_PASSWORD', 'PG_PASSWORD', 'PG_SQL_PASSWORD', 'PG_RESTORE_PASSWORD', 'PG_ADMIN_PASSWORD']), 'Blank PostgreSQL placeholders receive random passwords.')
+    check(all(generated[key] not in result.stdout + result.stderr for key in ['PG_READ_PASSWORD', 'PG_PASSWORD', 'PG_SQL_PASSWORD', 'PG_RESTORE_PASSWORD', 'PG_ADMIN_PASSWORD']),
           'Startup does not print generated PostgreSQL passwords.')
     before = settings.read_text()
     result = subprocess.run(['sh', str(workspace / 'scripts/start.sh')], env=environment, capture_output=True, text=True)

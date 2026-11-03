@@ -7,4 +7,5 @@ playwright-report
 node_modules
 vendor
 backups
+work
 *.log
