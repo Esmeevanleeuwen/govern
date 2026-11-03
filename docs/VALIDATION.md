@@ -3,6 +3,12 @@
 Stand van de controles: **3 november 2026**. Eerdere resultaten hieronder horen
 bij hun beschreven wijziging en zijn niet automatisch opnieuw uitgevoerd.
 
+De actuele bediening staat in [Explore](RECORD_MAP.md): één flexibel canvas
+met de gepagineerde record-map-acties. De hieronder bewaarde controles van
+Guided/Detailed en de eerdere GET-verkenner beschrijven hun eigen voorganger,
+niet een tweede actuele interface. Het `GET explore`-contract blijft beschikbaar
+voor bestaande clients.
+
 ## Guided / Stap voor stap voor collega's
 
 De recordverkenner heeft nu een standaard begeleide kijkmodus met categorieën,

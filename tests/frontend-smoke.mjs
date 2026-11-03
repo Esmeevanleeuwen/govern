@@ -49,12 +49,24 @@ const waitForModal = async page => {
     assert.match(await modalDocument(page).title(), /phpMyAdmin/i);
 };
 const switchModalTab = async (page, label) => {
-    const response = page.waitForResponse(result =>
-        result.url().includes('/phpmyadmin/index.php') && result.request().resourceType() === 'document');
-    await page.getByRole('tab', {name: label, exact: true}).click();
+    const tab = page.getByRole('tab', {name: label, exact: true});
+    const key = (await tab.getAttribute('id')).replace('database-tab-', '');
+    const database = await page.locator('#modal-database').inputValue();
+    const table = await page.locator('#modal-table').inputValue();
+    const route = key === 'browse' ? (table ? '/sql' : '/database/structure')
+        : (table ? '/table/' : '/database/') + key;
+    const requestedDocument = url => url.pathname === '/phpmyadmin/index.php'
+        && url.searchParams.get('route') === route && url.searchParams.get('db') === database
+        && (url.searchParams.get('table') || '') === table;
+    // The previous keyboard tab navigation can still be in flight. Only the
+    // document requested by this click establishes that the new tab loaded.
+    const response = page.waitForResponse(result => result.request().resourceType() === 'document'
+        && requestedDocument(new URL(result.url())));
+    await tab.click();
     assert.equal((await response).status(), 200);
+    await modalDocument(page).waitForURL(requestedDocument);
     await waitForModal(page);
-    assert.equal(await page.getByRole('tab', {name: label, exact: true}).getAttribute('aria-selected'), 'true');
+    assert.equal(await tab.getAttribute('aria-selected'), 'true');
 };
 
 try {
@@ -83,7 +95,9 @@ try {
     }
     await shot(page, 'data');
 
-    await page.getByRole('link', {name: 'Structuur', exact: true}).click();
+    await page.locator('[data-database-view="schema"]').click();
+    await page.locator('#schema-viewport').waitFor();
+    await page.locator('[data-database-view="structuur"]').click();
     await page.getByRole('heading', {name: 'Verwijzingen naar andere tabellen'}).waitFor();
     assert.ok(await page.locator('.data-table tbody tr').count() > 0);
     await shot(page, 'structure');
@@ -156,7 +170,10 @@ try {
         }
     }
 
-    await page.getByRole('link', {name: 'Experimenten', exact: true}).click();
+    await page.locator('#navigation [data-area="database"]').click();
+    const backups = page.locator('[data-database-tool="backups"]');
+    await backups.locator('xpath=ancestor::details[1]').locator('summary').click();
+    await backups.click();
     await page.getByRole('heading', {name: 'Je herstelpunten', exact: true}).waitFor();
     await waitForPage(page);
     await shot(page, 'experiments');
@@ -171,6 +188,12 @@ try {
     await page.getByRole('tab', {name: 'SQL', exact: true}).focus();
     await page.keyboard.press('ArrowLeft');
     assert.equal(await page.getByRole('tab', {name: 'Structure', exact: true}).getAttribute('aria-selected'), 'true');
+    await switchModalTab(page, 'Exporteren');
+    const exportUrl = new URL(modalDocument(page).url());
+    assert.ok(['/table/export', '/database/export'].includes(exportUrl.searchParams.get('route')),
+        'Export opens the real native phpMyAdmin export form.');
+    assert.equal(exportUrl.searchParams.get('db'), bootstrap.database.name,
+        'Export retains the explicitly selected work database.');
     await page.getByRole('button', {name: 'Venster vergroten', exact: true}).click();
     assert.equal(await page.locator('#database-dialog').evaluate(node => node.classList.contains('expanded')), true);
     await page.keyboard.press('Escape');

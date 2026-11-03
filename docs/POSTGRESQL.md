@@ -85,44 +85,40 @@ Normaal starten laadt de voorbeelden niet automatisch.
 
 ## Records en hun verbindingen verkennen
 
-Open **Database → Explore** (Nederlands: **Verkennen**) en kies een tabel en
-startrecord. Een punt in deze grafiek is een echt record. De lijnen volgen
-de foreign keys uit de actuele database. Het bestaande tabblad **Schema** blijft
-de structuur van tabellen tonen.
+Open **Database → Explore** (Nederlands: **Verkennen**) en kies via de
+bronbibliotheek een tabel en startrecord. Iedere kaart is een echt record;
+de lijnen volgen foreign keys uit de actuele database. Het hoofdtabblad
+**Schema** groepeert tabeldetails en het schemadiagram.
 
-Selecteer een punt of een rij in de lijst om hetzelfde record in beide te
-markeren. De uitleg toont zijn velden en de bron- en doelwaarden van een
-verwijzing. Met **Explore from here** ga je verder vanaf het gekozen record.
-Gebruik de relatiekeuzes en het zoekveld om de geladen weergave te beperken.
+Kaarten, bronbibliotheek en inspecteur werken met dezelfde selectie. Vanuit
+het geselecteerde record vouw je inkomende of uitgaande verwijzingen uit.
+Vragen zoals **Show linked …** gebruiken diezelfde verwijzingen. Bij meer
+resultaten kies je bewust een volgende pagina. **Show all loaded records**
+herstelt de zichtbaarheid van geladen kaarten, zonder de hele database te lezen.
 
-De eerste versie toont één stap rond het startrecord, met zichtbare grenzen
-voor het aantal records en relaties. De teller beschrijft geladen records;
-een ontbrekende lijn bewijst niet dat de hele database geen verbinding bevat.
-Tabellen zonder bruikbare unieke sleutel blijven in de gewone gegevensbrowser
-beschikbaar. Selecteren, zoeken en verder verkennen veranderen geen gegevens.
+Met **Explore from here** ga je verder vanaf een gekozen record. **View row**
+leest precies dat bronrecord opnieuw uit in Records. Sleutels, constraints,
+kolomparen en gebruikte SQL zijn beschikbaar onder technische details.
 
-### Zonder code: Guided / Stap voor stap
+Sleep kaarten, verschuif het werkvlak of gebruik zoom en passend maken.
+**Orbit** en **Flow** rangschikken kaarten; vastgezette kaarten houden daarbij
+hun positie. **Manual** bewaart je eigen indeling. Shift-selectie, Hide en Undo
+horen alleen bij de canvaspresentatie. Zij veranderen geen PostgreSQL-records.
+De bibliotheek en inspecteur kunnen bewegen, in breedte veranderen of sluiten;
+op mobiel is één lade tegelijk open.
 
-Verkennen opent standaard met eenvoudige keuzes. Kies een categorie, kies een
-item en gebruik daarna een vraagknop. Met de voorbeeldgegevens kun je bijvoorbeeld:
+De teller beschrijft geladen records. Een ontbrekende lijn bewijst niet dat de
+hele database geen verbinding bevat. Tabellen zonder bruikbare unieke sleutel
+blijven in de gewone recordsbrowser beschikbaar. Grootte- en previewgrenzen en
+externe verwijzingen blijven zichtbaar als beperking. Scope, selectie en
+indeling blijven per database/schema apart; opgehaalde records gaan niet naar
+browseropslag.
 
-1. **Demo organizations** en **Northbridge Council** kiezen.
-2. **Show Demo systems (2)** kiezen om de geladen systemen en het startitem te zien.
-3. **How is another item connected to this one?** openen en **Resident Services Portal** kiezen.
-4. **Explain this connection** gebruiken voor een uitleg van de opgeslagen verwijzing.
-5. Met **Follow this item** verder kijken vanaf dat systeem.
-
-De vraagknoppen gebruiken de werkelijk geladen records en verbindingen. Het zijn
-vaste kijkacties, geen vrije SQL of gegenereerde antwoorden. Aantallen tellen
-verschillende gekoppelde items; meerdere verwijzingen tellen een item niet dubbel.
-De bestaande grenzen van de geladen buurt blijven zichtbaar.
-
-**Technical details / Technische details** toont op verzoek de originele
-databasenaam, volledige sleutel en exacte bronvelden. Leesbare categorienamen
-worden uit de identifiers afgeleid; de database en haar inhoud blijven hetzelfde.
-**Detailed / Details** geeft de oorspronkelijke bediening terug zonder de
-selectie of filters opnieuw in te stellen. De browser bewaart alleen de gekozen
-modus. Records en sleutels worden hiervoor niet in browseropslag bewaard.
+Met de expliciete voorbeelden kun je **Demo organizations** kiezen, daarna
+**Northbridge Council**, en vervolgens een verwijzing naar **Demo systems**
+uitvouwen. De inspecteur laat de echte bronkolommen zien; de werkplek vraagt
+geen SQL of recordsleutel als invoer. Vragen zijn vaste leesacties en gebruiken
+geen AI of gegenereerde antwoorden. Zie [Explore](RECORD_MAP.md).
 
 ## Database en schema's
 

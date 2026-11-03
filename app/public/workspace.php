@@ -17,13 +17,12 @@ $governUser = \Govern\Web::user();
     <link rel="stylesheet" href="/assets/schema-help.css">
     <link rel="stylesheet" href="/assets/workspace-navigation.css">
     <link rel="stylesheet" href="/assets/schema-workspace.css">
-    <link rel="stylesheet" href="/assets/record-explorer.css">
-    <link rel="stylesheet" href="/assets/explorer-guide.css">
     <link rel="stylesheet" href="/assets/selection-pointer.css">
     <link rel="stylesheet" href="/assets/database-workspace.css">
     <link rel="stylesheet" href="/assets/row-editor.css">
     <link rel="stylesheet" href="/assets/database-manager.css">
     <link rel="stylesheet" href="/assets/ai-workspace.css">
+    <link rel="stylesheet" href="/assets/record-map.css">
     <script type="module" src="/assets/app.js"></script>
     <script type="module" src="/assets/workspace-account.js"></script>
 </head>

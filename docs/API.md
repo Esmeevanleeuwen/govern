@@ -127,9 +127,10 @@ schema parameters, so equal table names in separate schemas stay independent.
 Only names from `PG_DATABASE` and `PG_SCHEMAS` are listed for PostgreSQL;
 configured schemas that cannot be read remain visible with `available:false`.
 
-PostgreSQL supports only authenticated GET actions `bootstrap`, `schema`,
-`structure`, `browse` and `explore`, alongside the global `databases` action. Normal HTTP
-method and CSRF validation still apply. Every other scoped PostgreSQL action
+PostgreSQL supports authenticated GET actions `bootstrap`, `schema`,
+`structure`, `browse`, `explore` and `record-map-records`, plus the read-only
+POST `record-map`, alongside the global `databases` action. Normal HTTP method
+and CSRF validation still apply. Every other scoped PostgreSQL action
 returns 403 `postgres_read_only` before the corresponding service is invoked.
 This includes arbitrary SQL, row editing, saved queries, snapshots, import
 inspection/database creation, context export and AI. These controls are also
@@ -137,7 +138,8 @@ unavailable in the UI; the server guard remains authoritative.
 
 Bootstrap adds top-level `scope_key` and `capabilities`, and database fields
 `connection`, `engine`, `schema` and `scope_key`. PostgreSQL capabilities
-`browse`, `structure`, `schema`, `explore` are true; `write`, `query`, `saved_queries`,
+`browse`, `structure`, `schema`, `explore`, `record_map` are true;
+`write`, `query`, `saved_queries`,
 `snapshots`, `phpmyadmin`, `import`, `create_database`, `ai`, `context` are false.
 The normalized catalog/browse response retains the existing table, column and
 relationship fields. PostgreSQL browse returns no editable row identities;
@@ -146,7 +148,11 @@ relationship fields. PostgreSQL browse returns no editable row identities;
 PostgreSQL database, keeping external-schema foreign keys distinguishable.
 Structure can leave `create_sql` empty rather than inventing a full table DDL.
 
-### Read-only record exploration
+### Compatibility: read-only record exploration
+
+`GET explore` remains available for existing clients. The unified Explore
+workspace uses the paginated record-map endpoints below; it does not combine
+these two response shapes or their node IDs into a second graph.
 
 `GET explore` accepts a catalog `table` and an optional `key` containing a JSON
 object with the record's complete primary or non-nullable unique key. Ordinary
@@ -176,14 +182,73 @@ keys return 422 and a requested record that no longer exists returns 404.
 Exact key and relationship scalars are serialized as text by the engine before
 PDO conversion, preserving adjacent DOUBLE values as separate identities.
 
-The browser keeps graph selection, filters and focus in temporary per-scope
-view state. Switching database/schema aborts pending reads and ignores their
-late responses. This feature performs no row, schema, privilege or account
-mutation and does not enable the PostgreSQL SQL editor.
+The endpoint performs no row, schema, privilege or account mutation and does
+not enable the PostgreSQL SQL editor. Clients must keep the complete scope
+attached to requests and ignore replies belonging to an older scope.
 
 The public `health` action continues to check only the fixed MariaDB startup
 connection. PostgreSQL readiness appears in its authenticated bootstrap data;
 an unavailable optional PostgreSQL connection does not become a health target.
+
+### Unified Explore workspace and record-map API
+
+Both engines use the same read-only map endpoints. Every request carries the
+ordinary connection/database/schema URL scope and requires an approved account.
+Map operations use the reader connection and the ordinary maintenance lock.
+They accept no SQL, host, credentials or identifier expressions from the browser.
+
+`GET record-map-records` accepts `table`, `q`, `page` and `page_size` and returns
+`{table,nodes,key_columns,supported,reason_code?,page,page_size,has_more,next_page?}`.
+It lists possible starting records from one live catalog table. The default
+page size is 25, capped at 50. Unsupported views or record identities are
+explicit; they do not become invented node IDs.
+
+`POST record-map` uses JSON and the normal `X-CSRF-Token` header. Its input is
+`{table:string,key:object,relation?:string,offset?:integer,page_size?:integer}`.
+`key` contains the complete selected primary or suitable non-nullable unique
+key. Every value is an exact string, including large integers. Extra, missing
+or fabricated key fields are rejected, and the selected record is read again.
+An omitted `relation` inspects that record and lists its declared incoming and
+outgoing references. A `relation` ID returned by the live catalog expands one
+reference, with offset pagination and a default page size of 25 (maximum 50).
+
+The result is
+`{focus,nodes,edges,relations,has_more,next_offset,relation?}`. Nodes contain
+`{id,table,key,label,row,columns,truncated}`. `key` and `row` remain JSON objects,
+including when identifiers look numeric. Stable node IDs include connection,
+database, schema, table and the complete canonical key; preview text is never
+the source of identity. Large display values can be shortened explicitly.
+Identity and relationship columns are projected as engine text before PDO
+conversion, keeping adjacent floating-point keys distinct from rounded browser
+or PDO numeric previews.
+
+Edges contain source/target node IDs, `kind:"foreign_key"`, constraint name,
+source/target table and column names, exact source/target keys, and
+`source_values`/`target_values` objects keyed by their original column names.
+These additive objects carry complete matching FK values as text (or null),
+separately from shortened node previews and record primary keys. `evidence`
+contains prepared SQL, parameters, ordered column pairs and schema names.
+Relation descriptors identify incoming/outgoing direction and indicate whether
+the reference can be expanded. Cross-schema references, views and unsupported
+record keys remain labelled unavailable rather than being redirected to a
+same-named table in the current scope. Composite and self-references retain
+their declared identities. A nullable reference without matching values does
+not create a fictional target record.
+
+Only current records matching a declared foreign key create edges. This API
+does not generate semantic similarities, AI inferences or causal claims. Map
+selection and fetched previews stay in per-scope browser memory, not persistent
+browser record storage. Opening a selected source record in Records reads it again
+through `record-map`; it does not rely on a shortened preview or the first page
+of a table. Pagination describes the loaded result, not a claim that the entire
+database has been mapped. See [RECORD_MAP.md](RECORD_MAP.md).
+
+The workspace route is `#verkennen`; old `#verbanden` bookmarks resolve to the
+same workspace. Canvas movement, pinning, hiding, arrangement and undo are
+client presentation operations. They introduce no write endpoint or free-SQL
+argument. Undo must not resurrect an older record preview, edge or relationship
+cursor after that evidence has been refreshed. Changing the active connection,
+database or schema keeps each scope's temporary workspace separate.
 
 ### Existing MariaDB scope
 
@@ -877,10 +942,11 @@ PHP8.4+, PDO MySQL and PDO SQLite, Argon2id support, native PHP classes and ES m
 ## phpMyAdmin integration
 
 Same origin at `/phpmyadmin/` via Nginx. Modal shortcuts are Browse, Structure,
-SQL and Import. Iframe uses actual phpMyAdmin, not a partial imitation. URL query route
-`/sql` (Browse), `/table/structure`, `/table/sql` or `/table/import`, with encoded
-selected `db` and `table`. No-table fallback `/database/structure`,
-`/database/sql` or `/database/import`. Allow only
+SQL, Import and Export. Iframe uses actual phpMyAdmin, not a partial imitation.
+URL query routes are `/sql` (Browse), `/table/structure`, `/table/sql`,
+`/table/import` or `/table/export`, with encoded selected `db` and `table`.
+No-table fallbacks are `/database/structure`, `/database/sql`,
+`/database/import` and `/database/export`. Allow only
 same-origin framing; config auth uses the scoped writer account and actual
 MariaDB grants determine available databases. The four system schemas are hidden;
 `only_db` does not restrict additional granted schemas. Display current DB/table,

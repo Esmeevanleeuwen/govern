@@ -41,6 +41,10 @@ const navigate = async route => {
         if (!['gegevens', 'structuur', 'schema'].includes(current)) {
             await page.locator('#navigation [data-area="database"]').click();
         }
+        if (route === 'structuur' && !await page.locator('[data-database-view="structuur"]').count()) {
+            await page.locator('[data-database-view="schema"]').click();
+            await page.locator('#schema-viewport').waitFor();
+        }
         await page.locator('[data-database-view="' + route + '"]').click();
     } else await page.locator('#navigation [data-route="' + route + '"]').click();
     await page.waitForFunction(expected => location.hash.split('?')[0] === '#' + expected, route);
