@@ -2,6 +2,13 @@
 set -eu
 cd "$(dirname "$0")/.."
 
+# Once explicitly configured for a domain, ordinary updates keep the VPS edge.
+# Read one literal value; never source or evaluate .env as shell code.
+vps_domain=${GOVERN_DOMAIN:-$(if [ -f .env ]; then sed -n 's/^GOVERN_DOMAIN=//p' .env | tail -n 1 | tr -d '\r'; fi)}
+if [ -n "$vps_domain" ]; then
+    exec sh scripts/start-vps.sh "$vps_domain"
+fi
+
 if ! command -v docker >/dev/null 2>&1; then
     echo 'Installeer en start Docker Desktop (of Docker Engine met Compose) eerst.' >&2
     exit 1

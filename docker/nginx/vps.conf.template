@@ -1,0 +1,14 @@
+# This listener has no published host port. Only the opt-in TLS edge connects
+# to it. HTTPS is a property of that route, never a client-supplied header.
+server {
+    listen 81 default_server;
+    server_name _;
+    return 444;
+}
+
+server {
+    listen 81;
+    server_name ${GOVERN_DOMAIN};
+    set $govern_protocol https;
+    include /etc/nginx/govern-routes.inc;
+}

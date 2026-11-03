@@ -36,8 +36,9 @@ krijgt dezelfde openbare uitkomst als een wachtende aanvraag.
 Dit is installatiebrede toegang, geen gebruikersspecifieke databasescheiding.
 Elke goedgekeurde gebruiker krijgt dezelfde bestaande databasefuncties en
 MariaDB-rechten. Er is geen mailverificatie, herstelmail, wachtwoordreset of
-account-/apparaatsynchronisatie. De loopbackbinding blijft gelden; deze
-authenticatie is geen claim dat het platform klaar is voor openbare hosting.
+account-/apparaatsynchronisatie. De standaardinstallatie blijft aan loopback
+gebonden. De afzonderlijke VPS-configuratie hieronder voegt HTTPS op één
+expliciet domein toe; accounts blijven dezelfde installatierechten delen.
 
 `auth-api.php` biedt het kleine accountcontract. `api.php` behandelt alleen de
 vaste, minimale database-readinesscontrole zonder login; alle andere routes
@@ -61,6 +62,30 @@ stoppen de scripts de gateway, zonder volumes te verwijderen, zodat oudere
 toegangsregels niet actief achterblijven.
 
 ## Actuele databases, herbruikbare schermen
+
+### Optionele VPS-ingang met HTTPS
+
+`compose.vps.yaml` breidt de gewone stack uit met Caddy op poorten 80 en 443 en
+eigen volumes voor certificaten/configuratie. `GOVERN_DOMAIN` bepaalt de exacte
+DNS-naam. Caddy vernieuwt het certificaat en stuurt door naar de niet-gepubliceerde
+poort 81 van de bestaande Nginx-gateway. Die listener accepteert alleen dit
+domein en zet het protocol intern op de constante `https`. De gewone
+loopbacklistener behoudt zijn werkelijke protocol. Browserheaders kunnen deze
+keuze niet veranderen.
+
+Beide listeners gebruiken `docker/nginx/govern-routes.inc`, inclusief de
+authenticatiecontrole vóór ieder phpMyAdmin-verzoek, uploadlimieten en
+cachebeleid. Alleen de VPS-override geeft het domein door aan
+`APP_ALLOWED_HOSTS` en de domeincontrole van phpMyAdmin. De app gebruikt zijn
+bestaande Origin/CSRF-controle en Secure-sessiecookies; phpMyAdmin maakt zijn
+absolute URL met het protocol van de gateway.
+
+`scripts/start-vps.sh` controleert vooraf de bestaande actieve eigenaar, bewaart
+de domeinnaam zonder `.env` als code uit te voeren en start dezelfde volumes
+met de extra HTTPS-service. Het test en herlaadt de proxyconfiguratie. Bij een
+opstart-/configuratiefout stopt de publieke Caddy-ingang; de accounts,
+werkdatabases en SSH-toegang blijven behouden. Zie [VPS.md](VPS.md) voor de
+concrete installatie- en bijwerkstappen.
 
 ### Optionele PostgreSQL-verbinding
 

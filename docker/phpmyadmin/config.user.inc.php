@@ -12,13 +12,29 @@ $cfg['ServerDefault'] = 1;
 // through its expand arrow, without covering the editor on a narrow screen.
 $cfg['NavigationWidth'] = 0;
 
-// Preserve the browser's loopback hostname and port behind the local proxy.
-$governHost = $_SERVER['HTTP_HOST'] ?? 'localhost:8080';
-if (!preg_match('/\A(?:localhost|127\.0\.0\.1|\[::1\])(?::[0-9]{1,5})?\z/i', $governHost)) {
+// Keep the exact browser authority. Public hosting is an explicit, single-domain
+// opt-in; the gateway supplies HTTPS only on its private TLS-edge listener.
+$governAuthority = $_SERVER['HTTP_HOST'] ?? 'localhost:8080';
+$governParts = is_string($governAuthority) && !preg_match('/[\x00-\x20\x7f]/', $governAuthority)
+    ? parse_url('http://' . $governAuthority) : false;
+$governHost = is_array($governParts) ? strtolower((string) ($governParts['host'] ?? '')) : '';
+$governPort = is_array($governParts) ? ($governParts['port'] ?? null) : null;
+$governCanonical = $governHost . ($governPort !== null ? ':' . $governPort : '');
+$governProtocol = $_SERVER['HTTP_X_FORWARDED_PROTO'] ?? 'http';
+$governDomain = strtolower(trim(getenv('GOVERN_DOMAIN') ?: ''));
+$governDomainValid = preg_match('/\A(?=.{1,253}\z)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?\z/D', $governDomain) === 1;
+$governAuthorityValid = is_array($governParts) && $governHost !== ''
+    && !array_intersect(['user', 'pass', 'path', 'query', 'fragment'], array_keys($governParts))
+    && ($governPort === null || ($governPort >= 1 && $governPort <= 65535))
+    && strtolower($governAuthority) === $governCanonical
+    && in_array($governProtocol, ['http', 'https'], true);
+$governLocal = in_array($governHost, ['localhost', '127.0.0.1', '[::1]'], true);
+$governPublic = $governDomainValid && $governHost === $governDomain && $governProtocol === 'https';
+if (!$governAuthorityValid || (!$governLocal && !$governPublic)) {
     http_response_code(400);
-    exit('Open Govern via localhost of 127.0.0.1.');
+    exit('Open Govern via the configured address. Open Govern via het ingestelde adres.');
 }
-$cfg['PmaAbsoluteUri'] = 'http://' . $governHost . '/phpmyadmin/';
+$cfg['PmaAbsoluteUri'] = $governProtocol . '://' . $governCanonical . '/phpmyadmin/';
 
 $governDatabase = getenv('DB_NAME') ?: 'bestuursatlas';
 $cfg['Servers'][1]['host'] = getenv('PMA_HOST') ?: 'database';
@@ -53,4 +69,6 @@ $governStorage = [
 foreach ($governStorage as $setting => $suffix) {
     $cfg['Servers'][1][$setting] = '_govern_pma__' . $suffix;
 }
-unset($governHost, $governDatabase, $governStorage, $setting, $suffix);
+unset($governAuthority, $governParts, $governHost, $governPort, $governCanonical,
+    $governProtocol, $governDomain, $governDomainValid, $governAuthorityValid,
+    $governLocal, $governPublic, $governDatabase, $governStorage, $setting, $suffix);

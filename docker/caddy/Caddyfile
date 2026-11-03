@@ -1,0 +1,6 @@
+# Caddy obtains and renews the certificate for this exact domain. Its data
+# volume retains certificates and account keys across container recreation.
+{$GOVERN_DOMAIN} {
+    encode zstd gzip
+    reverse_proxy gateway:81
+}

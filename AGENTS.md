@@ -58,6 +58,11 @@ beperking van de werkplek.
 - Houd berekende kolommen berekend; maak ze niet tot gewone invoervelden.
 - Voer alle gewone app-verbindingen in UTC en de afgesproken strikte SQL-modus uit.
 - Snapshotbestanden staan buiten de webroot. Credentials en dumps blijven uit Git.
+- VPS-hosting is expliciete opt-in via `compose.vps.yaml`. Behoud de gewone
+  loopback-ingang en interne databasepoorten. De HTTPS-edge gebruikt de exacte
+  `GOVERN_DOMAIN` en de privélistener van de gateway; neem geen protocol- of
+  hostvertrouwen over uit vrije browserheaders. Behoud dezelfde account-/CSRF-
+  grens voor phpMyAdmin en controleer een bestaande eigenaar vóór publiceren.
 - Een Docker-volume is opslag, geen backup. Herstel wordt getest met echte data.
 - Beschrijf herstel eerlijk: DDL is niet transactioneel en SQL uit een ander
   phpMyAdmin-venster volgt niet automatisch onze applicatievergrendeling.

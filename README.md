@@ -527,10 +527,23 @@ Vrije SQL in **Onderzoeken** en het databasevenster gebruiken het schrijfaccount
 voor de toegestane databases. Vrije SQL vraagt bevestiging voor ingrijpende opdrachten;
 eerdere opdrachten in een script kunnen al zijn uitgevoerd als een latere faalt.
 
-De accountfunctie maakt deze lokale configuratie niet geschikt voor rechtstreeks
-publiceren op internet. Daarvoor zijn onder meer een afzonderlijke beoordeling
-van hosting, HTTPS, toegang en accountherstel nodig. De geleverde configuratie
-houdt de loopbackbinding en bestaande databasegrenzen aan.
+De gewone configuratie blijft lokaal aan loopback gebonden. Voor een eigen
+domein op een VPS is er een afzonderlijke, expliciete HTTPS-configuratie met
+Caddy. Maak eerst de installatie-eigenaar via je SSH-tunnel aan, richt DNS en
+poort 80/443 in en voer op de VPS vanuit de bestaande Govern-map uit:
+
+```bash
+sh scripts/start-vps.sh govern.example.nl
+```
+
+Deze route bewaart het domein in `.env`, behoudt bestaande accounts, wachtwoorden
+en volumes en vernieuwt certificaten automatisch. Latere `sh start.sh`-updates
+herkennen de bewaarde VPS-configuratie. Databases blijven intern en de
+loopbackingang blijft beschikbaar. Zie [Govern op een VPS](docs/VPS.md) voor
+TransIP-DNS, de precieze stappen, controle en herstel. De accounts blijven
+installatiebrede toegang; wachtwoordreset en accountherstel per e-mail zijn nog
+niet beschikbaar.
+
 ## Excel, CSV, TXT en JSON rechtstreeks importeren
 
 Open **Database openen → Bestanden importeren**. Kies een `.xlsx`, `.csv`, `.tsv`,
