@@ -626,7 +626,7 @@ function syncRestoreControls() {
 
 function syncSnapshotControls() {
     syncDatabasePicker();
-    const busy = state.restoring || state.creatingSnapshot;
+    const busy = state.restoring || state.creatingSnapshot || Boolean(document.querySelector('.snapshot-list[aria-busy="true"]'));
     document.querySelectorAll('[data-snapshot-action]').forEach(control => { control.disabled = busy || control.dataset.snapshotUnavailable === 'true'; });
 }
 
@@ -1798,7 +1798,7 @@ async function renderResearch(scope) {
         tables: tables(), database: state.bootstrap.database.name, initialTable: state.table,
         draft: state.builderDraft, open: state.builderOpen, scope,
         onDraft: draft => { state.builderDraft = structuredClone(draft); },
-        onToggle: open => { state.builderOpen = open; },
+        onToggle: open => { if (scope.live()) state.builderOpen = open; },
         getRevision: () => state.queryRevision,
         onApply: (built, design) => {
             state.queryRevision += 1;
@@ -1817,6 +1817,12 @@ async function renderResearch(scope) {
             el('section', {class: 'research-save'}, el('h2', {}, t('app.core.research.save')), form),
             el('section', {}, el('h2', {}, t('app.navigation.savedQueries')), savedList))) : null;
     library?.addEventListener('toggle', () => { if (scope.live()) state.queryLibraryOpen = library.open; });
+    scope.cleanup.push(() => {
+        // Details toggle events are queued. Capture the visible state before
+        // replacing this view or caching it during a database switch.
+        if (builder) state.builderOpen = builder.element.open;
+        if (library) state.queryLibraryOpen = library.open;
+    });
     page.append(el('div', {class: 'research-layout unified-research'},
         editorCard, result, builder?.element, library,
         el('details', {class: 'query-help'}, el('summary', {}, t('app.navigation.sqlHelp')), help)));
@@ -1829,13 +1835,14 @@ async function renderResearch(scope) {
 
 async function renderExperiments(scope) {
     page.append(databaseHeading('experimenten'), el('p', {class: 'muted'}, t(isPostgres() ? 'app.postgres.snapshotsHelp' : 'app.core.experiments.help')));
-    const list = el('div', {class: 'snapshot-list'});
+    const list = el('div', {class: 'snapshot-list', 'aria-busy': 'true'});
+    let loadingSnapshots = true;
     const snapshotIndex = el('nav', {class: 'snapshot-index', 'aria-label': t('app.navigation.snapshots')});
     contextContent.append(snapshotIndex);
     const counter = el('span');
     const label = el('input', {id: 'snapshot-label', class: 'input', maxlength: '160', value: state.snapshotLabel, placeholder: t('app.core.experiments.namePlaceholder'), 'aria-label': t('app.core.experiments.nameLabel')});
     label.addEventListener('input', () => { state.snapshotLabel = label.value; });
-    const createButton = button(t('app.core.experiments.create'), () => createSnapshot(), {id: 'create-snapshot', kind: 'primary', symbol: 'plus', disabled: state.creatingSnapshot || state.restoring, 'data-snapshot-action': 'create'});
+    const createButton = button(t('app.core.experiments.create'), () => createSnapshot(), {id: 'create-snapshot', kind: 'primary', symbol: 'plus', disabled: true, 'data-snapshot-action': 'create'});
     const status = el('div');
     if (state.restoring) status.append(notice(t('app.core.experiments.restoring')));
     else if (state.creatingSnapshot) status.append(notice(t('app.core.experiments.creating')));
@@ -1846,6 +1853,9 @@ async function renderExperiments(scope) {
             el('p', {}, t(isPostgres() ? 'app.postgres.snapshotIncludes' : 'app.core.experiments.includes', {database: state.bootstrap.database.name, schema: schemaName()})),
             el('label', {class: 'field-label'}, t('app.core.experiments.recognisableName'), label), createButton, status));
     const load = async () => {
+        loadingSnapshots = true;
+        list.setAttribute('aria-busy', 'true');
+        syncSnapshotControls();
         list.replaceChildren(loading(t('app.core.experiments.loading')));
         snapshotIndex.replaceChildren(loading(t('app.core.experiments.loading')));
         try {
@@ -1878,10 +1888,16 @@ async function renderExperiments(scope) {
                 list.replaceChildren(errorPanel(error, load));
                 snapshotIndex.replaceChildren(el('p', {class: 'small muted'}, errorText(error)));
             }
+        } finally {
+            if (scope.live()) {
+                loadingSnapshots = false;
+                list.setAttribute('aria-busy', 'false');
+                syncSnapshotControls();
+            }
         }
     };
     const createSnapshot = async () => {
-        if (state.creatingSnapshot || state.restoring) return;
+        if (!scope.live() || loadingSnapshots || state.creatingSnapshot || state.restoring) return;
         state.creatingSnapshot = true;
         state.snapshotError = null;
         syncSnapshotControls();
@@ -1906,7 +1922,7 @@ async function renderExperiments(scope) {
         }
     };
     const restoreSnapshot = async (snapshot, restoreButton) => {
-        if (state.restoring || state.creatingSnapshot) return;
+        if (!scope.live() || loadingSnapshots || state.restoring || state.creatingSnapshot) return;
         const database = state.bootstrap.database.name;
         const schema = schemaName();
         const target = isPostgres() ? database + '.' + schema : database;

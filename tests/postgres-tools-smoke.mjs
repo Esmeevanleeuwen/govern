@@ -73,7 +73,7 @@ const openImports = async () => {
     assert.equal(await page.locator('#database-frame').isVisible(), false);
     assert.equal(await page.locator('#database-tab-sql').isVisible(), false);
 };
-let snapshot, releaseImport;
+let snapshot, releaseImport, releaseSnapshotList;
 try {
     await page.goto(href('gegevens', 'govern_pg_values'), {waitUntil: 'networkidle'});
     const before = await browse('govern_pg_values');
@@ -141,10 +141,30 @@ try {
     await page.locator('.database-dialog-header .modal-tools button').last().click();
     await page.locator('#database-dialog').waitFor({state: 'hidden'});
     await page.waitForFunction(value => document.querySelector('#database-select')?.value === value && !document.querySelector('#database-select').disabled, scope);
+    await page.locator('#refresh-app:not([disabled])').waitFor();
     await page.evaluate(async () => (await import('/assets/i18n.js')).setLanguage('en'));
 
-    await page.goto(href('experimenten'), {waitUntil: 'networkidle'});
+    // Hash navigation can finish before this read. Keep it pending so the
+    // backup action must wait for its own shared-lock read to finish.
+    const listGate = new Promise(resolve => { releaseSnapshotList = resolve; });
+    const snapshotListRoute = url => url.pathname === '/api.php' && url.searchParams.get('action') === 'snapshots'
+        && url.searchParams.get('connection') === 'postgres' && url.searchParams.get('database') === 'govern_pg'
+        && url.searchParams.get('schema') === 'public';
+    const holdSnapshotList = async route => { await listGate; await route.continue(); };
+    await page.route(snapshotListRoute, holdSnapshotList);
+    const listStarted = page.waitForRequest(request => snapshotListRoute(new URL(request.url())), {timeout: 120000});
+    await clickDatabaseTool(page, 'backups');
+    await listStarted;
+    assert.equal(await page.locator('.snapshot-list').getAttribute('aria-busy'), 'true');
+    assert.equal(await page.locator('#create-snapshot').isDisabled(), true,
+        'A backup cannot start while the workspace is still loading its checkpoint list.');
     await page.locator('#snapshot-label').fill(marker);
+    const listed = waitApi('snapshots');
+    releaseSnapshotList(); releaseSnapshotList = null;
+    await read(await listed);
+    await page.locator('#create-snapshot:not([disabled])').waitFor();
+    assert.equal(await page.locator('.snapshot-list').getAttribute('aria-busy'), 'false');
+    await page.unroute(snapshotListRoute, holdSnapshotList);
     const created = waitApi('create-snapshot');
     await page.locator('#create-snapshot').click();
     snapshot = await read(await created);
@@ -246,6 +266,7 @@ try {
     console.log('PASS: PostgreSQL Free SQL, native SQL/CSV import, scoped archive download and real schema restore/readback in Dutch/mobile.');
 } finally {
     releaseImport?.();
+    releaseSnapshotList?.();
     // The successful restore removes the test's own tables and row edit. A failed
     // restore deliberately keeps its diagnostic state in this isolated database.
     await context.close();

@@ -41,13 +41,40 @@ const responseFor = action => page.waitForResponse(response => {
     const url = new URL(response.url());
     return url.pathname === '/api.php' && url.searchParams.get('action') === action;
 });
+const waitScope = async scope => {
+    await page.waitForFunction(value => document.querySelector('#database-select')?.value === value
+        && !document.querySelector('#database-select').disabled, scope);
+    await page.locator('#sql-editor').waitFor();
+};
 const switchScope = async scope => {
     const loading = responseFor('bootstrap');
     await page.locator('#database-select').selectOption(scope);
     await loading;
-    await page.waitForFunction(value => document.querySelector('#database-select')?.value === value
-        && !document.querySelector('#database-select').disabled, scope);
-    await page.locator('#sql-editor').waitFor();
+    await waitScope(scope);
+};
+const disclosureState = () => page.evaluate(() => ({
+    library: document.querySelector('#query-library').open,
+    builder: document.querySelector('.query-builder').open,
+}));
+const toggleAndSwitchScope = async (scope, selectors) => {
+    const loading = responseFor('bootstrap');
+    const outgoing = await page.evaluate(({scope, selectors}) => {
+        const picker = document.querySelector('#database-select');
+        if (picker.disabled) throw new Error('The source picker must be ready before this regression action.');
+        // Native summary activation changes .open synchronously but queues its
+        // toggle event. Switch in the same task, before that event can run.
+        for (const selector of selectors) document.querySelector(selector + ' > summary').click();
+        const values = {
+            library: document.querySelector('#query-library').open,
+            builder: document.querySelector('.query-builder').open,
+        };
+        picker.value = scope;
+        picker.dispatchEvent(new Event('change', {bubbles: true}));
+        return values;
+    }, {scope, selectors});
+    await loading;
+    await waitScope(scope);
+    return outgoing;
 };
 const bounded = async promise => {
     let timer;
@@ -122,6 +149,28 @@ try {
     await switchScope(secondScope);
     assert.equal(await page.locator('#sql-editor').inputValue(), draftB);
     await switchScope(first);
+
+    // Capture real disclosure state even when its queued toggle event has not
+    // run yet. Each source keeps the library and builder independently.
+    assert.deepEqual(await disclosureState(), {library: true, builder: false});
+    assert.deepEqual(await toggleAndSwitchScope(secondScope, ['#query-library', '.query-builder']), {library: false, builder: true});
+    assert.deepEqual(await disclosureState(), {library: false, builder: false}, 'A late event from A cannot open B’s disclosures.');
+    assert.deepEqual(await toggleAndSwitchScope(first, ['#query-library']), {library: true, builder: false});
+    assert.deepEqual(await disclosureState(), {library: false, builder: true}, 'A retains its immediate close/open changes.');
+    assert.equal(await page.locator('#sql-editor').inputValue(), draftA);
+    assert.deepEqual(await toggleAndSwitchScope(secondScope, ['#query-library', '.query-builder']), {library: true, builder: false});
+    assert.deepEqual(await disclosureState(), {library: true, builder: false}, 'B’s library opens independently of its builder.');
+    assert.equal(await page.locator('#sql-editor').inputValue(), draftB);
+    assert.deepEqual(await toggleAndSwitchScope(first, ['#query-library', '.query-builder']), {library: false, builder: true});
+    assert.deepEqual(await disclosureState(), {library: true, builder: false}, 'A retains the reverse open/close changes.');
+    await switchScope(secondScope);
+    assert.deepEqual(await disclosureState(), {library: false, builder: true}, 'B retains both immediate changes too.');
+    await switchScope(first);
+    assert.equal(await page.locator('#sql-editor').inputValue(), draftA);
+    assert.equal(await page.locator('#query-name').inputValue(), 'A retained title');
+    assert.equal(await page.locator('#query-notes').inputValue(), 'A retained note');
+    await page.locator('.query-result .data-table td').filter({hasText: /^42$/}).waitFor();
+
     const more = page.locator('#database-tools > summary');
     await more.focus(); await page.keyboard.press('Enter');
     assert.equal(await page.locator('#database-tools').evaluate(node => node.open), true);
