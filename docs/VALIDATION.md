@@ -3,6 +3,41 @@
 Stand van de controles: **4 november 2026**. Eerdere resultaten hieronder horen
 bij hun beschreven wijziging en zijn niet automatisch opnieuw uitgevoerd.
 
+## Native tabellen maken
+
+De vervolgwijziging op de vereenvoudigde werkplek voegt **Tabellen → Nieuw**
+toe voor MariaDB en PostgreSQL. Preview, expliciete creatie en de catalogus-
+refresh zijn afzonderlijke stappen. Een geslaagde creatie met mislukte refresh
+blijft als gemaakt zichtbaar; **Tabel openen** herhaalt alleen het lezen.
+
+Lokaal geslaagd:
+
+- 116 tabeldefinitiecontroles, inclusief exacte standaardwaarden, scopes,
+  conflicten, onzekere uitvoering en succesvolle DDL met ontbrekende readback.
+- 108 PostgreSQL-scopecontroles, 256 backendvertalingen en 15 backendbasiscontroles.
+- Alle 15 JavaScript-unitsuites, met 1.562 tweetalige berichten en 653 gebruikte
+  frontendsleutels; syntax voor de gewijzigde PHP-, JavaScript- en Pythonbestanden.
+- Workflow-YAML en `git diff --check`.
+
+De CI-workflow voert daarnaast beide echte database-engines uit via
+`table-definition-integration.php`: maken, metadata, exacte standaardwaarden,
+de bestaande rij-editor, conflicten en afzonderlijke PostgreSQL-schema's.
+`table-definition-http.py` gebruikt de echte API en een expliciet vastgehouden
+exclusief onderhoudsslot; beide endpoints moeten wachten met een 423-respons
+en na vrijgave normaal werken. De tests verwijderen alleen hun eigen probes.
+
+`table-definition-smoke.mjs` gebruikt expliciete API-fixtures voor formulier-,
+focus- en callbackgedrag. `native-table-workspace-smoke.mjs` voert echte preview,
+CREATE, rij-invoer en onafhankelijke readbacks uit op beide engines. Alleen
+één catalogusantwoord na een echte creatie wordt bewust leeg gemaakt om de
+read-only herstelactie zonder dubbele CREATE te controleren. De proef dekt
+ook scopeblokkering, taal- en conceptbehoud, annuleren en 320 px. De bestaande
+lege-databaseproef behoudt het handmatige SQL-voorbeeld als tweede optie.
+
+Database- en browserproeven kunnen niet lokaal draaien in deze omgeving;
+hun echte uitslag staat bij de Actions-run voor de exacte PR-commit. Alle
+bestaande regressieproeven blijven in de workflow opgenomen.
+
 ## Eenvoudigere databasewerkplek
 
 De navigatie groepeert Bladeren, Structuur en SQL rond dezelfde tabelkeuze.

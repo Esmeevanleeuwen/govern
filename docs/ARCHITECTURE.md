@@ -64,8 +64,9 @@ toegangsregels niet actief achterblijven.
 
 De bestaande PHP/API-diensten blijven de bron van de gegevens. De vereenvoudiging
 verandert de navigatie en presentatie in `app.js`, `database-modal.js`,
-`workspace-tools.js` en de gedeelde werkplekstijlen; er komen geen nieuwe
-backendroutes, opslagmodellen of UI-frameworks bij.
+`workspace-tools.js` en de gedeelde werkplekstijlen. De daaropvolgende native
+tabelbouwer voegt twee kleine API-routes toe; er komt geen nieuw opslagmodel,
+achtergrondproces of UI-framework bij.
 
 Zonder geldige schermroute opent `#gegevens` (**Bladeren / Browse**).
 `#gegevens`, `#structuur` en `#onderzoeken` vormen de vaste hoofdweergaven
@@ -88,6 +89,29 @@ voor MariaDB en context-export. Import en export horen bij de databasewerkplek.
 Export voor MariaDB blijft een officiële phpMyAdmin-handeling voor de gekozen
 tabel of database. PostgreSQL verwijst naar de bestaande schemaherstelpunten;
 een archiefdownload is geen nieuwe algemene tabelexporter.
+
+### Native tabel maken
+
+`table-builder.js` beheert een formulier met een vaste database-/schemascope
+en tijdelijke concepten per scope. **Tabellen → Nieuw** en de lege
+databaseweergave openen hetzelfde venster. De review doet alleen een
+`table-definition-preview`; de expliciete maakactie stuurt de gecontroleerde
+definitie en token naar `table-definition-create`. Taalwissels bewaren invoer
+en focus. Een expliciet toegevoegde ID-kolom is optioneel.
+
+`TableDefinition` valideert de compacte definitie en genereert precies één
+engine-specifieke, volledig gekwalificeerde `CREATE TABLE`. De bestaande
+SQL-verbinding voert deze uit. Bestaande objecten worden niet vervangen.
+Beide routes nemen dezelfde gedeelde `MaintenanceLock` als gewone SQL: lezen
+kan doorgaan, exclusief herstel en SQL-import kunnen niet overlappen.
+
+Na succesvolle creatie sluit het venster, wordt de catalogus opnieuw gelezen
+en opent Bladeren uitsluitend als de juiste nieuwe tabel echt zichtbaar is.
+Tijdens deze refresh blijft de bestemming vast en is de werkplek tijdelijk
+niet bedienbaar. Bij mislukte cataloguscontrole blijft de melding **gemaakt**
+staan met een nieuwe leespoging; er volgt geen tweede CREATE. De SQL-editor
+en zijn resultaten blijven behouden. Een onzekere verbinding tijdens CREATE
+wordt apart gemeld en nooit automatisch opnieuw uitgevoerd.
 
 Structuur leest metadata en wijzigt geen kolomdefinities via een nieuw formulier.
 De lege-toestandactie **Tabel maken met SQL** zet alleen een engine-specifiek
@@ -279,6 +303,7 @@ De onderdelen hebben een kleine, duidelijke taak:
 | `preferences.js` | Gevalideerde browservoorkeuren en gedeelde uiterlijktokens |
 | `dashboard-layout.js` | Blokvolgorde, breedtes, zichtbaarheid en een aparte bewerkingsversie |
 | `query-builder.js` | Het tijdelijke visuele queryontwerp en de toegepaste versie |
+| `table-builder.js` en `TableDefinition.php` | Een nieuwe tabel definiëren, controleren en één keer maken in de vastgelegde scope |
 | `schema-model.js` en `schema-visualizer.js` | Live relaties, diagramindeling en interactieve schemaverkenning |
 | `record-map.js`, `record-map.css` en `record-map-messages.js` | Eén Explore-canvas, bronbibliotheek, vragen en inspecteur |
 | `canvas-workspace.css` | Gedeelde canvasachtergrond, puntraster, afmetingen, kaarten en werkbalkmaterialen voor Schema en Explore |

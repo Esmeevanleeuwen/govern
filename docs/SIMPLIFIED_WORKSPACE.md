@@ -3,15 +3,17 @@
 Govern's everyday database work now follows one order: choose a database, choose
 a table, then **Browse**, **Structure** or **SQL**. The change keeps the existing
 database services and optional tools while reducing competing menus and repeated
-context. It builds on `main` at `98c9166` in
-`improve/simple-database-workspace`.
+context. The navigation change is in
+[PR #30](https://github.com/Esmeevanleeuwen/govern/pull/30), based on `main` at
+`98c9166`. `feature/native-table-creation` builds on its verified head `7529aac`
+and adds the native table builder below.
 
 ## Where each task belongs
 
 | Place | Actions |
 | --- | --- |
 | Header | Database picker, **+** to add/select a database, **Refresh**, **Workspace** |
-| Sidebar | Searchable tables; optional table details |
+| Sidebar | Searchable tables; **New** to create a table; optional table details |
 | Main views | **Browse**, **Structure**, **SQL** |
 | Database actions | **Import**; **Export via phpMyAdmin** for MariaDB or **Export backup** for PostgreSQL |
 | **More** | **Explore**, **Diagram**, **Backups** |
@@ -27,6 +29,24 @@ begin collapsed underneath. Saved queries retain their name, notes and existing
 storage. Extra table details are also collapsed initially, keeping the table list
 clear. These changes make the common actions direct while keeping more involved
 tools available where they are used.
+
+## Create a table
+
+Choose **New** beside **Tables**, enter a table name and add columns. The form
+supports text, whole numbers, decimals, booleans, dates and date/time values.
+An optional **Add ID column** gives new rows an automatic primary key. Review
+the definition, then choose **Create table**. The generated SQL is available in
+a collapsed disclosure.
+
+MariaDB and PostgreSQL use the same flow with their own generated SQL. The
+database/schema stays fixed while the form is open. Unfinished forms are kept
+separately for each scope, including after a language change. Cancel writes
+nothing. Creation opens the new table in Browse, ready for **Add row**, without
+replacing an existing SQL draft. A failed refresh offers a new read attempt;
+it does not repeat creation.
+
+The empty database view offers **Create table** first and keeps **Create a
+table with SQL** as a secondary option.
 
 ## Import and export
 
@@ -60,17 +80,19 @@ it does not export table records.
 ## Current limits
 
 **Structure shows metadata.** Column and key changes use SQL or, for MariaDB,
-the explicit phpMyAdmin structure action. An empty database offers **Create a
-table with SQL**, which opens an editable engine-specific example. The user
-executes it through the ordinary SQL action.
+the explicit phpMyAdmin structure action. The native builder creates new
+tables; it does not alter existing tables. It supports one primary-key column
+and literal defaults, with lowercase names up to 63 characters. Advanced
+types, composite keys, foreign keys, indexes and expressions remain available
+through SQL or the existing MariaDB tools.
 
 **Exports still use existing services.** This change adds no general native
-table exporter or visual schema editor. Native SQL import retains its 256 KiB
+table exporter or editor for existing table definitions. Native SQL import retains its 256 KiB
 UTF-8 limit; the existing advanced MariaDB path handles larger supported files.
 Dataset formats and limits remain those documented in the README and API guide.
 
 **Engine capabilities stay explicit.** PostgreSQL supports browsing, row edits,
-SQL, structure, diagram/record views, native imports and schema backups. The
+SQL, native table creation, structure, diagram/record views, native imports and schema backups. The
 visual query builder, saved queries, context export, AI and phpMyAdmin remain
 MariaDB-only. The current database manager creates MariaDB databases;
 PostgreSQL provisioning is outside this change.
@@ -84,9 +106,11 @@ At this review, [PR #28](https://github.com/Esmeevanleeuwen/govern/pull/28)
 implementations. Both overlap with navigation and import work.
 
 PR #28 adds a broader import workflow, native table builder and provisioning
-changes. PR #29 reorganizes database views and adds PostgreSQL creation. This
-branch is a smaller presentation change based directly on `main`; it does not
-include those new backend capabilities. Combining them needs deliberate
+changes. PR #29 reorganizes database views and adds PostgreSQL creation.
+PR #30 keeps the presentation change separate. This follow-up reuses only
+PR #28's isolated table-definition service and form, with dedicated API and
+real-database/browser checks. It does not include that branch's import worker
+or provisioning changes. Combining the remaining work needs deliberate
 reconciliation of navigation, import entry points, database scope and tests.
 
 ## Source and verification

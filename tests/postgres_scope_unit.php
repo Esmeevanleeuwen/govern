@@ -67,17 +67,20 @@ try {
     $assert(ConnectionScope::scopeKey('mariadb', 'existing') === 'existing', 'Existing MariaDB scope keys remain compatible.');
     $assert(ConnectionScope::scopeKey('postgres', 'data:set', 'a b') === 'postgres:data%3Aset:a%20b', 'Workspace keys encode identifier delimiters.');
     $capabilities = ConnectionScope::capabilities($public);
-    foreach (['browse', 'structure', 'schema', 'explore', 'write', 'query', 'snapshots', 'import'] as $capability) $assert($capabilities[$capability] === true, 'Supported capability: ' . $capability);
+    foreach (['browse', 'structure', 'schema', 'explore', 'write', 'query', 'snapshots', 'import', 'create_table'] as $capability) $assert($capabilities[$capability] === true, 'Supported capability: ' . $capability);
     foreach (['query_builder', 'saved_queries', 'phpmyadmin', 'create_database', 'ai', 'context'] as $capability) {
         $assert($capabilities[$capability] === false, 'Unsupported PostgreSQL capability: ' . $capability);
     }
     $assert(!in_array(false, ConnectionScope::capabilities($base), true), 'MariaDB retains all existing capabilities.');
     $assert(!ConnectionScope::capabilities([...$public, 'password' => ''])['write'], 'Missing writer credentials retain read-only controls without reusing reader credentials.');
     $assert(!ConnectionScope::capabilities([...$public, 'sql_password' => ''])['query'], 'SQL credentials are separate from the reader and row writer.');
+    $assert(!ConnectionScope::capabilities([...$public, 'sql_password' => ''])['create_table'], 'Table creation requires the existing SQL credentials, not row-writer credentials.');
+    $assert(ConnectionScope::capabilities([...$public, 'password' => ''])['create_table'], 'A missing row-writer password does not remove the separately configured SQL capability.');
     $assert(!ConnectionScope::capabilities([...$public, 'tools_socket' => ''])['snapshots'], 'Missing private helper configuration is explicit.');
     foreach (['bootstrap', 'schema', 'structure', 'browse', 'explore', 'row-editor', 'insert-row', 'update-row', 'delete-row',
         'query', 'snapshots', 'create-snapshot', 'restore-snapshot', 'download-snapshot', 'import-inspection',
-        'native-import-preview', 'native-import-execute', 'dataset-preview', 'dataset-import'] as $action) {
+        'native-import-preview', 'native-import-execute', 'dataset-preview', 'dataset-import',
+        'table-definition-preview', 'table-definition-create'] as $action) {
         ConnectionScope::requireAction($public, $action);
         $assert(true, 'Supported action allowed without connecting: ' . $action);
     }
