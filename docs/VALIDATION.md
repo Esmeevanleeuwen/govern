@@ -1,7 +1,39 @@
 # Validatie
 
-Stand van de controles: **3 november 2026**. Eerdere resultaten hieronder horen
+Stand van de controles: **4 november 2026**. Eerdere resultaten hieronder horen
 bij hun beschreven wijziging en zijn niet automatisch opnieuw uitgevoerd.
+
+## Eenvoudigere databasewerkplek
+
+De navigatie groepeert Bladeren, Structuur en SQL rond dezelfde tabelkeuze.
+Importeren gebruikt eerst de eigen SQL-/datasetweergave; phpMyAdmin blijft
+expliciet beschikbaar voor geavanceerde import, structuurwijzigingen en export.
+Zie [de ontwerpkeuzes](SIMPLIFIED_WORKSPACE.md).
+
+Lokaal gecontroleerd bij deze wijziging:
+
+- Alle 15 JavaScript-unitsuites, inclusief scopes, tijdelijke toestand,
+  canvasmodellen, voorkeuren en de Nederlands/Engelse vertalingen.
+- JavaScript-syntax en `git diff --check`.
+- Op de uitgangsversie `98c9166`: 14 volledige PHP-unitsuites, 66 controles uit
+  de provisioningsuite, alle 91 PHP-bestanden zonder syntaxfouten, 9 dataset-
+  lezerproeven, 32 opstartcontroles, 30 PostgreSQL-demoladercontroles en 52 echte
+  account-HTTP-controles met afzonderlijke SQLite-opslag.
+
+De lokale PHP-runtime is 8.3.6; productie/CI gebruikt PHP 8.4. De socketfase
+van provisioning kon lokaal niet draaien (`EPERM`); de PostgreSQL-helperproef
+stopt bij een niet-ondersteunde `chown`. Docker, database-engines en Chromium
+zijn hier niet beschikbaar. Dit is dus geen claim van lokale database- of
+browserverificatie.
+
+De CI-workflow controleert de echte geïsoleerde MariaDB/PostgreSQL-stack en
+alle bestaande browserpaden. `simple-workspace-smoke.mjs` voegt controle toe
+voor de vereenvoudigde navigatie, SQL-concepten, native import, een lege
+database, toetsenbordbediening en smalle schermen. De workflow bewaart
+screenshots als tijdelijk reviewartefact. De CI-uitslag hoort steeds bij de
+exacte commit van de pull request; eerdere geslaagde runs gelden niet als
+bewijs voor een volgende wijziging. Windows zelf en een gedownload
+Ollama-model blijven aparte controles op de gebruikerscomputer.
 
 ## Gelijke canvasvormgeving voor Schema en Explore
 

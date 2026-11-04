@@ -128,6 +128,8 @@ jobs:
           python3 tests/record-explorer-http.py --base-url http://127.0.0.1:8080 --confirm-database=govern_pg
           python3 tests/record-map-http.py --base-url http://127.0.0.1:8080 --confirm-fixtures=record-map-ci
       - name: Browser and visual query builder
+        env:
+          GOVERN_SCREENSHOT_DIR: ${{ runner.temp }}/govern-screenshots
         run: |
           node tests/i18n-unit.mjs
           node tests/api-scope-unit.mjs
@@ -152,6 +154,7 @@ jobs:
           export GOVERN_UI_WRITE_TESTS=1
           failed_suites=()
           for suite in \
+            tests/simple-workspace-smoke.mjs \
             tests/record-map-smoke.mjs \
             tests/homepage-auth-smoke.mjs \
             tests/postgres-smoke.mjs \
@@ -197,6 +200,14 @@ jobs:
           BROWSER_BIN="$(command -v google-chrome)"
           export BROWSER_BIN
           node tests/postgres-tools-smoke.mjs
+      - name: Workspace screenshots
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: workspace-screenshots
+          path: ${{ runner.temp }}/govern-screenshots
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Logs on failure
         if: failure()
         run: docker compose logs --tail=100

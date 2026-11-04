@@ -60,6 +60,40 @@ zou bestaande workers anders niet bijwerken. Bij start-/configuratie-/reloadfout
 stoppen de scripts de gateway, zonder volumes te verwijderen, zodat oudere
 toegangsregels niet actief achterblijven.
 
+## Eenvoudige databasewerkplek
+
+De bestaande PHP/API-diensten blijven de bron van de gegevens. De vereenvoudiging
+verandert de navigatie en presentatie in `app.js`, `database-modal.js`,
+`workspace-tools.js` en de gedeelde werkplekstijlen; er komen geen nieuwe
+backendroutes, opslagmodellen of UI-frameworks bij.
+
+Zonder geldige schermroute opent `#gegevens` (**Bladeren / Browse**).
+`#gegevens`, `#structuur` en `#onderzoeken` vormen de vaste hoofdweergaven
+**Bladeren, Structuur, SQL**. Ze gebruiken dezelfde doorzoekbare tabellenlijst
+in `workspace-context`. SQL is geen aparte navigatiecategorie meer.
+`#verkennen`, `#schema` en `#experimenten` blijven bereikbaar via **Meer**;
+`#verbanden` blijft een alias van `#verkennen`. Overzicht en Instellingen blijven
+rechtstreeks bereikbaar. Bestaande hashes en database-/tabelparameters blijven geldig.
+
+De SQL-editor en resultaten komen eerst. `builderOpen` en `queryLibraryOpen`
+beginnen uitgeschakeld en horen bij de bestaande toestand per database.
+Opgeslagen queries en het naam-/notitieformulier staan in `#query-library`,
+niet in plaats van de tabellenlijst. Hulp is een aparte disclosure. De zijbalk
+bewaart de open/dicht-toestand van `workspace-table-details`. De compacte
+zijbalk behoudt links/rechts, inklappen en de mobiele lade.
+
+De bovenbalk houdt databasekeuze, **+** en verversen zichtbaar. **Werkplek**
+bevat optionele hulpmiddelen, voorkeuren, de expliciete geavanceerde phpMyAdmin
+voor MariaDB en context-export. Import en export horen bij de databasewerkplek.
+Export voor MariaDB blijft een officiële phpMyAdmin-handeling voor de gekozen
+tabel of database. PostgreSQL verwijst naar de bestaande schemaherstelpunten;
+een archiefdownload is geen nieuwe algemene tabelexporter.
+
+Structuur leest metadata en wijzigt geen kolomdefinities via een nieuw formulier.
+De lege-toestandactie **Tabel maken met SQL** zet alleen een engine-specifiek
+`CREATE TABLE`-voorbeeld klaar. Uitvoering gebeurt pas via de bestaande SQL-stroom.
+Zie [de scope en ontwerpkeuzes](SIMPLIFIED_WORKSPACE.md).
+
 ## Actuele databases, herbruikbare schermen
 
 ### Optionele PostgreSQL-verbinding
@@ -223,9 +257,12 @@ een backupservice maakt en
 herstelt SQL-exports. Het HTTP-bestand behandelt sessie, CSRF, foutstatus en JSON.
 Deze verdeling volgt verantwoordelijkheden, niet afzonderlijke overheidsdomeinen.
 
-Het native importscherm is onderdeel van `import-inspection.js`, naast
-de bestaande phpMyAdmin-import. Er is geen tweede SQL-parser of extra
-backendservice; de import werkt alleen op expliciet geselecteerde bestanden.
+`database-modal.js` heeft een afzonderlijke native importmodus met
+`ImportInspectionPanel` voor SQL en `DatasetImportPanel` voor tabelbestanden.
+De gewone importacties openen deze modus zonder phpMyAdmin-frame. De expliciete
+geavanceerde MariaDB-import opent de bestaande officiële interface. Er is geen
+tweede SQL-parser of extra backendservice; de native import hergebruikt de
+bestaande contracten voor expliciet geselecteerde bestanden.
 
 De browser gebruikt herbruikbare onderdelen voor tabellen, meldingen, dialoog-
 vensters, SQL-blokken en API-verzoeken. Tabnamen uit de database zijn gegevens,
@@ -258,8 +295,8 @@ De onderdelen hebben een kleine, duidelijke taak:
 | `AiContext.php` | Begrensde context uit geselecteerde schema- en interfaceonderdelen |
 | `LocalCodeSearch.php` | Begrensde lokale zoekindex van alleen `app/` en `docs/`, met bronpassages en regelnummers |
 | `AiService.php` en `OllamaClient.php` | Gevalideerde vragen, lokaal providerverzoek, gecontroleerde projectcitaten en antwoord zonder uitvoering |
-| `database-modal.js` | Het venster rondom de echte phpMyAdmin |
-| `database-manager.js` | Dialoog voor databasekeuze, expliciete aanmaak en openen van de officiële import |
+| `database-modal.js` | Native SQL-/datasetimport en een afzonderlijke modus voor de officiële phpMyAdmin |
+| `database-manager.js` | Dialoog voor databasekeuze, expliciete MariaDB-aanmaak en openen van dezelfde native import |
 | `DatabaseProvisioner.php` | Begrensde client voor de privéservice voor databaseaanmaak |
 | `docker/database-manager/server.php` en `DatabaseManager.php` | Privé Unix-socketserver en uitsluitend databaseaanmaak/rechten per expliciete naam |
 | `row-editor.js` | Rijformulier met vaste databasecontext, exacte waarden en conflictfeedback |
@@ -298,7 +335,7 @@ De gedeelde phpMyAdmin-opslag blijft in de oorspronkelijke `DB_NAME`-database.
 
 ## Database toevoegen en SQL importeren
 
-De actie in Gereedschap opent een eigen, kleine dialoog. Een bestaande
+De **+**-knop naast de databasekiezer opent de bestaande kleine dialoog. Een bestaande
 database kiezen gebruikt de normale wisselstroom. Een naam voorbereiden gebruikt
 `POST prepare-database` met CSRF en de expliciete huidige databasescope. Het
 antwoord bevat de voorbereide naam, of die nieuw was, en de opnieuw uitgelezen
@@ -320,8 +357,16 @@ of vervangt niets. Herhalen is geschikt om een gedeeltelijk voltooide aanmaak of
 grantstap af te maken. De echte grants blijven in het MariaDB-volume bewaard en
 maken de nieuwe database bij een volgende start opnieuw zichtbaar.
 
-Voor SQL-bestanden tot 256 KiB heeft Govern ook een beperkte eerste-partij import
-in de Import-tab. `NativeImport` hergebruikt `SqlScript`, `QueryRunner` en
+De directe importknop en beide importacties van de databasemanager openen
+`DatabaseModal.open('', 'native-import')`. Die modus toont **SQL-bestand** en
+**Dataset**, met de engine en database als expliciete bestemming. Ze hergebruikt
+de bestaande request-, busy-, bevestigings- en refreshafhandeling. Het
+phpMyAdmin-frame, de externe-linkknop en de aparte tabelkiezer blijven hier
+verborgen. De knop **Geavanceerde import via phpMyAdmin** is alleen voor MariaDB
+beschikbaar en opent bewust de officiële importmodus.
+
+Voor SQL-bestanden tot 256 KiB gebruikt Govern de bestaande native import
+onder **SQL-bestand**. `NativeImport` hergebruikt `SqlScript`, `QueryRunner` en
 `ImportInspection`: eerst voorcontrole zonder uitvoering, daarna bevestiging
 van exact de databasenaam, vergelijking van de voorcontrole-token, exclusieve
 onderhoudslock en uitvoer met nacontrole. Bij een bestaande database met
@@ -333,9 +378,10 @@ andere geselecteerde databases. SQL kan daarom met `USE` of gekwalificeerde
 namen andere toegestane databases raken. De UI waarschuwt daarvoor en voert
 geen SQL uit zonder afzonderlijke bevestiging. Er is geen algemene undo.
 
-Voor grotere of complexe SQL-bestanden gebruikt Govern de echte phpMyAdmin. De extra snelkeuze
-**Import** opent de officiële database- of tabelimport met dezelfde context als
-de overige tabs. De gebruiker kiest zijn SQL-bestand en start de import daar;
+Voor grotere of complexe MariaDB-SQL-bestanden blijft de echte phpMyAdmin
+beschikbaar via de expliciete geavanceerde importactie. De officiële **Import**-
+tab opent de database- of tabelimport met dezelfde context als de overige
+geavanceerde tabs. De gebruiker kiest zijn SQL-bestand en start de import daar;
 Govern leest of herschrijft het bestand niet met een eigen parser. Bij sluiten
 worden catalogus, tabellen en relaties opnieuw uitgelezen. De ingestelde
 uploadgrens is 128 MB en de uitvoeringstijd is 300 seconden. De SQL kan bestaande
@@ -390,7 +436,7 @@ gedeclareerde relaties. Selecties die niet meer in het scherm staan blijven
 herkenbare momentopnamen. Een recordquery vereist alle werkelijke primaire-
 sleutelvelden; samengestelde sleutels blijven intact en rijen zonder sleutel
 worden niet als blijvend geïdentificeerde records behandeld. De vervolgstap kan
-een leesquery in Onderzoeken klaarzetten, maar voert die niet uit. De selectie
+een leesquery in SQL klaarzetten, maar voert die niet uit. De selectie
 verandert geen records, contextexports of opgeslagen voorkeuren. De vertalingen
 gebruiken dezelfde berichtregistratie als de rest van de interface.
 
@@ -469,8 +515,8 @@ toegangslaag; de vrije SQL-runner is daarvoor geen veilige automatische tool.
 
 ## Flexibele Explore-werkplek
 
-De route `#verkennen` voegt de eerdere verkenner en recordkaart samen in één
-Database-weergave. `#verbanden` blijft een alias voor bestaande bookmarks.
+**Meer → Verkennen** (`#verkennen`) houdt de eerdere verkenner en recordkaart
+samen in één Database-weergave. `#verbanden` blijft een alias voor bestaande bookmarks.
 Het schemadiagram toont tabellen; Explore toont geselecteerde rijen en de
 verwijzingen die werkelijk op die rijen passen. Beide gebruiken de bestaande
 databasekiezer, catalogus en leesrechten.
@@ -512,7 +558,7 @@ Leesbare labels veranderen geen identifiers of records. Sleutels, constraint-
 namen en SQL zijn beschikbaar onder technische details. Het scherm maakt geen
 AI-interpretatie of causale uitleg uit alleen een foreign key.
 
-Openen in Records toont een afzonderlijk, opnieuw uitgelezen bronrecord met zijn sleutel, ook wanneer
+Openen in Bladeren toont een afzonderlijk, opnieuw uitgelezen bronrecord met zijn sleutel, ook wanneer
 het niet op de eerste tabelpagina staat. De huidige Explore-werkplek voegt geen
 semantisch model, correlatieberekening, 3D-clustering of datakunst toe.
 Er verschijnen alleen uitgelezen databaseverbanden.
@@ -526,11 +572,11 @@ de bestaande per-tab keuze van de database blijft wel bewaard. Zie
 
 ## Schemavisualisatie
 
-Schema groepeert tabeldetails (`#structuur`) en het diagram (`#schema`) onder
-één primaire Database-taak. Vanuit tabeldetails kan de huidige tabel direct in
-het diagram worden geselecteerd. Vanuit het diagram blijven Records en
-tabeldetails bereikbaar voor de gekozen tabel. De visualizer gebruikt dezelfde glasmaterialen, vertaalsleutels
-en instellingen als de andere schermen.
+**Structuur** (`#structuur`) is een primaire databaseweergave met tabelmetadata.
+**Meer → Diagram** opent de bestaande visualizer (`#schema`) voor dezelfde
+database en tabelkeuze. Vanuit het diagram blijven Bladeren en Structuur direct
+bereikbaar. De visualizer gebruikt dezelfde glasmaterialen, vertaalsleutels en
+instellingen als de andere schermen.
 
 Schema plaatst het diagram in een afzonderlijke `schema-scene`, zodat de
 achtergrondgloed losstaat van het verschuivende puntraster. Schema en Explore
@@ -553,13 +599,12 @@ onderzoekconcepten en dashboardindeling. Tabelposities worden per database in
 een eigen versie van browseropslag bewaard; verplaatsen wijzigt geen tabellen,
 kolommen of sleutels in MariaDB.
 
-De schemaverkenner gebruikt een compacte gereedschapsbalk naast de
-hoofdnavigatie. Tabellen en Geselecteerd klappen hun bijbehorende paneel uit.
-Klikken op de actieve tool klapt alleen de inhoud in; de balk blijft zichtbaar.
-Selecteren in de tekening werkt de context automatisch bij terwijl de
-toetsenbordfocus in de tekening blijft. Een bewust ingeklapt menu blijft dicht. De tab en open/dicht-
-toestand blijven in de schermtoestand tijdens taalwisselingen en terugkeren naar
-Schema; alleen tabelposities worden naar browseropslag geschreven.
+De schemaverkenner gebruikt de gedeelde tabellenzijbalk en een gegroepeerde
+gereedschapsbalk boven het diagram. Selecteren in de tekening werkt de context
+bij terwijl de toetsenbordfocus in de tekening blijft. Een bewust ingeklapte
+zijbalk blijft dicht. Open/dicht-toestand, selectie en zoom blijven behouden bij
+taalwisselingen en terugkeren naar het diagram; alleen tabelposities worden
+naar browseropslag geschreven.
 
 De knop Wat kan ik hier doen? blijft beschikbaar in de gereedschapsbalk, ook
 zonder tabellen. De schemagids beschrijft bestaande handelingen en opent als
@@ -579,10 +624,11 @@ beschikbaar.
 `workspace-tools.js` verplaatst de bestaande werkplekbediening naar één
 gegroepeerde popover. IDs, handlers, rechten, disabled/hidden-toestand en
 actieve hulpmiddelen blijven bij de oorspronkelijke DOM-elementen. De
-databasekiezer en primaire phpMyAdmin-knop blijven in de bovenbalk. De
+databasekiezer, plusknop en verversen blijven in de bovenbalk; phpMyAdmin
+staat expliciet onder Geavanceerd in Werkplek. De
 non-modale popover gebruikt native focus en buitenklik, met een fallback voor
 browsers zonder Popover API. Sluiten vóór een handeling geeft nieuwe dialogen
-een zichtbare opener; de selectieaanwijzer gebruikt dezelfde Tools-knop als
+een zichtbare opener; de selectieaanwijzer gebruikt dezelfde Werkplek-knop als
 focusroute wanneer zijn eigen bediening verborgen is. Er is geen extra
 voorkeurenopslag, databaseactie of wijziging van de rechten.
 
@@ -659,7 +705,8 @@ dezelfde volgorde in één kolom, met behoud van de desktopbreedtes.
 
 ## Visueel een query samenstellen
 
-De querybouwer gebruikt dezelfde catalogus en onderzoekservice. De browser
+De querybouwer staat als standaard ingeklapt onderdeel onder de SQL-editor.
+Hij gebruikt dezelfde catalogus en onderzoekservice. De browser
 beschrijft een keuze van tabel, kolommen, filters, volgorde en eventueel één
 bestaande foreign key. `QueryDesigner` controleert die keuzes opnieuw tegen de
 actuele database. Tabelnamen, kolomnamen en koppelvoorwaarden worden daardoor
@@ -817,7 +864,7 @@ Werk de ontwerpdocumentatie en het API-contract in dezelfde wijziging bij.
 
 ## Gedeelde import voor tabelbestanden
 
-De taak begint in Database openen → Bestanden importeren: lokaal bestand kiezen,
+De taak begint in **Importeren → Dataset**: lokaal bestand kiezen,
 voorvertonen, werkblad en bestemming controleren, expliciet bevestigen, importeren
 naar de zichtbare database en terugkeren naar de gewone live tabelverkenner.
 `DatasetImportPanel` bewaart tijdelijke bestands- en formulierconcepten per database.
@@ -852,4 +899,6 @@ gebruiker eerst via de tabel controleren.
 De voorbeeldgrafiek gebruikt alleen twintig voorbeeldrijen en zegt dat zichtbaar.
 Deze fase maakt geen relaties op grond van kolomnamen, geen blijvende grafieken en
 geen geografische weergave. De bestaande catalogus toont geïmporteerde tabellen na
-sluiten van het databasevenster. SQL blijft bij officiële phpMyAdmin.
+sluiten van het importvenster. **Importeren → SQL-bestand** gebruikt de bestaande
+native SQL-import met voor- en nacontrole; de officiële phpMyAdmin blijft de
+bewust gekozen geavanceerde MariaDB-route.

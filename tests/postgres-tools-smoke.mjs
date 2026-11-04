@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 import {authenticatedContext} from './auth-session.mjs';
-import {selectWorkspaceLanguage} from './workspace-tools.mjs';
+import {selectWorkspaceLanguage, clickDatabaseTool} from './workspace-tools.mjs';
 
 assert.equal(process.env.GOVERN_UI_WRITE_TESTS, '1', 'Use an isolated stack and GOVERN_UI_WRITE_TESTS=1.');
 const require = createRequire(import.meta.url);
@@ -65,8 +65,7 @@ const run = async sql => {
 };
 const openImports = async () => {
     await page.goto(href('gegevens', 'govern_pg_values'), {waitUntil: 'networkidle'});
-    await page.locator('#database-tools > summary').click();
-    await page.locator('[data-database-tool="import"]').click();
+    await clickDatabaseTool(page, 'import');
     await page.locator('#native-import-file').waitFor();
     assert.equal(await page.locator('#database-select').isDisabled(), true);
     assert.equal(await page.locator('#modal-database').isEnabled(), true);
@@ -96,6 +95,11 @@ try {
     const scopePlan = await read(await scopePreview);
     await page.locator('#native-import-confirm').fill(scopePlan.confirmation);
     await page.locator('#modal-database').selectOption(maria.scope_key || maria.name);
+    assert.equal(await page.locator('#database-tab-native-import').getAttribute('aria-selected'), 'true', 'Routine import stays native after engine switching.');
+    assert.equal(await page.locator('#database-frame').isVisible(), false);
+    assert.equal(await page.locator('#native-import-file').evaluate(node => node.files.length), 0);
+    assert.equal(await page.locator('#native-import-confirm').inputValue(), '');
+    await page.locator('#advanced-import').click();
     await page.frameLocator('#database-frame').locator('#input_import_file').waitFor();
     await page.locator('#database-tab-sql').click();
     const pmaSql = page.frameLocator('#database-frame').locator('#sqlquery');

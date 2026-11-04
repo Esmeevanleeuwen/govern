@@ -42,7 +42,7 @@ export function createWorkspaceTools() {
     }
     move('.selection-pointer-controls', 'workspace-tools-explore');
     for (const selector of ['#open-companion', '#ai-toggle']) move(selector, 'workspace-tools-explore', 'workspace-tools-control');
-    for (const selector of ['#refresh-app', '#context-export', '#manage-databases']) move(selector, 'workspace-tools-data', 'workspace-tools-control');
+    for (const selector of ['#open-database', '#context-export']) move(selector, 'workspace-tools-data', 'workspace-tools-control');
     move('.language-picker', 'workspace-tools-preferences', 'workspace-tools-language');
     move('#workspace-account', 'workspace-tools-preferences', 'workspace-tools-control');
     const language = panel.querySelector('.workspace-tools-language');
@@ -50,7 +50,7 @@ export function createWorkspaceTools() {
         const label = document.createElement('span'); label.dataset.workspaceToolsText = 'language';
         language.prepend(label);
     }
-    for (const [id, key] of [['refresh-app', 'app.shell.refresh'], ['context-export', 'app.shell.export'], ['manage-databases', 'app.databases.manage']]) {
+    for (const [id, key] of [['context-export', 'app.shell.export']]) {
         const control = document.getElementById(id);
         if (!control) continue;
         let label = control.querySelector('span');

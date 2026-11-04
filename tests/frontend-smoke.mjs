@@ -1,3 +1,4 @@
+import {clickDatabaseView, clickWorkspaceTool, openQueryLibrary} from './workspace-tools.mjs';
 /**
  * Browser smoke test against a running local Govern stack.
  *
@@ -95,9 +96,9 @@ try {
     }
     await shot(page, 'data');
 
-    await page.locator('[data-database-view="schema"]').click();
+    await clickDatabaseView(page, 'schema');
     await page.locator('#schema-viewport').waitFor();
-    await page.locator('[data-database-view="structuur"]').click();
+    await clickDatabaseView(page, 'structuur');
     await page.getByRole('heading', {name: 'Verwijzingen naar andere tabellen'}).waitFor();
     assert.ok(await page.locator('.data-table tbody tr').count() > 0);
     await shot(page, 'structure');
@@ -106,7 +107,7 @@ try {
         await page.getByRole('textbox', {name: 'SQL-query'}).waitFor();
         assert.match(await page.locator('#sql-editor').inputValue(), /JOIN/);
     } else {
-        await page.getByRole('link', {name: 'Onderzoeken', exact: true}).click();
+        await clickDatabaseView(page, 'onderzoeken');
         await page.getByRole('textbox', {name: 'SQL-query'}).waitFor();
     }
 
@@ -125,6 +126,7 @@ try {
     await shot(page, 'research');
 
     if (process.env.GOVERN_UI_WRITE_TESTS === '1') {
+        await openQueryLibrary(page);
         const name = 'UI-test ' + Date.now();
         let id;
         try {
@@ -170,7 +172,7 @@ try {
         }
     }
 
-    await page.locator('#navigation [data-area="database"]').click();
+    await clickDatabaseView(page, 'gegevens');
     const backups = page.locator('[data-database-tool="backups"]');
     await backups.locator('xpath=ancestor::details[1]').locator('summary').click();
     await backups.click();
@@ -178,7 +180,7 @@ try {
     await waitForPage(page);
     await shot(page, 'experiments');
 
-    await page.getByRole('button', {name: 'Database openen', exact: true}).click();
+    await clickWorkspaceTool(page, '#open-database');
     await waitForModal(page);
     await shot(page, 'modal-browse');
     await switchModalTab(page, 'Structure');
@@ -216,7 +218,7 @@ try {
     assert.equal(await mobile.locator('#sidebar').getAttribute('aria-hidden'), 'true');
     assert.equal(await mobile.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
     await shot(mobile, 'mobile-data');
-    await mobile.getByRole('button', {name: 'Database openen', exact: true}).click();
+    await clickWorkspaceTool(mobile, '#open-database');
     await waitForModal(mobile);
     assert.equal(await mobile.locator('#database-dialog').evaluate(node => node.scrollWidth <= innerWidth), true);
     await shot(mobile, 'mobile-modal');

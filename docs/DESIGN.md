@@ -1,6 +1,9 @@
 # Govern UX and UI design
 
-**Design baseline 1.9.** Govern is a personal, local workspace for exploring, understanding and changing databases. This guide defines its brand, visual system, behaviour and the process for adding features without disrupting existing work.
+**Design baseline: simplified database workspace.** Govern is a personal, local
+workspace for browsing, understanding and changing databases. Everyday work
+starts with **Browse, Structure and SQL**. This guide defines the current
+navigation, visual system and behaviour; see [the change rationale and limits](SIMPLIFIED_WORKSPACE.md).
 
 The agreed visual direction is layered glass, soft shadows, custom colour and no hard decorative borders. Dutch and English are equal interface languages. The detailed rules below are the target for implementation; the interactive preview is a visual reference. The production modules implement the core language, appearance and layout controls; the future chart example remains a proposal.
 
@@ -44,8 +47,8 @@ The preview's Tools disclosure links to explanations of the real workspace tools
 
 **How it works** introduces Sources, record selection, expanding connections and
 source evidence, followed by canvas controls and a guide to Records/Schema,
-record windows and second-screen comparison/radar, both Tools entry points,
-imports, SQL/restore points and optional local AI. Explain the difference between
+record windows and second-screen comparison/radar, the production Workspace
+menu and database actions, imports, SQL/restore points and optional local AI. Explain the difference between
 table structure and record relationships, the read-only canvas, temporary work,
 installation accounts and PostgreSQL's SQL, import and schema-backup capabilities. Keep the
 longer control reference and common questions in keyboard-accessible disclosures.
@@ -100,12 +103,14 @@ their database and schema as well as the engine name, for example
 **govern_pg · public · PostgreSQL**. Keep identical table names in separate
 schemas visually and functionally scoped to their selected entry.
 
-Show a short localized notice that this PostgreSQL version supports browsing
-only. Make unsupported row editing, arbitrary SQL, research, restore points,
-phpMyAdmin/import, context export and AI unavailable rather than opening
-MariaDB tools against the selected PostgreSQL scope. These limits belong next
-to the affected task; keep the existing shared navigation and visual tokens.
-Do not create a separate PostgreSQL-themed UI or duplicate the table screens.
+PostgreSQL supports browsing, direct row editing, structure and schema views,
+record exploration, free SQL, native SQL/dataset import and schema backups.
+Use server capabilities for each action. The visual query builder, saved
+queries, context export, AI and phpMyAdmin remain unavailable for PostgreSQL.
+Its **Export backup** action opens the existing backup workspace; the download
+is a PostgreSQL archive, not a general table export. Database creation through
+the current manager remains MariaDB-only. Explain unavailable capabilities
+near the affected task and keep the same navigation and visual tokens.
 
 Switching between engines preserves each complete scope's table, search and
 diagram state. Cached data and delayed responses from another scope must never
@@ -114,11 +119,11 @@ same honest unavailable state as other connection failures.
 
 ## Unified record exploration
 
-**Database → Explore / Verkennen** combines the guided record explorer and
-relationship map in one workspace. Records is for ordinary rows and editing;
-Explore is for following actual record connections; Schema groups table details
-and the table diagram. Keep these tasks in the fixed order **Records, Explore,
-Schema**. The old `#verbanden` hash is an alias of `#verkennen`.
+**Database → More → Explore / Meer → Verkennen** opens the existing guided
+record explorer and relationship map. It is an optional database view alongside
+**More → Diagram** and **More → Backups**. The primary row remains **Browse,
+Structure, SQL**. Keep the existing canvas behaviour and the old `#verbanden`
+alias of `#verkennen`.
 
 Let the canvas dominate Explore. Use readable record cards, a floating source
 library and a selected-record inspector rather than a second fixed table list.
@@ -148,7 +153,7 @@ records and truncated previews have explicit states and a route back.
 Keep names readable while preserving exact identifiers, complete keys, FK
 column pairs and SQL/parameters under **Technical details**. Do not infer
 ownership or causality from a field name. Opening **View row** reads the exact
-selected source again in Records. Technical detail is a disclosure inside the
+selected source again in Browse. Technical detail is a disclosure inside the
 same workspace, not a separate Guided/Detailed navigation mode.
 
 Keep complete scope identity and cancellation checks on every read. Language,
@@ -177,24 +182,27 @@ the phpMyAdmin iframe to update window chrome, position, language or theme.
 
 Workspace navigation uses a slim muted scrollbar. Hide the outer document
 scrollbar while retaining document, keyboard and touch scrolling. Keep the
-database picker and connection status together, including on mobile. Database
-creation and import remain available in the compact Tools menu.
+database picker and connection status together, including on mobile. Keep the
+**+** database action and Refresh in the header. Import belongs beside the
+primary database tasks.
 
 ## Compact workspace header
 
-Keep the database picker and Open database visible in one compact row. Group
-secondary actions in a labelled Tools disclosure: exploration, database tools
-and preferences. The panel shows full action labels, native language selection
-and the current disabled/hidden states. On narrow screens use accessible icon
-buttons in the header and retain full labels inside the panel. Keep connection
-status as an inline dot with its text available to assistive technology and a
-tooltip. Active tools have a small header indicator.
+Keep the database picker, **+** database action and **Refresh** visible. The
+**Workspace / Werkplek** menu groups optional helpers, advanced tools and
+preferences. Selection inspection, second screen and AI remain optional;
+**Advanced: phpMyAdmin** and context export are explicit advanced actions.
+Language and Account keep their existing controls. Do not show a second
+prominent **Open database** action for a database already open in Govern.
 
-Use a nonmodal popover, with outside/Escape dismissal, natural Tab navigation
-and a visible focus route back to Tools. Opening a dialog or assistant closes
-the menu before activating the original control. Language changes preserve
-the open panel and current work. Preserve the original control nodes and
-listeners; relocating presentation must not change scope or capabilities.
+Use a nonmodal popover with outside/Escape dismissal, natural Tab navigation
+and focus return to Workspace. Opening a dialog or assistant closes the menu
+before activating the original control. Preserve its real DOM nodes, handlers,
+capabilities and disabled states. Language changes keep current work intact.
+At narrow widths keep accessible icon buttons in the header, full menu labels,
+at least 44 px action targets and a database picker that can shrink without
+horizontal page overflow. Keep the status dot's full text available to assistive
+technology and through its tooltip.
 
 ## Second-screen companion
 
@@ -329,124 +337,88 @@ Keep primary actions visible without hover. Check the layout at 320 px, tablet w
 
 ## Information architecture
 
-- **Overview / Overzicht:** a starting point with data access, research,
-  guidance and restore points. Open it directly. Counts come from the live
-  database; row estimates are labelled as estimates.
+The workspace opens **Browse / Bladeren** when no valid view is requested.
+Overview remains a deliberate destination for live counts and the configurable
+dashboard. Settings retains language, appearance, sidebar placement and local
+AI configuration.
 
-- **Database / Database:** one fixed primary row: **Records**, **Explore /
-  Verkennen**, **Schema**. These are workspace views, not extra main rail areas.
+| Place | Task |
+| --- | --- |
+| Shared header | Choose a database; add a MariaDB database with **+**; Refresh; open Workspace |
+| Database sidebar | Search and select tables; optionally expand table details |
+| Primary database row | **Browse / Bladeren**, **Structure / Structuur**, **SQL** |
+| Direct database actions | **Import**; **Export via phpMyAdmin** for MariaDB or **Export backup** for PostgreSQL |
+| **More / Meer** | **Explore / Verkennen**, **Diagram**, **Backups / Back-ups** |
+| Workspace menu | Optional helpers, advanced phpMyAdmin/context export, language and Account |
 
-  - **Records:** table selection, search, pagination, readable rows and optional
-    SQL explanation. Add rows or edit/delete through focused row dialogs. Keep
-    official phpMyAdmin available for unsupported editing and its full toolset.
-  - **Explore:** one flexible record canvas, source library, selection and
-    inspector. Contextual questions expand declared references. Every card can
-    open its source row; every line exposes its exact database evidence.
-  - **Schema:** secondary **Table details / Tabeldetails** and **Diagram** views.
-    Table details show columns, keys, relationships and definitions. Diagram
-    shows the live whole-database table/foreign-key structure.
-  - **Tools:** import and Backups, plus official phpMyAdmin actions for MariaDB.
-    PostgreSQL uses native SQL/file imports and schema backups; keep engine
-    capabilities explicit.
-    Backup creation, download and recovery use the existing restore-point flow;
-    old `#experimenten` bookmarks remain reachable.
+**Browse** owns table search, pagination, rows and add/edit/delete. **Structure**
+shows columns, keys, relationships and available table definitions. It is a
+metadata view, not a native visual schema editor. Use SQL for structure changes;
+MariaDB also offers **Edit structure in phpMyAdmin**. An empty database offers
+**Create a table with SQL**, which prepares an engine-correct editable example
+without executing it.
 
-- **Research / Onderzoeken:** visual query building, editable SQL, results and
-  saved research. Keep it separate from visually following loaded records.
+**SQL** stays in the same database workspace with the searchable table list
+available. Put the editor and results first. The visual query builder, saved
+queries and SQL help follow as collapsed disclosures. Saved queries include
+the existing name/notes form and library; they do not replace the table sidebar.
+Keep builder/library disclosure choices, SQL drafts and results per database.
+Choosing a table must not silently overwrite an existing SQL draft.
 
-- **Settings / Instellingen:** language, appearance, workspace preferences and
-  existing local AI configuration. Keep its entry in a consistent position.
+The expanded navigation and table explorer occupy one compact sidebar: 260 px
+on wide screens and 244 px at medium widths. Collapsing it leaves a 76 px rail.
+Keep the existing left/right preference and a bounded mobile drawer. Tables
+remain available in Browse, Structure and SQL; optional details do not replace
+the list. Explore retains one floating source library and inspector. Diagram
+uses the shared sidebar for its table index. Backups uses the existing
+restore-point context.
 
-The **database selector** belongs in the shared top bar: it changes the context
-of these areas rather than adding another navigation level. Show the exact
-database name and an unavailable label when needed. List schemas visible to
-both database roles, plus configured unavailable schemas needed for recovery;
-exclude system schemas. Selecting a database never grants access or connects
-an unrelated server.
-
-### One menu, three responsibilities
-
-| Layer | Responsibility | Content |
-| --- | --- | --- |
-| Main rail | Choose an area | Overview, Database and Research; Settings at the bottom |
-| Context panel or Explore library | Choose an object in that area | Tables, records, saved research or restore points |
-| Workspace | Read, inspect or act on the object | Database views, query builder and editor, restore controls and task tools |
-
-The rail and context panel form one connected glass surface with one shared
-elevation. Do not add another tool rail beside them. Clicking an active area
-with context toggles its panel; switching area replaces that panel's contents.
-Overview and Settings open their own screens without a contextual menu of
-links to other main areas. A dashboard action may still resume a specific task.
-
-Records and Schema keep the searchable table explorer. Selecting a table
-highlights it and updates the workspace; details do not replace the list.
-Explore uses its single floating source library instead of duplicating that
-fixed panel. The selected table carries between the three Database tasks.
-Record search and pagination remain separate from table-catalog search.
+The database selector changes the context of these tasks rather than adding
+another level of navigation. Show the exact database/schema and availability.
+Selecting an entry does not grant access or connect an unrelated server. Keep
+catalogue search distinct from row search and pagination.
 
 ### Predictable placement within Database
 
-Use the same order across Database:
+1. A compact Database heading with direct Import/Export and **More** actions.
+2. The **Browse, Structure, SQL** row with the selected table clearly identified.
+3. Local controls next to the content they affect: row actions, SQL Run or canvas
+   controls. Main navigation and database selection stay in fixed places.
+4. Main content, followed by optional detail or help disclosures.
 
-1. A compact **Database** heading and the shared source/panel opener.
-2. One primary view row: **Records**, **Explore**, **Schema**, with the selected
-   table context. Allow wrapping on narrow screens. Database Tools stays here.
-3. Schema alone adds **Table details / Diagram** beneath its primary task.
-4. Local tools stay beside the content they control. Canvas tools may float
-   within Explore; main navigation and the database selector do not move.
-5. Main content, then a compact loaded summary or optional explanation.
+Allow controls to wrap on narrow screens and keep menus inside the viewport.
+Do not repeat the visible table title in the page bar, a separate table header
+and an expanded sidebar inspector. Retain semantic headings for assistive
+technology. A normal import opens one native import flow; it does not expose
+another Browse/Structure/SQL navigation layer.
 
-Keep object selection separate from changing view or expanding details. The
-fixed explorer serves Records and Schema; Explore owns one floating library
-and inspector. Avoid a second table picker, another rail, or a permanent column
-for every tool.
+### Optional canvas views
 
-In Schema, group the tool area by purpose: connection filtering and column
-display; arrangement; zoom, actual size and fit; then refresh and Help. Keep
-those groups together above the canvas, with consistent alignment and wrapping.
-Zoom controls must not cover table fields or move below a large diagram.
-Put table/relationship counts and the PK/FK legend in a compact canvas footer.
+Explore follows actual records and declared references. Its loaded graph never
+implies a full database scan or inferred causality. Keep the documented
+selection, questions, source evidence, record windows and second-screen flows.
+Opening a source row returns to Browse even if that row is outside the first
+page. See [record-map behaviour](RECORD_MAP.md).
 
-Schema and Explore share the canvas material in `canvas-workspace.css`: the same
-accent/violet glow, low-contrast 22 px dot grid, elevation, corner radii and
-660 px height (630 px on compact screens). Both use the available workspace
-width and the same compact Database heading. Panning moves each grid with its
-diagram. Tables and records use opaque shared panel material with a clear
-selected state, and their local toolbars use the same surface, spacing and
-control states. Theme, reduced transparency and forced colours apply to both.
-Schema keeps its grouped toolbar above the diagram and its persistent table
-explorer; its table positions, selected table and navigation remain intact.
+Diagram keeps grouped filtering, column display, arrangement, zoom, fit,
+refresh and Help above its canvas. Preserve the table index, exact selection,
+positions and keyboard controls. Diagram and Explore retain the shared canvas
+materials in `canvas-workspace.css`, with theme, reduced-transparency and
+forced-colour support. Moving a table in the diagram never changes its schema.
 
-### Record canvas
+### Continuity and unavailable states
 
-Use the unified Explore behaviour above. Start from one actual record and
-expand declared incoming/outgoing references deliberately. Composite and self
-links retain their identity; table colour remains stable and paired with text.
-Selecting an edge exposes its ordered column pairs, complete keys and optional
-prepared SQL. The graph never implies inferred similarity or causal influence.
+Keep existing hashes: `#gegevens`, `#structuur`, `#onderzoeken`, `#schema`,
+`#verkennen`, the `#verbanden` alias, `#experimenten`, `#overzicht` and
+`#instellingen`, including database and table parameters. Labels change;
+bookmarked work remains reachable. The Database entry returns to its current
+view within the session.
 
-Keep the empty, unsupported, missing-record, cross-schema and partial-result
-states close to the relevant action. Show loaded records rather than claiming
-a full database scan. A source row can be inspected even if it is outside the
-first Records page. See [RECORD_MAP.md](RECORD_MAP.md) for controls and limits.
-
-The Database rail entry returns to the last Database view in the current
-session. Preserve direct links and existing hashes: `#gegevens`, `#structuur`,
-`#schema`, `#verkennen` and `#verbanden`, including table parameters. Changing navigation must
-not discard research drafts, builder choices, table state or schema placement.
-
-Research uses the shared panel for saved research. Database Tools opens the
-existing backup workspace and its restore-point context. Keep execution,
-saving and restoration controls in their workspace.
-Panel content must have its own loading, empty and error states. Recovery and
-Settings remain reachable when the database is unavailable.
-
-Move the complete connected menu together when the user chooses navigation on
-the right. At compact widths, use a labelled opener for the same navigation and
-explorer; keep the selected table and task tools visible in the workspace.
-Automatic selection updates must not reopen a deliberately collapsed panel or
-steal focus. Preserve context and collapse choices through language and theme
-changes, and keep keyboard access and focus return working.
+Changing views, language or appearance preserves table state, SQL drafts,
+builder choices and diagram placement. Late responses must not replace newer
+work. A deliberately collapsed panel stays collapsed. Each panel retains its
+loading, empty, error and recovery states. Settings, recovery and switching to
+another database remain usable when the current database is unavailable.
 
 ## Core user flows
 
@@ -476,42 +448,41 @@ The phpMyAdmin window opens at the selected database and has its own deliberate
 database navigation. Its frame keeps unsaved work during incidental shell,
 theme and language updates; only explicit tool navigation loads another page.
 
-### Add a database and import SQL
+### Add a database and import files
 
-Keep one labelled create/import action in the Tools menu beside the shared
-database selector. It opens a focused glass dialog.
-The dialog offers existing database choice and import, plus a name field for a
-new database. Keep the selected target visible in every action; changing the
-name must not silently change the active workspace before the request succeeds.
+Keep the **+** action beside the shared database selector. Its existing manager
+can select an available database or explicitly prepare a MariaDB database.
+Creating a missing database starts empty; preparing an existing name preserves
+its data. Database creation in this branch does not provision PostgreSQL or
+connect remote servers. Keep name validation, pending state, nearby errors and
+the entered name on failure.
 
-Creating a missing database starts empty. Preparing an existing name preserves
-its data and makes it available to Govern explicitly. Explain that importing SQL
-is a separate operation that can change or replace data. Do not turn the name
-form into a server administration panel or ask the user to paste credentials.
-If the private creation service is unavailable, retain the entered name, show
-the failure and keep existing database selection/import usable.
+The direct **Import** action, import into an existing database, and create-and-
+import all open the same native import mode. Show only **SQL file** and
+**Dataset** as its primary choices. Keep the selected engine/database visible.
+SQL files use the existing preflight, exact confirmation and postflight flow;
+datasets use the existing file/sheet preview and create/append destination.
+Changing the target invalidates the old review. A pending operation fixes the
+target and disables competing navigation.
 
-The create-and-import action prepares the database, switches through the shared
-database flow and opens the official phpMyAdmin Import screen. Import into an
-existing database opens that same screen directly. The user selects the file in
-phpMyAdmin; do not add a duplicate file picker that would require choosing the
-file twice. Keep **Import** and **Export** beside Browse, Structure and SQL
-as native modal shortcuts while leaving all of phpMyAdmin's tools available.
-Database Tools uses these same screens; it adds no competing import/export
-engine.
+For MariaDB, **Advanced import via phpMyAdmin** deliberately opens the official
+import interface. Do not load that iframe beside the normal SQL-file form.
+The native SQL limit remains 256 KiB UTF-8; larger/complex MariaDB imports use
+the existing official path and its limits. Neither path promises a universal
+rollback. PostgreSQL uses its native import services and never opens MariaDB
+tools for its selected scope.
 
-Show pending state during preparation and prevent duplicate creation or a
-competing target switch. Keep validation and server errors beside the name and
-preserve it for retry. Closing the native import window refreshes tables,
-structure and relationships while retaining valid previous workspace state.
-The earlier database's SQL draft remains available when switching back. A
-language change updates the dialog text without discarding its name or moving
-the text caret; it never reloads an active phpMyAdmin import form. Support
-keyboard focus return and a usable single-column dialog at 320 px.
+**Export via phpMyAdmin** honestly names the MariaDB exporter and preserves the
+selected table or database. PostgreSQL's **Export backup** opens Backups, whose
+custom archive is labelled separately. Context export contains schema and saved
+query context; it is not a replacement for data export.
 
-This flow prepares a database on Govern's existing MariaDB server. It does not
-discover or connect remote servers, promise that arbitrary SQL is reversible,
-or bypass the configured import size and execution limits.
+Closing import refreshes tables, structure and relationships without discarding
+valid workspace state. A language change preserves the file, preview,
+confirmation and input values; it never reloads an active phpMyAdmin form.
+Keep focus return and a usable single-column dialog at 320 px. In an empty
+database, **Create a table with SQL** only opens an editable example; execution
+uses the normal SQL action and existing confirmations.
 
 ### Inspect any Govern element
 
@@ -619,7 +590,7 @@ and local setup live in [the AI architecture](AI.md).
 
 ### Follow the schema
 
-Open **Database → Schema** using the shared view row; the current table stays
+Open **Database → More → Diagram**; the current table stays
 selected. The canvas shows live tables, views, columns, primary keys
 and declared foreign keys. Select an object to read its exact connections, and
 continue to its data or structure without losing the table explorer. Search
@@ -662,7 +633,7 @@ the visible catalog instead of drawing a connection to the wrong local table.
 
 ### Explore and change data
 
-Open Records, choose a table, read or search its rows, and optionally open the SQL explanation.
+Open Browse, choose a table, read or search its rows, and optionally open the SQL explanation.
 Place **Add row** in the table's action area and **Edit** / **Delete** beside each
 row with a usable identity. These actions remain visible without hover and
 preserve the table explorer, search and pagination. A dialog names both database
@@ -692,9 +663,17 @@ a clear route to the official phpMyAdmin rather than a guessed row action.
 toolset available and refreshes relevant catalog/data on closing. If a table
 was removed, explain that and offer another table rather than a blank screen.
 
-### Build and save research
+### Write SQL and save queries
 
-Choose a table, columns and filters, then generate SQL. Show that SQL before execution. Run visual designs through the read only research connection and show results, limits and any truncation. The free SQL editor uses the same scoped database account as phpMyAdmin. Clearly describe its writable DML, DDL, routine and transaction capabilities in Dutch and English; do not label that editor read only.
+Open **SQL** to reach the editor and results directly. The searchable table
+sidebar remains available. **Query builder**, **Saved queries** and **SQL help**
+begin collapsed below the editor and preserve their state per database.
+
+For a visual query, expand the builder, choose tables/columns/filters, then
+apply the generated SQL. Visual designs use the read-only connection. MariaDB's
+free SQL editor uses the same scoped writer as phpMyAdmin; PostgreSQL uses its
+separate SQL role. Describe the actual engine's writable capabilities and
+limits; neither free SQL editor is labelled read-only.
 
 One **Run query** submits a script using one temporary database session. Support
 multiple statements and `DELIMITER` routines, functions and triggers. Keep one
@@ -709,8 +688,8 @@ guessing a source table or record key.
 Use the existing confirmation dialog for potentially destructive SQL. Its
 preflight is advisory and makes no changes; mode-dependent scripts may not have
 an exact statement count before execution. Database grants determine which SQL
-can run. File import controls and server administration remain separate official
-tool capabilities rather than claims made by the query editor.
+can run. File imports use the dedicated Import action; extra MariaDB server
+tools remain in the explicitly named phpMyAdmin interface.
 
 For PostgreSQL, reuse the SQL editor with engine-correct quoted/qualified
 examples and explicit role-grant limits. Hide the visual builder, saved-query
@@ -815,7 +794,10 @@ Treat accessibility as part of the shared component, not a later screen specific
 
 For every addition, write down the user’s goal, entry point, information needed, main action, visible result and route back. Name the state that must survive if the user leaves or changes language. This short brief comes before new screens or controls.
 
-Place the addition in an existing area whenever its task belongs there. A new query capability belongs in Research; a reading tool belongs near Data or Research; a preference belongs in Settings. Add a top level navigation item only for a distinct, recurring task that cannot fit the existing structure clearly.
+Place additions with their existing task. Query capabilities belong in SQL;
+row-reading tools belong in Browse; optional relationship work belongs in
+Explore; preferences belong in Settings. Prefer a contextual action or disclosure
+before adding another main navigation area.
 
 ### Use this implementation sequence
 
@@ -850,7 +832,7 @@ Preserve the existing PHP, JavaScript module and SQL structure. Add a dependency
 | Local assistant | `ai-workspace.js`, live `AiContext`, local `LocalCodeSearch`, `AiService` and the optional configured `OllamaClient` |
 | Query design | `query-builder.js` and the existing backend services |
 | Direct row editing | `row-editor.js`, live catalog metadata and `RowEditor` / `RecordIdentity` |
-| Official database window | `database-modal.js` and the same origin phpMyAdmin integration |
+| Import and advanced database window | `database-modal.js` separates native SQL/dataset import from the same-origin official phpMyAdmin interface |
 | Language and preferences | `i18n.js` and `preferences.js` |
 | Movable blocks | `dashboard-layout.js` with a small block registry |
 
@@ -888,7 +870,7 @@ Save layout edits as a draft until **Save layout**. Keep language and appearance
 
 ### Example of a future chart feature
 
-A chart could start from an existing saved query in Research. The user chooses **Create chart**, selects fields and a chart type, then sees the same query results presented visually. A new top level chart application is not needed for that first task.
+A chart could start from an existing saved query in SQL. The user chooses **Create chart**, selects fields and a chart type, then sees the same query results presented visually. A new top level chart application is not needed for that first task.
 
 Use the existing query service, translation keys, glass panel and error patterns. Explain row limits and truncation; a chart of preview rows must not imply totals for the whole database. A dashboard version becomes an optional registered block referencing its saved query. Keep chart presentation settings separate from the saved SQL.
 
@@ -957,9 +939,9 @@ The existing application behaviour and integration boundaries are described in t
 
 ## Tabular file import
 
-A new **Bestanden importeren / Import files** tab lives inside the existing database
-window, alongside the official SQL-import shortcut. It uses shared buttons, input
-styles and semantic labels. Its panel has its own tabpanel ID and a contained scroll
+**Import → Dataset** uses the existing dataset panel inside the native import
+window, next to **SQL file**. It reuses shared buttons, input styles and semantic
+labels. Advanced MariaDB import is a separate deliberate phpMyAdmin action. Its panel has its own tabpanel ID and a contained scroll
 area for wide tables. The file preview explains its limits and distinguishes
 whole-file profile counts from the 20-row sample chart. The main action requires
 the visible database name before import. During a pending request all context

@@ -1,4 +1,4 @@
-import {clickWorkspaceTool, selectWorkspaceLanguage} from './workspace-tools.mjs';
+import {clickWorkspaceTool, selectWorkspaceLanguage, clickDatabaseView, openQueryLibrary} from './workspace-tools.mjs';
 /** Real multi-database navigation and row writes in a disposable local stack. */
 import {authenticatedContext} from './auth-session.mjs';
 import assert from 'node:assert/strict';
@@ -242,8 +242,9 @@ INSERT INTO ${table} (id,label,amount) VALUES (1,'${marker} seed',10.10);`);
     // Saved SQL and unfinished editor content belong to their own database.
     const savedA = data(await api('save-query', first, {body: {name: 'A saved ' + name, sql: 'SELECT 111 AS saved_a;', notes: ''}}));
     saved.push({database: first, id: savedA.id});
-    await page.locator('#navigation [data-area="research"]').click();
+    await clickDatabaseView(page, 'onderzoeken');
     await page.locator('#sql-editor').fill('SELECT 111 AS draft_a;');
+    await openQueryLibrary(page);
     await page.locator('#query-name').fill('A unfinished title');
     await page.locator('#query-notes').fill('A unfinished notes');
     await page.locator('.saved-item-open').filter({hasText: 'A saved ' + name}).waitFor();
@@ -252,6 +253,7 @@ INSERT INTO ${table} (id,label,amount) VALUES (1,'${marker} seed',10.10);`);
     assert.notEqual(await page.locator('#sql-editor').inputValue(), 'SELECT 111 AS draft_a;');
     assert.equal(await page.locator('.saved-item-open').filter({hasText: 'A saved ' + name}).count(), 0);
     await page.locator('#sql-editor').fill('SELECT 222 AS draft_b;');
+    await openQueryLibrary(page);
     await page.locator('#query-name').fill('B unfinished title');
     await page.locator('#query-notes').fill('B unfinished notes');
     await switchDatabase(first);
@@ -270,8 +272,7 @@ INSERT INTO ${table} (id,label,amount) VALUES (1,'${marker} seed',10.10);`);
     const unknown = await api('bootstrap', '__govern_unknown_database_' + name);
     assert.equal(unknown.status, 403, 'An unknown target never silently falls back to the active database.');
 
-    await page.locator('#navigation [data-area="database"]').click();
-    await page.locator('[data-database-view="gegevens"]').click();
+    await clickDatabaseView(page, 'gegevens');
     await waitTable(second);
     assert.ok((await page.locator('.table-workspace .data-table').innerText()).includes('B seed'));
     await edit('B seed');
@@ -295,7 +296,7 @@ INSERT INTO ${table} (id,label,amount) VALUES (1,'${marker} seed',10.10);`);
         'Closing after a language change restores the replacement row action.');
     await page.setViewportSize({width: 1440, height: 1100});
 
-    await page.locator('[data-database-view="schema"]').click();
+    await clickDatabaseView(page, 'schema');
     await page.locator('#schema-viewport').waitFor();
     await page.locator('#schema-actual').click();
     await page.locator('#schema-zoom-in').click();
@@ -309,7 +310,7 @@ INSERT INTO ${table} (id,label,amount) VALUES (1,'${marker} seed',10.10);`);
         'The picker restores the database’s own previous data view.');
     assert.equal(await page.locator('#selection-pointer-count').evaluate(button => button.hidden), true,
         'Database switching clears the selection count itself, independently of the closed Tools menu.');
-    await page.locator('[data-database-view="schema"]').click();
+    await clickDatabaseView(page, 'schema');
     await page.locator('#schema-viewport').waitFor();
     await page.locator('#schema-actual').click();
     await switchDatabase(second);
@@ -346,9 +347,9 @@ INSERT INTO ${table} (id,label,amount) VALUES (1,'${marker} seed',10.10);`);
 
     // The official tool receives B, performs a real SQL update there, and
     // Govern rereads B without changing the same-named record in A.
-    await page.locator('[data-database-view="gegevens"]').click();
+    await clickDatabaseView(page, 'gegevens');
     await waitTable(second);
-    await page.locator('#open-database').click();
+    await clickWorkspaceTool(page, '#open-database');
     await page.locator('#database-dialog[open]').waitFor();
     await page.locator('#database-dialog .frame-message').waitFor({state: 'hidden'});
     await page.locator('#database-tab-sql').click();

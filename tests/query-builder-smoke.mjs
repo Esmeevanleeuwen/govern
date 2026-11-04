@@ -1,3 +1,4 @@
+import {clickDatabaseView, openQueryBuilder, openQueryLibrary} from './workspace-tools.mjs';
 /**
  * Real browser check for the visual query builder. Uses the Bestuursatlas seed
  * in an isolated local Govern stack. GOVERN_UI_WRITE_TESTS=1 additionally
@@ -59,6 +60,7 @@ try {
     const page = await authenticatedPage(browser, base, {locale: 'nl-NL', viewport: {width: 1440, height: 1000}});
     page.on('pageerror', error => errors.push(error.message));
     await page.goto(new URL('/workspace.php#onderzoeken?table=digital_systems', base).href, {waitUntil: 'networkidle'});
+    await openQueryBuilder(page);
     await page.getByRole('button', {name: 'Query maken', exact: true}).waitFor();
     assert.equal(await page.getByRole('combobox', {name: 'Basistabel', exact: true}).inputValue(), 'digital_systems');
     const structure = await page.evaluate(async () => (await (await fetch('/api.php?action=structure&table=digital_systems')).json()).data);
@@ -102,6 +104,7 @@ try {
     assert.match(await page.locator('.query-result').innerText(), /De editor toont de uitgevoerde query/);
 
     if (process.env.GOVERN_UI_WRITE_TESTS === '1') {
+        await openQueryLibrary(page);
         const name = 'Bijgewerkte SQL-test ' + Date.now();
         let id;
         try {
@@ -176,9 +179,9 @@ try {
 
     // Both the applied SQL and the independent, unfinished design survive a
     // visit to another screen. Nothing is parsed back out of arbitrary SQL.
-    await page.locator('#navigation [data-area="database"]').click();
+    await clickDatabaseView(page, 'gegevens');
     await page.locator('.database-heading h1').filter({hasText: 'Database'}).waitFor();
-    await page.getByRole('link', {name: 'Onderzoeken', exact: true}).click();
+    await clickDatabaseView(page, 'onderzoeken');
     await page.getByRole('button', {name: 'Query maken', exact: true}).waitFor();
     assert.equal(await page.getByRole('textbox', {name: 'Waarde voor voorwaarde 1', exact: true}).inputValue(), 'niet-toegepaste-keuze');
     assert.equal(await page.getByRole('textbox', {name: 'SQL-query', exact: true}).inputValue(), manual);
@@ -266,12 +269,13 @@ try {
         return route.continue();
     });
     await schemaPage.goto(new URL('/workspace.php#onderzoeken?table=digital_systems', base).href, {waitUntil: 'networkidle'});
+    await openQueryBuilder(schemaPage);
     await schemaPage.getByRole('checkbox', {name: 'Basiskolom name', exact: true}).waitFor();
     assert.equal(await schemaPage.getByRole('checkbox', {name: 'Basiskolom name', exact: true}).isChecked(), true);
     hideColumn = true;
-    await schemaPage.locator('#navigation [data-area="database"]').click();
+    await clickDatabaseView(schemaPage, 'gegevens');
     await schemaPage.locator('.database-heading h1').filter({hasText: 'Database'}).waitFor();
-    await schemaPage.getByRole('link', {name: 'Onderzoeken', exact: true}).click();
+    await clickDatabaseView(schemaPage, 'onderzoeken');
     const missing = schemaPage.getByRole('button', {name: 'Ontbrekende kolom digital_systems.name verwijderen', exact: true});
     await missing.waitFor();
     assert.equal(await schemaPage.getByRole('checkbox', {name: 'Basiskolom name', exact: true}).count(), 0);
@@ -296,6 +300,7 @@ try {
     const mobile = await authenticatedPage(browser, base, {locale: 'nl-NL', viewport: {width: 390, height: 844}});
     mobile.on('pageerror', error => errors.push(error.message));
     await mobile.goto(new URL('/workspace.php#onderzoeken?table=digital_systems', base).href, {waitUntil: 'networkidle'});
+    await openQueryBuilder(mobile);
     await mobile.getByRole('button', {name: 'Query maken', exact: true}).waitFor();
     await mobile.getByRole('button', {name: 'Voorwaarde toevoegen', exact: true}).click();
     await mobile.getByRole('combobox', {name: 'Kolom voor voorwaarde 1', exact: true}).selectOption(ref('base', 'name'));

@@ -15,8 +15,19 @@
 .database-dialog .modal-database { display: flex; min-width: 0; max-width: 340px; flex: 1; }
 .database-dialog .modal-database-select { min-width: 0; width: 100%; max-width: 100%; }
 .modal-source-hint { margin: 0; padding: 0 23px 10px; flex-shrink: 0; line-height: 1.5; }
+.database-dialog.native-import-mode { max-width: 960px; height: min(860px, calc(100dvh - 56px)); }
+.database-dialog.native-import-mode.expanded { max-width: none; height: 100dvh; }
+.database-dialog.native-import-mode .database-context { flex: 1; justify-content: flex-end; }
+.database-dialog.native-import-mode .import-inspection { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; }
+.database-dialog.native-import-mode .native-import { margin-top: 12px; }
+.database-dialog.native-import-mode .database-dialog-footer { flex-wrap: wrap; }
+.database-dialog.native-import-mode .modal-footer-hint { display: none; }
+.database-dialog.native-import-mode #advanced-import { margin-left: auto; white-space: normal; text-align: left; }
 @media (max-width: 600px) {
     .database-dialog .database-context { grid-template-columns: minmax(0, 1fr); }
     .database-dialog .modal-database { max-width: 100%; }
     .modal-source-hint { padding: 0 13px 8px; }
+    .database-dialog.native-import-mode { max-width: none; height: 100dvh; }
+    .database-dialog.native-import-mode .database-context { justify-content: stretch; }
+    .database-dialog.native-import-mode #advanced-import { margin-left: 0; }
 }
