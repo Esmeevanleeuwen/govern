@@ -1,0 +1,11 @@
+.database-entry-actions { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
+.workspace-tools-ready #manage-databases { display: inline-flex; align-items: center; justify-content: center; gap: 6px; width: auto; height: auto; min-height: 44px; min-width: 44px; padding: 8px 12px; white-space: normal; flex: none; }
+.workspace-tools-ready #manage-databases .icon { width: 18px; height: 18px; }
+.workspace-tools #open-database > span { position: static; width: auto; height: auto; overflow: visible; clip-path: none; }
+.database-schema-picker { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; font-size: 14px; }
+.database-schema-picker select { min-height: 44px; max-width: 100%; }
+@media (max-width: 520px) {
+    .workspace-tools-ready #manage-databases { max-width: 100px; padding: 6px 8px; font-size: 12px; line-height: 1.25; }
+    .workspace-tools-ready #manage-databases .icon { display: none; }
+    .database-entry-actions { flex-direction: column; align-items: stretch; }
+}

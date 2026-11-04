@@ -16,8 +16,9 @@ beperking van de werkplek.
   Applicatietabellen hebben prefix `_govern_` en horen bij hun eigen database.
 - phpMyAdmin is de echte officiële toepassing achter dezelfde lokale oorsprong.
   Bouw geen gedeeltelijke imitatie die dezelfde naam of mogelijkheden claimt.
-- De modal heeft Browse, Structure, SQL en Import als snelkeuzes, met de overige
-  phpMyAdmin-bediening beschikbaar in het venster.
+- De modal opent de officiële phpMyAdmin als geavanceerde MariaDB-tools. Normale
+  nieuwe databases/imports lopen via Database toevoegen en datasets binnen een
+  bestaand doel via Gegevens toevoegen; voeg geen concurrerende gewone importformulieren toe.
 
 ## Gegevens en toegang
 
@@ -40,14 +41,33 @@ beperking van de werkplek.
   Maak ontbrekende databases aan en verleen alleen rechten per exacte naam.
   Geen globale grants; escape `_` in databasepatronen. Bestaande gegevens en
   accountwachtwoorden blijven behouden, ook bij herhalen na een gedeeltelijke fout.
-- De beperkte eigen SQL-import (maximaal 256 KiB UTF-8) gebruikt dezelfde SQL-parser
-  en uitvoerder als Onderzoeken. Bewaar geen SQL-bestanden, toon voor- en nacontrole,
-  eis bevestiging van de exacte databasenaam en neem vooraf bij bestaande
-  tabellen/views, ook interne `_govern_`-objecten een herstelpunt onder de exclusieve onderhoudslock.
-  Een import is geen SQL-sandbox: `USE` kan andere reeds toegestane databases raken.
-  Voor grotere bestanden blijft de echte phpMyAdmin-import beschikbaar. Beloof
-  nooit een algemene rollback of sluitende inhoudelijke controle. Geef AI geen
-  import- of databaseaanmaaktool.
+- De normale ingang is Database toevoegen met precies drie taken: lege database,
+  databaseback-up of dataset. Globale imports maken altijd een nieuw doel; een
+  bezette naam wordt nooit stilzwijgend voorbereid, overgenomen of vervangen.
+  De databasekiezer opent bestaande databases. Gegevens toevoegen gebruikt
+  dezelfde datasetstroom binnen een vaste engine/database/schema; alleen nieuwe
+  tabellen of expliciet gekoppelde append, zonder gewone vervangoptie.
+- Nieuwe PostgreSQL-databases zijn eigen database-identiteiten, geen vermomde
+  schema's. Houd bestaande packed scopekeys/bookmarks bruikbaar en laat schema's
+  een afzonderlijke toegestane context binnen de database blijven.
+- De nieuwe importstroom bewaart begrensde private bronnen en controleregistratie
+  buiten de webroot, met expliciete vervaltermijnen en zonder bronrijen in
+  blijvende jobmetadata. Controle en review voeren geen SQL uit. Aanmaak loopt
+  via de smalle privéservice; nieuwe imports gebruiken een doelgebonden account
+  en nooit administratorcredentials of een vrije SQL-tool voor AI.
+- Een geaccepteerde job is idempotent bij indienen, niet een garantie dat SQL
+  precies eenmaal wordt uitgevoerd. Na een onderbreking wordt onzeker werk
+  Onbekend, zonder automatische SQL-herhaling. Houd echte gedeeltelijke effecten,
+  stopverzoeken, geverifieerde uitkomsten en afzonderlijk aangemaakte lege doelen
+  uit elkaar. Verwijder nooit bestaande databases als automatische opruiming.
+- De oude native SQL-import-API blijft compatibel: maximaal 256 KiB UTF-8,
+  parser/uitvoerder van Onderzoeken, exacte doelbevestiging en een herstelpunt
+  onder de exclusieve onderhoudslock wanneer tabellen/views bestaan. Deze oude
+  route bewaart geen SQL-bestand en is geen SQL-sandbox: USE kan een andere reeds
+  toegestane database raken. Die bevestigingsregel geldt niet als een extra
+  naamveld voor nieuwe globale importtaken. phpMyAdmin blijft de echte aparte
+  geavanceerde MariaDB-tool, met zijn eigen import- en uitvoeringsgrenzen.
+  Beloof nooit algemene DDL-rollback, engineconversie of volledige SQL-controle.
 - Gebruik voor direct wijzigen de volledige primaire sleutel of een volledige
   unieke sleutel zonder NULL-velden of prefixindex. Lees de echte rij opnieuw;
   verkorte browsewaarden zijn nooit een schrijfbron. Behoud exacte getallen,

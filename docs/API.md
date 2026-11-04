@@ -18,12 +18,12 @@ Success envelope `{ "ok": true, "data": ... }`. A failure keeps the existing
 }
 ```
 
-POST requests use JSON, except the multipart dataset uploads described below,
+POST requests use JSON, except the multipart source and legacy dataset uploads described below,
 and header `X-CSRF-Token` from authenticated bootstrap
 or account status. PHP session cookie, same origin only. Except fixed database
 readiness, every database API route requires an approved installation account.
 One MySQL/MariaDB server with multiple selectable databases, plus an optional
-server-configured PostgreSQL connection with a selected database and allowlisted schemas.
+server-configured PostgreSQL connection with several permitted databases and allowlisted schemas.
 The optional local Ollama connection is disabled by default; only the separate AI
 endpoints can call that configured provider. Ordinary database operations and
 selection explanations do not require a model.
@@ -99,89 +99,218 @@ login to an explicit 302 redirect to `/auth.php?mode=login`. The internal locati
 cannot be requested directly. Native uploads/downloads and direct links receive
 the same check; official phpMyAdmin remains the actual application.
 
-## Eerste eigen SQL-import
+## Unified database creation and import
 
-Govern ondersteunt naast de officiële phpMyAdmin-import een beperkte eigen route in de
-bestaande Import-tab. Deze route accepteert **UTF-8 SQL-bestanden tot 262144 bytes**.
-De browser leest het bestand lokaal als tekst en verstuurt JSON met CSRF, zonder
-server-side uploadbestand of opgeslagen SQL-concept.
+The normal UI has one **Add database** entry with three tasks: create an empty
+database, import a database backup, or import a dataset. Global imports always
+create a new database. Contextual **Add data** shares the dataset flow with its
+existing connection, database and schema fixed; it creates a new table or appends
+mapped rows. The database picker only opens existing database identities.
+Backups / Restore and Advanced MariaDB tools retain their separate purposes.
 
-- `POST native-import-preview?database=<name>` met `{sql:string}` retourneert
-  `{database,bytes,sha256,statement_count,destructive,destructive_truncated,before,preview_token,max_bytes}`.
-  `before` is dezelfde best-effort cataloguscontrole als `GET import-inspection`.
-  Er wordt nog geen SQL uitgevoerd. De risicoselectie is **geen volledige parser-audit**.
-- `POST native-import-execute?database=<name>` met
-  `{sql:string,preview_token:string,confirmation:string}` vraagt de exacte
-  databasenaam als bevestiging. De preview-token bindt bestand, database en
-  geobserveerde staat. Wanneer de staat wijzigde volgt HTTP 409.
-  De server houdt bij deze fase een exclusieve onderhoudslock vast.
-  Als vooraf al tabellen of views bestaan, inclusief interne applicatietabellen, wordt onder die lock
-  eerst een automatisch herstelpunt gemaakt. De uitvoerder stopt op een SQL-fout.
-  De respons bevat `completed,executed,statement_count,failed,before,after`,
-  toegevoegde/verwijderde objectnamen, `unchecked_rows` en zo nodig
-  `safety_snapshot:{id}`. Er wordt nooit automatisch hersteld na een fout.
+These installation-wide workflow routes require an approved account and normal
+host/origin/session checks, but do not require the currently open database to be
+available. Every mutation uses CSRF. They validate their reviewed destination
+independently; the URL's current workspace cannot silently retarget a plan.
+Ordinary POST bodies are JSON except `import-source` multipart upload.
 
-Import gebruikt de bestaande `SqlScript` en `QueryRunner`, met dezelfde
-schrijfrechten als vrije SQL. Een bestand met `USE` of gekwalificeerde namen
-kan dus ook een **andere toegestane database** wijzigen. Een token of
-databasekeuzelabel is geen SQL-sandbox. De controle toont alleen wat daadwerkelijk
-wordt gemeten en kan gelijktijdige wijzigingen in phpMyAdmin niet blokkeren.
-De phpMyAdmin-import blijft nodig voor grote of niet-ondersteunde SQL-bestanden.
+| Method and action | Input | Successful data |
+| --- | --- | --- |
+| GET `database-workflows` | None | `{engines:[{id,engine,label,available,can_create}],worker_available,limits}` |
+| POST `import-source` | Multipart `file`, `kind:"backup"|"dataset"`, optional `settings` JSON object | 201 `{source_id,name,kind,bytes,sha256,settings,uploaded_at,expires_at,engine,requires_engine,blocked,warnings,...}` with bounded dataset preview or SQL format evidence |
+| POST `import-targets` | `{source_id,scope_key}` | Dataset preview and catalog targets with eligibility, columns and structure versions for the fixed existing scope |
+| POST `import-plan` | Reviewed intention described below | 201 `{plan_id,summary,expires_at}`; no database creation or data write |
+| POST `import-submit` | `{plan_id,submission_key}` | `{job}` for one durably accepted job |
+| GET `import-job` | URL `id` | `{job}` from persisted state |
+| GET `import-jobs` | None | `{jobs}` with up to 50 recent installation jobs |
+| POST `import-stop` | `{id}` | `{job}` recording a stop request or a confirmed queued cancellation |
+
+A plan accepts `kind:"empty"|"backup"|"dataset"`, `engine:"mariadb"|"postgres"`,
+`name`, and `target_mode:"new_database"|"new_table"|"append"`. File imports also
+supply `source_id`; empty creation has no source. A backup can include
+`source_engine` to explicitly confirm an ambiguous SQL source. Existing dataset
+targets include the server-issued `scope_key`; engine/name/schema must match
+that scope. New PostgreSQL databases initially target `public`. New database
+names are lowercase ASCII, start with a letter and contain up to 63 lowercase
+letters, digits or underscores. Fresh-name availability is checked during
+planning and again atomically by provisioning; an occupied name never becomes
+an append, overwrite or adoption operation.
+
+Dataset plans supply one or more `tables` entries:
+
+```json
+{
+  "kind": "dataset",
+  "source_id": "<server-issued opaque source id>",
+  "engine": "postgres",
+  "name": "test",
+  "target_mode": "new_database",
+  "tables": [{
+    "dataset": 0,
+    "table": "contacts",
+    "mode": "create",
+    "mapping": [
+      {"source": "full_name", "target": "full_name", "empty_as_null": false},
+      {"source": "postal_code", "target": "postal_code", "empty_as_null": false}
+    ]
+  }]
+}
+```
+
+The source index identifies a parsed file dataset or selected worksheet.
+Every source column is mapped once or explicitly skipped with `target:null`;
+target columns cannot be duplicated. Append requires its catalog `version` and
+eligible text/NULL target columns. The execution path revalidates that structure
+under the appropriate engine lock/transaction. Unmapped required target columns
+without a supported database default block append. New tables add a generated
+`_govern_id`; matching headings never infer a primary or foreign key. Source
+values remain exact text or NULL. This route does not enable automatic numeric,
+date or relationship conversion.
+
+`settings` supports `delimiter:"auto"|","|";"|"\t"|"|"`, `header:boolean`,
+`skip_blank_rows:boolean`, `trim_whitespace:boolean` and `empty_as_null:boolean`.
+Defaults are automatic delimiter, header on, blank-row skipping on, trimming off
+and empty-to-NULL off. Settings are bound to an immutable source. Changing them
+uploads/reparses the selected file as a new source and requires a new plan;
+there is no in-place mutation of a previously reviewed source. CSV empty text
+stays empty text by default; JSON null/missing keys are NULL. JSON accepts a
+top-level array of objects and retains supported nested values as serialized
+text. XLSX cached values are read without evaluating formulas or macros; the
+first visible nonempty sheet is initially selected and additional sheets are
+explicit choices.
+
+Limits are 16 MiB per dataset file, 100,000 rows, 256 columns and a combined
+1,000,000-cell budget. The row and cell budgets cover all inspected datasets in
+the file, including worksheets not selected for import. New workflow formats are CSV, TSV, TXT, XLSX and JSON;
+ZIP remains only a legacy reader capability. Preview rows are bounded to the
+first 20, with 32 KiB per cell and a 2 MiB combined preview budget, and expose
+`preview_truncated` when shortened. Counts describe the complete supported
+parse rather than the visible sample.
+
+Backup imports support a bounded plain UTF-8 SQL subset: 256 KiB and at most
+4,096 statements. Source evidence can suggest MariaDB or PostgreSQL; an
+ambiguous `.sql` file requires explicit source confirmation. Choosing an engine
+does not convert a dump. General PGDMP/custom archives, client commands, inline
+COPY input, routines and administration are not supported. Database-selection
+statements and unsupported source-qualified names require re-export; they are
+not rewritten with string replacement. SQL inspection is limited analysis,
+while the target-specific database login provides the execution boundary.
+
+Plans expire after 15 minutes or earlier source expiry. `submission_key` is a
+16–96-character ASCII letter/digit/underscore/hyphen idempotency key. Repeating
+an accepted submission for the same plan returns its existing job, including
+after response loss. This does not make arbitrary SQL exactly-once. A live
+worker heartbeat, no older than 60 seconds, is required before accepting a new
+job. The API enqueues work; it never performs the queued SQL inline.
+
+Job `state` values are `queued`, `provisioning`, `importing`, `verifying`,
+`completed`, `partial`, `failed`, `unknown` and `cancelled`. The response carries
+fixed destination identity, stage, confirmed `completed_units` and `unit_kind`,
+`stop_requested`, `created_database`, `action_required`, timestamps, result and
+error code. Bytes, rows and statements are distinct measures, never a fabricated
+percentage. Completed means execution and the implemented verification finished.
+Partial means incomplete committed effects are confirmed. Failed or Cancelled
+can still leave a separately created empty database, which is reported explicitly.
+Unknown means the outcome is uncertain and forbids automatic replay. A queued
+stop can cancel before work; active stop is a request checked at supported
+statement/table boundaries, not an immediate interruption or rollback promise.
+An incomplete committed outcome remains Partial even if a stop caused it.
+
+Private source files and `control.sqlite` live under `IMPORT_DIR` (default
+`/var/lib/govern/imports`) in the `import_data` volume, outside imported databases
+and the webroot. Unsubmitted sources expire after 24 hours. Accepted sources have
+a hard seven-day bound from upload, shortened to 24 hours after Completed,
+Partial, Failed or Cancelled. Unknown does not extend the hard bound. Sources
+are not database backups; deleting them does not undo imported data. Private
+control metadata retains job evidence without logging whole uploaded rows or
+credentials. Capacity is bounded to 64 retained sources / 256 MiB and 25 pending
+jobs. The installation worker lock serializes execution; a restart changes
+previous active jobs to Unknown instead of replaying them. Pending work checks
+that the initiating installation account is still approved.
+
+### Native basic table definition
+
+Scoped POST `table-definition-preview` accepts a definition directly:
+`{name,columns:[{name,type,nullable,primary,generated,default:{mode,value?},precision?,scale?}]}`.
+Names use a lowercase letter followed by lowercase letters/digits/underscores,
+up to 63 characters. There must be 1–256 unique columns. Types are `text`,
+`whole`, `decimal`, `boolean`, `date` and `datetime`. Text maps to MariaDB
+LONGTEXT/PostgreSQL text; whole numbers to signed BIGINT/bigint. Decimal permits
+1–65 total digits and 0–30 fractional digits, not exceeding the total. Date/time
+uses DATETIME(6) or timestamp(6) without time zone and the UTC convention.
+There is at most one primary key, which cannot be nullable or Text. A generated
+whole-number primary key cannot have an explicit default.
+
+Default modes are `none`, `null` when nullable, and `literal` with a type-checked
+value. Exact integer/decimal defaults are strings; no floating point conversion
+or arbitrary SQL expression is accepted. Date/time literals have no stored
+timezone. Preview returns `{definition_token,definition,sql,table,database,schema,engine}`.
+It checks that the target is absent but creates nothing. POST
+`table-definition-create` accepts exactly `{definition,definition_token}`, checks
+the captured scope/definition and target again, and executes only generated,
+qualified CREATE TABLE through the scoped SQL role under the maintenance lock.
+A racing collision returns 409 and cannot overwrite an existing table.
+
+Creation returns `{created:true,verified,scope_key,table,database,schema,engine,definition,sql}`.
+If DDL returned successfully but the catalog refresh failed, `verified:false`
+reports that limitation while retaining the known creation result. Connection
+loss after possible DDL returns `table_definition_uncertain`; inspect the target
+before another attempt. This is a new-table builder, not table alteration or a
+full administration tool.
+
+### Legacy native SQL endpoints
+
+`native-import-preview` / `native-import-execute` remain for compatible existing
+clients. They accept the previous JSON SQL body, preview token and exact target
+confirmation, with the same 256 KiB bound. Existing-table execution keeps its
+pre-import safety snapshot and exclusive maintenance lock. Unlike the new
+fresh-target workflow, these routes use the existing SQL role and can affect
+other databases/schemas already granted to that role. SQL state inspection is
+best effort, not a complete safety analysis or universal rollback. These legacy
+routes and the separate official phpMyAdmin importer are not additional ordinary
+steps in the guided Add database journey.
 
 ## Database scope
 
 ### Optional PostgreSQL connection
 
-The default connection remains `mariadb`. PostgreSQL requests specify
-`connection=postgres&database=<configured database>&schema=<configured schema>`
-on every scoped API URL. Missing `database`/`schema` parameters use that
-connection's configured defaults. The browser cannot submit a hostname, port,
-role or password. Unknown connections, databases and schemas return 403
-`database_not_available`; selecting a scope does not grant access.
+PostgreSQL URLs specify `connection=postgres&database=<permitted name>&schema=<permitted schema>`
+on every scoped request. The server controls hosts, ports and credentials;
+selection cannot supply them or grant access. `PG_DATABASE` is the default,
+`PG_DATABASES` can name additional configured recovery entries, and live discovery
+requires explicit CONNECT grants for both reader and writer roles, not PUBLIC
+visibility. Fresh provisioned PostgreSQL databases appear without editing an env
+file or restarting the app. Configured unavailable entries remain visible for
+recovery.
 
-For compatibility with cached API modules from before PostgreSQL support,
-`database` may contain the complete server-issued `postgres:<database>:<schema>`
-workspace key when both `connection` and `schema` parameters are absent. Its
-percent-encoded identifiers pass through the same configured scope validation.
-Malformed keys and packed keys combined with explicit connection/schema
-parameters return 403 `database_not_available`. Normal authentication, CSRF
-and PostgreSQL capability checks still apply.
+`GET databases` returns one PostgreSQL picker entry per database, with `name`,
+`connection`, `engine`, `schema`, `schemas`, `available_schemas`, `scope_key`,
+`label` and `available`. Schema is secondary scope, not another database identity.
+The selected default favors readable `public`, then another permitted readable
+schema. Existing explicit schema bookmarks remain supported. PostgreSQL scope
+keys retain `postgres:` plus RFC 3986 encoded database, `:` and encoded schema;
+MariaDB keys stay the exact database name. Each tab's selection, caches and
+mutations keep the complete scope.
 
-`GET databases` remains an installation-wide list. Each entry retains
-`name` and `available`, and adds `connection`, `engine`, `schema`, `scope_key`
-and `label`. MariaDB scope keys remain the exact database name. PostgreSQL keys
-are `postgres:` + RFC 3986 percent-encoded database + `:` + percent-encoded schema.
-The UI stores this complete key in its per-tab selection, state caches, diagram
-layout and bookmarks. API requests expand it into separate connection/database/
-schema parameters, so equal table names in separate schemas stay independent.
-Only names from `PG_DATABASE` and `PG_SCHEMAS` are listed for PostgreSQL;
-configured schemas that cannot be read remain visible with `available:false`.
+Older clients may send the complete PostgreSQL workspace key as `database` when
+both `connection` and `schema` parameters are absent. Malformed keys or mixing a
+packed key with explicit connection/schema return 403 `database_not_available`.
+The same allowlist, approved account, method and CSRF checks apply.
 
-PostgreSQL supports authenticated GET actions `bootstrap`, `schema`,
-`structure`, `browse`, `explore`, `record-map-records`, `row-editor`,
-`import-inspection`, `snapshots` and `download-snapshot`; the read-only POST
-`record-map`; and POST `insert-row`, `update-row`, `delete-row`, `query`,
-`native-import-preview`, `native-import-execute`, `dataset-preview`,
-`dataset-import`, `create-snapshot` and `restore-snapshot`. Normal methods,
-sessions and CSRF checks apply. `query` accepts manual SQL only; visual designs
-remain unsupported. Other scoped actions return 403 `postgres_read_only` before
-the corresponding service runs, including saved queries, database creation,
-context export and AI. phpMyAdmin is never a PostgreSQL fallback.
+PostgreSQL supports the shared catalog, record map, row editor, free manual SQL,
+legacy import endpoints, schema snapshots and the new native table definition.
+The installation-wide unified workflow separately provisions a fresh database
+and performs reviewed imports. Visual query design, saved queries, context
+export, phpMyAdmin and AI remain unsupported for PostgreSQL. Capability fields
+reflect configured routes and accounts, not proof of a successful live request;
+actual grants and service availability remain authoritative. Row writes use the
+DML account; free SQL and generated table DDL use the separate SQL role.
 
-Bootstrap adds `scope_key` and `capabilities`, and database fields
-`connection`, `engine`, `schema` and `scope_key`. Read capabilities are true.
-`write` requires separate row-writer credentials. `query` and `import` require
-SQL credentials; `snapshots` requires the configured tools socket. These flags
-describe configured routes, not a successful live connection; database grants
-and service errors remain authoritative. `query_builder`, `saved_queries`,
-`phpmyadmin`, `create_database`, `ai` and `context` remain false for PostgreSQL.
-The normalized catalog/browse response retains the existing table, column and
-relationship fields. PostgreSQL browse includes exact `row_keys` and
-`key_columns` for supported complete identities, independently of preview
-shortening. Unsupported rows keep null keys. Schema responses use
-`database` for the selected schema namespace and `database_name` for the real
-PostgreSQL database, keeping external-schema foreign keys distinguishable.
-Structure can leave `create_sql` empty rather than inventing a full table DDL.
+The normalized catalog/browse response keeps existing table, column and
+relationship fields. Exact `row_keys` and `key_columns` are separate from shortened
+preview values. Schema responses use `database` for the namespace and
+`database_name` for the real database. Structure can leave `create_sql` empty
+rather than inventing complete DDL.
 
 ### Compatibility: read-only record exploration
 
@@ -308,8 +437,9 @@ session storage, and keeps table/search state, SQL drafts, results and visual
 builder state separately per database in memory. Changing scope cancels old
 reads and ignores late replies. Async mutations capture their original scope.
 
-### Create or prepare a database for import
+### Legacy database preparation and inspection
 
+This compatibility endpoint is not the new-only creation operation used by the guided workflow.
 `POST prepare-database` accepts exactly `{name:string}` with the ordinary CSRF
 header and explicit current `database` URL parameter. The current selection is
 still validated; `name` names the database to prepare rather than silently
@@ -327,7 +457,7 @@ case-insensitively. Extra input fields, invalid names and system names return
 422 `database_create_invalid`. The browser cannot provide SQL, account names,
 collation, root credentials, a socket path or an import file to this endpoint.
 
-The private `database-manager` service supports only a bounded
+The private `database-manager` service retains the bounded legacy
 `prepare_database` request over `/run/govern-databases/provision.sock`. It creates
 the named database if missing and grants the existing writer and reader their
 per-database rights. An existing name is explicitly made available without
@@ -356,8 +486,8 @@ compares 23 known tables, three views and 54 foreign-key constraints and groups
 missing or empty tables into five content areas. These checks detect structural
 and numerical differences, not semantic truth or a successful transaction.
 
-SQL upload is handled by official phpMyAdmin, not by a new Govern import parser.
-The database modal's Import shortcut opens `/database/import` or `/table/import`
+Advanced MariaDB tools also retain official phpMyAdmin SQL import.
+Its native Import action opens `/database/import` or `/table/import`
 with the chosen `db` and optional `table`. The existing 128 MB upload and 300-second
 execution settings apply. Import may modify or replace data according to its
 SQL; DDL is not generally transactional and no universal rollback is promised.
@@ -790,8 +920,9 @@ and `PostgresSqlScript`, retaining the ordinary per-statement/result_sets
 response shape and destructive-confirmation flow below. Each run opens one
 fresh `PG_SQL_USER` session with the selected schema search path, UTC and native
 prepared settings. There is no SQL permission sandbox: qualified SQL, functions
-and search-path changes can touch other granted schemas. No database/schema
-creation, administrative role or transfer of existing object ownership is added.
+and search-path changes can touch other granted schemas. This free-SQL route itself adds no database/schema provisioning operation,
+administrative role or transfer of existing object ownership; fresh provisioning
+is the separate reviewed workflow described above.
 Creating a new table in a permitted schema is supported; altering an existing
 object owned by another role can fail with the database permission error.
 
@@ -1111,7 +1242,10 @@ The embedded application's own interface remains phpMyAdmin's responsibility.
 MariaDB snapshots are SQL exports; PostgreSQL snapshots are native custom schema archives. Neither is a container volume snapshot. Restoring overwrites current selected DB contents; user confirmation and automatic safety export required. DDL is not represented as transactionally undoable. No database or phpMyAdmin host port; only proxy bound127.0.0.1:8080. Nothing runs on the user computer until they start this project.
 
 
-## Tabular dataset upload
+## Legacy tabular dataset upload
+
+These multipart endpoints remain compatible for existing clients. The ordinary
+UI uses the unified source/plan/job flow above, including contextual Add data.
 
 `POST dataset-preview` and `POST dataset-import` are exceptions to the JSON request
 body convention: they accept multipart FormData with a single `file` upload.

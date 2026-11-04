@@ -143,11 +143,16 @@ try {
     $managerSocket = $directory . '/manager.sock';
     $environment = getenv();
     $environment['DB_MANAGER_SOCKET'] = $managerSocket;
+    // Production defaults to Apache group 33. A host developer cannot change
+    // ownership to that unrelated group, so this isolated fixture uses its own.
+    $applicationGroup = function_exists('posix_geteuid') && posix_geteuid() !== 0
+        && !in_array(33, posix_getgroups(), true) ? posix_getegid() : 33;
+    $environment['DB_MANAGER_GID'] = (string) $applicationGroup;
     $environment['DB_ROOT_PASSWORD'] = '';
     $start([PHP_BINARY, dirname(__DIR__) . '/docker/database-manager/server.php'], $managerSocket, $environment);
     clearstatcache();
-    $assert((fileperms($directory) & 0777) === 0750 && filegroup($directory) === 33, 'Manager directory permits Apache traversal without unlink access.');
-    $assert((fileperms($managerSocket) & 0777) === 0660 && filegroup($managerSocket) === 33, 'Manager socket permits the Apache group, not other users.');
+    $assert((fileperms($directory) & 0777) === 0750 && filegroup($directory) === $applicationGroup, 'Manager directory permits the configured application group traversal without unlink access.');
+    $assert((fileperms($managerSocket) & 0777) === 0660 && filegroup($managerSocket) === $applicationGroup, 'Manager socket permits the configured application group, not other users.');
     $rawRequest = static function (string $raw) use ($managerSocket): array {
         $connection = stream_socket_client('unix://' . $managerSocket, $number, $reason, 2);
         if ($connection === false) throw new RuntimeException('Real manager socket unavailable.');

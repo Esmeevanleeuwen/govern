@@ -273,7 +273,7 @@ try {
     await sibling.goto(new URL('/workspace.php#instellingen', base).href, {waitUntil: 'networkidle'});
     await sibling.locator('#preference-language').selectOption('en');
     await page.waitForFunction(() => document.documentElement.lang === 'en');
-    await page.locator('#database-title').filter({hasText: 'Database workspace'}).waitFor();
+    await page.locator('#database-title').filter({hasText: 'Advanced MariaDB tools'}).waitFor();
     assert.equal(frame.url(), frameUrl, 'An open database document does not reload on a language preference update.');
     assert.equal(await frame.evaluate(() => window.governUnsavedDocument), 'keep-this-active-document');
     await sibling.close();

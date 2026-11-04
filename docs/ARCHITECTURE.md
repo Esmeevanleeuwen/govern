@@ -74,15 +74,18 @@ recordkaart.
 `PostgresAdapter`. `Catalog` kiest overeenkomstig `MariaDbCatalog` of
 `PostgresCatalog`; beide geven dezelfde metadata aan de bestaande schermen.
 MySQL-DSN's, sessie-instellingen, identifierquoting en catalogusvragen blijven
-bij de MariaDB-adapter. PostgreSQL gebruikt PDO PostgreSQL, een verbinding met
-één database, expliciet gequote schemanamen en zijn eigen catalogusvragen.
+bij de MariaDB-adapter. PostgreSQL gebruikt PDO PostgreSQL, per verzoek een verbinding met de gekozen
+database, expliciet gequote schemanamen en zijn eigen catalogusvragen.
 
 `ConnectionScope` combineert de bestaande `DatabaseScope` met de optionele
 PostgreSQL-configuratie. Alleen de server bepaalt host, lees- en schrijfaccount.
 Ieder verzoek bevat de verbinding, database en het schema. De PostgreSQL-kiezer
-toont alleen de geconfigureerde database en de schema's uit `PG_SCHEMAS`;
-de werkelijke leesbaarheid wordt met het leesaccount gecontroleerd. Een
-ontbrekend of ontoegankelijk schema blijft herkenbaar als niet beschikbaar.
+toont één identiteit per database; schema is aanvullende scope. `PG_DATABASE`
+is de standaard, `PG_DATABASES` voegt vaste herstelvermeldingen toe en live
+ontdekking vereist expliciete CONNECT-rechten voor zowel lezer als schrijver.
+PUBLIC-zichtbaarheid verleent geen toegang. Nieuwe via Govern gemaakte databases
+worden direct ontdekt. Toegestane en werkelijk leesbare schema's blijven apart
+in de metadata staan; oude expliciete schemalinks blijven geldig.
 
 De browser bewaart voor PostgreSQL een volledige `scope_key` met database én
 schema. Daardoor delen gelijknamige tabellen geen cache, selectie, concept of
@@ -131,11 +134,14 @@ wordt teruggezet, standaardrechten worden hersteld en bij een fout blijft
 de oude inhoud staan. `SET ROLE` op een adminverbinding wordt hiervoor niet
 gebruikt. Zie POSTGRESQL.md voor scope-, ownership- en objectbeperkingen.
 
-SQL en import kunnen andere verleende schema’s raken. Native SQL-import maakt
+Vrije SQL en de behouden native import-compatibiliteitsroute kunnen andere
+verleende schema’s raken. Die native SQL-import maakt
 daarom vóór uitvoering per bestaand ingesteld schema een herstelpunt onder de
 gedeelde exclusieve onderhoudslock. De kopieën vormen geen algemene rollback.
-De browser houdt voor iedere handeling de database/schema-scope vast; PG-import
-en herstel vragen de exacte bevestiging `database.schema`.
+De browser houdt voor iedere handeling de database/schema-scope vast. Alleen
+de legacy PG-import en destructief herstel behouden de exacte bevestiging
+`database.schema`; een nieuwe database gebruikt de echte naam en een beoordeelde
+laatste actie, zonder de naam opnieuw te laten typen.
 De startbestanden schakelen het profiel in bij `PG_ENABLED=1` en bewaren
 bestaande wachtwoorden en volumes. Zie [POSTGRESQL.md](POSTGRESQL.md) voor de
 configuratie en de grenzen van deze PostgreSQL-functies.
@@ -223,9 +229,11 @@ een backupservice maakt en
 herstelt SQL-exports. Het HTTP-bestand behandelt sessie, CSRF, foutstatus en JSON.
 Deze verdeling volgt verantwoordelijkheden, niet afzonderlijke overheidsdomeinen.
 
-Het native importscherm is onderdeel van `import-inspection.js`, naast
-de bestaande phpMyAdmin-import. Er is geen tweede SQL-parser of extra
-backendservice; de import werkt alleen op expliciet geselecteerde bestanden.
+`database-manager.js` is nu de gedeelde taakstroom voor nieuwe databases en
+imports. `ImportWorkflow` bewaart bronnen, plannen en taken buiten de
+werkdatabases; een aparte `import-worker` voert aanvaarde taken uit. De bestaande
+native importservices en `import-inspection.js` blijven voor compatibele oude
+clients, terwijl phpMyAdmin onder Geavanceerde MariaDB-tools blijft.
 
 De browser gebruikt herbruikbare onderdelen voor tabellen, meldingen, dialoog-
 vensters, SQL-blokken en API-verzoeken. Tabnamen uit de database zijn gegevens,
@@ -259,9 +267,12 @@ De onderdelen hebben een kleine, duidelijke taak:
 | `LocalCodeSearch.php` | Begrensde lokale zoekindex van alleen `app/` en `docs/`, met bronpassages en regelnummers |
 | `AiService.php` en `OllamaClient.php` | Gevalideerde vragen, lokaal providerverzoek, gecontroleerde projectcitaten en antwoord zonder uitvoering |
 | `database-modal.js` | Het venster rondom de echte phpMyAdmin |
-| `database-manager.js` | Dialoog voor databasekeuze, expliciete aanmaak en openen van de officiële import |
+| `database-manager.js` | Eén begeleide taakstroom voor lege database, databasebackup en dataset; contextueel Gegevens toevoegen |
+| `ImportWorkflow`, `ImportWorkflowStore`, `ImportWorkflowRunner` | Privébronnen, onveranderlijke plannen, duurzame taken en afzonderlijke uitvoering |
+| `DatasetMapping` | Expliciete tekst/NULL-koppelingen en catalogusgestuurde append met structuurcontrole |
+| `TableDefinition` en `table-builder.js` | Beperkte native nieuwe-tabellenbouwer met controle en gegenereerde DDL |
 | `DatabaseProvisioner.php` | Begrensde client voor de privéservice voor databaseaanmaak |
-| `docker/database-manager/server.php` en `DatabaseManager.php` | Privé Unix-socketserver en uitsluitend databaseaanmaak/rechten per expliciete naam |
+| `docker/database-manager/server.php`, `DatabaseManager.php` en `DatabaseCreator.php` | Privé Unix-socketserver, nieuwe database-identiteit, exacte grants en idempotente aanmaakbewijzen |
 | `row-editor.js` | Rijformulier met vaste databasecontext, exacte waarden en conflictfeedback |
 | `DatabaseScope.php` | Toegestane databasekeuze, afzonderlijke herstelpuntpaden en gedeelde locklocatie |
 | `RecordIdentity.php` en `RowEditor.php` | Volledige rij-identiteit, catalogusgestuurde formulieren en gecontroleerde mutaties |
@@ -296,51 +307,103 @@ zelf een databasekeuze. Het volgt expliciete navigatie binnen phpMyAdmin zonder
 een formulier door gewone shellupdates of taal-/themawisselingen te herladen.
 De gedeelde phpMyAdmin-opslag blijft in de oorspronkelijke `DB_NAME`-database.
 
-## Database toevoegen en SQL importeren
+## Database toevoegen en importeren
 
-De actie in Gereedschap opent een eigen, kleine dialoog. Een bestaande
-database kiezen gebruikt de normale wisselstroom. Een naam voorbereiden gebruikt
-`POST prepare-database` met CSRF en de expliciete huidige databasescope. Het
-antwoord bevat de voorbereide naam, of die nieuw was, en de opnieuw uitgelezen
-databasekeuzes. Pas na een geslaagd antwoord verandert de browser zijn selectie.
-Concepten van de vorige database blijven bewaard.
+Eén actie **Database toevoegen** opent precies drie taken: een lege database
+maken, een databasebackup importeren of een dataset importeren. De gewone
+kiezer opent uitsluitend bestaande database-identiteiten. Bij een bestand begint
+de taak met de bron en de voorcontrole; de bestemming volgt daarna. Elke globale
+import maakt een werkelijk nieuwe database. Een bezette naam blokkeert, ook als
+die pas na de voorcontrole verschijnt. **Gegevens toevoegen** binnen een bestaande
+database hergebruikt dezelfde datasetonderdelen met vaste engine, database en
+schema. Dat is een nieuwe tabel of expliciet gekoppelde append, nooit vervangen.
+Backups en destructief herstel blijven in hun eigen context. phpMyAdmin staat
+apart onder Geavanceerde MariaDB-tools.
 
-De webapp praat via een lokale Unix-socket met de afzonderlijke Compose-service
-`database-manager`. Alleen deze service en de bestaande opstart-/databaseprocessen
-hebben het rootwachtwoord. De socket heeft geen gepubliceerde netwerkpoort; de
-Apache-worker kan erop aansluiten, maar de browser kiest geen pad of credentials.
-Een begrensd JSON-bericht kan alleen `prepare_database` met één gevalideerde naam
-vragen. Het is geen algemene SQL-, shell- of beheertool en wordt niet aan AI
-beschikbaar gemaakt.
+De HTTP-routes `database-workflows`, `import-source`, `import-targets`,
+`import-plan`, `import-submit`, `import-job`, `import-jobs` en `import-stop`
+vereisen dezelfde goedgekeurde installatieaccountgrens. Mutaties controleren
+CSRF. Ze blijven bruikbaar als de momenteel geopende database onbereikbaar is,
+omdat een eigen beoordeeld plan de bestemming vastlegt. Een voorcontrole of
+plan schrijft nog geen gegevens naar de bestemming; alleen de laatste actie
+accepteert één taak met een idempotente inzendsleutel. Het herhalen van die
+inzending retourneert dezelfde taak en voert SQL niet automatisch opnieuw uit.
 
-De service maakt de gekozen database alleen aan als die ontbreekt en verleent de
-twee bestaande accounts rechten per exacte naam. Een bestaande naam toevoegen is
-expliciet toegestaan en behoudt de data. Deze voorbereiding importeert, verwijdert
-of vervangt niets. Herhalen is geschikt om een gedeeltelijk voltooide aanmaak of
-grantstap af te maken. De echte grants blijven in het MariaDB-volume bewaard en
-maken de nieuwe database bij een volgende start opnieuw zichtbaar.
+`ImportWorkflowStore` bewaart private bronbestanden en `control.sqlite` in
+`IMPORT_DIR`, standaard `/var/lib/govern/imports`, via het gedeelde `import_data`-
+volume buiten de webroot en buiten geïmporteerde databases. De records bronnen,
+plannen, taken en gebeurtenissen zijn controlemetadata, geen gekopieerde
+gebruikerscatalogus. Bronbestanden zijn onveranderlijk. Andere leesinstellingen
+betekenen opnieuw uploaden, opnieuw parseren en een nieuw plan. Plannen zijn
+maximaal vijftien minuten geldig. Niet-ingezonden bronnen verlopen na 24 uur;
+een aanvaarde bron uiterlijk zeven dagen na upload, verkort tot 24 uur na een
+voltooide, gedeeltelijke, mislukte of geannuleerde taak. Unknown verlengt die
+harde grens niet. Bronverwijdering draait geen databasewijzigingen terug.
 
-Voor SQL-bestanden tot 256 KiB heeft Govern ook een beperkte eerste-partij import
-in de Import-tab. `NativeImport` hergebruikt `SqlScript`, `QueryRunner` en
-`ImportInspection`: eerst voorcontrole zonder uitvoering, daarna bevestiging
-van exact de databasenaam, vergelijking van de voorcontrole-token, exclusieve
-onderhoudslock en uitvoer met nacontrole. Bij een bestaande database met
-tabellen of views (ook verborgen interne applicatietabellen) wordt onder de exclusieve lock een herstelpunt
-gemaakt vóór uitvoering. De controle van structuur en rijen is best effort; bij
-grotere tabellen zijn aantallen expliciet onbekend. De SQL zelf is niet beperkt
-tot de geselecteerde database: het schrijvende account heeft ook rechten op
-andere geselecteerde databases. SQL kan daarom met `USE` of gekwalificeerde
-namen andere toegestane databases raken. De UI waarschuwt daarvoor en voert
-geen SQL uit zonder afzonderlijke bevestiging. Er is geen algemene undo.
+De afzonderlijke Compose-service `import-worker` gebruikt een exclusieve lokale
+workerlock, een geregelde heartbeat en de bestaande exclusieve onderhoudslock
+voor uitvoering. Nieuwe inzendingen vereisen een heartbeat van hoogstens zestig
+seconden oud. De worker controleert opnieuw of het startende account nog is
+goedgekeurd. Bij herstart worden eerder actieve taken Unknown; ze worden niet
+hervat door hun onzekere SQL opnieuw te spelen. Wachtende taken kunnen wel
+worden opgepakt. De browser kan de opgeslagen toestand na herladen of opnieuw
+inloggen weer lezen. Er is geen serversessie met een veranderlijke actieve
+bestemmingsdatabase.
 
-Voor grotere of complexe SQL-bestanden gebruikt Govern de echte phpMyAdmin. De extra snelkeuze
-**Import** opent de officiële database- of tabelimport met dezelfde context als
-de overige tabs. De gebruiker kiest zijn SQL-bestand en start de import daar;
-Govern leest of herschrijft het bestand niet met een eigen parser. Bij sluiten
-worden catalogus, tabellen en relaties opnieuw uitgelezen. De ingestelde
-uploadgrens is 128 MB en de uitvoeringstijd is 300 seconden. De SQL kan bestaande
-data veranderen en DDL heeft geen algemene rollback. Een import is geen
-herstelpunt en is niet automatisch gekoppeld aan de applicatie-onderhoudslock.
+De taken gebruiken `queued`, `provisioning`, `importing`, `verifying`,
+`completed`, `partial`, `failed`, `unknown` en `cancelled`. Voortgang benoemt de
+werkelijk bevestigde eenheid: bytes, rijen of statements. Een stop van wachtend
+werk kan direct annuleren; actieve uitvoering controleert een stopverzoek op
+ondersteunde statement- of tabelgrenzen. Stoppen in de browser is geen bewezen
+stop van SQL. Incomplete bevestigde wijzigingen blijven Partial, ook bij een
+stopverzoek; onzekerheid blijft Unknown. Een afzonderlijk gemaakte lege database
+kan na Failed of Cancelled blijven bestaan. Nieuwe incomplete bestemmingen
+blijven zichtbaar met Actie nodig en een taakverwijzing. Bestaande databases
+worden nooit als importopruiming verwijderd.
+
+De private Unix-socketservice blijft uitsluitend voor vaste beheertaken. De
+nieuwe `create_database`-handeling ontvangt een gevalideerde engine, naam en
+operation-id. Ze weigert een bezette naam, bewaart een privaat aanmaakbewijs en
+kan dezelfde bevestigde operatie idempotent beantwoorden. Een crash met onzekere
+aanmaak mag geen bestaande naam adopteren. Alleen de private service en
+opstartprocessen hebben beheercredentials; de webapp en phpMyAdmin ontvangen ze
+niet. Nieuwe imports krijgen een aparte login met rechten voor de exacte nieuwe
+bestemming. Die credentials blijven server-side, komen niet in taaksamenvattingen
+voor de browser en verlenen geen vrije beheerhandeling. De helper ontvangt geen
+SQL, bestandspad of importinhoud. Gewone lezer/schrijver/SQL-grants worden voor de
+nieuwe database voorbereid, zodat geïmporteerde objecten daarna bruikbaar zijn.
+
+`ImportBackupSql` gebruikt de bestaande enginespecifieke scriptgrenzen voor een
+beperkte gewone UTF-8 SQL-backup: 256 KiB en maximaal 4.096 statements. Een
+ambigue `.sql` vraagt de bronengine; engine kiezen converteert geen dump.
+Databasekeuze en niet-ondersteunde bronkwalificaties moeten met een nieuwe export
+worden verwijderd, niet met globale tekstvervanging. Algemene PGDMP-archieven,
+clientopdrachten, COPY-invoer, routines en beheer-SQL blijven uitgeschakeld.
+Voorcontrole is begrensde analyse; de aparte beperkte login begrenst de werkelijke
+uitvoering. MariaDB-DDL en eerdere commits kunnen gedeeltelijke resultaten
+achterlaten. Er is geen algemene undo.
+
+`TableDefinition` en `table-builder.js` maken een eerste tabel binnen Govern.
+Het formulier houdt database en schema vast en begint met een lege, nullable
+tekstkolom zonder expliciete standaardwaarde. De zes families zijn Tekst,
+Geheel getal, Decimaal, Booleaans, Datum en Datum en tijd. Een optionele
+gegenereerde gehele identifier is één niet-nullable primaire sleutel. Vrije
+SQL-expressies, samengestelde sleutels, tekstsleutels en wijzigingen aan bestaande
+tabellen vallen buiten deze kleine bouwer. Preview geeft gecontroleerde DDL en
+een scope-/definitietoken; create controleert opnieuw en voert alleen gequote,
+gekwalificeerde CREATE TABLE uit met de beperkte SQL-verbinding. Een racing
+naamconflict kan niet overschrijven. Een verloren antwoord na mogelijke DDL
+vereist inspectie, geen automatische herhaling.
+
+De oude `prepare-database`, `native-import-preview`, `native-import-execute`,
+`dataset-preview` en `dataset-import` blijven contractcompatibel voor oudere
+clients. Ze vormen geen extra gewone routes in de nieuwe UI. De legacy MariaDB-
+voorbereiding mag nog een bestaande naam beschikbaar maken; dat gedrag wordt
+niet voor de nieuwe aanmaakstroom gebruikt. De legacy native SQL-route behoudt
+haar naambevestiging en veiligheidskopie bij bestaande objecten, maar gebruikt
+het gewone SQL-account en kan andere reeds verleende databases/schema's raken.
+De officiële phpMyAdmin-import blijft beschikbaar in het geavanceerde venster,
+met zijn eigen upload- en uitvoergrenzen en zonder universele rollback.
 
 ## Gegevens rechtstreeks bewerken
 
@@ -726,8 +789,9 @@ dubbelepunt en een backtick. Zie de [PHP-documentatie](https://www.php.net/manua
 Govern gebruikt twee verbindingen naar de geselecteerde database. De eerste mag
 onderzoeken en metadata lezen. Leestransacties beschermen ook tegen schrijvende
 functies die via een zelfgemaakte view zouden worden aangeroepen. De tweede slaat
-eigen instellingen op, maakt herstelpunten en voert vrije SQL uit. Vrije SQL en
-phpMyAdmin gebruiken hetzelfde schrijfaccount. Gewone catalogus- en rijacties
+eigen instellingen op, maakt herstelpunten en voert vrije SQL uit. Vrije MariaDB-SQL en
+phpMyAdmin gebruiken hetzelfde schrijfaccount. Nieuwe globale imports krijgen
+een apart, op de nieuwe bestemming begrensd importaccount. Gewone catalogus- en rijacties
 blijven bij de geselecteerde database; vrije SQL kan via `USE` of gekwalificeerde
 namen ook andere reeds toegestane databases bereiken. Er worden voor de
 SQL-editor geen extra of globale serverrechten toegevoegd; ontbrekende rechten
@@ -817,39 +881,45 @@ Werk de ontwerpdocumentatie en het API-contract in dezelfde wijziging bij.
 
 ## Gedeelde import voor tabelbestanden
 
-De taak begint in Database openen → Bestanden importeren: lokaal bestand kiezen,
-voorvertonen, werkblad en bestemming controleren, expliciet bevestigen, importeren
-naar de zichtbare database en terugkeren naar de gewone live tabelverkenner.
-`DatasetImportPanel` bewaart tijdelijke bestands- en formulierconcepten per database.
-Taalwisselen behoudt het concept. Tijdens een verzoek blokkeren sluiten, tabwisselen
-en databasewisselen. Verzoeken houden hun oorspronkelijke database vast.
+De globale datasettaak maakt een nieuwe database; contextueel **Gegevens
+toevoegen** houdt de bestaande identiteit vast. Beide gebruiken dezelfde private
+bron, voorvertoning, kolomkoppeling en beoordeelde taak. De geselecteerde
+werkbladen vormen expliciete tabelplannen, niet automatisch één samengevoegde
+tabel. Nieuwe tabellen voegen een gegenereerde `_govern_id` toe; relaties en
+andere sleutels worden niet uit gelijknamige kolommen afgeleid.
 
-`tabular.py` leest XLSX via de standaard ZIP/XML-lezer, CSV/TSV/TXT via `csv` en JSON
-via `json`/`decimal`. Geen netwerk, macro's, formule-evaluatie of uitgepakte paden.
-Elke lezer levert dezelfde beschrijving met kolommen, exacte tekstwaarden, NULL,
-rijaantallen en kwaliteitskenmerken. Een nieuwe lezer kan dat contract hergebruiken.
-Python draait als afzonderlijk lokaal proces zonder databasecredentials als argumenten.
-De procesomgeving is geërfd, maar de lezer gebruikt geen configuratie of netwerk.
-Bestandsgrootte, archiefinhoud, kolommen, rijen, CPU en procesgeheugen zijn begrensd.
+`tabular.py` leest CSV/TSV/TXT, XLSX en JSON met de standaardbibliotheek, zonder
+netwerk, macro's of formule-uitvoering. Python krijgt geen databasecredentials
+als argument. De bron is maximaal 16 MiB; de lezer begrenst rijen tot 100.000,
+kolommen tot 256 en cellen tot een gecombineerde 1.000.000. Rijen en cellen
+tellen over alle ingelezen datasets, ook niet-geselecteerde werkbladen. Ook archiefinhoud,
+CPU en procesgeheugen blijven begrensd. XLSX gebruikt ondersteunde cached
+formulewaarden met een melding. Verborgen werkbladen worden niet standaard
+gekozen. De nieuwe taak accepteert geen ZIP, ook al blijft dat een legacy
+lezermogelijkheid.
 
-`DatasetImport` controleert de upload en voert alleen de door de gebruiker gekozen
-schrijfhandeling uit. Voorbeeld en import lezen het bestand onafhankelijk opnieuw.
-De SHA-256 uit het voorbeeld moet gelijk blijven. Beide routes controleren de gewone
-host-, origin-, sessie-, CSRF- en databasescopegrens. De lezer loopt vóór het nemen
-van de gedeelde onderhoudslock. Import zelf deelt de lock met andere appverzoeken.
+Bronwaarden blijven exacte tekst of NULL. Lege CSV-velden zijn standaard lege
+tekst; JSON-null en ontbrekende sleutels zijn NULL. Delimiter, kopregel,
+volledig lege rijen, witruimtetrimmen en lege-naar-NULL hebben zichtbare
+instellingen; standaard wordt niet getrimd of numeriek geconverteerd. Ondersteunde
+geneste JSON blijft geserialiseerde tekst. Een gewijzigde instelling levert een
+nieuwe bron en analyse op. De voorvertoning toont maximaal twintig rijen met
+cel- en totaalbytegrenzen en een expliciete truncatiemelding; totaalaantallen
+komen uit de volledige ondersteunde parse.
 
-Nieuwe tabelnamen gebruiken een begrensde ASCII-regel. De tabel wordt eerst onder
-een willekeurige interne naam gevuld en pas daarna zonder overwrite hernoemd.
-Een fout ruimt alleen deze stagingtabel op. Bij een procescrash kan een interne
-stagingtabel achterblijven. Bestaande tabellen komen uit de catalogus en moeten
-InnoDB gebruiken, passende tekstkolommen hebben en hetzelfde structuurfingerprint
-houden. Een metadata-lock houdt hun structuur vast tijdens het transactionele
-invoegen. Een rijfout draait de volledige append terug. Externe SQL kan daarnaast
-actief blijven. Er is geen algemene undo of automatische deduplicatie; ook een
-expliciete tweede append voegt opnieuw toe. Een verloren HTTP-antwoord moet de
-gebruiker eerst via de tabel controleren.
+`DatasetMapping` koppelt elke bronkolom één keer of slaat die expliciet over.
+Doelkolommen zijn uniek, NULL verschilt van lege tekst en een overgeslagen kolom
+roept alleen een werkelijk ondersteunde database-default op. Verplichte velden
+zonder waarde/default blokkeren append. Catalogusdoelen tonen geschiktheid en
+een structuurversie; de worker controleert die opnieuw. Nieuwe tabelpublicatie
+kan niet overschrijven. Append behoudt bestaande rijen en gebruikt de beperkte
+tekst/NULL-grens en enginespecifieke transacties. Een fout in een ondersteunde
+append-eenheid kan die eenheid terugdraaien; eerdere afgeronde tabelplannen
+vormen geen gezamenlijke rollback. Dat levert waar nodig Partial op.
 
-De voorbeeldgrafiek gebruikt alleen twintig voorbeeldrijen en zegt dat zichtbaar.
-Deze fase maakt geen relaties op grond van kolomnamen, geen blijvende grafieken en
-geen geografische weergave. De bestaande catalogus toont geïmporteerde tabellen na
-sluiten van het databasevenster. SQL blijft bij officiële phpMyAdmin.
+De taak houdt bronhash, leesinstellingen, exacte bestemming, mappings en
+structuurversies samen. Een herladen browser leest de taak in plaats van opnieuw
+in te voegen. Dubbele rijen worden gemeld maar niet stilzwijgend verwijderd;
+een bewust nieuwe tweede append kan dus opnieuw dezelfde rijen toevoegen. De
+behouden legacy multipart-endpoints parseren opnieuw en controleren hun eerdere
+SHA-256/naambevestiging, maar worden niet als tweede gewone importwijze getoond.

@@ -87,14 +87,25 @@ def main():
           and data["database"]["connection"] == "postgres" and data["database"]["available"],
           "Bootstrap reports the actual engine, database and schema")
     check(data["scope_key"] == "postgres:govern_pg:public", "Selection carries its stable scoped identity")
-    check(all(data["capabilities"].get(name) is True for name in ["browse", "schema", "structure", "write", "query", "snapshots", "import"]),
+    check(all(data["capabilities"].get(name) is True for name in ["browse", "schema", "structure", "write", "query", "snapshots", "import", "create_table"]),
           "PostgreSQL advertises its supported catalog, SQL, import and checkpoint operations")
     check(all(data["capabilities"].get(name) is False for name in ["query_builder", "saved_queries",
-          "phpmyadmin", "create_database", "ai", "context"]), "Unsupported capabilities remain explicit")
-    public_entry = next(item for item in data["databases"] if item.get("scope_key") == "postgres:govern_pg:public")
-    archive_entry = next(item for item in data["databases"] if item.get("scope_key") == "postgres:govern_pg:archive")
-    check(public_entry["name"] == archive_entry["name"] == "govern_pg" and public_entry["schema"] != archive_entry["schema"],
-          "The connection picker distinguishes schemas within the same database")
+          "phpmyadmin", "ai", "context"]), "Unsupported capabilities remain explicit")
+    status, result = request("database-workflows")
+    check(status == 200 and result.get("ok"), "The authenticated workflow capability catalog is available")
+    postgres_engine = next(item for item in result["data"]["engines"] if item["id"] == "postgres")
+    check(postgres_engine["can_create"] is True and data["capabilities"]["create_database"] is True
+          and data["can_create_database"] is True,
+          "A ready private PostgreSQL provisioner enables explicit database creation")
+    entries = [item for item in data["databases"] if item.get("connection") == "postgres" and item["name"] == "govern_pg"]
+    check(len(entries) == 1 and entries[0]["scope_key"] == "postgres:govern_pg:public"
+          and {"public", "archive"}.issubset(entries[0]["schemas"])
+          and {"public", "archive"}.issubset(entries[0]["available_schemas"]),
+          "The picker has one PostgreSQL database identity with public and archive as secondary schemas")
+    status, result = request("bootstrap", parameters={**packed, "database": "postgres:govern_pg:archive"})
+    check(status == 200 and result["data"]["scope_key"] == "postgres:govern_pg:archive"
+          and result["data"]["database"]["schema"] == "archive",
+          "Existing packed schema URLs retain their exact namespace after picker normalization")
 
     status, result = request("schema")
     check(status == 200 and result["data"]["database"] == "public", "Diagram metadata uses the selected namespace")

@@ -43,9 +43,10 @@ try {
     await page.goto(new URL('/workspace.php#overzicht', base).href, {waitUntil: 'networkidle'});
     await page.locator('.stats-grid').waitFor(); await ready(page);
     assert.equal(await trigger.isVisible(), true);
-    assert.equal(await page.locator('#open-database').isVisible(), true);
+    assert.equal(await page.locator('#manage-databases').isVisible(), true);
+    assert.equal(await page.locator('#open-database').isVisible(), false, 'Advanced tools start inside Tools.');
     assert.equal(await menu.isVisible(), false);
-    for (const id of ['open-companion', 'ai-toggle', 'selection-pointer-toggle', 'refresh-app', 'context-export', 'manage-databases', 'language-select', 'workspace-account']) {
+    for (const id of ['open-companion', 'ai-toggle', 'selection-pointer-toggle', 'refresh-app', 'context-export', 'open-database', 'language-select', 'workspace-account']) {
         assert.equal(await page.locator('#' + id).count(), 1, 'Original unique control: ' + id);
         assert.equal(await page.locator('#' + id).isVisible(), false, 'Secondary action starts inside Tools: ' + id);
     }
@@ -70,12 +71,12 @@ try {
     const refresh = page.waitForResponse(response => new URL(response.url()).searchParams.get('action') === 'bootstrap');
     await clickWorkspaceTool(page, '#refresh-app'); await refresh; await ready(page);
     assert.equal(await menu.isVisible(), false);
-    await clickWorkspaceTool(page, '#manage-databases');
+    await page.locator('#manage-databases').click();
     await page.locator('#database-manager-dialog[open]').waitFor();
     assert.equal(await menu.isVisible(), false);
     await page.locator('#database-manager-close').click();
     await page.locator('#database-manager-dialog').waitFor({state: 'hidden'});
-    await page.waitForFunction(() => document.activeElement?.id === 'workspace-tools-toggle');
+    await page.waitForFunction(() => document.activeElement?.id === 'manage-databases');
     await clickWorkspaceTool(page, '#ai-toggle'); await page.locator('#ai-workspace-panel[open]').waitFor();
     await page.locator('#ai-prompt').fill('Keep this local assistant draft.');
     await page.locator('#ai-close').click(); await page.locator('#ai-workspace-panel').waitFor({state: 'hidden'});
@@ -117,7 +118,7 @@ try {
     await page.locator('#database-select').selectOption('postgres:govern_pg:public'); await ready(page);
     await ensureWorkspaceTools(page, '#language-select');
     assert.equal(await page.locator('#context-export').isVisible(), false, 'PostgreSQL export stays unavailable even inside the open menu.');
-    assert.equal(await page.locator('#open-database').isDisabled(), true);
+    assert.equal(await page.locator('#open-database').isVisible(), false, 'Advanced MariaDB tools stay hidden for PostgreSQL.');
     await page.evaluate(async () => (await import('/assets/preferences.js')).updatePreferences({theme: 'dark', reduceTransparency: true}, {persist: false}));
     await page.waitForFunction(() => document.documentElement.dataset.theme === 'dark');
     assert.equal(await fits(menu), true); await shot(page, 'tools-menu-dark'); await closeWorkspaceTools(page);

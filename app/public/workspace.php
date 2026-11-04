@@ -21,6 +21,7 @@ $governUser = \Govern\Web::user();
     <link rel="stylesheet" href="/assets/database-workspace.css">
     <link rel="stylesheet" href="/assets/row-editor.css">
     <link rel="stylesheet" href="/assets/database-manager.css">
+    <link rel="stylesheet" href="/assets/table-builder.css">
     <link rel="stylesheet" href="/assets/dataset-import.css">
     <link rel="stylesheet" href="/assets/ai-workspace.css">
     <link rel="stylesheet" href="/assets/modal-shell.css">
@@ -31,6 +32,7 @@ $governUser = \Govern\Web::user();
     <link rel="stylesheet" href="/assets/workspace-tools.css">
     <link rel="stylesheet" href="/assets/record-map.css">
     <link rel="stylesheet" href="/assets/canvas-workspace.css">
+    <link rel="stylesheet" href="/assets/database-entry.css">
     <script type="module" src="/assets/app.js"></script>
     <script type="module" src="/assets/workspace-account.js"></script>
 </head>
@@ -62,7 +64,7 @@ $governUser = \Govern\Web::user();
                                 <select id="database-select" aria-label="Database kiezen" data-i18n-aria="app.databases.choose" disabled><option value="">Database…</option></select>
                             </label>
                             <div id="connection-state" class="connection-card" role="status"><span class="status-dot waiting"></span><span data-i18n="app.shell.connecting">Verbinding maken…</span></div>
-                            <button id="manage-databases" class="icon-button database-manager-toggle" type="button" aria-label="Database toevoegen of importeren" data-i18n-aria="app.databases.manage" title="Database toevoegen of importeren" data-i18n-title="app.databases.manage" aria-haspopup="dialog" aria-controls="database-manager-dialog" disabled></button>
+                            <button id="manage-databases" class="button button-secondary button-small database-manager-toggle" type="button" aria-label="Database toevoegen" data-i18n-aria="app.databaseEntry.add" title="Database toevoegen" data-i18n-title="app.databaseEntry.add" aria-haspopup="dialog" aria-controls="database-manager-dialog" disabled><span data-i18n="app.databaseEntry.add">Database toevoegen</span></button>
                         </div>
                     </div>
                     <strong id="breadcrumb-current" class="sr-only">Overzicht</strong>
@@ -75,7 +77,7 @@ $governUser = \Govern\Web::user();
                     <a class="icon-button" href="/api.php?action=context" id="context-export" aria-label="Context exporteren" data-i18n-aria="app.shell.export" title="Context exporteren" data-i18n-title="app.shell.export"><span class="sr-only" data-i18n="app.shell.export">Context exporteren</span></a>
                     <button id="refresh-app" class="icon-button" type="button" aria-label="Werkplek verversen" data-i18n-aria="app.shell.refresh" data-i18n-title="app.shell.refresh" title="Werkplek verversen"></button>
                     <button id="workspace-tools-toggle" class="button button-secondary button-small workspace-tools-toggle" type="button" aria-haspopup="dialog" aria-controls="workspace-tools" aria-expanded="false" data-selection-ui="" disabled><span>Gereedschap</span></button>
-                    <button id="open-database" class="button button-secondary" type="button" disabled><span data-i18n="app.shell.openDatabase">Database openen</span></button>
+                    <button id="open-database" class="button button-secondary" type="button" disabled><span data-i18n="app.databaseEntry.advanced">Geavanceerde MariaDB-tools</span></button>
                 </div>
             </header>
             <div id="companion-launch-notice" class="notice companion-launch-notice" role="status" hidden></div>

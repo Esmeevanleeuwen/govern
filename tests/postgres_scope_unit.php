@@ -22,7 +22,8 @@ $reject = static function (callable $action, string $code, int $status = 403) us
     }
     throw new RuntimeException('Expected rejection: ' . $code);
 };
-$values = ['PG_ENABLED' => '1', 'PG_HOST' => 'never-connect.invalid', 'PG_PORT' => '5432',
+$values = ['DB_MANAGER_SOCKET' => '/unit-only/provision.sock', 'PG_DATABASES' => 'scope_second_pg,0,scope_second_pg',
+    'PG_ENABLED' => '1', 'PG_HOST' => 'never-connect.invalid', 'PG_PORT' => '5432',
     'PG_DATABASE' => 'scope_unit_pg', 'PG_SCHEMAS' => 'public,archive,0,public',
     'PG_USER' => 'scope_unit_writer', 'PG_PASSWORD' => 'writer-unit-test-value',
     'PG_SQL_USER' => 'scope_unit_sql', 'PG_SQL_PASSWORD' => 'sql-unit-test-value',
@@ -34,12 +35,18 @@ try {
     $base = Config::fromEnvironment();
     $assert($base['engine'] === 'mariadb', 'Opting into PostgreSQL preserves the default MariaDB engine.');
     $assert($base['postgres']['schemas'] === ['public', 'archive', '0'], 'Configured schemas deduplicate without dropping the literal zero name.');
+    $assert($base['postgres']['databases'] === ['scope_unit_pg', 'scope_second_pg', '0'], 'Configured database identities deduplicate and retain the zero identifier.');
     $assert($base['postgres']['user'] === 'scope_unit_writer' && $base['postgres']['password'] === 'writer-unit-test-value', 'PostgreSQL writer credentials are explicitly configured and distinct from the reader.');
     $scope = new ConnectionScope($base);
     $public = $scope->select('scope_unit_pg', 'postgres', 'public');
     $archive = $scope->select('scope_unit_pg', 'postgres', 'archive');
     $assert($public['schema'] === 'public' && $archive['schema'] === 'archive', 'Selection stays request-local.');
     $assert($scope->select('scope_unit_pg', 'postgres')['schema'] === 'public', 'Omitted schema selects the configured default.');
+    $additional = $scope->select('scope_second_pg', 'postgres');
+    $assert($additional['name'] === 'scope_second_pg' && $additional['scope_key'] === 'postgres:scope_second_pg:public', 'Configured additional identities keep their actual database name.');
+    $secondary = new ConnectionScope([...$base, 'postgres' => [...$base['postgres'], 'schema' => 'archive', 'schemas' => ['archive']]]);
+    $fresh = $secondary->select('scope_second_pg', 'postgres');
+    $assert($fresh['schema'] === 'public' && $fresh['schemas'] === ['public', 'archive'], 'New database public context remains in its returned schema choices.');
     $assert($scope->select('scope_unit_pg', 'postgres', '0')['schema'] === '0', 'The zero schema remains selectable.');
     $legacy = $scope->selectRequest('postgres:scope_unit_pg:archive');
     $assert($legacy['engine'] === 'postgres' && $legacy['name'] === 'scope_unit_pg' && $legacy['schema'] === 'archive',

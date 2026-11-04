@@ -1,3 +1,4 @@
+import {selectWorkspaceSchema} from './workspace-tools.mjs';
 /** PostgreSQL browsing and schema switching against disposable fixtures. */
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
@@ -30,7 +31,7 @@ try {
     await page.goto(bookmark('gegevens', publicKey, 'govern_pg_values'), {waitUntil: 'networkidle'});
     await loaded(publicKey, 'literal%_value');
     assert.equal(await page.locator('[data-postgres-editing]').count(), 1);
-    assert.equal(await page.locator('#open-database').isDisabled(), true);
+    assert.equal(await page.locator('#open-database').isVisible(), false, 'Advanced MariaDB tools stay hidden for PostgreSQL.');
     assert.equal(await page.locator('#add-row').count(), 1);
     assert.ok(await page.locator('[data-row-action="edit"]').count() > 0);
     assert.equal(await page.locator('#context-export').evaluate(link => link.hidden), true,
@@ -46,14 +47,14 @@ try {
     await page.locator('#data-search').fill('%_');
     await searched;
     await row('literal%_value').first().waitFor();
-    await page.locator('#database-select').selectOption(archiveKey);
+    await selectWorkspaceSchema(page, 'archive');
     await page.waitForFunction(key => document.querySelector('#database-select')?.value === key
         && !document.querySelector('#database-select').disabled, archiveKey);
     await page.locator('.catalog-item[title="govern_pg_values"]').click();
     await loaded(archiveKey, 'Archive-only row');
     assert.equal(await page.locator('#data-search').inputValue(), '', 'Schema searches stay separate.');
     assert.equal((await page.locator('.data-table').textContent()).includes('literal%_value'), false);
-    await page.locator('#database-select').selectOption(publicKey);
+    await selectWorkspaceSchema(page, 'public');
     await loaded(publicKey, 'literal%_value');
     assert.equal(await page.locator('#data-search').inputValue(), '%_', 'Returning restores the public search draft.');
     // A completed public-schema read held beyond a switch must not replace
@@ -70,7 +71,7 @@ try {
     });
     await page.locator('#data-search').fill('Second');
     await held;
-    await page.locator('#database-select').selectOption(archiveKey);
+    await selectWorkspaceSchema(page, 'archive');
     await loaded(archiveKey, 'Archive-only row');
     releaseOld();
     await page.waitForLoadState('networkidle');

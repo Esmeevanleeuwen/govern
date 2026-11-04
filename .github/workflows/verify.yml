@@ -54,10 +54,12 @@ jobs:
       - name: PostgreSQL sample data and repeat loading
         run: python3 tests/postgres-demo-integration.py --confirm-project=govern --confirm-database=govern_pg
       - name: Dataset readers
-        run: python3 tests/dataset-readers.py
+        run: |
+          python3 tests/dataset-readers.py
+          python3 tests/dataset-mapping-readers.py
       - name: PHP syntax
         run: |
-          docker compose exec -T app sh -c 'find /var/www/src /var/www/public -name "*.php" -exec php -l {} \;'
+          docker compose exec -T app sh -c 'find /var/www/src /var/www/public /var/www/bin -name "*.php" -exec php -l {} \;'
           docker compose exec -T database-manager sh -c 'find /opt/govern/docker/database-manager -name "*.php" -exec php -l {} \;'
       - name: Focused backend checks
         run: |
@@ -75,6 +77,10 @@ jobs:
           docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app -d allow_url_fopen=0 -d disable_functions=fsockopen,pfsockopen,stream_socket_client,stream_socket_server,socket_create,socket_connect,curl_exec,exec,shell_exec,system,passthru,popen,proc_open /workspace/tests/local_code_search_unit.php
           docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/ai_project_unit.php
           docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/database_provisioner_unit.php
+          docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/provisioning-create-unit.php
+          docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/table-definition-unit.php
+          docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/dataset-mapping-unit.php
+          docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/import-workflow-unit.php
           docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/auth_unit.php
       - name: Isolated authentication HTTP integration
         run: |
@@ -131,6 +137,7 @@ jobs:
         run: |
           node tests/i18n-unit.mjs
           node tests/api-scope-unit.mjs
+          node tests/database-workflow-model-unit.mjs
           node tests/record-map-model-unit.mjs
           node tests/explore-canvas-model-unit.mjs
           node tests/frontend-messages-unit.mjs
@@ -149,6 +156,7 @@ jobs:
           BROWSER_BIN="$(command -v google-chrome)"
           export BROWSER_BIN
           export BASE_URL=http://127.0.0.1:8080
+          export GOVERN_TEST_STORAGE_STATE="$RUNNER_TEMP/govern-browser/approved-session.json"
           export GOVERN_UI_WRITE_TESTS=1
           failed_suites=()
           for suite in \
@@ -162,8 +170,10 @@ jobs:
             tests/explorer-guide-smoke.mjs \
             tests/modal-windows-smoke.mjs \
             tests/companion-smoke.mjs \
-            tests/dataset-import-smoke.mjs \
-            tests/database-import-smoke.mjs \
+            tests/unified-database-api.mjs \
+            tests/unified-database-browser.mjs \
+            tests/advanced-mariadb-tools-smoke.mjs \
+            tests/postgres-backups-smoke.mjs \
             tests/frontend-smoke.mjs \
             tests/query-builder-smoke.mjs \
             tests/ui-settings-smoke.mjs \
@@ -186,17 +196,12 @@ jobs:
           fi
       # These tests restore public. All fixture-dependent suites run first, so a
       # real checkpoint restore cannot remove records needed by a later suite.
+      - name: Target-bound MariaDB and PostgreSQL importer logins
+        run: docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" -e GOVERN_PROVISIONING_DISPOSABLE=1 app /workspace/tests/provisioning-actor-integration.php --confirm-database=bestuursatlas
+      - name: Fresh PostgreSQL database checkpoint and recovery
+        run: docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" -e GOVERN_PROVISIONING_DISPOSABLE=1 app /workspace/tests/provisioning-postgres-backup-integration.php --confirm-database=bestuursatlas
       - name: PostgreSQL tools HTTP with real schema restore
         run: python3 tests/postgres-tools-http.py --base-url http://127.0.0.1:8080 --confirm-database=govern_pg --confirm-schema=public
-      - name: PostgreSQL tools browser with real schema restore
-        env:
-          BASE_URL: http://127.0.0.1:8080
-          GOVERN_UI_WRITE_TESTS: "1"
-        run: |
-          export PLAYWRIGHT_MODULE="$RUNNER_TEMP/govern-browser/node_modules/playwright"
-          BROWSER_BIN="$(command -v google-chrome)"
-          export BROWSER_BIN
-          node tests/postgres-tools-smoke.mjs
       - name: Logs on failure
         if: failure()
         run: docker compose logs --tail=100

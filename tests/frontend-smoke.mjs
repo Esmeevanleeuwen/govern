@@ -1,3 +1,4 @@
+import {clickWorkspaceTool} from './workspace-tools.mjs';
 /**
  * Browser smoke test against a running local Govern stack.
  *
@@ -178,7 +179,7 @@ try {
     await waitForPage(page);
     await shot(page, 'experiments');
 
-    await page.getByRole('button', {name: 'Database openen', exact: true}).click();
+    await clickWorkspaceTool(page, '#open-database');
     await waitForModal(page);
     await shot(page, 'modal-browse');
     await switchModalTab(page, 'Structure');
@@ -216,7 +217,7 @@ try {
     assert.equal(await mobile.locator('#sidebar').getAttribute('aria-hidden'), 'true');
     assert.equal(await mobile.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
     await shot(mobile, 'mobile-data');
-    await mobile.getByRole('button', {name: 'Database openen', exact: true}).click();
+    await clickWorkspaceTool(mobile, '#open-database');
     await waitForModal(mobile);
     assert.equal(await mobile.locator('#database-dialog').evaluate(node => node.scrollWidth <= innerWidth), true);
     await shot(mobile, 'mobile-modal');

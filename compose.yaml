@@ -52,9 +52,19 @@ services:
       DB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?Missing generated root password}
       DB_USER: govern
       DB_READ_USER: govern_reader
+      PG_ENABLED: ${PG_ENABLED:-0}
+      PG_HOST: ${PG_HOST:-postgres}
+      PG_PORT: ${PG_PORT:-5432}
+      PG_ADMIN_PASSWORD: ${PG_ADMIN_PASSWORD:-}
+      PG_READ_USER: ${PG_READ_USER:-govern_pg_reader}
+      PG_USER: ${PG_USER:-govern_pg_writer}
+      PG_SQL_USER: ${PG_SQL_USER:-govern_pg_sql}
+      PG_RESTORE_USER: ${PG_RESTORE_USER:-govern_pg_restore}
+      DB_PROVISION_DIR: /var/lib/govern/provisioning
       DB_MANAGER_SOCKET: /run/govern-databases/provision.sock
     volumes:
       - database_management:/run/govern-databases
+      - database_provisioning:/var/lib/govern/provisioning
     depends_on:
       database:
         condition: service_healthy
@@ -157,10 +167,10 @@ services:
     restart: unless-stopped
 
   app:
-    build:
+    build: &app_build
       context: .
       dockerfile: docker/app.Dockerfile
-    environment:
+    environment: &app_environment
       DB_HOST: database
       DB_PORT: 3306
       DB_NAME: ${DB_NAME:-bestuursatlas}
@@ -171,10 +181,12 @@ services:
       DB_READ_PASSWORD: ${DB_READ_PASSWORD}
       BACKUP_DIR: /var/lib/govern/backups
       AUTH_DIR: /var/lib/govern/auth
+      IMPORT_DIR: /var/lib/govern/imports
       PG_ENABLED: ${PG_ENABLED:-0}
       PG_HOST: ${PG_HOST:-postgres}
       PG_PORT: ${PG_PORT:-5432}
       PG_DATABASE: ${PG_DATABASE:-govern_pg}
+      PG_DATABASES: ${PG_DATABASES:-}
       PG_SCHEMAS: ${PG_SCHEMAS:-public}
       PG_READ_USER: ${PG_READ_USER:-govern_pg_reader}
       PG_READ_PASSWORD: ${PG_READ_PASSWORD:-}
@@ -196,11 +208,13 @@ services:
       - ./app/public:/var/www/public:ro
       - ./app/src:/var/www/src:ro
       - ./app/importers:/var/www/importers:ro
+      - ./app/bin:/var/www/bin:ro
       - ./app:/opt/govern/project/app:ro
       - ./docs:/opt/govern/project/docs:ro
       - ./docker/database/20-govern.sql:/var/www/workbench.sql:ro
       - backups:/var/lib/govern/backups
       - account_data:/var/lib/govern/auth
+      - import_data:/var/lib/govern/imports
       - database_management:/run/govern-databases:ro
       - postgres_management:/run/govern-postgres:ro
     depends_on:
@@ -221,6 +235,26 @@ services:
       interval: 15s
       timeout: 5s
       retries: 4
+    restart: unless-stopped
+
+  # Durable jobs use the same restricted roles as the app, never administrator credentials.
+  import-worker:
+    build: *app_build
+    environment: *app_environment
+    command: [php, /var/www/bin/import-worker.php]
+    volumes:
+      - ./app/src:/var/www/src:ro
+      - ./app/bin:/var/www/bin:ro
+      - ./app/importers:/var/www/importers:ro
+      - ./docker/database/20-govern.sql:/var/www/workbench.sql:ro
+      - backups:/var/lib/govern/backups
+      - import_data:/var/lib/govern/imports
+      - account_data:/var/lib/govern/auth:ro
+      - database_management:/run/govern-databases:ro
+      - postgres_management:/run/govern-postgres:ro
+    depends_on:
+      app:
+        condition: service_healthy
     restart: unless-stopped
 
   phpmyadmin:
@@ -264,3 +298,5 @@ volumes:
   backups:
   database_management:
   account_data:
+  import_data:
+  database_provisioning:

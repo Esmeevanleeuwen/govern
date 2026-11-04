@@ -1,7 +1,76 @@
 # Validatie
 
-Stand van de controles: **3 november 2026**. Eerdere resultaten hieronder horen
+Stand van de controles: **4 november 2026**. Eerdere resultaten hieronder horen
 bij hun beschreven wijziging en zijn niet automatisch opnieuw uitgevoerd.
+
+## Begeleide databaseaanmaak en import
+
+Gecontroleerd op **4 november 2026**, in een afzonderlijk project met eigen
+MariaDB- en PostgreSQL-volumes en gegenereerde testaccounts. De nieuwe wizard
+gebruikt echte API's en een actieve import-worker; de controles voeren geen
+bewerkingen op bestaande gebruikersdatabases uit.
+
+- Alle **18 PHP-unitbestanden** en **16 JavaScript-unitbestanden** slagen,
+  waaronder de nieuwe aanmaak-, taak-, koppeling- en tabeldefinitiegrenzen.
+  De workflowcontrole heeft **46** assertions, verse provisioning **35**,
+  tabeldefinities **65** en datasetkoppelingen **14**. Bestaande SQL-parsers,
+  accounts, scopeselectie, herstelpuntclient en AI-controles blijven slagen.
+- De echte API/worker-reeks heeft **61 controles** en controleert beide engines: nieuwe lege database,
+  bezette naam, zij-effectvrij overzicht, idempotente indiening, gegenereerde
+  tabellen, datasetkoppeling en append, exacte tekst/NULL en voorloopnullen,
+  compatibele SQL-backups, CSRF en een daadwerkelijk gedeeltelijke import met
+  een blijvend waarschuwingskenmerk bij de database.
+- De echte browser doorloopt met **23 controles** de drie taken, PostgreSQL-aanmaak gevolgd door de
+  eerste tabel, een dataset op de andere engine, het benoemde overzicht zonder
+  naam opnieuw te typen, een SQL-backup en terugkeer naar het resultaat.
+  De werkelijke modules zijn ook met begrensde fixtures op taal, focus,
+  vaste append-scope, afgekorte previews, taakgeschiedenis en 320 px gecontroleerd.
+- De officiële phpMyAdmin **5.2.3** is daadwerkelijk ingebed gebruikt voor een
+  SQL-bestandsimport met twee gekoppelde tabellen en een SQL-export. De gewone
+  Govern-catalogus leest daarna de echte records en foreign key. Een lopende
+  upload blokkeert wisselen/sluiten; taalwisseling herlaadt het formulier niet.
+- Een nieuwe PostgreSQL-database is via de echte `PostgresBackupService`,
+  Unix-socketservice en native PostgreSQL **18.6**-clients gewijzigd, opgeslagen,
+  opnieuw gewijzigd en hersteld. **11 controles** bevestigen onder meer exacte
+  BIGINT/decimaal/tekst, verwijdering van later gemaakte objecten en normale
+  schrijfrechten na herstel. Daarnaast slagen **12 browsercontroles** voor een
+  herstelpunt in een nieuwe PostgreSQL-database: echte archiefdownload via HTTP,
+  wijziging, Nederlands/mobiel met exacte scopebevestiging, herstel met
+  veiligheidskopie en zichtbaar teruglezen in Records. Een restrictieve umask
+  leverde aanvankelijk bestanden zonder groepsleesrecht op; expliciete beperkte
+  bestandsrechten zijn gecorrigeerd en het echte download-/herstelpad is herhaald.
+
+De uitgebreide datasetproef slaagt met **17 controles per engine**, inclusief
+transactie-heartbeats en afgebroken koppelingen. De tabelbouwerfixture heeft
+**34 controles**, waaronder late callbacks die een nieuw concept niet mogen
+overschrijven. Alle tien gerichte bestaande browserregressies slagen: algemene
+frontend, Gereedschap, instellingen, selectieaanwijzer, meerdere databases met
+rijbewerking, PostgreSQL bekijken/bewerken, een oude gecachete API-module,
+PostgreSQL-demo en de begeleide verkenning. De uiteindelijke bron is opnieuw
+gecontroleerd na het herstarten van alleen de geïsoleerde test-worker.
+
+
+De afzonderlijke importaccounts zijn met **23 echte controles** op beide engines
+getest: doelgebonden schrijven, normale apprechten op nieuwe objecten, stabiele
+credentials bij herhalen, bezette namen zonder dataverlies, afwijzing van globale
+rechten/rolwisseling en MariaDB-grantpatronen met underscores. Onbeheerde
+PostgreSQL-databases kunnen zelfstandig PUBLIC CONNECT toestaan. De
+importverbinding blijft vast; clientopdrachten voor opnieuw verbinden worden niet uitgevoerd.
+
+De lokale omgeving gebruikt gecachete PHP-images en wegens de schijflimiet een
+afzonderlijk hostproces voor de echte private helpers en uitgepakte officiële
+phpMyAdmin-code achter een lokale proxy. Administratorcredentials blijven buiten
+de webapp. Configureerbare helper-UID/GID-instellingen voor deze test veranderen
+de productiestandaarden niet; de productiegrenzen blijven afzonderlijk getest.
+Een volledige nieuwe Docker-imagebuild en Windows PowerShell zijn lokaal niet
+uitgevoerd. De volledige GitHub Actions-uitslag hoort bij de gepubliceerde commit.
+
+Historische vermeldingen van `database-import-smoke.mjs`,
+`dataset-import-smoke.mjs` en `postgres-tools-smoke.mjs` hieronder horen bij de
+toenmalige schermen. Die scripts zijn vervangen door
+`unified-database-api.mjs`, `unified-database-browser.mjs`,
+`advanced-mariadb-tools-smoke.mjs` en de afzonderlijke PostgreSQL-herstelproeven.
+De oude PHP-API-contracten blijven apart getest.
 
 ## Gelijke canvasvormgeving voor Schema en Explore
 
@@ -789,7 +858,9 @@ node tests/dashboard-layout-unit.mjs
 node tests/schema-model-unit.mjs
 node tests/schema-navigation-unit.mjs
 BASE_URL=http://127.0.0.1:18080 GOVERN_UI_WRITE_TESTS=1 node tests/frontend-smoke.mjs
-BASE_URL=http://127.0.0.1:18080 GOVERN_UI_WRITE_TESTS=1 node tests/database-import-smoke.mjs
+BASE_URL=http://127.0.0.1:18080 GOVERN_UI_WRITE_TESTS=1 node tests/unified-database-api.mjs
+BASE_URL=http://127.0.0.1:18080 GOVERN_UI_WRITE_TESTS=1 node tests/unified-database-browser.mjs
+BASE_URL=http://127.0.0.1:18080 GOVERN_UI_WRITE_TESTS=1 node tests/advanced-mariadb-tools-smoke.mjs
 BASE_URL=http://127.0.0.1:18080 node tests/query-builder-smoke.mjs
 BASE_URL=http://127.0.0.1:18080 node tests/ui-settings-smoke.mjs
 BASE_URL=http://127.0.0.1:18080 node tests/ai-workspace-smoke.mjs

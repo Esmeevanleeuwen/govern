@@ -42,7 +42,7 @@ export function createWorkspaceTools() {
     }
     move('.selection-pointer-controls', 'workspace-tools-explore');
     for (const selector of ['#open-companion', '#ai-toggle']) move(selector, 'workspace-tools-explore', 'workspace-tools-control');
-    for (const selector of ['#refresh-app', '#context-export', '#manage-databases']) move(selector, 'workspace-tools-data', 'workspace-tools-control');
+    for (const selector of ['#refresh-app', '#context-export', '#open-database']) move(selector, 'workspace-tools-data', 'workspace-tools-control');
     move('.language-picker', 'workspace-tools-preferences', 'workspace-tools-language');
     move('#workspace-account', 'workspace-tools-preferences', 'workspace-tools-control');
     const language = panel.querySelector('.workspace-tools-language');

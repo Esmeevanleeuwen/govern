@@ -29,3 +29,12 @@ export async function selectWorkspaceLanguage(page, value) {
     await page.waitForFunction(language => document.documentElement.lang === language, value);
     await closeWorkspaceTools(page);
 }
+
+/** A PostgreSQL schema is context inside one existing database identity. */
+export async function selectWorkspaceSchema(page, value) {
+    const select = page.locator('#database-schema-select');
+    await select.waitFor({state: 'visible'});
+    await select.selectOption(value);
+    await page.waitForFunction(schema => document.querySelector('#database-schema-select')?.value === schema
+        && !document.querySelector('#database-select')?.disabled, value);
+}

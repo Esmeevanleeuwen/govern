@@ -1,3 +1,4 @@
+import {selectWorkspaceSchema} from './workspace-tools.mjs';
 /** A pre-upgrade cached API module must not break PostgreSQL selection. */
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
@@ -57,18 +58,18 @@ try {
         'A new record window decodes its captured scope while the pre-upgrade request module is cached.');
     assert.ok((await recordWindow.textContent()).includes('literal%_value'), 'The old client still reads the exact captured record.');
     await recordWindow.locator('.modal-shell-close').click();
-    assert.equal(await page.locator('#open-database').isDisabled(), true);
+    assert.equal(await page.locator('#open-database').isVisible(), false, 'Advanced MariaDB tools stay hidden for PostgreSQL.');
     await page.goto(bookmark('schema', publicKey), {waitUntil: 'networkidle'});
     await page.locator('[data-schema-node="govern_pg_child"]').waitFor();
     await page.goto(bookmark('gegevens', publicKey, 'govern_pg_values'), {waitUntil: 'networkidle'});
     await loaded(publicKey, 'literal%_value');
-    await page.locator('#database-select').selectOption(archiveKey);
+    await selectWorkspaceSchema(page, 'archive');
     await page.waitForFunction(key => document.querySelector('#database-select')?.value === key
         && !document.querySelector('#database-select').disabled, archiveKey);
     await page.locator('.catalog-item[title="govern_pg_values"]').click();
     await loaded(archiveKey, 'Archive-only row');
     assert.equal((await page.locator('.data-table').textContent()).includes('literal%_value'), false);
-    await page.locator('#database-select').selectOption(publicKey);
+    await selectWorkspaceSchema(page, 'public');
     await loaded(publicKey, 'literal%_value');
     await page.reload({waitUntil: 'networkidle'});
     await loaded(publicKey, 'literal%_value');

@@ -1,4 +1,4 @@
-import {selectWorkspaceLanguage} from './workspace-tools.mjs';
+import {selectWorkspaceLanguage, selectWorkspaceSchema} from './workspace-tools.mjs';
 /** Real record graph, source inspector and state isolation in a disposable stack. */
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
@@ -47,8 +47,17 @@ const mapResponse = (scope, relation) => page.waitForResponse(response => {
     return (url.searchParams.get('connection') || 'mariadb') === scope && payload?.relation === relation;
 });
 const selectScope = async value => {
-    await page.locator('#database-select').selectOption(value);
     try {
+        const postgres = /^postgres:([^:]+):([^:]+)$/.exec(value);
+        if (postgres) {
+            const prefix = 'postgres:' + postgres[1] + ':';
+            const database = await page.locator('#database-select option').evaluateAll((options, prefix) =>
+                options.find(option => option.value.startsWith(prefix))?.value, prefix);
+            assert.ok(database, 'The requested PostgreSQL database identity is listed.');
+            await page.locator('#database-select').selectOption(database);
+            await page.waitForFunction(() => !document.querySelector('#database-select')?.disabled);
+            await selectWorkspaceSchema(page, decodeURIComponent(postgres[2]));
+        } else await page.locator('#database-select').selectOption(value);
         await page.waitForFunction(key => document.querySelector('#database-select')?.value === key
             && !document.querySelector('#database-select')?.disabled && !document.querySelector('#refresh-app')?.disabled, value);
         // Each database restores its own last Database view; a new scope starts in Data.

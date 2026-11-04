@@ -7,6 +7,45 @@ namespace Govern;
 final class Messages
 {
     private const TEXT = [
+        'table_definition_invalid' => ['nl' => 'Controleer de tabeldefinitie en gebruik maximaal 256 kolommen.', 'en' => 'Check the table definition and use at most 256 columns.'],
+        'table_definition_name' => ['nl' => 'Gebruik een kleine letter gevolgd door kleine letters, cijfers of underscores, maximaal 63 tekens.', 'en' => 'Use a lowercase letter followed by lowercase letters, numbers or underscores, up to 63 characters.'],
+        'table_definition_column' => ['nl' => 'Controleer kolomnamen, typen, primaire sleutel, NULL en gegenereerde waarden. De eenvoudige bouwer ondersteunt één primaire sleutel en geen primaire tekstsleutel.', 'en' => 'Check column names, types, the primary key, NULL and generated values. The basic builder supports one primary key and no text primary key.'],
+        'table_definition_default' => ['nl' => 'Deze standaardwaarde past niet bij het gekozen type of de NULL-regel. Gebruik een letterlijke waarde, geen SQL-expressie.', 'en' => 'This default does not match its type or NULL rule. Use a literal value, not a SQL expression.'],
+        'table_definition_exists' => ['nl' => 'De tabel {table} bestaat al. Kies een andere naam.', 'en' => 'Table {table} already exists. Choose another name.'],
+        'table_definition_changed' => ['nl' => 'De definitie of bestemming is gewijzigd. Controleer de tabel opnieuw.', 'en' => 'The definition or destination changed. Review the table again.'],
+        'table_definition_create_failed' => ['nl' => 'De tabel kon niet worden gemaakt. Controleer de rechten en tabeldefinitie; bestaande tabellen zijn niet vervangen.', 'en' => 'The table could not be created. Check its permissions and definition; existing tables were not replaced.'],
+        'table_definition_uncertain' => ['nl' => 'Het resultaat voor {table} is onbekend. Controleer de database voordat je opnieuw probeert.', 'en' => 'The result for {table} is unknown. Inspect the database before trying again.'],
+        'dataset_mapping_invalid' => ['nl' => 'Controleer de dataset, tabelnamen en kolomkoppelingen. Koppel elke bronkolom of sla die expliciet over, zonder dubbele doelkolommen.', 'en' => 'Check the dataset, table names and column mappings. Map or explicitly skip every source column, without duplicate targets.'],
+        'dataset_mapping_value' => ['nl' => 'Kolom {column} kan de waarde in gegevensrij {row} niet opslaan: {reason}.', 'en' => 'Column {column} cannot store the value in data row {row}: {reason}.'],
+        'dataset_mapping_required' => ['nl' => 'Kolom {column} heeft een waarde nodig. Koppel een bronkolom of kies een ondersteunde standaardwaarde.', 'en' => 'Column {column} requires a value. Map a source column or use a supported default.'],
+        'dataset_mapping_reason_null' => ['nl' => 'NULL is niet toegestaan', 'en' => 'NULL is not allowed'],
+        'dataset_mapping_reason_length' => ['nl' => 'de waarde is te lang', 'en' => 'the value is too long'],
+        'dataset_mapping_reason_required' => ['nl' => 'een verplichte waarde ontbreekt', 'en' => 'a required value is missing'],
+        'dataset_mapping_reason_invalid' => ['nl' => 'de waarde wordt niet ondersteund', 'en' => 'the value is unsupported'],
+        'dataset_append_unsupported' => ['nl' => '{table} ondersteunt deze tekst/NULL-import niet. Kies een andere tabel of maak een nieuwe tabel.', 'en' => '{table} does not support this text/NULL import. Choose another table or create a new table.'],
+        'dataset_row_invalid' => ['nl' => 'Bronrecord {row} heeft meer velden dan de opgegeven kolommen. Corrigeer het bestand of de leesinstellingen.', 'en' => 'Source record {row} has more fields than the declared columns. Correct the file or parser settings.'],
+        'database_exists' => ['nl' => 'Een database met deze naam bestaat al. Kies een andere naam; bestaande gegevens worden niet vervangen.', 'en' => 'A database with this name already exists. Choose another name; existing data is not replaced.'],
+        'database_creation_uncertain' => ['nl' => 'Het resultaat van de databaseaanmaak is onbekend. Controleer de database en de taakstatus voordat je een nieuwe poging start.', 'en' => 'The database creation result is unknown. Inspect the database and job status before starting another attempt.'],
+        'workflow_invalid' => ['nl' => 'Controleer de taak, bron, bestemming en kolomkoppelingen en bekijk de samenvatting opnieuw.', 'en' => 'Check the task, source, destination and column mappings, then review the summary again.'],
+        'workflow_unavailable' => ['nl' => 'De lokale importopslag is niet beschikbaar. Controleer de opslagrechten of start Govern opnieuw.', 'en' => 'The local import store is unavailable. Check its storage permissions or restart Govern.'],
+        'workflow_upload' => ['nl' => 'Kies een ondersteund bestand binnen de getoonde bestandsgrootte. SQL moet UTF-8 zijn en mag maximaal 256 KiB groot zijn; datasets maximaal 16 MiB.', 'en' => 'Choose a supported file within the displayed size limit. SQL must be UTF-8 and no larger than 256 KiB; datasets no larger than 16 MiB.'],
+        'workflow_capacity' => ['nl' => 'Er is tijdelijk te weinig importruimte of er staan te veel taken klaar. Wacht op de lopende taken en probeer daarna opnieuw.', 'en' => 'Import storage is temporarily full or too many jobs are queued. Wait for active jobs and try again afterward.'],
+        'workflow_engine_unavailable' => ['nl' => 'Databases maken is voor deze engine niet beschikbaar in deze installatie. Controleer de configuratie en de databaseaanmaakservice.', 'en' => 'Database creation for this engine is unavailable in this installation. Check its configuration and database provisioning service.'],
+        'workflow_target_exists' => ['nl' => 'De gekozen nieuwe database bestaat al. Kies een andere naam of open de bestaande database en gebruik Gegevens toevoegen.', 'en' => 'The proposed new database already exists. Choose another name, or open the existing database and use Add data.'],
+        'workflow_plan_changed' => ['nl' => 'De bron, bestemming of structuur is gewijzigd. Controleer de keuzes en de samenvatting opnieuw.', 'en' => 'The source, destination or structure changed. Check the choices and review the summary again.'],
+        'workflow_expired' => ['nl' => 'De bron of het importplan is verlopen. Kies het bestand opnieuw en controleer de import.', 'en' => 'The source or import plan expired. Choose the file again and review the import.'],
+        'workflow_not_found' => ['nl' => 'Deze importtaak is niet beschikbaar. Vernieuw de takenlijst.', 'en' => 'This import job is unavailable. Refresh the job list.'],
+        'workflow_worker_unavailable' => ['nl' => 'De importwerker is niet actief. Start Govern opnieuw met het startscript en controleer daarna de taakstatus.', 'en' => 'The import worker is not active. Restart Govern with the startup script, then check the job status.'],
+        'workflow_source_ambiguous' => ['nl' => 'Kies de engine waarmee dit SQL-bestand is geëxporteerd. De bestandsextensie alleen bepaalt dat niet.', 'en' => 'Choose the engine that exported this SQL file. The file extension alone does not establish it.'],
+        'workflow_engine_incompatible' => ['nl' => 'Deze backup hoort bij een andere database-engine. Kies de passende engine; importeren zet MariaDB en PostgreSQL niet automatisch in elkaar om.', 'en' => 'This backup belongs to a different database engine. Choose its compatible engine; importing does not automatically convert MariaDB and PostgreSQL.'],
+        'workflow_backup_qualified' => ['nl' => 'Exporteer de backup opnieuw zonder databasekeuze of verwijzingen naar de oorspronkelijke databasenaam. Deze import herschrijft zulke verwijzingen niet automatisch.', 'en' => 'Re-export the backup without database-selection statements or references to the original database name. This import does not rewrite those references automatically.'],
+        'workflow_backup_unsupported' => ['nl' => 'Gebruik een ondersteunde gewone UTF-8 SQL-backup tot 256 KiB. Archieven, clientopdrachten, COPY-invoer en routines worden in deze import niet ondersteund.', 'en' => 'Use a supported ordinary UTF-8 SQL backup up to 256 KiB. Archives, client commands, COPY input and routines are not supported in this import.'],
+        'workflow_account_inactive' => ['nl' => 'Het account dat deze taak startte heeft geen actieve toegang meer. Nog niet begonnen importwerk wordt niet uitgevoerd.', 'en' => 'The account that started this job no longer has active access. Import work that has not started will not run.'],
+        'workflow_import_credentials' => ['nl' => 'Het beperkte importaccount voor deze database is niet beschikbaar. Controleer de databaseaanmaakservice en inspecteer de taakstatus.', 'en' => 'The restricted import account for this database is unavailable. Check the provisioning service and inspect the job status.'],
+        'workflow_import_failed' => ['nl' => 'De import kon niet worden voltooid. Bekijk de bevestigde wijzigingen en taakstatus voordat je beslist over een nieuwe poging.', 'en' => 'The import could not be completed. Inspect the confirmed changes and job status before deciding on another attempt.'],
+        'workflow_time_limit' => ['nl' => 'De import heeft de uitvoeringstijdlimiet bereikt. Controleer de bevestigde wijzigingen en taakstatus; voer de SQL niet automatisch opnieuw uit.', 'en' => 'The import reached its execution time limit. Inspect the confirmed changes and job status; do not automatically replay the SQL.'],
+        'workflow_uncommitted' => ['nl' => 'Een onvoltooide importtransactie is teruggedraaid. Eerder bevestigde wijzigingen kunnen blijven bestaan; controleer de taakstatus.', 'en' => 'An unfinished import transaction was rolled back. Earlier committed changes may remain; inspect the job status.'],
+        'workflow_interrupted' => ['nl' => 'Het importresultaat is onzeker na een onderbreking. Vernieuw de taakstatus en inspecteer de database voordat je een nieuwe poging start.', 'en' => 'The import outcome is uncertain after an interruption. Refresh the job status and inspect the database before starting another attempt.'],
         'explore_key_invalid' => ['nl' => 'Kies een record met zijn volledige, exacte sleutel.', 'en' => 'Choose a record using its complete, exact key.'],
         'explore_record_missing' => ['nl' => 'Dit record is niet meer beschikbaar. Vernieuw de verkenning.', 'en' => 'This record is no longer available. Refresh the explorer.'],
         'record_map_input_invalid' => ['nl' => 'Kies een geldig record en een verbinding uit de kaart.', 'en' => 'Choose a valid record and a connection from the map.'],
@@ -261,6 +300,12 @@ final class Messages
             $parameters['detail'] = isset($parameters['database_code'])
                 ? self::text('database_client_error_detail', ['code' => $parameters['database_code']], $language)
                 : '';
+        }
+        if ($key === 'dataset_mapping_value') {
+            if (($parameters['row'] ?? null) === 0) return self::text('dataset_mapping_required', $parameters, $language);
+            $reason = in_array($parameters['reason'] ?? null, ['null', 'length', 'required'], true)
+                ? $parameters['reason'] : 'invalid';
+            $parameters['reason'] = self::text('dataset_mapping_reason_' . $reason, [], $language);
         }
         $message = self::TEXT[$key][$language === 'en' ? 'en' : 'nl'];
         $replacements = [];

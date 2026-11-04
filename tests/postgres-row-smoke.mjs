@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 import {authenticatedContext} from './auth-session.mjs';
-import {selectWorkspaceLanguage} from './workspace-tools.mjs';
+import {selectWorkspaceLanguage, selectWorkspaceSchema} from './workspace-tools.mjs';
 
 assert.equal(process.env.GOVERN_UI_WRITE_TESTS, '1', 'Use an isolated stack and set GOVERN_UI_WRITE_TESTS=1.');
 const require = createRequire(import.meta.url);
@@ -74,7 +74,7 @@ try {
     await page.goto(bookmark(), {waitUntil: 'networkidle'});
     await waitRows('Original public row');
     assert.equal(await page.locator('[data-postgres-editing]').count(), 1);
-    assert.equal(await page.locator('#open-database').isDisabled(), true);
+    assert.equal(await page.locator('#open-database').isVisible(), false, 'Advanced MariaDB tools stay hidden for PostgreSQL.');
     await page.locator('#add-row').click();
     await field('label').waitFor();
     assert.equal(await page.locator('#database-select').isDisabled(), true,
@@ -124,13 +124,13 @@ try {
     await dialog.waitFor({state: 'hidden'});
     await waitRows(marker + ' edited');
 
-    await page.locator('#database-select').selectOption(archiveKey);
+    await selectWorkspaceSchema(page, 'archive');
     await page.waitForFunction(key => document.querySelector('#database-select')?.value === key
         && !document.querySelector('#database-select').disabled, archiveKey);
     await page.locator('.catalog-item[title="govern_pg_edit"]').click();
     await waitRows('Archive row');
     assert.equal((await page.locator('.table-workspace .data-table').innerText()).includes(marker), false);
-    await page.locator('#database-select').selectOption(publicKey);
+    await selectWorkspaceSchema(page, 'public');
     await waitRows(marker + ' edited');
     await selectWorkspaceLanguage(page, 'nl');
     await page.setViewportSize({width: 360, height: 800});

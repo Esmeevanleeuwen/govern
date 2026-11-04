@@ -28,7 +28,7 @@ try {
     await row('Resident Services Portal').waitFor();
     assert.equal(await page.locator('#database-select').inputValue(), key);
     assert.equal(await page.locator('[data-postgres-editing]').count(), 1);
-    assert.equal(await page.locator('#open-database').isDisabled(), true);
+    assert.equal(await page.locator('#open-database').isVisible(), false, 'Advanced MariaDB tools stay hidden for PostgreSQL.');
     assert.equal(await page.locator('#add-row').count(), 1);
     assert.ok(await page.locator('[data-row-action="edit"]').count() > 0);
 

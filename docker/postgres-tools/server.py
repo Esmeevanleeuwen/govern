@@ -20,7 +20,22 @@ ID = re.compile(r"[0-9]{8}T[0-9]{6}Z_[a-f0-9]{16}\Z")
 MAX_REQUEST = 4096
 MAX_RESPONSE = 1048576
 MAX_DUMP = 536870912
-APP_UID = APP_GID = 33
+APP_UID = 33
+
+
+def service_id(name, default):
+    value = os.environ.get(name, str(default))
+    if not re.fullmatch(r"[0-9]{1,10}", value) or int(value) > 2147483647:
+        raise SystemExit("postgres_tools_invalid")
+    return int(value)
+
+
+# Docker keeps immutable backups owned by root and readable by Apache group 33.
+# A private host worker can select a different owner/group, never the web UID.
+OWNER_UID = service_id("PG_TOOLS_OWNER_UID", 0)
+APP_GID = service_id("PG_TOOLS_GID", 33)
+if OWNER_UID == APP_UID:
+    raise SystemExit("postgres_tools_invalid")
 
 
 class Failure(Exception):
@@ -103,16 +118,28 @@ class Tools:
                         role=role, input=sql.encode(), error=error).decode().strip()
 
     def request(self, request):
-        if not isinstance(request, dict) or request.get("database") != self.database or request.get("schema") not in self.schemas:
+        if not isinstance(request, dict):
             raise Failure("postgres_tools_invalid")
-        action, schema = request.get("action"), request["schema"]
+        action = request.get("action")
         expected = {"action", "database", "schema"}
         if action == "create":
             expected.add("label")
         elif action in ("download", "restore"):
             expected.add("id")
-        if set(request) != expected:
+        if action not in ("list", "create", "download", "restore") or set(request) != expected:
             raise Failure("postgres_tools_invalid")
+        database = request.get("database")
+        if database != self.database:
+            # Only explicit grants to both app roles authorize another database.
+            if not self.database_allowed(database):
+                raise Failure("postgres_tools_invalid")
+            environment = dict(self.env)
+            environment["PGDATABASE"] = database
+            environment["PG_SCHEMAS"] = ",".join(dict.fromkeys(["public", *self.schemas]))
+            return Tools(environment).request(request)
+        if request.get("schema") not in self.schemas:
+            raise Failure("postgres_tools_invalid")
+        schema = request["schema"]
         if action == "list":
             return self.list(schema)
         if action == "create":
@@ -123,6 +150,22 @@ class Tools:
             return self.restore(schema, request["id"])
         raise Failure("postgres_tools_invalid")
 
+    def database_allowed(self, database):
+        if (not isinstance(database, str) or re.fullmatch(r"[A-Za-z0-9_]{1,63}", database) is None
+                or database in ("postgres", "template0", "template1")):
+            return False
+        sql = ("SELECT EXISTS (SELECT 1 FROM pg_catalog.pg_database d WHERE d.datname=" + literal(database)
+               + " AND d.datallowconn AND NOT d.datistemplate"
+               + " AND EXISTS (SELECT 1 FROM pg_catalog.aclexplode(d.datacl) a JOIN pg_catalog.pg_roles r ON r.oid=a.grantee"
+               + " WHERE r.rolname=" + literal(self.env["PG_READ_USER"]) + " AND a.privilege_type='CONNECT')"
+               + " AND EXISTS (SELECT 1 FROM pg_catalog.aclexplode(d.datacl) a JOIN pg_catalog.pg_roles r ON r.oid=a.grantee"
+               + " WHERE r.rolname=" + literal(self.env["PG_USER"]) + " AND a.privilege_type='CONNECT'));\n")
+        try:
+            result = self.run(["psql", "-X", "-qAt", "--set", "ON_ERROR_STOP=1", "--dbname", "postgres"], input=sql.encode())
+            return result.decode().strip() == "t"
+        except Failure:
+            return False
+
     def directory(self, schema):
         scope = "postgres:" + quote(self.database, safe="-_.~") + ":" + quote(schema, safe="-_.~")
         for directory in (self.root, self.root / "connections", self.root / "connections" / hashlib.sha256(scope.encode()).hexdigest()):
@@ -132,7 +175,7 @@ class Tools:
             if not directory.is_dir():
                 raise Failure("backup_directory_invalid")
             if directory != self.root:
-                os.chown(directory, 0, APP_GID)
+                os.chown(directory, OWNER_UID, APP_GID)
                 os.chmod(directory, 0o750)
         return directory
 
@@ -148,7 +191,7 @@ class Tools:
             with os.fdopen(descriptor, "rb") as stream:
                 metadata = os.fstat(stream.fileno())
                 if (not stat.S_ISREG(metadata.st_mode) or metadata.st_size > limit
-                        or metadata.st_uid != 0 or metadata.st_mode & 0o022):
+                        or metadata.st_uid != OWNER_UID or metadata.st_mode & 0o022):
                     raise Failure("snapshot_invalid")
                 data = stream.read(limit + 1)
                 if len(data) > limit:
@@ -310,13 +353,15 @@ class Tools:
                             target.write(chunk)
                         target.flush()
                         os.fsync(target.fileno())
-                os.chown(destination, 0, APP_GID)
+                os.chown(destination, OWNER_UID, APP_GID)
+                os.chmod(destination, 0o440)
                 descriptor = os.open(metadata, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o440)
                 with os.fdopen(descriptor, "wb") as stream:
                     stream.write(json.dumps(manifest, ensure_ascii=False, separators=(",", ":")).encode() + b"\n")
                     stream.flush()
                     os.fsync(stream.fileno())
-                os.chown(metadata, 0, APP_GID)
+                os.chown(metadata, OWNER_UID, APP_GID)
+                os.chmod(metadata, 0o440)
             except OSError:
                 for path in (destination, metadata):
                     with contextlib.suppress(OSError):
@@ -464,7 +509,7 @@ def serve():
     if not path.is_absolute() or len(str(path).encode()) > 103 or path.parent.is_symlink():
         raise Failure("postgres_tools_invalid")
     path.parent.mkdir(mode=0o750, parents=True, exist_ok=True)
-    os.chown(path.parent, 0, APP_GID)
+    os.chown(path.parent, OWNER_UID, APP_GID)
     os.chmod(path.parent, 0o750)
     if path.exists() or path.is_symlink():
         if path.is_symlink() or not stat.S_ISSOCK(path.lstat().st_mode):
@@ -472,7 +517,7 @@ def serve():
         path.unlink()
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as server:
         server.bind(str(path))
-        os.chown(path, 0, APP_GID)
+        os.chown(path, OWNER_UID, APP_GID)
         os.chmod(path, 0o660)
         server.listen(8)
         while True:

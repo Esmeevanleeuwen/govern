@@ -19,7 +19,7 @@ try {
     await ensureSources();
     const rootId = await selectSeed('Northbridge Council');
     assert.equal(rootId, start.focus.id);
-    assert.equal(await page.locator('#open-database').isDisabled(), true);
+    assert.equal(await page.locator('#open-database').isVisible(), false, 'Advanced MariaDB tools stay hidden for PostgreSQL.');
     assert.equal(await page.locator('#add-row, [data-row-action]').count(), 0);
     assert.equal(await page.locator('.record-map textarea').count(), 0, 'Guided exploration requires no SQL input.');
     await openQuestions();

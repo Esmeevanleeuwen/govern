@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import re
 import sys
+import subprocess
 import tempfile
 root = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location('govern_tools_unit', root / 'docker/postgres-tools/server.py')
@@ -71,4 +72,12 @@ with tempfile.TemporaryDirectory(prefix='pg-tools-unit-', dir=root / 'work') as 
         check(limited.stat().st_size <= 512, 'A lower inherited file limit is preserved.')
     finally:
         worker.resource.setrlimit(worker.resource.RLIMIT_FSIZE, inherited)
+for key, value in [("PG_TOOLS_OWNER_UID", "bad"), ("PG_TOOLS_OWNER_UID", "33"),
+                   ("PG_TOOLS_OWNER_UID", "2147483648"), ("PG_TOOLS_GID", "-1")]:
+    environment = dict(os.environ)
+    environment[key] = value
+    result = subprocess.run([sys.executable, str(root / 'docker/postgres-tools/server.py'), '--health'],
+                            env=environment, capture_output=True, text=True)
+    check(result.returncode != 0, 'Invalid private service identity is rejected before socket or database use.')
+    check(result.stderr.strip() == 'postgres_tools_invalid', 'Invalid identity emits only a fixed code.')
 print(f'PASS: {checks} private PostgreSQL helper request/file/role/lexical checks.')

@@ -3,6 +3,7 @@
  * python3 tests/auth_http.py --initialize before running the browser suites.
  */
 import assert from 'node:assert/strict';
+import {readFile, writeFile, chmod} from 'node:fs/promises';
 
 async function authenticate(context, base) {
     const origin = new URL(base);
@@ -15,6 +16,8 @@ async function authenticate(context, base) {
     const statusResponse = await context.request.get(endpoint.href);
     const status = await statusResponse.json();
     assert.ok(statusResponse.ok() && status.ok, 'The authentication status endpoint must be available.');
+    // A still-approved cached test session uses the same real status check as a reload.
+    if (status.data.user?.email === email && status.data.user?.status === 'active') return;
     endpoint.searchParams.set('action', 'login');
     const response = await context.request.post(endpoint.href, {
         headers: {'X-CSRF-Token': status.data.csrf}, data: {email, password},
@@ -25,9 +28,19 @@ async function authenticate(context, base) {
 }
 
 export async function authenticatedContext(browser, base, options = {}) {
-    const context = await browser.newContext(options);
+    const cache = process.env.GOVERN_TEST_STORAGE_STATE;
+    let storageState;
+    if (cache && !options.storageState) {
+        try { storageState = JSON.parse(await readFile(cache, 'utf8')); }
+        catch (error) { if (error.code !== 'ENOENT') throw error; }
+    }
+    const context = await browser.newContext({...(storageState ? {storageState} : {}), ...options});
     try {
         await authenticate(context, base);
+        if (cache) {
+            await writeFile(cache, JSON.stringify(await context.storageState()), {mode: 0o600});
+            await chmod(cache, 0o600);
+        }
         return context;
     } catch (error) {
         await context.close();
