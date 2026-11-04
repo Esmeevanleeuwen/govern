@@ -3,6 +3,67 @@
 Stand van de controles: **4 november 2026**. Eerdere resultaten hieronder horen
 bij hun beschreven wijziging en zijn niet automatisch opnieuw uitgevoerd.
 
+## Engine kiezen na de handeling — 4 november 2026
+
+De vernieuwde ingang begint met Database aanmaken, Database importeren of
+Tabel importeren, daarna de engine en bestemming. MariaDB-aanmaak opent de
+officiële Structure-weergave; PostgreSQL toont zijn bestaande database/schema
+en de beschikbare SQL-werkplek. De imports behouden hun eigen voorcontrole,
+exacte bevestiging en brongebonden uitvoering. De globale `engines`-metadata
+laat MariaDB-aanmaak ook vanuit een PostgreSQL-werkplek kiezen.
+
+Vóór deze aanpassing is de echte toepassing doorlopen in een afzonderlijk
+Docker-project op poort 18081, met PHP 8.4, MariaDB, PostgreSQL en de officiële
+phpMyAdmin. De doorloop omvat de publieke pagina, accounts, Overzicht, Records,
+Explore, Schema en tabeldetails, Queries met echte SQL voor beide engines,
+instellingen, mobiele navigatie en phpMyAdmin. De negen betrokken
+browserproeven slaagden als nulmeting; een kaartproef kreeg eerst Fit om de
+benodigde kaarten in het kleinere werkvlak zichtbaar te maken.
+
+Alle 27 uitgevoerde backend-, HTTP- en herstelproeven op deze geïsoleerde stack
+slagen, naast de bestaande PHP-unitcontroles. De aanvullende metadata is
+gecontroleerd met 111 scope-/capabilitycontroles, 42 MariaDB-HTTP-controles en
+63 PostgreSQL-HTTP-controles. Die metadata bevat geen hosts of credentials en
+verandert de bestaande scoped capabilityvelden niet. PostgreSQL zonder
+SQL-credentials en een uitgeschakelde PostgreSQL-verbinding zijn in de
+databasevrije unitproef gecontroleerd.
+
+Dit is een echte lokale integratieomgeving met eigen gegevens en accounts.
+De eerdere opslaggrens hieronder hoort bij de vorige validatiepoging; deze
+keer draaiden beide engines en de volledige toepassing.
+
+De nieuwe engine-browserproef slaagt tegen deze stack voor de expliciete
+enginekeuze zonder voortijdige werkplekwissel, Terug, behoud van naam en caret
+bij taalwisseling, MariaDB-aanmaak vanuit PostgreSQL met de expliciete
+standaard-MariaDB-verzoekscope en Enter naar de officiële Structure-weergave.
+PostgreSQL-SQL- en tabelvoorbeelden worden via de echte API gelezen. De
+meldingen voor niet-ingeschakeld en alleen-lezen PostgreSQL gebruiken apart
+gecontroleerde UI-metadata op 320 px, in donker thema en met verminderde
+transparantie; de test schakelt de echte server daarvoor niet uit.
+
+De aangepaste database-importbrowserproef slaagt voor upload via de officiële
+phpMyAdmin, de eigen SQL-voorcontrole en bevestiging, teruglezen van de records
+en handmatig een tabel aanmaken in phpMyAdmin. De tabelimportbrowserproef,
+inclusief echte import, teruglezen en de mobiele controles, slaagt. Ook de
+bijgewerkte frontend-, Gereedschap- en PostgreSQL-browserproeven en de proeven
+voor Explore, Schema en Queries slagen tegen de laatste broncode. De gefocuste
+importfixture slaagt met vaste API-antwoorden en
+controleert geen echte database-uitvoering. Syntax, vertaalsleutels met 1.542
+tweetalige berichten en `git diff --check` slagen.
+
+De verdere echte browserdoorloop slaagt voor startpagina/accounts,
+instellingen, gedeelde navigatie, vrije SQL, losse vensters, vergelijking,
+recordkaart, de verkenningsgids en de AI-interface/projectzoeker. De laatste
+PostgreSQL-gereedschapsproef controleert SQL, SQL-/CSV-import, archiefdownload
+en echt herstellen/teruglezen in Nederlands en op mobiel. Ook die proef slaagt.
+De phpMyAdmin-taalcontrole wacht expliciet op de zichtbare, geïnitialiseerde
+SQL-editor voordat het concept wordt ingevuld; de iframe-markering en tekst
+blijven tijdens taalwisseling behouden.
+
+De installatie op de gebruikercomputer, Windows zelf en een lokaal taalmodel
+zijn niet hiermee gecontroleerd; de volledige GitHub Actions-uitslag hoort
+bij de commit.
+
 ## Gedeelde databasewerkplek en expliciete importkeuze
 
 Database gebruikt Records, Explore, Schema en Queries in dezelfde kop en met

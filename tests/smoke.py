@@ -80,6 +80,15 @@ def main():
     database = data["database"]["name"]
     check(len(csrf) >= 32 and data["stats"]["tables"] >= 23, "Real bootstrap and CSRF session")
     check(all(not t["name"].startswith("_govern_") for t in data["tables"]), "Content explorer keeps internal metadata separate in its display")
+    engines = {item["id"]: item for item in data["engines"]}
+    check(set(engines) == {"mariadb", "postgres"} and engines["mariadb"]["configured"],
+          "Global engine choices include configured MariaDB and an explicit PostgreSQL state")
+    check(engines["mariadb"]["capabilities"]["create_database"] == data["can_create_database"],
+          "MariaDB creation metadata reflects the private broker without changing the scoped compatibility flag")
+    status, listing, _ = request("databases")
+    check(status == 200 and listing["data"]["engines"] == data["engines"]
+          and listing["data"]["can_create"] == engines["mariadb"]["capabilities"]["create_database"],
+          "Database listing and bootstrap expose the same global engine tools")
 
     status, result, _ = request("schema")
     check(status == 200 and result["ok"] is True, "Schema visualizer metadata is available over HTTP")

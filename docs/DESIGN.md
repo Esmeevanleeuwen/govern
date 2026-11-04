@@ -186,7 +186,10 @@ creation and import remain available in the compact Tools menu.
 
 ## Compact workspace header
 
-Keep the database picker and Open database visible in one compact row. Group
+Keep the database picker, its adjacent add button and Database tools visible in
+one compact row. The add button starts the task/engine/destination flow and stays
+outside the Tools popover. Database tools opens official phpMyAdmin for MariaDB
+or the Queries workspace for PostgreSQL. Group
 secondary actions in a labelled Tools disclosure: exploration, database tools
 and preferences. The panel shows full action labels, native language selection
 and the current disabled/hidden states. On narrow screens use accessible icon
@@ -484,12 +487,25 @@ theme and language updates; only explicit tool navigation loads another page.
 
 ### Add a database and import files
 
-The plus beside the database selector, Database Tools → Import and the shared
-Tools create/import action open the same focused glass dialog. First choose
-**Table files** (the default) or **SQL file**, then an existing destination or
-a name for a new database. Keep the selected target visible in every action;
-changing the name must not silently change the active workspace before the
-request succeeds.
+The plus beside the database selector and Database Tools → Import open the same
+focused glass dialog. Start with **Create database**, **Import database** or
+**Import table**. Then ask which engine to use, before showing destination fields.
+Show both MariaDB and PostgreSQL with their actual configuration and tools;
+derive availability from global engine metadata rather than the engine of the
+currently selected workspace. Keep the selected task, engine and target visible.
+
+**Create database** asks for a MariaDB name and opens the created database at
+Structure in the real phpMyAdmin, ready to design tables and columns. Selecting
+PostgreSQL explains that this version uses its configured database and schemas;
+offer **Open SQL workspace** for an existing scope. Do not label a schema as a
+new database or suggest that PostgreSQL provisioning has been implemented.
+
+**Import database** chooses a new or existing MariaDB destination, or an existing
+configured PostgreSQL database/schema, then opens a focused SQL import dialog.
+**Import table** chooses an existing engine-specific destination, then opens the
+focused file/preview/confirmation dialog. A user can create an empty MariaDB
+destination through the separate creation task first. Engine choices do not
+convert SQL dialects or connect another server.
 
 Creating a missing database starts empty. Preparing an existing name preserves
 its data and makes it available to Govern explicitly. Explain that importing SQL
@@ -498,13 +514,19 @@ form into a server administration panel or ask the user to paste credentials.
 If the private creation service is unavailable, retain the entered name, show
 the failure and keep existing database selection/import usable.
 
-Create and import prepares the database, switches through the shared database
-flow and opens the chosen file-import tab. Import into an existing database
-opens the same tab directly. Table files use the numbered Choose, Review and
-Confirm steps; success offers **Open table** to return to Records. SQL uses the
-existing Govern preview and explicit confirmation, with official phpMyAdmin
-available for larger MariaDB files. Keep the native modal shortcuts and all
-phpMyAdmin tools available; the entry points share the existing import services.
+Creating an import destination prepares the database and switches through the
+shared database flow only after success. Table files retain the numbered Choose,
+Review and Confirm steps; success offers **Open table** to return to Records.
+SQL uses the existing Govern preview and exact confirmation. Keep the official
+phpMyAdmin fallback for larger MariaDB files as an explicit action, rather than
+showing an unrelated full toolset beside the focused import form. Database tools
+continues to provide the complete official application separately.
+
+**Change destination** returns to the wizard with the current task and engine.
+Discard the previous preview/confirmation when scope changes; preserve unrelated
+workspace drafts. Keep task and engine choices during a language change or a
+recoverable error. Do not switch the active workspace merely because the user
+entered another name.
 
 Show pending state during preparation and prevent duplicate creation or a
 competing target switch. Keep validation and server errors beside the name and

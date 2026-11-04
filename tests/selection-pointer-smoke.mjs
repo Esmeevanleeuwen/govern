@@ -198,7 +198,7 @@ try {
     await page.locator('.table-workspace .data-table tbody tr').nth(1).waitFor();
     await page.locator('[data-database-view="schema"]').click();
     await page.locator('#schema-viewport').waitFor();
-    await page.locator('.catalog-item[title="organizations"]').click();
+    await page.locator('.catalog-item').filter({has: page.locator('.catalog-item-name', {hasText: /^organizations$/})}).click();
     await page.locator('#schema-actual').click();
     await clickWorkspaceTool(page, '#selection-pointer-toggle');
     const header = page.locator('[data-schema-header="organizations"]');

@@ -26,15 +26,17 @@ export function phpMyAdminUrl(database, table, tab = 'browse') {
 }
 
 export class DatabaseModal {
-    constructor(onClose, onOpenChange) {
+    constructor(onClose, onOpenChange, onChangeDestination) {
         this.database = '';
         this.tables = [];
         this.databases = [];
         this.table = '';
         this.tab = 'browse';
         this.currentUrl = '';
+        this.workflow = null;
         this.onClose = onClose;
         this.onOpenChange = onOpenChange;
+        this.onChangeDestination = onChangeDestination;
         this.importInspection = new ImportInspectionPanel(busy => this.setBusy(busy));
         this.datasetImport = new DatasetImportPanel(busy => {
             this.setBusy(busy);
@@ -76,19 +78,34 @@ export class DatabaseModal {
         this.frameMessage = el('div', {class: 'frame-message', role: 'status'});
         this.status = el('span', {}, t('modal.ready'));
         this.panel = el('div', {id: 'database-panel', class: 'database-frame-panel', role: 'tabpanel', 'aria-labelledby': 'database-tab-browse'}, this.frame, this.frameMessage);
+        this.changeDestination = button(t('modal.changeDestination'), () => {
+            if (this.isBusy() || !this.workflow || !this.dialog.open) return;
+            this.pendingDestinationChange = {workflow: this.workflow, database: this.database, tab: this.tab};
+            this.dialog.close();
+        }, {id: 'modal-change-destination', symbol: 'arrow', className: 'button-small'});
+        this.importContext = el('section', {class: 'modal-import-context', hidden: true, 'aria-label': t('modal.importDestination')},
+            el('div', {}, el('p', {class: 'eyebrow', 'data-i18n': 'modal.importDestination'}, t('modal.importDestination')),
+                this.importSource = el('p', {class: 'modal-import-source'})), this.changeDestination);
+        this.fullImport = button(t('modal.fullImport'), () => {
+            if (!this.isBusy()) this.open('', 'import');
+        }, {id: 'modal-full-import', symbol: 'external', className: 'button-small'});
+        this.importFallback = el('section', {class: 'modal-import-fallback', hidden: true},
+            el('p', {'data-i18n': 'modal.fullImportHelp'}, t('modal.fullImportHelp')), this.fullImport);
         this.dialog.append(
             el('div', {class: 'database-dialog-header'},
                 el('div', {class: 'database-dialog-title'}, el('span', {class: 'database-dialog-icon'}, icon('database')),
-                    el('div', {}, el('h2', {id: 'database-title', 'data-i18n': 'modal.title'}, t('modal.title')), el('p', {'data-i18n': 'modal.description'}, t('modal.description')))),
+                    el('div', {}, this.title = el('h2', {id: 'database-title', 'data-i18n': 'modal.title'}, t('modal.title')), el('p', {'data-i18n': 'modal.description'}, t('modal.description')))),
                 el('div', {class: 'modal-tools'}, this.external, this.expand,
                     this.closeButton = button(t('modal.close'), () => this.isBusy() ? null : this.dialog.close(), {symbol: 'close', className: 'button-small'}))),
-            el('div', {class: 'database-toolbar'}, tablist,
+            this.toolbar = el('div', {class: 'database-toolbar'}, tablist,
                 el('div', {class: 'database-context'},
                     el('div', {class: 'modal-database'}, icon('database'), this.name, this.databaseSelect),
                     el('label', {class: 'sr-only', for: 'modal-table', 'data-i18n': 'modal.table'}, t('modal.table')), this.tableSelect)),
             this.sourceHint = el('p', {id: 'modal-source-hint', class: 'modal-source-hint small muted', 'data-i18n': 'modal.sourceHint'}, t('modal.sourceHint')),
+            this.importContext,
             this.datasetImport.panel,
             this.importInspection.panel,
+            this.importFallback,
             this.panel,
             el('div', {class: 'database-dialog-footer'}, el('span', {class: 'status-dot'}), this.status,
                 el('span', {class: 'modal-footer-hint', 'data-i18n': 'modal.footerHint'}, t('modal.footerHint'))));
@@ -102,7 +119,10 @@ export class DatabaseModal {
             this.onOpenChange?.(false);
             const imported = this.pendingImported || null;
             this.pendingImported = null;
-            this.onClose?.({imported});
+            const destinationChange = this.pendingDestinationChange || null;
+            this.pendingDestinationChange = null;
+            if (destinationChange && this.onChangeDestination) this.onChangeDestination(destinationChange);
+            else this.onClose?.({imported});
         });
         document.body.append(this.dialog);
         this.shell = attachDialog(this.dialog, {handle: this.dialog.querySelector('.database-dialog-header')});
@@ -118,16 +138,42 @@ export class DatabaseModal {
         return 'modal.description';
     }
 
+    updateWorkflow() {
+        const focused = Boolean(this.workflow);
+        this.dialog.classList.toggle('focused-import', focused);
+        this.toolbar.hidden = this.sourceHint.hidden = focused;
+        this.importContext.hidden = !focused;
+        this.changeDestination.hidden = typeof this.onChangeDestination !== 'function';
+        this.importFallback.hidden = !focused || this.tab !== 'import' || this.isPostgres();
+        this.title.dataset.i18n = this.workflow === 'import-database' ? 'modal.importDatabase'
+            : this.workflow === 'import-table' ? 'modal.importTable' : 'modal.title';
+        this.title.textContent = t(this.title.dataset.i18n);
+        this.importContext.setAttribute('aria-label', t('modal.importDestination'));
+        const scope = parseConnectionScope(this.database);
+        const target = scope.connection === 'postgres' ? scope.database + '.' + scope.schema : this.database;
+        this.importSource.replaceChildren(el('strong', {}, this.isPostgres() ? 'PostgreSQL' : 'MariaDB'), el('code', {}, target));
+        this.changeDestination.querySelector('span').textContent = t('modal.changeDestination');
+        this.changeDestination.setAttribute('aria-label', t('modal.changeDestination'));
+        this.fullImport.querySelector('span').textContent = t('modal.fullImport');
+        this.fullImport.setAttribute('aria-label', t('modal.fullImport'));
+        for (const [key, tab] of Object.entries(this.tabButtons)) tab.hidden = focused || this.isPostgres() && !['import', 'dataset'].includes(key);
+        this.datasetImport.panel.setAttribute('role', focused ? 'region' : 'tabpanel');
+        this.datasetImport.panel.setAttribute('aria-labelledby', focused ? 'database-title' : 'database-tab-dataset');
+        this.importInspection.panel.setAttribute('role', !focused && this.isPostgres() ? 'tabpanel' : 'region');
+        this.importInspection.panel.setAttribute('aria-labelledby', !focused && this.isPostgres() ? 'database-tab-import' : 'import-inspection-title');
+    }
+
     setBusy() {
         const busy = this.isBusy();
         this.databaseSelect.disabled = busy;
         this.tableSelect.disabled = busy; this.closeButton.disabled = busy;
+        this.changeDestination.disabled = this.fullImport.disabled = busy;
         Object.values(this.tabButtons).forEach(tab => {tab.disabled = busy;});
     }
 
     pollFrame() {
         clearInterval(this.poll);
-        if (this.dialog.open && !this.isPostgres() && this.tab !== 'dataset')
+        if (this.dialog.open && !this.workflow && !this.isPostgres() && this.tab !== 'dataset')
             this.poll = setInterval(() => { this.syncLocation(); this.watchNativeImport(); }, 800);
     }
 
@@ -214,10 +260,20 @@ export class DatabaseModal {
         tables.forEach(table => this.tableSelect.append(el('option', {value: table.name}, table.name + (table.type === 'view' ? ' · view' : ''))));
         this.table = tables.some(table => table.name === selected) ? selected : '';
         this.tableSelect.value = this.table;
+        this.updateWorkflow();
     }
 
-    open(table = '', tab = 'browse') {
+    open(table = '', tab = 'browse', {workflow} = {}) {
         if (this.isBusy()) return;
+        this.workflow = ['import-database', 'import-table'].includes(workflow) ? workflow : null;
+        if (this.workflow) {
+            tab = this.workflow === 'import-table' ? 'dataset' : 'import';
+            table = '';
+            clearInterval(this.poll); clearTimeout(this.loadTimeout);
+            this.currentUrl = this.lastObserved = '';
+            this.fallbackVisible = false;
+            if (this.frame.getAttribute('src') !== 'about:blank') this.frame.src = 'about:blank';
+        }
         const available = table && this.tables.some(item => item.name === table);
         this.table = available ? table : '';
         this.tab = this.isPostgres() ? (tab === 'dataset' ? 'dataset' : 'import') : routes[tab] ? tab : 'browse';
@@ -229,15 +285,16 @@ export class DatabaseModal {
         if (this.panel.hidden || this.tab === 'dataset' || this.tab === 'import' || nextUrl !== this.currentUrl || this.frame.getAttribute('src') === 'about:blank') this.navigate();
         else this.updateTabs();
         this.pollFrame();
-        this.tabButtons[this.tab].focus();
+        if (this.workflow) (this.tab === 'dataset' ? this.datasetImport.panel.querySelector('input[type="file"]') : this.importInspection.ownFile)?.focus();
+        else this.tabButtons[this.tab].focus();
     }
 
     navigate() {
         if (this.isBusy()) return;
         clearInterval(this.poll);
         this.datasetImport.panel.hidden = this.tab !== 'dataset';
-        this.panel.hidden = this.isPostgres() || this.tab === 'dataset';
-        this.external.hidden = this.isPostgres() || this.tab === 'dataset';
+        this.panel.hidden = Boolean(this.workflow) || this.isPostgres() || this.tab === 'dataset';
+        this.external.hidden = Boolean(this.workflow) || this.isPostgres() || this.tab === 'dataset';
         this.tableSelect.hidden = this.isPostgres() || this.tab === 'dataset';
         if (this.tab === 'dataset') {
             this.importInspection.close(); this.updateTabs(); clearTimeout(this.loadTimeout);
@@ -247,7 +304,7 @@ export class DatabaseModal {
         if (this.tab === 'import') this.importInspection.open(this.database);
         else this.importInspection.close();
         this.updateTabs();
-        if (this.isPostgres()) {
+        if (this.isPostgres() || this.workflow) {
             clearTimeout(this.loadTimeout);
             this.frameMessage.hidden = true;
             this.status.textContent = this.name.textContent + ' · ' + t('modal.import');
@@ -276,10 +333,11 @@ export class DatabaseModal {
         }
         this.panel.setAttribute('aria-labelledby', 'database-tab-' + this.tab);
         this.dialog.querySelector('[data-i18n="modal.description"]').textContent = t(this.descriptionKey());
+        this.updateWorkflow();
     }
 
     tabKeydown(event, current) {
-        if (this.isBusy()) return;
+        if (this.workflow || this.isBusy()) return;
         const keys = Object.keys(this.tabButtons).filter(key => !this.tabButtons[key].hidden);
         let next = keys.indexOf(current);
         if (event.key === 'ArrowRight') next = (next + 1) % keys.length;
@@ -294,7 +352,7 @@ export class DatabaseModal {
     }
 
     checkLoaded() {
-        if (this.isPostgres() || this.tab === 'dataset') return;
+        if (this.workflow || this.isPostgres() || this.tab === 'dataset') return;
         try {
             const document = this.frame.contentDocument;
             if (document && this.frame.contentWindow.location.pathname.startsWith('/phpmyadmin/') && document.body) {
@@ -314,7 +372,7 @@ export class DatabaseModal {
 
     /** phpMyAdmin may finish its import through AJAX without reloading the iframe. */
     watchNativeImport() {
-        if (this.isPostgres() || !this.dialog.open || this.tab !== 'import' || !this.importInspection.database) return;
+        if (this.workflow || this.isPostgres() || !this.dialog.open || this.tab !== 'import' || !this.importInspection.database) return;
         try {
             const document = this.frame.contentDocument;
             if (!document?.body || !this.frame.contentWindow.location.pathname.startsWith('/phpmyadmin/')) return;
@@ -354,7 +412,7 @@ export class DatabaseModal {
     }
 
     showFallback(definiteError = false) {
-        if (this.isPostgres() || !this.dialog.open) return;
+        if (this.workflow || this.isPostgres() || !this.dialog.open) return;
         if (definiteError && this.importInspection.submitted) {
             this.importUncertain = true;
             this.importInspection.finishedFile();
@@ -371,7 +429,7 @@ export class DatabaseModal {
 
     syncLocation() {
         if (this.isBusy()) return;
-        if (this.isPostgres() || this.tab === 'dataset') return;
+        if (this.workflow || this.isPostgres() || this.tab === 'dataset') return;
         if (!this.dialog.open) return;
         try {
             const location = new URL(this.frame.contentWindow.location.href);

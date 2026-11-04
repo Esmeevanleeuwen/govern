@@ -51,8 +51,11 @@ try {
         Http::get();
     }
     $scope = new ConnectionScope($baseConfig);
-    if ($action === 'databases') Http::json(['databases' => $scope->databases(), 'default_database' => $baseConfig['name'],
-        'can_create' => (new DatabaseProvisioner())->isAvailable()]);
+    if ($action === 'databases') {
+        $canCreateMariaDb = (new DatabaseProvisioner())->isAvailable();
+        Http::json(['databases' => $scope->databases(), 'default_database' => $baseConfig['name'],
+            'can_create' => $canCreateMariaDb, 'engines' => $scope->engines($canCreateMariaDb)]);
+    }
     $config = $scope->selectRequest(Http::text($_GET, 'database', false),
         array_key_exists('connection', $_GET) ? Http::text($_GET, 'connection', false) : null,
         array_key_exists('schema', $_GET) ? Http::text($_GET, 'schema', false) : null);
@@ -120,8 +123,10 @@ try {
         Http::json($action === 'ai-context' ? $ai->previewContext($input) : $ai->chat($input));
     }
     if ($action === 'bootstrap') {
+        $canCreateMariaDb = (new DatabaseProvisioner())->isAvailable();
         $data = ['csrf' => $csrf, 'databases' => $scope->databases(), 'default_database' => $baseConfig['name'],
-            'can_create_database' => $config['engine'] === 'mariadb' && (new DatabaseProvisioner())->isAvailable(),
+            'can_create_database' => $config['engine'] === 'mariadb' && $canCreateMariaDb,
+            'engines' => $scope->engines($canCreateMariaDb),
             'scope_key' => $config['scope_key'], 'capabilities' => ConnectionScope::capabilities($config),
             'database' => ['name' => $config['name'], 'connection' => $config['connection'], 'engine' => $config['engine'],
                 'schema' => $config['schema'] ?? $config['name'], 'scope_key' => $config['scope_key'],

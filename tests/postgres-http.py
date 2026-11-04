@@ -62,6 +62,20 @@ def main():
     check(status == 200 and result["ok"], "Authenticated PostgreSQL bootstrap succeeds")
     data = result["data"]
     csrf = data["csrf"]
+    engines = {item["id"]: item for item in data["engines"]}
+    check(set(engines) == {"mariadb", "postgres"}, "Bootstrap lists both engines independently of the selected scope")
+    check(engines["mariadb"]["configured"] and engines["mariadb"]["capabilities"]["create_database"]
+          and data["can_create_database"] is False,
+          "A PostgreSQL workspace retains global MariaDB creation metadata while its scoped flag stays false")
+    check(engines["postgres"]["configured"] and engines["postgres"]["capabilities"] == {
+          "create_database": False, "import": True, "query": True, "phpmyadmin": False},
+          "PostgreSQL engine tools reflect its SQL credentials without promising database creation or phpMyAdmin")
+    check(all(set(item) == {"id", "label", "configured", "capabilities"} for item in engines.values()),
+          "Engine descriptors contain no host or credential fields")
+    status, result = request("databases")
+    check(status == 200 and result["data"]["engines"] == data["engines"]
+          and result["data"]["can_create"] == engines["mariadb"]["capabilities"]["create_database"],
+          "The unscoped database listing uses the same engine metadata as PostgreSQL bootstrap")
     packed = {"database": "postgres:govern_pg:public", "connection": None, "schema": None}
     status, result = request("bootstrap", parameters=packed)
     check(status == 200 and result["data"]["scope_key"] == "postgres:govern_pg:public",

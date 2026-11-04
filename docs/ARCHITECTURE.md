@@ -259,7 +259,7 @@ De onderdelen hebben een kleine, duidelijke taak:
 | `LocalCodeSearch.php` | Begrensde lokale zoekindex van alleen `app/` en `docs/`, met bronpassages en regelnummers |
 | `AiService.php` en `OllamaClient.php` | Gevalideerde vragen, lokaal providerverzoek, gecontroleerde projectcitaten en antwoord zonder uitvoering |
 | `database-modal.js` | Het venster rondom de echte phpMyAdmin |
-| `database-manager.js` | Gedeelde importkeuze voor tabelbestanden of SQL, bestaande bestemming of expliciete databaseaanmaak |
+| `database-manager.js` | Taak, engine en bestemming kiezen voor databaseaanmaak, SQL-import of tabelimport |
 | `DatabaseProvisioner.php` | Begrensde client voor de privéservice voor databaseaanmaak |
 | `docker/database-manager/server.php` en `DatabaseManager.php` | Privé Unix-socketserver en uitsluitend databaseaanmaak/rechten per expliciete naam |
 | `row-editor.js` | Rijformulier met vaste databasecontext, exacte waarden en conflictfeedback |
@@ -298,16 +298,31 @@ De gedeelde phpMyAdmin-opslag blijft in de oorspronkelijke `DB_NAME`-database.
 
 ## Database toevoegen en bestanden importeren
 
-De plus naast de databasekiezer, Database → Tools → Importeren en de actie in
-Gereedschap openen dezelfde dialoog. Eerst kiest de gebruiker tabelbestanden
-(standaard) of SQL; daarna een bestaande bestemming of een nieuwe database.
-Een bestaande database kiezen gebruikt de normale wisselstroom. Een naam voorbereiden gebruikt
-`POST prepare-database` met CSRF en de expliciete huidige databasescope. Het
-antwoord bevat de voorbereide naam, of die nieuw was, en de opnieuw uitgelezen
-databasekeuzes. Pas na een geslaagd antwoord verandert de browser zijn selectie.
-Concepten van de vorige database blijven bewaard. Aanmaken en importeren opent
-na die wissel de gekozen bestaande `dataset`- of `import`-tab; alleen aanmaken
-start geen import. De API-contracten veranderen hierdoor niet.
+De plus naast de databasekiezer en Database → Tools → Importeren openen dezelfde
+taakgerichte dialoog: Database aanmaken, Database importeren of Tabel importeren,
+gevolgd door engine en bestemming. `ConnectionScope::engines` levert voor
+`GET databases` en bootstrap dezelfde globale enginebeschrijving, onafhankelijk
+van de actuele werkplek. De oude scoped capabilityvelden blijven bestaan.
+Een ontbrekende PostgreSQL-configuratie en ontbrekende SQL-rechten blijven
+expliciet; deze weergave breidt PostgreSQL-databaseaanmaak niet uit.
+
+Een bestaande bestemming kiezen gebruikt de normale wisselstroom. MariaDB-
+aanmaak gebruikt `POST prepare-database` met het bestaande exacte `{name}`-
+contract, CSRF en `default_database` als expliciete MariaDB-verzoekscope. Daardoor
+kan ook een gebruiker die PostgreSQL bekijkt bewust MariaDB aanmaken, zonder
+de huidige werkplek vooraf te wisselen. Het antwoord bevat de voorbereide naam,
+of die nieuw was, en de opnieuw uitgelezen databasekeuzes. Pas na succes verandert
+de selectie. Concepten van de vorige database blijven bewaard.
+
+Database aanmaken opent daarna de echte phpMyAdmin op Structure. SQL-import in
+een nieuwe of bestaande MariaDB-database, of een ingesteld PostgreSQL-schema,
+opent de bestaande native importcontrole in een taakgericht venster. Tabelimport
+gebruikt een bestaande bestemming en de bestaande `DatasetImportPanel`.
+`DatabaseModal.workflow` bewaart of het om `import-database` of `import-table`
+gaat; Bestemming wijzigen geeft die taak, engine en scope terug aan de wizard.
+Een scopewissel wist de eerdere voorcontrole en bevestiging. De volledige
+officiële MariaDB-bediening blijft apart bereikbaar via Databasegereedschap;
+PostgreSQL gebruikt daar de bestaande Queries-route.
 
 De webapp praat via een lokale Unix-socket met de afzonderlijke Compose-service
 `database-manager`. Alleen deze service en de bestaande opstart-/databaseprocessen
@@ -337,9 +352,10 @@ andere geselecteerde databases. SQL kan daarom met `USE` of gekwalificeerde
 namen andere toegestane databases raken. De UI waarschuwt daarvoor en voert
 geen SQL uit zonder afzonderlijke bevestiging. Er is geen algemene undo.
 
-Voor grotere of complexe SQL-bestanden gebruikt Govern de echte phpMyAdmin. De extra snelkeuze
-**Import** opent de officiële database- of tabelimport met dezelfde context als
-de overige tabs. De gebruiker kiest zijn SQL-bestand en start de import daar;
+Voor grotere of complexe MariaDB-SQL-bestanden opent een expliciete actie de
+echte phpMyAdmin-import vanuit het taakgerichte venster. De snelkeuze **Import**
+in de volledige databasegereedschappen blijft dezelfde officiële database- of
+tabelimport openen. De gebruiker kiest zijn SQL-bestand en start de import daar;
 Govern leest of herschrijft het bestand niet met een eigen parser. Bij sluiten
 worden catalogus, tabellen en relaties opnieuw uitgelezen. De ingestelde
 uploadgrens is 128 MB en de uitvoeringstijd is 300 seconden. De SQL kan bestaande
@@ -589,7 +605,7 @@ beschikbaar.
 `workspace-tools.js` verplaatst de bestaande werkplekbediening naar één
 gegroepeerde popover. IDs, handlers, rechten, disabled/hidden-toestand en
 actieve hulpmiddelen blijven bij de oorspronkelijke DOM-elementen. De
-databasekiezer en primaire phpMyAdmin-knop blijven in de bovenbalk. De
+databasekiezer, aangrenzende plus en Databasegereedschap blijven in de bovenbalk. De
 non-modale popover gebruikt native focus en buitenklik, met een fallback voor
 browsers zonder Popover API. Sluiten vóór een handeling geeft nieuwe dialogen
 een zichtbare opener; de selectieaanwijzer gebruikt dezelfde Tools-knop als
@@ -828,8 +844,8 @@ Werk de ontwerpdocumentatie en het API-contract in dezelfde wijziging bij.
 ## Gedeelde import voor tabelbestanden
 
 De taak begint via de plus naast de databasekiezer of Database → Tools →
-Importeren: tabelbestanden kiezen, een bestaande of nieuwe database bepalen,
-en daarna de genummerde stappen bestand kiezen, voorbeeld en doeltabel
+Importeren: Tabel importeren kiezen, daarna de engine en een bestaande bestemming,
+en vervolgens de genummerde stappen bestand kiezen, voorbeeld en doeltabel
 controleren, en expliciet bevestigen. Na import opent Tabel openen de nieuwe
 of aangevulde tabel in Records, na verversen van de live catalogus.
 `DatasetImportPanel` bewaart tijdelijke bestands- en formulierconcepten per database.

@@ -37,7 +37,9 @@ const shot = async (page, name) => {
 };
 const load = async (page, hash = '#schema') => {
     await page.goto(new URL('/workspace.php' + hash, base).href, {waitUntil: 'networkidle'});
-    await page.locator('#catalog-search').waitFor({state: 'attached'});
+    // The shared catalog appears before the schema response has mounted its
+    // canvas. Wait for the view whose nodes this suite is about to inspect.
+    await page.locator('#schema-viewport').waitFor({state: 'attached'});
 };
 const ensureExplorer = async (current = page) => {
     // A resize can precede the matchMedia change handler that refreshes ARIA.
@@ -107,7 +109,7 @@ try {
     assert.deepEqual(await canvasAppearance('.record-map-scene'), schemaAppearance,
         'Switching between Schema and Explore preserves the canvas material, grid, sizing and toolbar style.');
     await page.locator('[data-database-view="schema"]').click();
-    await page.locator('#catalog-search').waitFor({state: 'attached'});
+    await page.locator('#schema-viewport').waitFor({state: 'attached'});
     const renderedColumns = await page.locator('[data-schema-node]').evaluateAll(nodes =>
         nodes.map(node => ({name: node.dataset.schemaNode,
             columns: [...node.querySelectorAll('[data-schema-column]')].map(column => column.dataset.schemaColumn)})));
@@ -421,7 +423,7 @@ try {
     assert.equal((await page.locator('#page').innerText()).includes('app.schema.'), false, 'No untranslated keys leak.');
     await focusLanguagePage.close();
     await page.reload({waitUntil: 'networkidle'});
-    await page.locator('#catalog-search').waitFor();
+    await page.locator('#schema-viewport').waitFor();
     assert.deepEqual(await position(table.name), moved, 'Positions are restored on reload.');
     await searchFor('no_such_table_or_column_8237');
     assert.equal(await page.locator('.catalog .catalog-item').count(), 0, 'The explorer has a filtered-empty state.');
@@ -429,7 +431,7 @@ try {
     await searchFor('');
     assert.equal(await page.locator('[data-schema-node]').count(), schema.tables.length);
     await searchFor('public_functions');
-    assert.ok(await page.locator('.catalog .catalog-item[title="public_functions"]').count(), 'The shared table search finds exact table names in every view.');
+    assert.ok(await page.locator('.catalog .catalog-item-name').filter({hasText: /^public_functions$/}).count(), 'The shared table search finds exact table names in every view.');
     await searchFor('');
     await selectTable('public_functions');
     const allCount = await page.locator('[data-schema-node]').count();
@@ -457,7 +459,7 @@ try {
     await page.locator('#settings-link').click();
     await page.locator('#preference-theme').selectOption('dark');
     await page.goto(new URL('/workspace.php#schema', base).href);
-    await page.locator('#catalog-search').waitFor();
+    await page.locator('#schema-viewport').waitFor();
     await searchFor('organizations');
     await selectTable('organizations');
     await page.locator('#schema-fit').click();
@@ -472,7 +474,7 @@ try {
     await page.locator('#settings-link').click();
     await page.locator('#preference-reduceTransparency').check();
     await page.goto(new URL('/workspace.php#schema', base).href);
-    await page.locator('#catalog-search').waitFor();
+    await page.locator('#schema-viewport').waitFor();
     assert.equal(await page.locator('.schema-node, .schema-node-header, #schema-viewport').evaluateAll(nodes =>
         nodes.every(element => getComputedStyle(element).backdropFilter === 'none')), true,
         'Schema materials support reduced transparency.');
@@ -616,7 +618,7 @@ try {
     await fixturePage.locator('#workspace-context-content .notice-error button').waitFor();
     fixtureMode = 'normal';
     await fixturePage.locator('#page .notice-error button').click();
-    await fixturePage.locator('#catalog-search').waitFor();
+    await fixturePage.locator('#schema-viewport').waitFor();
     fixtureMode = 'empty';
     await fixturePage.reload({waitUntil: 'networkidle'});
     await fixturePage.locator('#page .empty-state').waitFor();
@@ -632,7 +634,7 @@ try {
     });
     fixtureMode = 'normal';
     await fixturePage.reload({waitUntil: 'networkidle'});
-    await fixturePage.locator('#catalog-search').waitFor();
+    await fixturePage.locator('#schema-viewport').waitFor();
     await selectTable('parent', fixturePage);
     const fixtureHeader = fixturePage.locator('[data-schema-header="parent"]');
     const storageBefore = await fixturePage.locator('[data-schema-node="parent"]').evaluate(element => element.style.left);

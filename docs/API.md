@@ -102,8 +102,11 @@ the same check; official phpMyAdmin remains the actual application.
 ## Eerste eigen SQL-import
 
 De plus naast de databasekiezer en Database → Tools → Importeren openen dezelfde
-keuze voor tabelbestanden of SQL, gevolgd door een bestaande of nieuwe bestemming.
-Deze navigatie gebruikt de bestaande routes; de API-contracten veranderen niet.
+keuze voor Database aanmaken, Database importeren of Tabel importeren, gevolgd
+door engine en bestemming. De import- en querycontracten blijven gelijk;
+bootstrap en de databaselijst krijgen de aanvullende globale `engines`-metadata
+die hieronder is beschreven. De taakgerichte importmodal gebruikt dezelfde
+preview/uitvoering en biedt een route om de bestemming te wijzigen.
 Database → Queries gebruikt dezelfde query-API als de behouden route `#onderzoeken`.
 De gedeelde tabellenlijst, zoekopdracht en geselecteerde tabel zijn browsertoestand.
 
@@ -298,7 +301,7 @@ and POST alike. The request body does not change the target database. Omitting
 the parameter retains `DB_NAME` for older clients and links. There is no mutable
 server-session selection; two browser tabs can use different databases safely.
 
-`GET databases` returns `{databases:[{name,available,...}],default_database,can_create}` without
+`GET databases` returns `{databases:[{name,available,...}],default_database,can_create,engines}` without
 requiring a selected database connection. Available names are the intersection
 of the writer's and reader's live `SHOW DATABASES` results, excluding
 `information_schema`, `mysql`, `performance_schema` and `sys`. `DB_NAME` and
@@ -313,6 +316,25 @@ context exports. It remembers the choice per tab in `govern.database.v1`
 session storage, and keeps table/search state, SQL drafts, results and visual
 builder state separately per database in memory. Changing scope cancels old
 reads and ignores late replies. Async mutations capture their original scope.
+
+Both `GET databases` and `GET bootstrap` include the same additive `engines`
+array, independent of the selected workspace:
+
+```json
+{"id":"mariadb","label":"MariaDB","configured":true,
+ "capabilities":{"create_database":true,"import":true,"query":true,"phpmyadmin":true}}
+```
+
+The array always lists `mariadb` and `postgres`. `configured` describes server
+configuration, not live connection health; destination availability remains on
+the individual database/schema entries. MariaDB's `create_database` reflects
+the private broker's availability. PostgreSQL's SQL/import flags require its
+separate SQL credentials; its `create_database` and `phpmyadmin` flags remain
+false. An unconfigured PostgreSQL entry has every capability set to false.
+Descriptors contain no hosts, account names or credentials. Existing
+`can_create` and scoped `can_create_database` fields retain their behavior.
+To create MariaDB data while PostgreSQL is selected, the browser uses the
+returned MariaDB `default_database` as the explicit preparation request scope.
 
 ### Create or prepare a database for import
 
@@ -410,9 +432,9 @@ interface and future feature rules.
 
 ## Endpoints
 
-- GET `databases`: `{databases:[{name,available}],default_database,can_create}`; see database scope above.
+- GET `databases`: `{databases:[{name,available}],default_database,can_create,engines}`; see database scope above.
 - POST `prepare-database` exactly `{name}`: `{database,created,databases:[{name,available}],default_database}`; see database preparation above.
-- GET `bootstrap`: `{csrf, databases:[{name,available}],default_database,can_create_database,database:{name,version,status,available}, stats:{tables,views,rows_estimate}, tables:[{name,type:"table"|"view",comment,rows_estimate,columns}]}`. An unavailable database can also return `warning` and `warning_i18n`; bootstrap still supplies the selected database name and CSRF token for recovery.
+- GET `bootstrap`: `{csrf, databases:[{name,available}],default_database,can_create_database,engines,database:{name,version,status,available}, stats:{tables,views,rows_estimate}, tables:[{name,type:"table"|"view",comment,rows_estimate,columns}]}`. An unavailable database can also return `warning` and `warning_i18n`; bootstrap still supplies the selected database name and CSRF token for recovery.
 - GET `browse&table=...&page=1&page_size=25&q=...`: `{table,columns:[{name,type,nullable,default,generated,primary,comment}],rows:[{column:value}],key_columns:[name],row_keys:[object|null],page,page_size,total,sql,params,truncated,notice,notice_i18n}`. `row_keys` aligns with `rows` and is extracted before preview truncation; key values are exact strings, binary keys hex encoded. Named identifiers verified against live catalog; values bound; max page_size100. App-owned `_govern_` tables excluded from normal list, remain accessible in phpMyAdmin.
 - GET `structure&table=...`: `{table,columns:[...],indexes:[{name,unique,columns:[name]}],foreign_keys:[{name,columns:[name],referenced_table,referenced_columns:[name]}],create_sql}`.
 - GET `schema`: `{database:string,tables:[{name,type:"table"|"view",comment,columns:[...],foreign_keys:[{name,columns:[name],referenced_schema,referenced_table,referenced_columns:[name]}]}]}`. Full live metadata for the schema visualizer, read through the restricted reader with three batched catalog queries. No table rows, DDL, credentials or saved queries; `_govern_` source tables are excluded.
@@ -1125,8 +1147,8 @@ body convention: they accept multipart FormData with a single `file` upload.
 Both require an approved installation account, the ordinary `X-CSRF-Token`,
 same-origin session and explicit URL scope. PostgreSQL additionally carries
 `connection=postgres` and `schema`, or the compatible packed workspace key.
-Both engines reuse the same upload reader. The shared import dialog defaults
-to Table files; after destination selection the UI presents Choose, Review and
+Both engines reuse the same upload reader. Import table chooses its engine and
+an existing database/schema first; the focused dialog then presents Choose, Review and
 Confirm steps. On success, Open table refreshes the catalog and navigates to
 Records without an additional write request.
 They return the usual JSON envelope. The PHP upload limit is

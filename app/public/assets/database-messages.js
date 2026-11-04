@@ -2,7 +2,7 @@ import {registerMessages} from './i18n.js';
 
 registerMessages('app.databases', {
     nl: {
-        manage: 'Database toevoegen of importeren', closeManager: 'Sluiten', managerTitle: 'Jouw databases',
+        manage: 'Database of tabel toevoegen', closeManager: 'Sluiten', managerTitle: 'Jouw databases',
         managerDescription: 'Kies wat je wilt importeren en daarna de bestemming. Je kunt ook alleen een database openen of aanmaken.',
         importType: '1. Wat wil je importeren?', tableFiles: 'Tabelbestanden · Excel, CSV, TXT, JSON, ZIP', sqlFile: 'SQL-bestand · database of tabellen',
         tableFilesHelp: 'Bekijk eerst de kolommen en rijen. Maak daarna een nieuwe tabel of voeg rijen toe aan een passende bestaande tabel.',
@@ -29,7 +29,7 @@ registerMessages('app.databases', {
         openEditor: 'Bewerken in phpMyAdmin',
     },
     en: {
-        manage: 'Add or import database', closeManager: 'Close', managerTitle: 'Your databases',
+        manage: 'Add database or table', closeManager: 'Close', managerTitle: 'Your databases',
         managerDescription: 'Choose what to import, then its destination. You can also just open or create a database.',
         importType: '1. What are you importing?', tableFiles: 'Table files · Excel, CSV, TXT, JSON, ZIP', sqlFile: 'SQL file · database or tables',
         tableFilesHelp: 'Preview the columns and rows, then create a new table or append rows to a compatible existing table.',

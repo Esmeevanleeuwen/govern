@@ -153,6 +153,7 @@ jobs:
           failed_suites=()
           for suite in \
             tests/workspace-consistency-fixture.mjs \
+            tests/focused-import-fixture.mjs \
             tests/record-map-smoke.mjs \
             tests/homepage-auth-smoke.mjs \
             tests/postgres-smoke.mjs \
@@ -165,6 +166,7 @@ jobs:
             tests/companion-smoke.mjs \
             tests/dataset-import-smoke.mjs \
             tests/database-import-smoke.mjs \
+            tests/engine-workflow-smoke.mjs \
             tests/frontend-smoke.mjs \
             tests/query-builder-smoke.mjs \
             tests/ui-settings-smoke.mjs \

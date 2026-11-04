@@ -75,6 +75,26 @@ try {
     $assert(!ConnectionScope::capabilities([...$public, 'password' => ''])['write'], 'Missing writer credentials retain read-only controls without reusing reader credentials.');
     $assert(!ConnectionScope::capabilities([...$public, 'sql_password' => ''])['query'], 'SQL credentials are separate from the reader and row writer.');
     $assert(!ConnectionScope::capabilities([...$public, 'tools_socket' => ''])['snapshots'], 'Missing private helper configuration is explicit.');
+    $engines = $scope->engines(true);
+    $assert($engines === [
+        ['id' => 'mariadb', 'label' => 'MariaDB', 'configured' => true,
+            'capabilities' => ['create_database' => true, 'import' => true, 'query' => true, 'phpmyadmin' => true]],
+        ['id' => 'postgres', 'label' => 'PostgreSQL', 'configured' => true,
+            'capabilities' => ['create_database' => false, 'import' => true, 'query' => true, 'phpmyadmin' => false]],
+    ], 'Engine metadata exposes only fixed labels and configured tools, never connection credentials.');
+    $scope->select('scope_unit_pg', 'postgres', 'archive');
+    $assert($scope->engines(true) === $engines, 'Selecting PostgreSQL does not hide the global MariaDB creation path.');
+    $withoutManager = $scope->engines(false);
+    $assert(!$withoutManager[0]['capabilities']['create_database'] && $withoutManager[0]['capabilities']['import'],
+        'An unavailable creation broker does not hide ordinary MariaDB import.');
+    $assert($withoutManager[1] === $engines[1], 'MariaDB broker availability does not change PostgreSQL tools.');
+    foreach (['sql_user', 'sql_password'] as $missing) {
+        $readOnly = new ConnectionScope([...$base, 'postgres' => [...$base['postgres'], $missing => '']]);
+        $readOnlyEngine = $readOnly->engines(true)[1];
+        $assert($readOnlyEngine['configured'] && !$readOnlyEngine['capabilities']['import']
+            && !$readOnlyEngine['capabilities']['query'] && !$readOnlyEngine['capabilities']['create_database'],
+            'Configured PostgreSQL without ' . $missing . ' advertises no SQL or import tools.');
+    }
     foreach (['bootstrap', 'schema', 'structure', 'browse', 'explore', 'row-editor', 'insert-row', 'update-row', 'delete-row',
         'query', 'snapshots', 'create-snapshot', 'restore-snapshot', 'download-snapshot', 'import-inspection',
         'native-import-preview', 'native-import-execute', 'dataset-preview', 'dataset-import'] as $action) {
@@ -97,6 +117,11 @@ try {
     putenv('PG_ENABLED=0');
     $disabled = Config::fromEnvironment();
     $assert($disabled['postgres'] === null, 'PostgreSQL is absent when disabled.');
+    $disabledEngines = (new ConnectionScope($disabled))->engines(true);
+    $assert($disabledEngines[1] === ['id' => 'postgres', 'label' => 'PostgreSQL', 'configured' => false,
+        'capabilities' => ['create_database' => false, 'import' => false, 'query' => false, 'phpmyadmin' => false]],
+        'An unconfigured PostgreSQL engine remains explainable without advertising unavailable tools.');
+    $assert($disabledEngines[0] === $engines[0], 'Disabling PostgreSQL preserves the MariaDB engine descriptor.');
     $reject(static fn () => (new ConnectionScope($disabled))->select('scope_unit_pg', 'postgres', 'public'), 'database_not_available');
     $reject(static fn () => (new ConnectionScope($disabled))->selectRequest('postgres:scope_unit_pg:public'), 'database_not_available');
     putenv('PG_ENABLED=1');

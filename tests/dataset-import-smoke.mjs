@@ -1,8 +1,10 @@
 /** Screen -> multipart API -> isolated MariaDB -> visible preview/readback. */
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
+import {mkdir} from 'node:fs/promises';
+import path from 'node:path';
 import {authenticatedContext} from './auth-session.mjs';
-import {clickWorkspaceTool} from './workspace-tools.mjs';
+import {openDatabaseTask} from './workspace-tools.mjs';
 const require = createRequire(import.meta.url);
 const {chromium} = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 assert.equal(process.env.GOVERN_UI_WRITE_TESTS, '1', 'Use a disposable local stack.');
@@ -31,13 +33,14 @@ try {
     scope = await page.evaluate(async database => (await (await fetch('/api.php?' + new URLSearchParams({action: 'bootstrap', database}))).json()).data, database);
     assert.equal(scope.database.name, database);
     assert.equal(scope.database.engine, 'mariadb');
-    await clickWorkspaceTool(page, '#manage-databases');
-    const manager = page.locator('#database-manager-dialog');
-    await manager.waitFor({state: 'visible'});
+    const manager = await openDatabaseTask(page, {task: 'table', engine: 'mariadb'});
     assert.equal(await manager.locator('#database-manager-existing').inputValue(), database);
-    assert.equal(await manager.locator('#database-manager-import-type').inputValue(), 'dataset');
-    await manager.locator('#database-manager-import-existing').click();
+    await manager.locator('#database-manager-continue').click();
     await manager.waitFor({state: 'hidden'});
+    await page.locator('#dataset-import-panel').waitFor({state: 'visible'});
+    assert.equal(await page.locator('#database-dialog .database-toolbar').isVisible(), false,
+        'The table import keeps its chosen engine and destination in one file flow.');
+    assert.equal(await page.locator('#database-frame').getAttribute('src'), 'about:blank');
     assert.equal(await page.locator('#database-tab-dataset').getAttribute('aria-selected'), 'true');
     await page.locator('#dataset-file').setInputFiles({name: 'media.csv', mimeType: 'text/csv', buffer: Buffer.from('ID;Title\n001;First\n002;Second\n')});
     let intercepted;
@@ -68,6 +71,15 @@ try {
     assert.match(await page.locator('#dataset-import-panel').innerText(), /2 rijen · 2 kolommen/);
     assert.ok(await page.getByRole('cell', {name: '001', exact: true}).count());
     await page.locator('#dataset-table').fill(name);
+    if (process.env.SCREENSHOTS_DIR) {
+        await mkdir(process.env.SCREENSHOTS_DIR, {recursive: true});
+        await page.screenshot({path: path.join(process.env.SCREENSHOTS_DIR, 'dataset-preview.png'), fullPage: true});
+        const viewport = page.viewportSize();
+        await page.setViewportSize({width: 320, height: 900});
+        assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+        await page.screenshot({path: path.join(process.env.SCREENSHOTS_DIR, 'dataset-preview-mobile.png'), fullPage: true});
+        await page.setViewportSize(viewport);
+    }
     await page.evaluate(async () => (await import('/assets/i18n.js')).setLanguage('en'));
     assert.equal(await page.locator('#dataset-table').inputValue(), name);
     await page.locator('#dataset-confirmation').fill('a_different_database');
@@ -86,7 +98,8 @@ try {
     }, scope.database.name);
     assert.equal(csrfStatus, 403);
     await page.setViewportSize({width: 320, height: 750});
-    assert.equal(await page.locator('#database-tab-dataset').isVisible(), true);
+    assert.equal(await page.locator('#dataset-import-panel').isVisible(), true,
+        'The focused table flow remains available at mobile width.');
     await page.locator('#dataset-open-table').click();
     await page.locator('#database-dialog').waitFor({state: 'hidden'});
     await page.locator('.table-heading h2').filter({hasText: name}).waitFor();

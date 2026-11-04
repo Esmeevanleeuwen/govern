@@ -155,10 +155,12 @@ database en schema apart. Recordgegevens gaan niet naar browseropslag. Zie
 
 ## Een andere database kiezen of toevoegen
 
-De compacte bovenbalk houdt de databasekiezer en **Database openen / Open
-database** zichtbaar. Onder **Gereedschap / Tools** staan de selectieaanwijzer,
-het tweede scherm, de AI-assistent, verversen, context exporteren, databases
-toevoegen/importeren, taal en Account. Klik buiten het menu of druk op Escape
+De compacte bovenbalk houdt de databasekiezer, de **plus** en
+**Databasegereedschap / Database tools** zichtbaar. De plus begint een nieuwe
+aanmaak of import. Databasegereedschap opent de officiële phpMyAdmin voor
+MariaDB; bij PostgreSQL opent de knop de SQL-werkplek. Onder **Gereedschap / Tools**
+staan de selectieaanwijzer, het tweede scherm, de AI-assistent, verversen,
+context exporteren, taal en Account. Klik buiten het menu of druk op Escape
 om het te sluiten. De verbindingsstatus staat als stip bij de databasekiezer;
 de volledige status blijft beschikbaar via de tooltip en schermlezer.
 
@@ -167,29 +169,35 @@ context-export en herstelpunten volgen die keuze. Je onderzoeksconcept en
 tabelkeuze blijven tijdens deze browsersessie per database behouden; de keuze
 geldt alleen voor dit browsertabblad.
 
-Gebruik de **plus naast de databasekiezer**, **Database → Tools → Importeren**
-of **Gereedschap → Database toevoegen of importeren**. Deze openen dezelfde
-keuze; je hoeft `.env` niet aan te passen:
+Gebruik de **plus naast de databasekiezer** of **Database → Tools → Importeren**.
+Kies eerst de handeling en daarna de engine, **MariaDB** of **PostgreSQL**:
 
-1. Kies **Tabelbestanden** (standaard: Excel, CSV, TXT, JSON of ZIP) of **SQL-bestand**.
-2. Kies een bestaande database als bestemming, of vul een nieuwe naam in,
-   bijvoorbeeld `onderzoek`, en kies **Aanmaken en importeren**. **Alleen aanmaken**
-   maakt een lege database zonder een import te starten.
-3. Bij tabelbestanden volg je **Bestand kiezen**, **Voorbeeld en doeltabel controleren**
-   en **Import bevestigen**. Kies een nieuwe tabel of een passende bestaande tabel.
-   Na import opent **Tabel openen** de geïmporteerde tabel in Records.
-4. Kies bij SQL voor een UTF-8 `.sql`-bestand tot 256 KiB **Controleer bestand**,
-   lees de risico's, typ de exacte databasenaam en kies **Import uitvoeren**. Bekijk
-   daarna de nacontrole. Voor grotere MariaDB-dumps blijft de officiële
-   phpMyAdmin-import eronder beschikbaar.
+- **Database aanmaken:** kies MariaDB, vul een naam in en kies **Aanmaken en
+  ontwerpen**. Govern opent de nieuwe database direct op **Structure** in de
+  officiële phpMyAdmin. Daar maak je zelf tabellen en kolommen. Dit werkt ook
+  wanneer je daarvoor een PostgreSQL-werkplek gebruikte.
+- **Database importeren:** kies de engine en een bestemming. Bij MariaDB kun je
+  een nieuwe database aanmaken of een bestaande kiezen; bij PostgreSQL kies je
+  een ingesteld database/schema. Kies daarna je SQL-bestand, bekijk de
+  voorcontrole en bevestig de exacte bestemming. Grotere MariaDB-bestanden
+  kunnen via de expliciete knop naar de officiële phpMyAdmin-import.
+- **Tabel importeren:** kies de engine en een bestaande doeldatabase of een
+  ingesteld PostgreSQL-schema. Kies vervolgens Excel, CSV, TSV, TXT, JSON of ZIP,
+  bekijk het voorbeeld en kies een nieuwe tabel of passende bestaande tabel.
+  Bevestig de getoonde bestemming. Na import opent **Tabel openen** de tabel in
+  Records. Maak een lege MariaDB-database desgewenst eerst via Database aanmaken.
 
-De databasekiezer in het importvenster groepeert MariaDB en PostgreSQL. Je kunt
-daar tussen bestaande ingeschakelde databases en schema's wisselen. Het gekozen
-doel staat bij de import; de bevestiging moet exact dat doel bevatten. Een naam
-typen in het bevestigingsveld maakt of kiest geen database. Kies een ander doel
-vóór de bestandscontrole: wisselen wist de eerdere voorcontrole en bevestiging.
-Tijdens een lopende import blijft de keuze vaststaan. PostgreSQL gebruikt de
-eigen importweergave; phpMyAdmin hoort bij MariaDB.
+PostgreSQL toont of de verbinding is ingeschakeld. Govern maakt via deze
+weergave geen nieuwe PostgreSQL-databases aan: het gebruikt de ingestelde
+`PG_DATABASE` en `PG_SCHEMAS`. **SQL-werkplek openen** biedt daar een route om zelf
+tabellen te maken. Een SQL-bestand wordt niet naar een andere engine omgezet.
+
+Het importvenster houdt één taak en bestemming zichtbaar. **Bestemming wijzigen**
+gaat terug naar de keuze met dezelfde handeling en engine. Wisselen van bestemming
+maakt een eerdere voorcontrole en bevestiging ongeldig. Een naam typen in het
+bevestigingsveld maakt of kiest geen database. Tijdens een lopende import blijft
+de keuze vaststaan. PostgreSQL gebruikt de eigen importweergave; phpMyAdmin
+hoort bij MariaDB.
 
 De tab **Import** toont vóór het uploaden hoeveel tabellen, views, relaties en records al
 bestaan. Na een SQL-import vergelijkt Govern de actuele structuur en
@@ -200,9 +208,8 @@ volledige importresultaat blijft in phpMyAdmin. Niet alle grote tabellen kunnen
 exact worden geteld: zulke aantallen staan uitdrukkelijk als niet gecontroleerd.
 Dit is geen garantie dat een import veilig of volledig is.
 
-In hetzelfde venster kun je een bestaande database kiezen of de import voor de
-geselecteerde database openen. Een bestaande naam toevoegen vervangt geen
-gegevens; de expliciete import kan dat wel doen, afhankelijk van het SQL-bestand.
+Een bestaande naam toevoegen vervangt geen gegevens; de expliciete import kan
+dat wel doen, afhankelijk van het SQL-bestand.
 De eigen Govern-import maakt vooraf een herstelpunt als er al tabellen
 of views bestaan (ook interne Govern-tabellen). Het herstelpunt is geen algemene undo en de controle garandeert
 geen inhoudelijke volledigheid. Tijdens de eigen import worden overige
@@ -556,7 +563,7 @@ houdt de loopbackbinding en bestaande databasegrenzen aan.
 ## Excel, CSV, TXT en JSON rechtstreeks importeren
 
 Open de **plus naast de databasekiezer** of **Database → Tools → Importeren**.
-Kies **Tabelbestanden** en een bestaande of nieuwe doeldatabase. Kies een `.xlsx`,
+Kies **Tabel importeren**, de engine en een bestaande bestemming. Kies een `.xlsx`,
 `.csv`, `.tsv`, `.txt`, `.json` of een ZIP met zulke bestanden en klik
 **Importvoorbeeld bekijken**. Controleer het werkblad, de kolommen en de nieuwe
 of bestaande doeltabel. Typ de getoonde bestemming exact en klik **Importeren**.

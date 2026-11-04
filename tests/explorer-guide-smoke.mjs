@@ -19,7 +19,13 @@ try {
     await ensureSources();
     const rootId = await selectSeed('Northbridge Council');
     assert.equal(rootId, start.focus.id);
-    assert.equal(await page.locator('#open-database').isDisabled(), true);
+    assert.equal(await page.locator('#open-database').isEnabled(), true);
+    await page.locator('#open-database').click();
+    await page.locator('#sql-editor').waitFor();
+    assert.equal(await page.locator('#database-select').inputValue(), publicKey, 'PostgreSQL database tools keep their selected scope.');
+    assert.equal(await page.locator('#database-dialog').isVisible(), false, 'PostgreSQL SQL uses the shared workspace without phpMyAdmin.');
+    await page.locator('[data-database-view="verkennen"]').click();
+    await inspector.locator('h3').filter({hasText: 'Northbridge Council'}).waitFor();
     assert.equal(await page.locator('#add-row, [data-row-action]').count(), 0);
     assert.equal(await page.locator('.record-map textarea').count(), 0, 'Guided exploration requires no SQL input.');
     await openQuestions();

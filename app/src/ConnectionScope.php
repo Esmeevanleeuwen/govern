@@ -59,6 +59,21 @@ final class ConnectionScope
         return $this->known = $entries;
     }
 
+    /** Global configured tools, independent of the workspace currently selected. */
+    public function engines(bool $canCreateMariaDb): array
+    {
+        $postgres = $this->base['postgres'] ?? null;
+        $postgresCapabilities = $postgres === null ? null : self::capabilities($postgres);
+        return [
+            ['id' => 'mariadb', 'label' => 'MariaDB', 'configured' => true,
+                'capabilities' => ['create_database' => $canCreateMariaDb, 'import' => true,
+                    'query' => true, 'phpmyadmin' => true]],
+            ['id' => 'postgres', 'label' => 'PostgreSQL', 'configured' => $postgres !== null,
+                'capabilities' => ['create_database' => false, 'import' => $postgresCapabilities['import'] ?? false,
+                    'query' => $postgresCapabilities['query'] ?? false, 'phpmyadmin' => false]],
+        ];
+    }
+
     public function select(string $name, string $connection = 'mariadb', string $schema = ''): array
     {
         if ($connection === 'mariadb') {

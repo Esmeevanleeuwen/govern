@@ -179,27 +179,38 @@ const databaseModal = new DatabaseModal(({imported} = {}) => {
         }
         if (!databaseModal.dialog.open && document.activeElement === document.body && !openDatabase.disabled) openDatabase.focus();
     }).catch(error => toast(errorText(error), 'error'));
-}, () => syncDatabasePicker());
+}, () => syncDatabasePicker(), context => {
+    databaseManager.open({task: context.workflow === 'import-table' ? 'table' : 'database',
+        engine: context.database.startsWith('postgres:') ? 'postgres' : 'mariadb', database: context.database});
+    refreshBootstrap(false, {invalidateRecordMap: true, allRecordMaps: true});
+});
 const databaseManager = createDatabaseManager({getDatabase, getDatabases: () => knownDatabases,
-    canCreate: () => state.bootstrap?.can_create_database === true,
+    getEngines: () => state.bootstrap?.engines || [],
+    getDefaultDatabase: () => state.bootstrap?.default_database || '',
     isBusy: () => databaseOperationsBusy() || state.switchingDatabase,
     onBusy: busy => { state.databaseManagerOpen = busy; syncDatabasePicker(); },
-    onSelect: async database => {
+    onSelect: async (database, {view} = {}) => {
         if (database !== getDatabase()) await switchDatabase(database);
         else await refreshBootstrap(false);
+        if (view && getDatabase() === database && !state.connectionError) go(view);
     },
-    onImport: async (database, {tab = 'dataset'} = {}) => {
+    onImport: async (database, {tab = 'dataset', workflow} = {}) => {
         if (database !== getDatabase()) await switchDatabase(database);
         else await refreshBootstrap(false);
-        if (getDatabase() === database && !state.connectionError && supports('import')) databaseModal.open('', tab);
-        else if (getDatabase() === database && !supports('import')) toast(t('app.postgres.unavailable'), 'error');
+        if (getDatabase() !== database || state.connectionError) throw state.connectionError || new Error(t('app.databases.managerResponseInvalid'));
+        if (!supports('import')) throw new Error(t('app.postgres.unavailable'));
+        databaseModal.open('', tab, {workflow});
     },
-    onPrepared: async (data, {importSql, importTab = 'dataset'}) => {
+    onPrepared: async (data, {importSql, importTab = 'dataset', workflow, design}) => {
         knownDatabases = data.databases;
         if (data.database !== getDatabase()) await switchDatabase(data.database);
         else await refreshBootstrap(false);
         toast(t('app.databases.' + (data.created ? 'createdDatabase' : 'enabledDatabase'), {name: data.database}));
-        if (importSql && getDatabase() === data.database && !state.connectionError) databaseModal.open('', importTab);
+        if (getDatabase() !== data.database || state.connectionError) throw state.connectionError || new Error(t('app.databases.managerResponseInvalid'));
+        if (design) {
+            go('gegevens');
+            databaseModal.open('', 'structure');
+        } else if (importSql) databaseModal.open('', importTab, {workflow});
     },
 });
 manageDatabases.append(icon('plus'));
@@ -219,7 +230,10 @@ document.getElementById('database-picker-icon').append(icon('database'));
 databaseSelect.addEventListener('change', () => switchDatabase(databaseSelect.value));
 document.getElementById('language-select').addEventListener('change', event => changePreference({language: event.target.value}));
 openDatabase.prepend(icon('database'));
-openDatabase.addEventListener('click', () => { if (supports('phpmyadmin')) databaseModal.open(state.table, 'browse'); });
+openDatabase.addEventListener('click', () => {
+    if (supports('phpmyadmin')) databaseModal.open(state.table, 'browse');
+    else if (supports('query')) go('onderzoeken');
+});
 refreshButton.append(icon('refresh'));
 refreshButton.addEventListener('click', () => refreshBootstrap(true));
 document.getElementById('context-export').prepend(icon('download'));
@@ -350,6 +364,17 @@ function syncDatabasePicker() {
     aiToggle.hidden = !supports('ai');
     const selectionAi = document.getElementById('selection-ask-ai');
     if (selectionAi) { selectionAi.hidden = !supports('ai'); selectionAi.disabled = !supports('ai'); }
+    syncDatabaseTool();
+}
+
+function syncDatabaseTool() {
+    const native = supports('phpmyadmin');
+    const label = native ? 'app.shell.openDatabase' : 'app.shell.sqlWorkspace';
+    const caption = openDatabase.querySelector('span');
+    caption.dataset.i18n = label; caption.textContent = t(label);
+    openDatabase.setAttribute('aria-label', t(label)); openDatabase.title = t(label);
+    openDatabase.disabled = !state.bootstrap || state.restoring || state.switchingDatabase
+        || (!native && !supports('query')) || native && databaseModal.database !== getDatabase();
 }
 
 function rememberDatabase() {
@@ -467,8 +492,7 @@ function localizeShell() {
     document.querySelectorAll('[data-i18n-aria]').forEach(node => node.setAttribute('aria-label', t(node.dataset.i18nAria)));
     document.querySelectorAll('[data-i18n-title]').forEach(node => node.title = t(node.dataset.i18nTitle));
     document.getElementById('language-select').value = getLanguage();
-    openDatabase.setAttribute('aria-label', t('app.shell.openDatabase'));
-    openDatabase.title = t('app.shell.openDatabase');
+    syncDatabaseTool();
     if (state.connectionError) document.getElementById('connection-state').replaceChildren(el('span', {class: 'status-dot offline'}), el('span', {}, t('app.core.connection.offline')));
     else if (state.bootstrap) document.getElementById('connection-state').replaceChildren(el('span', {class: 'status-dot ' + (state.bootstrap.database.status === 'unavailable' ? 'offline' : '')}), el('span', {}, t(state.bootstrap.database.status === 'unavailable' ? 'app.core.connection.offline' : 'app.navigation.ready')));
     const current = routes[route().name];
@@ -616,7 +640,7 @@ function renderConnectionNotice() {
 }
 
 function syncRestoreControls() {
-    openDatabase.disabled = !supports('phpmyadmin') || state.restoring || state.switchingDatabase || !state.bootstrap || databaseModal.database !== getDatabase();
+    syncDatabaseTool();
     document.getElementById('language-select').disabled = state.restoring;
     menuToggle.disabled = state.restoring;
     refreshButton.disabled = state.restoring;
@@ -679,7 +703,7 @@ async function refreshBootstrap(notify = false, {preserveFocus = false, focusFal
         state.structureData.clear();
         setCsrf(data.csrf);
         if (!databaseModal.dialog.open && (supports('phpmyadmin') || supports('import'))) databaseModal.configure(selectedScope, data.tables || [], knownDatabases);
-        openDatabase.disabled = !supports('phpmyadmin') || state.restoring;
+        syncDatabaseTool();
         syncDatabasePicker();
         const ready = data.database.status !== 'unavailable';
         document.getElementById('connection-state').replaceChildren(
@@ -726,7 +750,7 @@ async function refreshBootstrap(notify = false, {preserveFocus = false, focusFal
         if (revision === databaseRevision && bootstrapController === controller) {
             bootstrapController = null; state.switchingDatabase = false;
             refreshButton.disabled = state.restoring;
-            openDatabase.disabled = !supports('phpmyadmin') || state.restoring || !state.bootstrap || databaseModal.database !== getDatabase();
+            syncDatabaseTool();
             syncDatabasePicker();
         }
     }

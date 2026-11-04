@@ -77,6 +77,9 @@ try {
     await waitPosition(second.id, beforeArrange[second.id]);
     assert.equal(await outer(first.id).getAttribute('data-pinned'), 'true', 'Undoing a layout does not undo the earlier pin action.');
 
+    // Undo also restores the camera that inspection panned to the first card.
+    // Bring the full branch into view before selecting its other card.
+    await page.locator('#record-map-fit').click();
     await node(second.id).click({modifiers: ['Shift']});
     assert.equal(await page.locator('.record-map-node[data-selected="true"]').count(), 2, 'Shift-click shares a multi-record selection.');
     const validEdgesBeforeHide = await page.locator('[data-record-edge]').evaluateAll(items => items.map(el => el.dataset.recordEdge).sort());

@@ -30,7 +30,13 @@ try {
     await page.goto(bookmark('gegevens', publicKey, 'govern_pg_values'), {waitUntil: 'networkidle'});
     await loaded(publicKey, 'literal%_value');
     assert.equal(await page.locator('[data-postgres-editing]').count(), 1);
-    assert.equal(await page.locator('#open-database').isDisabled(), true);
+    assert.equal(await page.locator('#open-database').isEnabled(), true, 'PostgreSQL database tools open the SQL workspace.');
+    await page.locator('#open-database').click();
+    await page.locator('#sql-editor').waitFor();
+    assert.equal(await page.locator('#database-dialog').isVisible(), false,
+        'PostgreSQL tools use the selected schema’s Queries view without loading phpMyAdmin.');
+    await page.locator('[data-database-view="gegevens"]').click();
+    await loaded(publicKey, 'literal%_value');
     assert.equal(await page.locator('#add-row').count(), 1);
     assert.ok(await page.locator('[data-row-action="edit"]').count() > 0);
     assert.equal(await page.locator('#context-export').evaluate(link => link.hidden), true,

@@ -1,4 +1,4 @@
-import {ensureWorkspaceTools, clickWorkspaceTool} from './workspace-tools.mjs';
+import {ensureWorkspaceTools, clickWorkspaceTool, openDatabaseTask} from './workspace-tools.mjs';
 /** Real database creation and official phpMyAdmin SQL-file import, isolated stack only. */
 import {authenticatedContext} from './auth-session.mjs';
 import assert from 'node:assert/strict';
@@ -64,9 +64,9 @@ const switchDatabase = async name => {
     await page.locator('#database-select').selectOption(name);
     await waitWorkspace(name);
 };
-const openManager = async () => {
-    await clickWorkspaceTool(page, '#manage-databases');
-    await manager.waitFor({state: 'visible'});
+const openManager = async (options = {}) => {
+    const task = options.task || 'database';
+    await openDatabaseTask(page, {engine: 'mariadb', ...(task === 'database' ? {targetMode: 'existing'} : {}), ...options, task});
 };
 const closeManager = async () => {
     await manager.locator('#database-manager-cancel').click();
@@ -83,6 +83,16 @@ const shot = async name => {
 };
 const waitImport = async database => {
     await nativeDialog.waitFor({state: 'visible'});
+    await nativeDialog.locator('#native-import-file').waitFor({state: 'visible'});
+    assert.equal(await nativeDialog.locator('#modal-change-destination').isVisible(), true);
+    assert.equal(await nativeDialog.locator('.database-toolbar').isVisible(), false,
+        'A focused import keeps the chosen destination and file task together.');
+    assert.equal(await page.locator('#database-frame').getAttribute('src'), 'about:blank',
+        'The first-party SQL flow does not load phpMyAdmin before an explicit choice.');
+    assert.equal(await page.locator('#database-select').inputValue(), database);
+};
+const openOfficialImport = async database => {
+    await nativeDialog.locator('#modal-full-import').click();
     await frame.locator('#input_import_file').waitFor({state: 'visible'});
     await page.waitForFunction(database => {
         const node = document.querySelector('#database-frame');
@@ -124,15 +134,15 @@ try {
     await openManager();
     assert.equal(await manager.locator('#database-manager-existing').inputValue(), first,
         'The current database is the initial import destination.');
-    assert.equal(await manager.locator('#database-manager-import-type').inputValue(), 'dataset',
-        'Table files are available directly from the common import entry.');
-    await manager.locator('#database-manager-import-type').selectOption('import');
+    assert.equal(await manager.locator('#database-manager-target-mode').inputValue(), 'existing',
+        'The database import starts with the selected existing destination.');
+    await manager.locator('#database-manager-target-mode').selectOption('new');
     await nameInput.fill(created);
     await nameInput.evaluate(node => { node.focus(); node.setSelectionRange(4, 9); });
     await language('en');
     assert.equal(await nameInput.inputValue(), created, 'Language switching retains the database name draft.');
-    assert.equal(await manager.locator('#database-manager-import-type').inputValue(), 'import',
-        'Language switching retains the selected SQL import flow.');
+    assert.equal(await manager.locator('#database-manager-target-mode').inputValue(), 'new',
+        'Language switching retains the chosen new destination.');
     assert.deepEqual(await nameInput.evaluate(node => [node.selectionStart, node.selectionEnd]), [4, 9]);
     assert.equal(await nameInput.evaluate(node => node === document.activeElement), true);
     await shot('manager');
@@ -145,11 +155,12 @@ try {
     const holdPreparation = async route => { requestStarted(); await gate; await route.continue(); };
     await page.route(preparationRoute, holdPreparation);
     const pending = responseFor('prepare-database');
-    await manager.locator('#database-manager-create-import').click();
+    await manager.locator('#database-manager-continue').click();
     await started;
-    assert.equal(await manager.locator('#database-manager-create-import').isDisabled(), true);
-    assert.equal(await manager.locator('#database-manager-import-type').isDisabled(), true,
-        'An in-flight database preparation keeps its chosen import flow.');
+    assert.equal(await manager.locator('#database-manager-continue').isDisabled(), true);
+    assert.equal(await manager.locator('#database-manager-target-mode').isDisabled(), true,
+        'An in-flight database preparation keeps its chosen destination.');
+    assert.equal(await manager.locator('#database-manager-back').isDisabled(), true);
     assert.equal(await manager.locator('#database-manager-cancel').isDisabled(), true);
     await page.keyboard.press('Escape');
     assert.equal(await manager.isVisible(), true, 'An in-flight preparation cannot silently lose its result.');
@@ -174,6 +185,7 @@ try {
     await page.waitForFunction(() => document.querySelector('#import-inspection .import-inspection-summary')?.textContent.includes('0 tables'));
 
     // An empty/rejected phpMyAdmin form must not trap the surrounding dialog.
+    await openOfficialImport(created);
     await frame.locator('#buttonGo').click();
     await page.waitForFunction(() => !document.querySelector('#modal-database')?.disabled
         && !document.querySelector('#database-dialog .database-dialog-header .button')?.disabled,
@@ -248,8 +260,10 @@ try {
     await nativeDialog.locator('.database-dialog-header .button').click();
     await nativeDialog.waitFor({state: 'hidden'});
     await waitWorkspace(created);
+    await page.locator('[data-database-view="onderzoeken"]').click();
     await page.locator('#sql-editor').fill(importedDraft);
-    await page.goto(new URL('/workspace.php#gegevens?' + new URLSearchParams({database: created, table: 'imported_notes'}), base).href);
+    await page.locator('[data-database-view="gegevens"]').click();
+    await page.locator('.catalog-item').filter({has: page.locator('.catalog-item-name', {hasText: /^imported_notes$/})}).click();
     await page.locator('.table-heading h2').filter({hasText: 'imported_notes'}).waitFor();
     assert.ok((await page.locator('.table-workspace .data-table').innerText()).includes(literal));
     assert.equal(await page.evaluate(() => window.importUnsafe), undefined, 'Imported text is rendered safely in the custom workspace.');
@@ -259,34 +273,53 @@ try {
     const repeated = data(await api('prepare-database', created, {body: {name: created}}));
     assert.equal(repeated.created, false);
     assert.equal(data(await api('browse', created, {params: {table: 'imported_people'}})).rows[0].name, 'Local person');
-    await openManager();
-    await manager.locator('#database-manager-existing').selectOption(first);
-    await manager.locator('#database-manager-switch').click();
-    await manager.waitFor({state: 'hidden'});
-    await waitWorkspace(first);
-    await page.goto(new URL('/workspace.php#onderzoeken?' + new URLSearchParams({database: first}), base).href);
+    await switchDatabase(first);
+    await page.locator('[data-database-view="onderzoeken"]').click();
     await page.locator('#sql-editor').waitFor();
     assert.equal(await page.locator('#sql-editor').inputValue(), beforeDraft, 'The original database query draft survives create/import and switching back.');
     await switchDatabase(created);
+    await page.locator('[data-database-view="onderzoeken"]').click();
     assert.equal(await page.locator('#sql-editor').inputValue(), importedDraft, 'The imported database keeps its own query draft.');
 
     // Create without importing, then reopen native import for an existing target.
-    await openManager();
-    await nameInput.fill(emptyDatabase);
+    await openManager({task: 'create', name: emptyDatabase});
     const emptyPending = responseFor('prepare-database');
-    await manager.locator('#database-manager-create').click();
+    await manager.locator('#database-manager-continue').click();
     const emptyPayload = await (await emptyPending).json();
     assert.equal(emptyPayload.ok, true, emptyPayload.error);
     assert.equal(emptyPayload.data.created, true); owned.add(emptyDatabase);
     await manager.waitFor({state: 'hidden'});
-    await waitWorkspace(emptyDatabase);
-    assert.equal(await nativeDialog.isVisible(), false, 'Create-only does not open a file upload automatically.');
+    await page.waitForFunction(database => document.querySelector('#database-select')?.value === database, emptyDatabase);
+    await nativeDialog.waitFor({state: 'visible'});
+    await frame.locator('#createTableMinimalForm').waitFor({state: 'visible'});
+    assert.equal(await page.locator('#database-tab-structure').getAttribute('aria-selected'), 'true',
+        'Creating a database opens the official Structure form for manual table creation.');
+    assert.equal(await nativeDialog.locator('#native-import-file').isVisible(), false,
+        'Creating a database does not open a file upload automatically.');
     assert.deepEqual(data(await api('schema', emptyDatabase)).tables, []);
+    await frame.locator('#createTableNameInput').fill('govern_manual_creation');
+    await frame.locator('#createTableNumFieldsInput').fill('1');
+    await frame.locator('#createTableMinimalForm input[type="submit"]').click();
+    await frame.locator('input[name="field_name[0]"]').fill('id');
+    await frame.locator('select[name="field_type[0]"]').selectOption('INT');
+    await frame.locator('[name="do_save_data"]').click();
+    await page.waitForFunction(async database => {
+        const response = await fetch('/api.php?' + new URLSearchParams({action: 'schema', database}));
+        const payload = await response.json();
+        return payload.ok && payload.data.tables.some(table => table.name === 'govern_manual_creation');
+    }, emptyDatabase);
+    const manuallyCreated = data(await api('structure', emptyDatabase, {params: {table: 'govern_manual_creation'}}));
+    assert.deepEqual(manuallyCreated.columns.map(column => column.name), ['id'],
+        'The manual creation form writes the new table into the chosen database.');
+    await sql(emptyDatabase, 'DROP TABLE govern_manual_creation;', true);
+    assert.deepEqual(data(await api('schema', emptyDatabase)).tables, []);
+    await nativeDialog.locator('.database-dialog-header .button').click();
+    await nativeDialog.waitFor({state: 'hidden'});
 
     // First-party import: plan, exact database confirmation, execution and postflight.
     await openManager();
     await manager.locator('#database-manager-existing').selectOption(emptyDatabase);
-    await manager.locator('#database-manager-import-existing').click();
+    await manager.locator('#database-manager-continue').click();
     await manager.waitFor({state: 'hidden'});
     await waitImport(emptyDatabase);
     const ownSql = 'CREATE TABLE govern_native_import (id INT PRIMARY KEY, value VARCHAR(30));\n'
@@ -328,10 +361,11 @@ try {
     await nativeDialog.waitFor({state: 'hidden'});
     await openManager();
     await manager.locator('#database-manager-existing').selectOption(created);
-    await manager.locator('#database-manager-import-existing').click();
+    await manager.locator('#database-manager-continue').click();
     await manager.waitFor({state: 'hidden'});
     await waitImport(created);
     await page.waitForFunction(() => document.querySelector('#import-inspection .import-inspection-warnings')?.textContent.includes('already contains 2 tables'));
+    await openOfficialImport(created);
     const frameSrc = await page.locator('#database-frame').getAttribute('src');
     await language('nl');
     assert.equal(await page.locator('#database-frame').getAttribute('src'), frameSrc,
@@ -339,10 +373,10 @@ try {
     await nativeDialog.locator('.database-dialog-header .button').click();
     await nativeDialog.waitFor({state: 'hidden'});
     await waitWorkspace(created);
-    await openManager();
+    await openManager({task: 'create'});
     await nameInput.fill('retained_cancel_draft');
     await closeManager();
-    await page.waitForFunction(() => document.activeElement?.id === 'workspace-tools-toggle');
+    await page.waitForFunction(() => document.activeElement?.id === 'manage-databases');
 
     const mobile = await context.newPage();
     await mobile.setViewportSize({width: 320, height: 900});
@@ -351,6 +385,10 @@ try {
     await clickWorkspaceTool(mobile, '#manage-databases');
     await mobile.locator('#database-manager-dialog[open]').waitFor();
     assert.equal(await mobile.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+    assert.equal(await mobile.locator('#database-manager-dialog').evaluate(node => node.scrollWidth <= innerWidth), true);
+    await mobile.locator('#database-manager-task-create').click();
+    assert.equal(await mobile.locator('#database-manager-dialog').evaluate(node => node.scrollWidth <= innerWidth), true);
+    await mobile.locator('#database-manager-engine-mariadb').click();
     assert.equal(await mobile.locator('#database-manager-dialog').evaluate(node => node.scrollWidth <= innerWidth), true);
     await mobile.locator('#database-manager-name').fill('mobile_name_draft');
     await mobile.evaluate(async () => { const {setLanguage} = await import('/assets/i18n.js'); setLanguage('en'); });

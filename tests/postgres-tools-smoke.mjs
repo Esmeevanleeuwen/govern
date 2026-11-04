@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 import {authenticatedContext} from './auth-session.mjs';
-import {selectWorkspaceLanguage} from './workspace-tools.mjs';
+import {selectWorkspaceLanguage, openDatabaseTask} from './workspace-tools.mjs';
 
 assert.equal(process.env.GOVERN_UI_WRITE_TESTS, '1', 'Use an isolated stack and GOVERN_UI_WRITE_TESTS=1.');
 const require = createRequire(import.meta.url);
@@ -65,12 +65,12 @@ const run = async sql => {
 };
 const openImports = async () => {
     await page.goto(href('gegevens', 'govern_pg_values'), {waitUntil: 'networkidle'});
-    await page.locator('#database-tools > summary').click();
-    await page.locator('[data-database-tool="import"]').click();
+    await openDatabaseTask(page, {task: 'database', engine: 'postgres', database: scope, targetMode: 'existing', submit: true});
     await page.locator('#native-import-file').waitFor();
     assert.equal(await page.locator('#database-select').isDisabled(), true);
-    assert.equal(await page.locator('#modal-database').isEnabled(), true);
-    assert.equal(await page.locator('#modal-database').isVisible(), true);
+    assert.equal(await page.locator('#modal-change-destination').isEnabled(), true);
+    assert.equal(await page.locator('#modal-database').isVisible(), false);
+    assert.match(await page.locator('.modal-import-source').innerText(), /PostgreSQL.*govern_pg\.public/s);
     assert.equal(await page.locator('#database-frame').isVisible(), false);
     assert.equal(await page.locator('#database-tab-sql').isVisible(), false);
 };
@@ -81,36 +81,52 @@ try {
     assert.equal(before.rows.find(row => row.id === originalKey).label, 'literal%_value');
     const archiveBefore = await api('browse', {schema: 'archive', table: 'govern_pg_values'});
 
-    // Both engines stay available inside one modal; changing its target must
-    // discard the previous file preflight instead of moving its token.
+    // A deliberate destination change returns to the wizard. The new engine
+    // starts its own file preflight, preserving the original scope boundary.
     const sources = (await api('bootstrap')).databases;
     const maria = sources.find(item => item.connection === 'mariadb' && item.available !== false);
     assert.ok(maria, 'The isolated stack has a MariaDB scope for engine switching.');
     const expectedChoices = sources.map(item => item.scope_key || item.name).sort();
     await openImports();
-    assert.deepEqual(await page.locator('#modal-database optgroup').evaluateAll(groups => groups.map(group => group.label)), ['MariaDB', 'PostgreSQL']);
-    assert.deepEqual(await page.locator('#modal-database option').evaluateAll(options => options.map(option => option.value).sort()), expectedChoices);
     await page.locator('#native-import-file').setInputFiles({name: 'scope-check.sql', mimeType: 'text/plain', buffer: Buffer.from('SELECT 1;')});
     const scopePreview = waitApi('native-import-preview');
     await page.locator('#native-import-preview').click();
     const scopePlan = await read(await scopePreview);
     await page.locator('#native-import-confirm').fill(scopePlan.confirmation);
-    await page.locator('#modal-database').selectOption(maria.scope_key || maria.name);
+    await page.locator('#modal-change-destination').click();
+    const destination = page.locator('#database-manager-dialog[open]');
+    await destination.locator('#database-manager-back').click();
+    await destination.locator('#database-manager-engine-mariadb').click();
+    await destination.locator('#database-manager-target-mode').selectOption('existing');
+    await destination.locator('#database-manager-existing').selectOption(maria.scope_key || maria.name);
+    await destination.locator('#database-manager-continue').click();
+    await destination.waitFor({state: 'hidden'});
+    await page.locator('#database-dialog[open]').waitFor();
+    assert.match(await page.locator('.modal-import-source').innerText(), /MariaDB/);
+    await page.locator('#modal-full-import').click();
     await page.frameLocator('#database-frame').locator('#input_import_file').waitFor();
     await page.locator('#database-tab-sql').click();
     const pmaSql = page.frameLocator('#database-frame').locator('#sqlquery');
     await pmaSql.waitFor({state: 'attached'});
+    await page.waitForFunction(() => {
+        const frame = document.querySelector('#database-frame');
+        const doc = frame?.contentDocument;
+        const route = frame?.contentWindow ? new URL(frame.contentWindow.location.href).searchParams.get('route') : '';
+        const container = doc?.querySelector('.CodeMirror');
+        const editor = container?.CodeMirror;
+        return route?.endsWith('/sql') && doc?.readyState === 'complete'
+            && container?.getClientRects().length > 0 && typeof editor?.setValue === 'function';
+    });
     const pmaDraft = "SELECT 'keep the MariaDB SQL draft';";
-    await pmaSql.evaluate(async (node, draft) => {
-        if (document.readyState !== 'complete') await new Promise(resolve => window.addEventListener('load', resolve, {once: true}));
-        document.querySelector('.CodeMirror')?.CodeMirror?.setValue(draft);
-        node.value = draft;
+    await pmaSql.evaluate((node, draft) => {
+        const editor = document.querySelector('.CodeMirror').CodeMirror;
+        editor.setValue(draft); node.value = draft;
         window.governDraftRetained = draft;
     }, pmaDraft);
     await page.evaluate(async () => (await import('/assets/i18n.js')).setLanguage('nl'));
+    assert.equal(await pmaSql.evaluate(() => window.governDraftRetained), pmaDraft, 'Language changes do not reload the iframe.');
     assert.equal(await pmaSql.inputValue(), pmaDraft, 'Language changes retain the real phpMyAdmin form.');
     assert.equal(await pmaSql.evaluate(node => document.querySelector('.CodeMirror')?.CodeMirror?.getValue() ?? node.value), pmaDraft);
-    assert.equal(await pmaSql.evaluate(() => window.governDraftRetained), pmaDraft, 'Language changes do not reload the iframe.');
     assert.deepEqual(await page.locator('#modal-database option').evaluateAll(options => options.map(option => option.value).sort()), expectedChoices);
     await page.locator('#modal-database').selectOption(scope);
     assert.equal(await page.locator('#database-tab-import').getAttribute('aria-selected'), 'true', 'MariaDB SQL becomes native import when entering PostgreSQL.');
@@ -173,6 +189,7 @@ try {
     await page.locator('#native-import-run').click();
     await started;
     assert.equal(await page.locator('#modal-database').isDisabled(), true, 'An actual pending import holds its complete target.');
+    assert.equal(await page.locator('#modal-change-destination').isDisabled(), true, 'The visible destination action also waits for import completion.');
     await page.locator('#modal-database').evaluate((node, value) => { node.value = value; node.dispatchEvent(new Event('change', {bubbles: true})); }, maria.scope_key || maria.name);
     assert.equal(await page.locator('#modal-database').inputValue(), scope, 'A programmatic change also cannot redirect an active write.');
     await page.keyboard.press('Escape');
@@ -180,13 +197,16 @@ try {
     releaseImport(); releaseImport = null;
     const native = await read(await imported);
     await page.unroute(importRoute, holdImport);
-    await page.locator('#modal-database:not([disabled])').waitFor();
+    await page.locator('#modal-change-destination:not([disabled])').waitFor();
     assert.equal(native.completed, true);
     assert.ok(native.safety_snapshots.some(point => point.schema === 'public'));
     assert.ok(native.safety_snapshots.some(point => point.schema === 'archive'));
     assert.equal((await browse(importTable)).rows[0].label, 'native import ' + stamp);
 
-    await page.locator('#database-tab-dataset').click();
+    await page.locator('.database-dialog-header .modal-tools button').last().click();
+    await page.locator('#database-dialog').waitFor({state: 'hidden'});
+    await openDatabaseTask(page, {task: 'table', engine: 'postgres', database: scope, submit: true});
+    await page.locator('#dataset-import-panel').waitFor({state: 'visible'});
     await page.locator('#dataset-file').setInputFiles({name: 'govern-ui.csv', mimeType: 'text/csv',
         buffer: Buffer.from('code,label\n9007199254740993,CSV literal <record>\n')});
     const csvPreview = waitApi('dataset-preview');
