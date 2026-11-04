@@ -71,3 +71,94 @@
 .native-import [role="status"]:empty { display: none; }
 
 .database-dialog.postgres-import .import-inspection { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; }
+
+/* Unified database journeys use the workspace materials and keep preview data dense. */
+.database-workflow-dialog { width: min(1060px, calc(100vw - 32px)); color: var(--g-ink); }
+.database-workflow-dialog form { min-width: 0; }
+.database-workflow-dialog .database-manager-heading { margin-bottom: 20px; }
+.database-workflow-dialog .database-manager-heading > div { min-width: 0; }
+.database-workflow-dialog .database-manager-heading h2 { overflow-wrap: anywhere; }
+.database-workflow-dialog .database-manager-section { padding: 24px; background: var(--g-dense-frost); box-shadow: var(--g-elevation); }
+.database-workflow-dialog .database-manager-section h3 { font-size: 18px; line-height: 1.4; margin: 0 0 18px; }
+.database-workflow-dialog h4 { margin: 18px 0 12px; font-size: 14px; }
+.database-workflow-dialog p { line-height: 1.6; overflow-wrap: anywhere; }
+.database-workflow-dialog .input { min-height: 44px; min-width: 0; width: 100%; }
+.database-workflow-dialog .button, .database-workflow-dialog button { min-height: 44px; }
+.database-workflow-dialog .database-manager-close { min-width: 44px; min-height: 44px; }
+.database-workflow-dialog .notice { font-size: 13px; }
+.database-workflow-content { min-width: 0; }
+.database-workflow-steps ol { display: flex; flex-wrap: wrap; gap: 12px 20px; list-style: none; padding: 0; margin: 0 0 24px; }
+.database-workflow-steps li { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--g-muted); }
+.database-workflow-steps li > span { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; background: var(--g-row); }
+.database-workflow-steps li.active { color: var(--g-ink); font-weight: 650; }
+.database-workflow-steps li.active > span { color: var(--g-panel); background: var(--g-accent); }
+.database-workflow-tasks { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.database-workflow-task { display: flex; flex-direction: column; align-items: flex-start; gap: 16px; text-align: start; padding: 24px; border: 0; border-radius: 20px;
+    color: var(--g-ink); background: var(--g-frost); box-shadow: var(--g-elevation); cursor: pointer; font: inherit; }
+.database-workflow-task:hover { background: var(--g-dense-frost); }
+.database-workflow-task > .icon { width: 28px; height: 28px; color: var(--g-accent); flex: none; }
+.database-workflow-task strong { font-size: 17px; line-height: 1.4; }
+.database-workflow-task > span { font-size: 13px; line-height: 1.65; color: var(--g-muted); }
+.database-workflow-field { display: flex; flex-direction: column; gap: 8px; margin: 18px 0; min-width: 0; }
+.database-workflow-field .field-label { margin: 0; }
+.database-workflow-field .field-hint { margin: 0; }
+.database-workflow-check { display: flex; align-items: center; gap: 10px; min-height: 44px; line-height: 1.5; cursor: pointer; overflow-wrap: anywhere; }
+.database-workflow-check input { flex: none; width: 18px; height: 18px; accent-color: var(--g-accent); }
+.database-workflow-check > span { margin-inline-start: auto; }
+.database-workflow-source-settings { display: grid; grid-template-columns: minmax(160px, 1fr) minmax(160px, 1fr); gap: 0 24px; align-items: center; }
+.database-workflow-source-card { padding: 14px 16px; border-radius: 12px; background: var(--g-row); font-weight: 600; }
+.database-workflow-checked { display: flex; align-items: center; gap: 8px; color: var(--g-accent); font-weight: 600; }
+.database-workflow-section-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+.database-workflow-dataset { padding: 16px 0; min-width: 0; }
+.database-workflow-table-scroll { max-width: 100%; overflow: auto; border-radius: 12px; overscroll-behavior: contain; background: var(--g-panel); }
+.database-workflow-table-scroll table { width: 100%; font-size: 13px; }
+.database-workflow-table-scroll caption { text-align: start; padding: 12px 14px; font-size: 12px; color: var(--g-muted); }
+.database-workflow-table-scroll th, .database-workflow-table-scroll td { white-space: pre-wrap; overflow-wrap: anywhere; min-width: 100px; max-width: 280px; vertical-align: top; }
+.database-workflow-table-scroll td { font-family: var(--font-mono, ui-monospace, monospace); }
+.database-workflow-null { color: var(--g-muted); font-style: italic; }
+.database-workflow-facts { display: grid; gap: 12px; margin: 20px 0; }
+.database-workflow-facts > div { display: grid; grid-template-columns: minmax(120px, .5fr) minmax(0, 1fr); gap: 16px; }
+.database-workflow-facts dt { color: var(--g-muted); font-size: 13px; }
+.database-workflow-facts dd { margin: 0; overflow-wrap: anywhere; font-weight: 600; }
+.database-workflow-engine-badge { display: inline-block; padding: 7px 12px; background: var(--g-row); border-radius: 8px; font-weight: 650; }
+.database-workflow-mapping { display: grid; gap: 12px; }
+.database-workflow-mapping-row { display: grid; grid-template-columns: minmax(0, .85fr) minmax(0, 1fr) minmax(0, 1.1fr); gap: 20px; padding: 16px; border-radius: 12px; background: var(--g-row); }
+.database-workflow-mapping-row > div { min-width: 0; display: flex; flex-direction: column; gap: 8px; overflow-wrap: anywhere; }
+.database-workflow-mapping-row p { margin: 0; }
+.database-workflow-example { display: block; white-space: pre-wrap; overflow-wrap: anywhere; font-family: var(--font-mono, ui-monospace, monospace); }
+.database-workflow-jobs { margin-top: 24px; min-width: 0; }
+.database-workflow-jobs ul { margin: 0; list-style: none; padding: 0; display: grid; gap: 8px; }
+.database-workflow-jobs li { display: flex; justify-content: space-between; gap: 16px; align-items: center; padding: 12px 16px; background: var(--g-row); border-radius: 12px; }
+.database-workflow-jobs li > div { display: grid; gap: 4px; min-width: 0; overflow-wrap: anywhere; }
+.database-workflow-footer { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-top: 24px; }
+.database-workflow-footer > .button { max-width: 100%; }
+.database-workflow-result-heading { display: flex; gap: 16px; align-items: flex-start; }
+.database-workflow-result-heading > .icon { width: 32px; height: 32px; flex: none; color: var(--g-accent); }
+.database-workflow-job-state { font-weight: 650; }
+.database-workflow-result-tables { list-style: none; margin: 16px 0; padding: 0; display: grid; gap: 8px; }
+.database-workflow-result-tables li { display: flex; justify-content: space-between; gap: 16px; background: var(--g-row); padding: 12px; border-radius: 10px; }
+.database-workflow-technical pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+.database-workflow-dialog details > summary { min-height: 44px; padding-block: 10px; cursor: pointer; }
+@media (max-width: 760px) {
+    .database-workflow-tasks { grid-template-columns: minmax(0, 1fr); }
+    .database-workflow-task { gap: 10px; padding: 20px; }
+    .database-workflow-mapping-row { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+    .database-workflow-source-settings { grid-template-columns: minmax(0, 1fr); gap: 0; }
+}
+@media (max-width: 620px) {
+    .database-workflow-dialog { width: calc(100vw - 16px); max-height: calc(100dvh - 16px); }
+    .database-workflow-dialog form { padding: 18px; }
+    .database-workflow-dialog .database-manager-section { padding: 16px; }
+    .database-workflow-steps ol { gap: 8px; }
+    .database-workflow-steps li { display: none; }
+    .database-workflow-steps li.active { display: flex; }
+    .database-workflow-dialog .input { font-size: 16px; }
+    .database-workflow-facts > div { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+    .database-workflow-footer > .button { flex: 1 1 100%; white-space: normal; }
+    .database-workflow-jobs li { align-items: stretch; flex-direction: column; }
+}
+:root[data-reduce-transparency="true"] .database-workflow-task,
+:root[data-reduce-transparency="true"] .database-workflow-dialog .database-manager-section { background: var(--g-panel); }
+.database-workflow-result-tables li > div { min-width: 0; overflow-wrap: anywhere; }
+.database-workflow-result-tables .button { max-width: 100%; white-space: normal; }
+@media (max-width: 620px) { .database-workflow-result-tables li { flex-direction: column; } }

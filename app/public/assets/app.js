@@ -2,6 +2,8 @@ import {request, setCsrf, endpoint, setDatabase, getDatabase} from './api.js';
 import {el, icon, button, badge, heading, loading, empty, errorPanel, errorText, notice, dataTable, number, fileSize, dateTime, quoteIdentifier as mariaIdentifier, toast, copyText, sqlDisclosure, confirmAction} from './ui.js';
 import {DatabaseModal} from './database-modal.js';
 import {createDatabaseManager} from './database-manager.js';
+import {createTableBuilder} from './table-builder.js';
+import {parseConnectionScope} from './connection-scope.js';
 import {QueryBuilder} from './query-builder.js';
 import {t, getLanguage, setLanguage} from './i18n.js';
 import {getPreferences, updatePreferences, resetAppearance, subscribePreferences} from './preferences.js';
@@ -20,6 +22,7 @@ import './workspace-messages.js';
 import './navigation-messages.js';
 import './database-messages.js';
 import './postgres-messages.js';
+import './database-entry-messages.js';
 
 setLanguage(getPreferences().language);
 
@@ -58,6 +61,7 @@ const state = {
     rowEditorOpen: false,
     switchingDatabase: false,
     databaseManagerOpen: false,
+    tableBuilderOpen: false,
     connectionError: null,
     queryError: null,
     querySaveError: null,
@@ -185,20 +189,57 @@ const databaseManager = createDatabaseManager({getDatabase, getDatabases: () => 
         if (database !== getDatabase()) await switchDatabase(database);
         else await refreshBootstrap(false);
     },
-    onImport: async database => {
-        if (database !== getDatabase()) await switchDatabase(database);
-        else await refreshBootstrap(false);
-        if (getDatabase() === database && !state.connectionError && supports('import')) databaseModal.open('', 'import');
-        else if (getDatabase() === database && !supports('import')) toast(t('app.postgres.unavailable'), 'error');
-    },
-    onPrepared: async (data, {importSql}) => {
-        knownDatabases = data.databases;
-        if (data.database !== getDatabase()) await switchDatabase(data.database);
-        else await refreshBootstrap(false);
-        toast(t('app.databases.' + (data.created ? 'createdDatabase' : 'enabledDatabase'), {name: data.database}));
-        if (importSql && getDatabase() === data.database && !state.connectionError) databaseModal.open('', 'import');
+    onOpenDatabase: openCreatedDatabase,
+    onFirstTable: async key => { if (await openCreatedDatabase(key)) tableBuilder.open({database: key}); },
+    onCompleted: async job => {
+        await refreshDatabaseChoices();
+        if (job.scope_key === getDatabase() && !databaseOperationsBusy()) {
+            await refreshBootstrap(false, {invalidateRecordMap: true});
+        }
     },
 });
+const tableBuilder = createTableBuilder({getDatabase,
+    getScope: () => state.bootstrap?.database,
+    isBusy: () => databaseBusy() || state.switchingDatabase,
+    onBusy: busy => { state.tableBuilderOpen = busy; syncDatabasePicker(); },
+    onCreated: async data => {
+        const target = getDatabase(), revision = databaseRevision, navigation = location.hash;
+        if (data.scope_key && data.scope_key !== target) return;
+        await refreshBootstrap(false, {invalidateRecordMap: true});
+        if (target !== getDatabase() || revision !== databaseRevision || navigation !== location.hash || databaseBusy()) return;
+        if (data.table) { state.table = data.table; go('gegevens', {table: data.table}); }
+    },
+});
+
+async function refreshDatabaseChoices() {
+    const data = await request('databases');
+    knownDatabases = data.databases; syncDatabasePicker();
+}
+
+async function openCreatedDatabase(key, table = '') {
+    const originalRevision = databaseRevision;
+    const originalNavigation = location.hash;
+    await refreshDatabaseChoices();
+    if (originalRevision !== databaseRevision || originalNavigation !== location.hash || databaseBusy()) return false;
+    let targetRevision = databaseRevision;
+    let targetNavigation = location.hash;
+    if (key !== getDatabase()) {
+        const switching = switchDatabase(key);
+        targetRevision = databaseRevision;
+        targetNavigation = location.hash;
+        await switching;
+    } else await refreshBootstrap(false, {invalidateRecordMap: true});
+    if (key !== getDatabase() || targetRevision !== databaseRevision || targetNavigation !== location.hash || databaseBusy()) return false;
+    if (state.connectionError || !state.bootstrap || state.bootstrap.database.available === false) return false;
+    state.table = table || ''; go('gegevens', table ? {table} : {});
+    return true;
+}
+
+function addData(table = '') {
+    const scope = state.bootstrap?.database;
+    if (!scope || databaseOperationsBusy()) return;
+    databaseManager.open({task: 'dataset', scope: {...scope, database: scope.name, scope_key: getDatabase()}, table});
+}
 manageDatabases.append(icon('plus'));
 manageDatabases.addEventListener('click', () => databaseManager.open());
 
@@ -327,7 +368,7 @@ function routeHash(name, params = {}) {
 function databaseHash(name) { return routeHash(name, state.table ? {table: state.table} : {}); }
 
 function databaseOperationsBusy() {
-    return state.restoring || state.creatingSnapshot || state.savingQuery || state.deletingQuery || state.runningQuery || state.rowEditorOpen || databaseModal.dialog.open;
+    return state.restoring || state.creatingSnapshot || state.savingQuery || state.deletingQuery || state.runningQuery || state.rowEditorOpen || state.tableBuilderOpen || databaseModal.dialog.open;
 }
 
 function databaseBusy() { return state.databaseManagerOpen || databaseOperationsBusy(); }
@@ -335,11 +376,22 @@ function databaseBusy() { return state.databaseManagerOpen || databaseOperations
 function syncDatabasePicker() {
     const selected = getDatabase();
     const options = [...knownDatabases];
+    const selectedScope = parseConnectionScope(selected);
+    if (selectedScope.connection === 'postgres') {
+        const entry = options.find(item => item.connection === 'postgres' && item.name === selectedScope.database);
+        if (entry) { options.splice(options.indexOf(entry), 1, {...entry, scope_key: selected, schema: selectedScope.schema}); }
+    }
     if (selected && !options.some(item => scopeKey(item) === selected)) options.unshift({name: selected, available: false});
-    databaseSelect.replaceChildren(...options.map(item => el('option', {value: scopeKey(item), selected: scopeKey(item) === selected},
-        item.available === false ? t('app.databases.unavailable', {name: item.label || item.name}) : item.label || item.name)));
+    databaseSelect.replaceChildren(...options.map(item => {
+        const label = item.name + ' · ' + (item.connection === 'postgres' ? 'PostgreSQL' : 'MariaDB')
+            + (item.action_required ? ' · ' + t('app.databaseEntry.actionRequired') : '');
+        return el('option', {value: scopeKey(item), selected: scopeKey(item) === selected},
+            item.available === false ? t('app.databases.unavailable', {name: label}) : label);
+    }));
     databaseSelect.disabled = !options.length || databaseBusy() || state.switchingDatabase;
-    manageDatabases.disabled = !state.bootstrap || databaseBusy() || state.switchingDatabase;
+    // Adding a fresh database does not depend on the open database being healthy.
+    manageDatabases.disabled = databaseBusy() || state.switchingDatabase;
+    openDatabase.hidden = !supports('phpmyadmin');
     const contextExport = document.getElementById('context-export');
     if (supports('context')) contextExport.href = endpoint('context');
     else contextExport.removeAttribute('href');
@@ -468,8 +520,8 @@ function localizeShell() {
     document.querySelectorAll('[data-i18n-aria]').forEach(node => node.setAttribute('aria-label', t(node.dataset.i18nAria)));
     document.querySelectorAll('[data-i18n-title]').forEach(node => node.title = t(node.dataset.i18nTitle));
     document.getElementById('language-select').value = getLanguage();
-    openDatabase.setAttribute('aria-label', t('app.shell.openDatabase'));
-    openDatabase.title = t('app.shell.openDatabase');
+    openDatabase.setAttribute('aria-label', t('app.databaseEntry.advanced'));
+    openDatabase.title = t('app.databaseEntry.advanced');
     if (state.connectionError) document.getElementById('connection-state').replaceChildren(el('span', {class: 'status-dot offline'}), el('span', {}, t('app.core.connection.offline')));
     else if (state.bootstrap) document.getElementById('connection-state').replaceChildren(el('span', {class: 'status-dot ' + (state.bootstrap.database.status === 'unavailable' ? 'offline' : '')}), el('span', {}, t(state.bootstrap.database.status === 'unavailable' ? 'app.core.connection.offline' : 'app.navigation.ready')));
     const current = routes[route().name];
@@ -512,6 +564,7 @@ window.addEventListener('govern:languagechange', () => {
     const scroll = {left: window.scrollX, top: window.scrollY};
     localizeShell();
     databaseModal.refreshLanguage();
+    tableBuilder.translate();
     render();
     const restored = focused ? document.getElementById(focused) : null;
     restored?.focus({preventScroll: true});
@@ -679,7 +732,7 @@ async function refreshBootstrap(notify = false, {preserveFocus = false, focusFal
         state.schemaData = null;
         state.structureData.clear();
         setCsrf(data.csrf);
-        if (!databaseModal.dialog.open && (supports('phpmyadmin') || supports('import'))) databaseModal.configure(selectedScope, data.tables || [], knownDatabases);
+        if (!databaseModal.dialog.open && supports('phpmyadmin')) databaseModal.configure(selectedScope, data.tables || [], knownDatabases);
         openDatabase.disabled = !supports('phpmyadmin') || state.restoring;
         syncDatabasePicker();
         const ready = data.database.status !== 'unavailable';
@@ -1046,8 +1099,11 @@ function databaseTools() {
     const actions = el('div', {class: 'database-tools-menu'});
     const native = (tool, label, symbol) => button(t(label), () => { menu.open = false; databaseModal.open('', tool); },
         {className: 'database-tool-action', kind: 'ghost', symbol, 'data-database-tool': tool});
-    if (supports('import')) actions.append(native('import', 'app.navigation.import', 'download'));
-    if (supports('phpmyadmin')) actions.append(native('export', 'app.navigation.export', 'external'));
+    if (supports('write')) actions.append(button(t('app.databaseEntry.addData'), () => { menu.open = false; addData(); },
+        {className: 'database-tool-action', kind: 'ghost', symbol: 'plus', 'data-database-tool': 'add-data'}));
+    if (supports('create_table')) actions.append(button(t('app.databaseEntry.newTable'), () => { menu.open = false; tableBuilder.open(); },
+        {className: 'database-tool-action', kind: 'ghost', symbol: 'table', 'data-database-tool': 'create-table'}));
+    if (supports('phpmyadmin')) actions.append(native('browse', 'app.databaseEntry.advanced', 'external'));
     if (supports('snapshots')) actions.append(el('a', {class: 'database-tool-action', href: routeHash('experimenten'),
         'data-database-tool': 'backups', on: {click: () => { menu.open = false; }}}, icon('clock'), t('app.navigation.backups')));
     menu.append(summary, actions);
@@ -1076,9 +1132,24 @@ function databaseHeading(view) {
             'data-schema-view': 'schema', 'aria-current': view === 'schema' ? 'page' : null}, t('app.navigation.diagram'))) : null;
     return el('header', {class: 'page-heading database-heading'},
         el('div', {class: 'database-heading-main'}, el('h1', {}, t('app.navigation.database')), el('div', {class: 'database-heading-actions'}, explorer, databaseTools())),
-        el('div', {class: 'database-viewbar'}, modeLinks,
+        el('div', {class: 'database-viewbar'}, modeLinks, schemaContext(),
             el('p', {class: 'database-selection'}, el('span', {}, t('app.navigation.selected')),
                 el('code', {class: 'database-selected-table', id: 'database-selected-table'}, state.table || t('app.navigation.emptySelection')))), schemaLinks);
+}
+
+function schemaContext() {
+    const scope = state.bootstrap?.database;
+    if (scope?.engine !== 'postgres') return null;
+    const schemas = scope.schemas || [scope.schema];
+    const select = el('select', {class: 'input select', id: 'database-schema-select',
+        'aria-label': t('app.databaseEntry.schema'), on: {change: async event => {
+            const schema = event.target.value;
+            if (databaseBusy()) { event.target.value = scope.schema; return; }
+            const key = 'postgres:' + encodeURIComponent(scope.name) + ':' + encodeURIComponent(schema);
+            try { await switchDatabase(key); }
+            catch (error) { toast(errorText(error), 'error'); }
+        }}}, schemas.map(schema => el('option', {value: schema, selected: schema === scope.schema}, schema)));
+    return el('label', {class: 'database-schema-picker'}, el('span', {}, t('app.databaseEntry.schema')), select);
 }
 
 function databaseContext(view, scope) {
@@ -1123,7 +1194,8 @@ function drawTableInspector(inspector, table, data) {
 function tableHeader(table, tab) {
     return el('div', {class: 'table-heading'},
         el('div', {}, el('div', {class: 'table-heading-title'}, el('h2', {}, table.name), badge(table.type === 'view' ? t('app.core.table.viewBadge') : t('app.core.table.tableBadge'), table.type === 'view' ? 'badge-blue' : 'badge-green'))),
-        el('div', {class: 'table-heading-actions'}, supports('phpmyadmin')
+        el('div', {class: 'table-heading-actions'}, supports('write') && table.type !== 'view'
+            ? button(t('app.databaseEntry.addData'), () => addData(table.name), {className: 'button-small', symbol: 'download', 'data-add-data': table.name}) : null, supports('phpmyadmin')
             ? button(tab === 'structure' ? t('app.core.table.openStructure') : t('app.core.table.openBrowse'), () => databaseModal.open(table.name, tab), {className: 'button-small', symbol: 'database'}) : null));
 }
 
@@ -1189,8 +1261,10 @@ async function selectedSourceRecord(root, table, scope) {
 }
 
 function noTables() {
-    return empty(t('app.core.table.emptyTitle'), t('app.core.table.emptyHelp'),
-        supports('phpmyadmin') ? button(t('app.core.table.openDatabase'), () => databaseModal.open('', 'sql'), {kind: 'primary', symbol: 'database'}) : null);
+    return empty(t('app.databaseEntry.emptyTitle'), t('app.databaseEntry.emptyHelp'),
+        el('div', {class: 'database-entry-actions'},
+            supports('create_table') ? button(t('app.databaseEntry.firstTable'), () => tableBuilder.open(), {kind: 'primary', symbol: 'plus', id: 'add-first-table'}) : null,
+            supports('write') ? button(t('app.databaseEntry.addData'), () => addData(), {symbol: 'download', id: 'empty-add-data'}) : null));
 }
 
 async function renderData(scope) {

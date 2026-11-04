@@ -41,6 +41,11 @@ final class Config
             $pgSqlUser = $env('PG_SQL_USER', 'govern_pg_sql');
             $pgRestoreUser = $env('PG_RESTORE_USER', 'govern_pg_restore');
             $pgRoles = [$pgReadUser, $pgUser, $pgSqlUser, $pgRestoreUser];
+            $pgDatabases = array_values(array_unique([$pgName, ...array_filter(array_map('trim', explode(',', $env('PG_DATABASES'))), static fn (string $value): bool => $value !== '')]));
+            foreach ($pgDatabases as $pgDatabase) {
+                if (!preg_match('/^[A-Za-z0-9_]{1,63}$/D', $pgDatabase) || in_array($pgDatabase, ['postgres', 'template0', 'template1'], true))
+                    throw ApiException::fromCode('postgres_config_invalid', 503);
+            }
             $pgSchemas = array_values(array_unique(array_filter(array_map('trim', explode(',', $env('PG_SCHEMAS', 'public'))), static fn (string $value): bool => $value !== '')));
             if ($pgPort === false || $pgPort < 1 || $pgPort > 65535 || !preg_match('/^[A-Za-z0-9_]{1,63}$/D', $pgName)
                 || $pgHost === '' || preg_match('/[;\x00-\x20\x7f]/', $pgHost) || $pgSchemas === []) {
@@ -58,7 +63,7 @@ final class Config
                 }
             }
             $postgres = ['engine' => 'postgres', 'host' => $pgHost, 'port' => $pgPort, 'name' => $pgName,
-                'schema' => $pgSchemas[0], 'schemas' => $pgSchemas, 'read_user' => $pgReadUser,
+                'schema' => $pgSchemas[0], 'schemas' => $pgSchemas, 'databases' => $pgDatabases, 'read_user' => $pgReadUser,
                 'read_password' => $env('PG_READ_PASSWORD'), 'user' => $pgUser,
                 'password' => $env('PG_PASSWORD'), 'sql_user' => $pgSqlUser, 'sql_password' => $env('PG_SQL_PASSWORD'),
                 'restore_user' => $pgRestoreUser, 'tools_socket' => $env('PG_TOOLS_SOCKET', '/run/govern-postgres/tools.sock'), 'socket' => ''];
@@ -76,6 +81,7 @@ final class Config
             'read_password' => $env('DB_READ_PASSWORD'),
             'socket' => $env('DB_SOCKET'),
             'backup_dir' => $env('BACKUP_DIR', '/var/lib/govern/backups'),
+            'import_dir' => $env('IMPORT_DIR', '/var/lib/govern/imports'),
             'dump_bin' => $env('DB_DUMP_BIN', 'mariadb-dump'),
             'client_bin' => $env('DB_CLIENT_BIN', 'mariadb'),
             'schema_file' => $schema,

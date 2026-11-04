@@ -16,10 +16,29 @@ MAX_BYTES = 16 * 1024 * 1024
 MAX_EXPANDED = 64 * 1024 * 1024
 MAX_ROWS = 100000
 MAX_COLS = 256
+MAX_CELLS = 1000000
 NS = '{http://schemas.openxmlformats.org/spreadsheetml/2006/main}'
 
 class InvalidDataset(ValueError):
-    pass
+    def __init__(self, reason, row=None):
+        super().__init__(reason)
+        self.row = row
+
+def reader_settings(settings=None):
+    settings = {} if settings is None else settings
+    if not isinstance(settings, dict) or set(settings) - {'delimiter', 'header', 'skip_blank_rows', 'trim_whitespace', 'empty_as_null'}:
+        raise InvalidDataset('settings')
+    result = {'delimiter': 'auto', 'header': True, 'skip_blank_rows': True,
+              'trim_whitespace': False, 'empty_as_null': False, **settings}
+    if result['delimiter'] not in ('auto', ',', ';', '\t', '|') or any(type(result[k]) is not bool for k in ('header', 'skip_blank_rows', 'trim_whitespace', 'empty_as_null')):
+        raise InvalidDataset('settings')
+    return result
+
+def consume_cells(budget, count):
+    if budget is not None:
+        budget['cells'] += count
+        if budget['cells'] > MAX_CELLS:
+            raise InvalidDataset('limit')
 
 def check_archive(z):
     infos = z.infolist()
@@ -34,7 +53,7 @@ def xml(z, name):
         raise InvalidDataset('xml')
     return ET.fromstring(raw)
 
-def xlsx(raw):
+def xlsx(raw, settings=None, budget=None):
     with zipfile.ZipFile(io.BytesIO(raw)) as z:
         check_archive(z)
         book = xml(z, 'xl/workbook.xml')
@@ -91,12 +110,15 @@ def xlsx(raw):
                         base = epoch + dt.timedelta(days=1) if epoch.year == 1899 and serial < 60 else epoch
                         value = (base + dt.timedelta(days=serial)).isoformat(sep=' ')
                     values[col - 1] = value
-                if any(v is not None and v != '' for v in values):
-                    rows.append(values)
+                consume_cells(budget, len(values))
+                rows.append(values)
                 if len(rows) > MAX_ROWS + 1:
                     raise InvalidDataset('limit')
-            if rows:
-                result.append(normalize(sheet.get('name', 'Sheet'), rows, formulas))
+            if any(any(v not in (None, '') for v in row) for row in rows):
+                item = normalize(sheet.get('name', 'Sheet'), rows, formulas, settings, budget)
+                item['hidden'] = sheet.get('state', 'visible') != 'visible'
+                item['selected_by_default'] = not item['hidden'] and not any(d.get('selected_by_default') for d in result)
+                result.append(item)
         return result
 
 def identifier(value, index, used):
@@ -121,18 +143,39 @@ def json_text(value):
         return str(value)
     return json.dumps(value, ensure_ascii=False, allow_nan=False)
 
-def normalize(name, rows, formulas=0):
-    if not rows or len(rows) < 2:
+def normalize(name, rows, formulas=0, settings=None, budget=None):
+    settings = reader_settings(settings)
+    rows = list(rows)
+    leading_blank_rows = 0
+    if settings['header'] and settings['skip_blank_rows']:
+        while leading_blank_rows < len(rows) and not any(v not in (None, '') for v in rows[leading_blank_rows]):
+            leading_blank_rows += 1
+        rows = rows[leading_blank_rows:]
+    if not rows or (settings['header'] and len(rows) < 2):
         raise InvalidDataset('empty')
-    width = len(rows[0])
-    if not width or width > MAX_COLS or len(rows) - 1 > MAX_ROWS:
+    width = len(rows[0]) if settings['header'] else max(map(len, rows))
+    source_rows = rows[1:] if settings['header'] else rows
+    headings = rows[0] if settings['header'] else ['column_' + str(i + 1) for i in range(width)]
+    if not width or width > MAX_COLS or len(source_rows) > MAX_ROWS:
+        raise InvalidDataset('limit')
+    if width * (len(source_rows) + 1) > MAX_CELLS:
+        raise InvalidDataset('limit')
+    if any(v is not None and ('\x00' in str(v) or len(str(v).encode('utf-8')) > 1024 * 1024) for v in headings):
         raise InvalidDataset('limit')
     used = set()
-    columns = [{'source': str(v or ''), 'name': identifier(v, i, used), 'type': 'LONGTEXT'} for i, v in enumerate(rows[0])]
+    columns = [{'source': str(v or ''), 'name': identifier(v, i, used), 'type': 'LONGTEXT'} for i, v in enumerate(headings)]
     data = []
-    for row in rows[1:]:
+    blank_rows = leading_blank_rows
+    missing_values = 0
+    for ordinal, row in enumerate(source_rows, (2 if settings['header'] else 1) + leading_blank_rows):
         if len(row) > width:
-            raise InvalidDataset('shape')
+            raise InvalidDataset('shape', ordinal)
+        if all(v in (None, '') for v in row):
+            blank_rows += 1
+            if settings['skip_blank_rows']:
+                continue
+        missing_values += width - len(row)
+        consume_cells(budget, width - len(row))
         converted = []
         for v in row + [None] * (width - len(row)):
             if isinstance(v, (list, dict)):
@@ -141,10 +184,16 @@ def normalize(name, rows, formulas=0):
                 v = '1' if v else '0'
             elif v is not None:
                 v = str(v)
+            if isinstance(v, str) and settings['trim_whitespace']:
+                v = v.strip()
+            if v == '' and settings['empty_as_null']:
+                v = None
             if v is not None and ('\x00' in v or len(v.encode('utf-8')) > 1024 * 1024):
                 raise InvalidDataset('limit')
             converted.append(v)
         data.append(converted)
+    if not data:
+        raise InvalidDataset('empty')
     # Keep source values exact. Types are suggestions, never silent coercion.
     for i, column in enumerate(columns):
         vals = [r[i] for r in data if r[i] not in (None, '')]
@@ -157,32 +206,45 @@ def normalize(name, rows, formulas=0):
         column['empty'] = sum(r[i] in (None, '') for r in data)
         column['distinct'] = len(set(r[i] for r in data))
         column['unique'] = len(vals) == len(data) and len(set(vals)) == len(data)
-    return {'name': name, 'columns': columns, 'rows': data, 'count': len(data), 'formulas': formulas,
-            'duplicate_rows': len(data) - len(set(tuple(r) for r in data))}
+    suggestion = identifier(pathlib.Path(name).stem, 0, set())
+    return {'name': name, 'suggested_name': suggestion, 'columns': columns, 'rows': data, 'count': len(data), 'formulas': formulas,
+            'duplicate_rows': len(data) - len(set(tuple(r) for r in data)),
+            'blank_rows': blank_rows, 'skipped_blank_rows': blank_rows if settings['skip_blank_rows'] else 0,
+            'missing_values': missing_values, 'settings': settings}
 
-def read(raw, name):
+def read(raw, name, settings=None, budget=None):
+    settings = reader_settings(settings)
     ext = pathlib.Path(name).suffix.lower()
     if ext == '.xlsx':
-        return xlsx(raw)
+        return xlsx(raw, settings, budget)
     if ext in ('.csv', '.tsv', '.txt'):
+        csv.field_size_limit(1024 * 1024)
         text = raw.decode('utf-8-sig')
         try:
             dialect = csv.Sniffer().sniff(text[:65536], delimiters=',;\t|')
         except csv.Error:
             dialect = csv.excel_tab if ext in ('.tsv', '.txt') else csv.excel
         rows = []
-        for row in csv.reader(io.StringIO(text, newline=''), dialect):
+        options = {} if settings['delimiter'] == 'auto' else {'delimiter': settings['delimiter']}
+        for row in csv.reader(io.StringIO(text, newline=''), dialect, **options):
             if len(rows) > MAX_ROWS or len(row) > MAX_COLS:
                 raise InvalidDataset('limit')
-            if any(v != '' for v in row):
-                rows.append(row)
-        return [normalize(name, rows)]
+            consume_cells(budget, len(row))
+            rows.append(row)
+        item = normalize(name, rows, settings=settings, budget=budget)
+        item['delimiter'] = options.get('delimiter', dialect.delimiter)
+        item['selected_by_default'] = True
+        return [item]
     if ext == '.json':
         value = json.loads(raw.decode('utf-8-sig'), parse_float=decimal.Decimal, parse_constant=lambda value: (_ for _ in ()).throw(InvalidDataset('json_shape')))
         if not isinstance(value, list) or not value or not all(isinstance(r, dict) for r in value):
             raise InvalidDataset('json_shape')
         keys = list(dict.fromkeys(k for row in value for k in row))
-        return [normalize(name, [keys] + [[r.get(k) for k in keys] for r in value])]
+        consume_cells(budget, len(keys) * (len(value) + 1))
+        # A JSON object containing only nulls is still a record, not a blank CSV row.
+        item = normalize(name, [keys] + [[r.get(k) for k in keys] for r in value], settings={**settings, 'header': True, 'skip_blank_rows': False}, budget=budget)
+        item['selected_by_default'] = True
+        return [item]
     if ext == '.zip':
         result = []
         with zipfile.ZipFile(io.BytesIO(raw)) as z:
@@ -191,19 +253,20 @@ def read(raw, name):
                 if not entry.is_dir() and pathlib.Path(entry.filename).suffix.lower() in ('.xlsx', '.csv', '.tsv', '.txt', '.json'):
                     if len(result) >= 32:
                         raise InvalidDataset('limit')
-                    result.extend(read(z.read(entry), entry.filename))
+                    result.extend(read(z.read(entry), entry.filename, settings, budget))
         if not result:
             raise InvalidDataset('unsupported')
         return result
     raise InvalidDataset('unsupported')
 
-def parse(raw, name):
+def parse(raw, name, settings=None):
     if len(raw) > MAX_BYTES:
         raise InvalidDataset('limit')
-    datasets = read(raw, name)
+    settings = reader_settings(settings)
+    datasets = read(raw, name, settings, {'cells': 0})
     if not datasets or sum(d['count'] for d in datasets) > MAX_ROWS or len(datasets) > 32:
         raise InvalidDataset('limit')
-    return {'sha256': hashlib.sha256(raw).hexdigest(), 'datasets': datasets}
+    return {'sha256': hashlib.sha256(raw).hexdigest(), 'settings': settings, 'datasets': datasets}
 
 if __name__ == '__main__':
     try:
@@ -211,8 +274,10 @@ if __name__ == '__main__':
         import resource
         resource.setrlimit(resource.RLIMIT_CPU, (20, 20))
         resource.setrlimit(resource.RLIMIT_AS, (384 * 1024 * 1024, 384 * 1024 * 1024))
-        result = parse(sys.stdin.buffer.read(MAX_BYTES + 1), sys.argv[1])
+        settings = json.loads(sys.argv[2]) if len(sys.argv) > 2 else {}
+        result = parse(sys.stdin.buffer.read(MAX_BYTES + 1), sys.argv[1], settings)
         print(json.dumps(result, ensure_ascii=False, allow_nan=False))
     except Exception as error:
-        print(json.dumps({'error': str(error) if isinstance(error, InvalidDataset) else 'invalid'}))
+        print(json.dumps({'error': str(error) if isinstance(error, InvalidDataset) else 'invalid',
+                          'row': getattr(error, 'row', None)}))
         sys.exit(1)

@@ -31,6 +31,8 @@ use Govern\RecordExplorer;
 use Govern\RecordMap;
 use Govern\NativeImport;
 use Govern\DatasetImport;
+use Govern\ImportWorkflow;
+use Govern\TableDefinition;
 
 try {
     $baseConfig = Config::fromEnvironment();
@@ -42,16 +44,43 @@ try {
         (new Database($baseConfig))->reader()->query('SELECT 1')->fetchColumn();
         Http::json(['status' => 'ok']);
     }
-    (new Auth())->requireUser();
-    $posts = ['build-query', 'query', 'save-query', 'delete-query', 'create-snapshot', 'restore-snapshot', 'insert-row', 'update-row', 'delete-row', 'ai-context', 'ai-chat', 'prepare-database', 'record-map', 'native-import-preview', 'native-import-execute'];
+    $account = (new Auth())->requireUser();
+    $posts = ['build-query', 'query', 'save-query', 'delete-query', 'create-snapshot', 'restore-snapshot', 'insert-row', 'update-row', 'delete-row', 'ai-context', 'ai-chat', 'prepare-database', 'record-map', 'native-import-preview', 'native-import-execute',
+        'import-plan', 'import-submit', 'import-stop', 'import-targets', 'table-definition-preview', 'table-definition-create'];
     $datasetUpload = in_array($action, ['dataset-preview', 'dataset-import'], true);
-    $file = $datasetUpload ? DatasetImport::upload($csrf) : null;
+    $multipartUpload = $datasetUpload || $action === 'import-source';
+    $file = $multipartUpload ? DatasetImport::upload($csrf) : null;
     $input = in_array($action, $posts, true) ? Http::post($csrf) : [];
-    if (!$datasetUpload && !in_array($action, $posts, true)) {
+    if (!$multipartUpload && !in_array($action, $posts, true)) {
         Http::get();
     }
+    // These installation-wide workflows bind their own reviewed destination.
+    // They must also work when the currently open database is unavailable.
+    if (in_array($action, ['database-workflows', 'import-source', 'import-plan', 'import-submit', 'import-job', 'import-jobs', 'import-stop', 'import-targets'], true)) {
+        $workflow = new ImportWorkflow($baseConfig);
+        if ($action === 'database-workflows') Http::json($workflow->capabilities());
+        if ($action === 'import-source') {
+            $settingsText = Http::text($_POST, 'settings', false);
+            if (strlen($settingsText) > 16384) throw ApiException::fromCode('workflow_invalid', 422);
+            try { $settings = $settingsText === '' ? [] : json_decode($settingsText, true, 16, JSON_THROW_ON_ERROR); }
+            catch (JsonException) { throw ApiException::fromCode('workflow_invalid', 422); }
+            if (!is_array($settings) || ($settings !== [] && array_is_list($settings))) throw ApiException::fromCode('workflow_invalid', 422);
+            Http::json($workflow->upload($file, Http::text($_POST, 'kind'), $settings, $account['id']), 201);
+        }
+        if ($action === 'import-plan') Http::json($workflow->plan($input, $account['id']), 201);
+        if ($action === 'import-submit') Http::json($workflow->submit($input, $account['id']), 202);
+        if ($action === 'import-targets') Http::json($workflow->targets($input));
+        if ($action === 'import-job') Http::json($workflow->job(Http::text($_GET, 'id')));
+        if ($action === 'import-jobs') Http::json($workflow->jobs());
+        Http::json($workflow->stop($input));
+    }
     $scope = new ConnectionScope($baseConfig);
-    if ($action === 'databases') Http::json(['databases' => $scope->databases(), 'default_database' => $baseConfig['name'],
+    $databaseChoices = static function (ConnectionScope $scope) use ($baseConfig): array {
+        $entries = $scope->databases();
+        try { return (new ImportWorkflow($baseConfig))->decorateDatabases($entries); }
+        catch (ApiException | PDOException | JsonException) { return $entries; }
+    };
+    if ($action === 'databases') Http::json(['databases' => $databaseChoices($scope), 'default_database' => $baseConfig['name'],
         'can_create' => (new DatabaseProvisioner())->isAvailable()]);
     $config = $scope->selectRequest(Http::text($_GET, 'database', false),
         array_key_exists('connection', $_GET) ? Http::text($_GET, 'connection', false) : null,
@@ -62,7 +91,7 @@ try {
         $prepared = (new DatabaseProvisioner())->prepare($input);
         // Permissions changed: discard the catalog cached before provisioning.
         $freshScope = new ConnectionScope($baseConfig);
-        Http::json([...$prepared, 'databases' => $freshScope->databases(), 'default_database' => $baseConfig['name']],
+        Http::json([...$prepared, 'databases' => $databaseChoices($freshScope), 'default_database' => $baseConfig['name']],
             $prepared['created'] ? 201 : 200);
     }
     $snapshotActions = ['snapshots', 'create-snapshot', 'restore-snapshot', 'download-snapshot'];
@@ -90,6 +119,12 @@ try {
         exit;
     }
     $database = new Database($config);
+    if (in_array($action, ['table-definition-preview', 'table-definition-create'], true)) {
+        $lock = new MaintenanceLock($config['maintenance_dir'], $action === 'table-definition-create');
+        $definition = new TableDefinition($database, $config);
+        Http::json($action === 'table-definition-preview' ? $definition->preview($input) : $definition->create($input),
+            $action === 'table-definition-create' ? 201 : 200);
+    }
     if ($datasetUpload) {
         $parsed = DatasetImport::read($file);
         $lock = new MaintenanceLock($config['maintenance_dir']);
@@ -120,11 +155,12 @@ try {
         Http::json($action === 'ai-context' ? $ai->previewContext($input) : $ai->chat($input));
     }
     if ($action === 'bootstrap') {
-        $data = ['csrf' => $csrf, 'databases' => $scope->databases(), 'default_database' => $baseConfig['name'],
-            'can_create_database' => $config['engine'] === 'mariadb' && (new DatabaseProvisioner())->isAvailable(),
+        $data = ['csrf' => $csrf, 'databases' => $databaseChoices($scope), 'default_database' => $baseConfig['name'],
+            'can_create_database' => (new DatabaseProvisioner())->isAvailable($config['engine']),
             'scope_key' => $config['scope_key'], 'capabilities' => ConnectionScope::capabilities($config),
             'database' => ['name' => $config['name'], 'connection' => $config['connection'], 'engine' => $config['engine'],
                 'schema' => $config['schema'] ?? $config['name'], 'scope_key' => $config['scope_key'],
+                'schemas' => $config['schemas'] ?? [],
                 'version' => null, 'status' => 'unavailable', 'available' => false],
             'stats' => ['tables' => 0, 'views' => 0, 'rows_estimate' => 0], 'tables' => []];
         try {

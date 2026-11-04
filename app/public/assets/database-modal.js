@@ -36,6 +36,9 @@ export class DatabaseModal {
         this.onClose = onClose;
         this.onOpenChange = onOpenChange;
         this.importInspection = new ImportInspectionPanel(busy => this.setBusy(busy));
+        // Ordinary imports use the unified wizard. This panel only reports
+        // before/after observations for the advanced official application.
+        this.importInspection.ownPanel.remove();
         this.datasetImport = new DatasetImportPanel(busy => {
             this.setBusy(busy);
         });
@@ -83,7 +86,6 @@ export class DatabaseModal {
                     el('div', {class: 'modal-database'}, icon('database'), this.name, this.databaseSelect),
                     el('label', {class: 'sr-only', for: 'modal-table', 'data-i18n': 'modal.table'}, t('modal.table')), this.tableSelect)),
             this.sourceHint = el('p', {id: 'modal-source-hint', class: 'modal-source-hint small muted', 'data-i18n': 'modal.sourceHint'}, t('modal.sourceHint')),
-            this.datasetImport.panel,
             this.importInspection.panel,
             this.panel,
             el('div', {class: 'database-dialog-footer'}, el('span', {class: 'status-dot'}), this.status,
@@ -161,8 +163,8 @@ export class DatabaseModal {
                 this.datasetImport.draft.confirmation = '';
             }
         }
-        this.databases = [...databases];
-        this.sourceHint.dataset.i18n = this.databases.some(item => item.connection === 'postgres') ? 'modal.sourceHint' : 'modal.onlyMariaDb';
+        this.databases = databases.filter(item => item.connection !== 'postgres');
+        this.sourceHint.dataset.i18n = 'modal.sourceHint';
         this.sourceHint.textContent = t(this.sourceHint.dataset.i18n);
         this.databaseSelect.replaceChildren(...['mariadb', 'postgres'].map(engine => {
             const items = this.databases.filter(item => (item.connection === 'postgres' ? 'postgres' : 'mariadb') === engine);
@@ -188,7 +190,7 @@ export class DatabaseModal {
             this.frame.src = 'about:blank';
             this.external.removeAttribute('href');
         }
-        for (const [key, tab] of Object.entries(this.tabButtons)) tab.hidden = this.isPostgres() && !['import', 'dataset'].includes(key);
+        for (const [key, tab] of Object.entries(this.tabButtons)) tab.hidden = key === 'dataset' || this.isPostgres();
         this.tabButtons.import.setAttribute('aria-controls', this.isPostgres() ? 'import-inspection' : 'database-panel');
         this.importInspection.panel.setAttribute('role', this.isPostgres() ? 'tabpanel' : 'region');
         this.importInspection.panel.setAttribute('aria-labelledby', this.isPostgres() ? 'database-tab-import' : 'import-inspection-title');
@@ -205,7 +207,7 @@ export class DatabaseModal {
     }
 
     open(table = '', tab = 'browse') {
-        if (this.isBusy()) return;
+        if (this.isBusy() || this.isPostgres() || tab === 'dataset') return;
         const available = table && this.tables.some(item => item.name === table);
         this.table = available ? table : '';
         this.tab = this.isPostgres() ? (tab === 'dataset' ? 'dataset' : 'import') : routes[tab] ? tab : 'browse';

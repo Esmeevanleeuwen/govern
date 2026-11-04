@@ -49,7 +49,7 @@ const entries = {
     'dashboard.view': ['overzicht', 'view'],
     'dashboard.viewAll': ['Alles bekijken', 'View all'],
     'dashboard.noTables': ['Nog geen tabellen', 'No tables yet'],
-    'dashboard.noTablesHelp': ['Open het databasevenster om gegevens te importeren, of herstel een eerder herstelpunt.', 'Open the database window to import data, or restore an earlier point.'],
+    'dashboard.noTablesHelp': ['Open Records om een tabel te maken of Gegevens toevoegen te gebruiken. Kies Database toevoegen voor een nieuwe database en Back-ups voor bestaande herstelpunten.', 'Open Records to create a table or use Add data. Choose Add database for a new database and Backups for existing recovery points.'],
     'dashboard.noResearch': ['Bewaar je vragen.', 'Keep your questions close.'],
     'dashboard.noResearchHelp': ['Sla een query met notities op en ga later verder waar je bleef.', 'Save a query and its notes to pick up where you left off.'],
     'dashboard.newResearch': ['Nieuw onderzoek', 'New research'],

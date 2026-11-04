@@ -28,9 +28,11 @@ final class DatabaseProvisioner
         return $name;
     }
 
-    public function isAvailable(): bool
+    public function isAvailable(?string $engine = null): bool
     {
+        if ($engine !== null && !in_array($engine, ['mariadb', 'postgres'], true)) return false;
         if ($this->transport !== null) return true;
+        if ($engine === 'postgres' && getenv('PG_ENABLED') !== '1') return false;
         if (!$this->validSocket()) return false;
         clearstatcache(true, $this->socket);
         return !is_link($this->socket) && @filetype($this->socket) === 'socket';
@@ -62,6 +64,51 @@ final class DatabaseProvisioner
             throw ApiException::fromCode('database_manager_invalid', 502);
         }
         return ['database' => $name, 'created' => $data['created']];
+    }
+
+    /** New journeys never prepare an occupied name. Credentials stay server-side. */
+    public function create(array $input): array
+    {
+        $keys = array_keys($input); sort($keys);
+        if ($keys !== ['engine', 'name', 'operation_id']) throw ApiException::fromCode('database_create_invalid', 422);
+        $engine = $input['engine'];
+        if (!is_string($engine) || !in_array($engine, ['mariadb', 'postgres'], true))
+            throw ApiException::fromCode('database_create_invalid', 422);
+        $name = self::validateCreateName($input['name'], $engine);
+        $id = $input['operation_id'];
+        if (!is_string($id) || preg_match('/\A[A-Za-z0-9_-]{16,96}\z/D', $id) !== 1)
+            throw ApiException::fromCode('database_create_invalid', 422);
+        $request = ['action' => 'create_database', 'engine' => $engine, 'name' => $name, 'operation_id' => $id];
+        try { $response = $this->transport === null ? $this->exchange($request) : ($this->transport)($request); }
+        catch (ApiException $exception) { throw $exception; }
+        catch (\Throwable) { throw ApiException::fromCode('database_manager_unavailable', 503); }
+        if (!is_array($response) || !is_bool($response['ok'] ?? null)) throw ApiException::fromCode('database_manager_invalid', 502);
+        if (!$response['ok']) {
+            $status = ['database_create_invalid' => 422, 'database_exists' => 409,
+                'database_creation_uncertain' => 409, 'database_prepare_failed' => 503,
+                'database_manager_unavailable' => 503][$response['error_code'] ?? ''] ?? null;
+            if ($status === null || count($response) !== 2) throw ApiException::fromCode('database_manager_invalid', 502);
+            throw ApiException::fromCode($response['error_code'], $status);
+        }
+        $data = $response['data'] ?? null;
+        $scope = ConnectionScope::scopeKey($engine, $name, $engine === 'postgres' ? 'public' : '');
+        if (count($response) !== 2 || !is_array($data) || count($data) !== 6
+            || ($data['database'] ?? null) !== $name || ($data['engine'] ?? null) !== $engine
+            || ($data['created'] ?? null) !== true || ($data['scope_key'] ?? null) !== $scope
+            || !is_string($data['import_user'] ?? null) || !preg_match('/\Agovern_import_[a-f0-9]{16}\z/D', $data['import_user'])
+            || !is_string($data['import_password'] ?? null) || !preg_match('/\A[a-f0-9]{64}\z/D', $data['import_password']))
+            throw ApiException::fromCode('database_manager_invalid', 502);
+        return $data;
+    }
+
+    public static function validateCreateName(mixed $name, string $engine): string
+    {
+        if (!in_array($engine, ['mariadb', 'postgres'], true) || !is_string($name)
+            || preg_match('/\A[a-z][a-z0-9_]{0,62}\z/D', $name) !== 1
+            || in_array($name, ['mysql', 'information_schema', 'performance_schema', 'sys', 'postgres', 'template0', 'template1'], true)
+            || str_starts_with($name, 'pg_') || str_starts_with($name, '_govern_'))
+            throw ApiException::fromCode('database_create_invalid', 422);
+        return $engine === 'mariadb' ? self::validateName($name) : $name;
     }
 
     private function validSocket(): bool

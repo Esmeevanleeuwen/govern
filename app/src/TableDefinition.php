@@ -1,0 +1,220 @@
+<?php
+declare(strict_types=1);
+
+namespace Govern;
+
+use PDO;
+
+/** A small, generated new-table contract; it never edits or replaces a table. */
+final class TableDefinition
+{
+    public const MAX_COLUMNS = 256;
+    public const MAX_SQL_BYTES = 262144;
+
+    public function __construct(private readonly Database $database, private readonly array $config = []) {}
+
+    /** Pure validation/compiler, also used by the unit suite without database access. */
+    public static function compile(array $input, string $engine, string $database, string $schema): array
+    {
+        if (!in_array($engine, ['mariadb', 'postgres'], true) || !self::keys($input, ['name', 'columns'])
+            || !is_array($input['columns']) || !array_is_list($input['columns'])
+            || count($input['columns']) < 1 || count($input['columns']) > self::MAX_COLUMNS) {
+            throw ApiException::fromCode('table_definition_invalid', 422);
+        }
+        $name = self::name($input['name']);
+        $columns = []; $names = []; $primary = null;
+        foreach ($input['columns'] as $raw) {
+            if (!is_array($raw) || !self::keys($raw, ['name', 'type', 'nullable', 'primary', 'generated', 'default'], ['precision', 'scale'])) {
+                throw ApiException::fromCode('table_definition_column', 422);
+            }
+            $column = self::name($raw['name']);
+            if (isset($names[$column]) || !is_string($raw['type'])
+                || !in_array($raw['type'], ['text', 'whole', 'decimal', 'boolean', 'date', 'datetime'], true)
+                || !is_bool($raw['nullable']) || !is_bool($raw['primary']) || !is_bool($raw['generated'])) {
+                throw ApiException::fromCode('table_definition_column', 422);
+            }
+            $names[$column] = true;
+            if ($raw['primary']) {
+                if ($primary !== null || $raw['nullable'] || $raw['type'] === 'text') {
+                    throw ApiException::fromCode('table_definition_column', 422);
+                }
+                $primary = $column;
+            }
+            $precision = 18; $scale = 2;
+            if ($raw['type'] === 'decimal') {
+                $precision = $raw['precision'] ?? 18; $scale = $raw['scale'] ?? 2;
+                if (!is_int($precision) || !is_int($scale) || $precision < 1 || $precision > 65
+                    || $scale < 0 || $scale > min($precision, 30)) {
+                    throw ApiException::fromCode('table_definition_column', 422);
+                }
+            } elseif (isset($raw['precision']) || isset($raw['scale'])) {
+                throw ApiException::fromCode('table_definition_column', 422);
+            }
+            if (!is_array($raw['default']) || !self::keys($raw['default'], ['mode'], ['value'])
+                || !in_array($raw['default']['mode'], ['none', 'null', 'literal'], true)
+                || ($raw['default']['mode'] === 'literal') !== array_key_exists('value', $raw['default'])) {
+                throw ApiException::fromCode('table_definition_default', 422);
+            }
+            if ($raw['generated'] && ($raw['type'] !== 'whole' || !$raw['primary'] || $raw['nullable'] || $raw['default']['mode'] !== 'none')) {
+                throw ApiException::fromCode('table_definition_column', 422);
+            }
+            if ($raw['default']['mode'] === 'null' && !$raw['nullable']) {
+                throw ApiException::fromCode('table_definition_default', 422);
+            }
+            $normalized = ['name' => $column, 'type' => $raw['type'], 'nullable' => $raw['nullable'],
+                'primary' => $raw['primary'], 'generated' => $raw['generated'], 'default' => ['mode' => $raw['default']['mode']]];
+            if ($raw['type'] === 'decimal') $normalized += ['precision' => $precision, 'scale' => $scale];
+            if ($raw['default']['mode'] === 'literal') {
+                $normalized['default']['value'] = self::literal($raw['default']['value'], $raw['type'], $precision, $scale);
+            }
+            $columns[] = $normalized;
+        }
+        $definition = ['name' => $name, 'columns' => $columns];
+        $quote = static fn (string $identifier): string => $engine === 'postgres'
+            ? '"' . str_replace('"', '""', $identifier) . '"' : Database::identifier($identifier);
+        $parts = [];
+        foreach ($columns as $column) {
+            $type = match ($column['type']) {
+                'text' => $engine === 'postgres' ? 'text' : 'LONGTEXT',
+                'whole' => $engine === 'postgres' ? 'bigint' : 'BIGINT',
+                'decimal' => 'DECIMAL(' . $column['precision'] . ', ' . $column['scale'] . ')',
+                'boolean' => 'BOOLEAN', 'date' => 'DATE',
+                'datetime' => $engine === 'postgres' ? 'timestamp(6) without time zone' : 'DATETIME(6)',
+            };
+            $sql = $quote($column['name']) . ' ' . $type;
+            if ($column['generated'] && $engine === 'postgres') $sql .= ' GENERATED BY DEFAULT AS IDENTITY';
+            $sql .= $column['nullable'] ? ' NULL' : ' NOT NULL';
+            if ($column['generated'] && $engine === 'mariadb') $sql .= ' AUTO_INCREMENT';
+            if ($column['default']['mode'] === 'null') $sql .= ' DEFAULT NULL';
+            if ($column['default']['mode'] === 'literal') {
+                $value = $column['default']['value'];
+                $sql .= ' DEFAULT ' . match ($column['type']) {
+                    'whole', 'decimal' => $value,
+                    'boolean' => $value === 'true' ? 'TRUE' : 'FALSE',
+                    default => self::quoteLiteral($value, $engine),
+                };
+            }
+            $parts[] = $sql;
+        }
+        if ($primary !== null) $parts[] = 'PRIMARY KEY (' . $quote($primary) . ')';
+        $sql = 'CREATE TABLE ' . $quote($engine === 'postgres' ? $schema : $database) . '.' . $quote($name)
+            . " (\n    " . implode(",\n    ", $parts) . "\n)" . ($engine === 'mariadb' ? ' ENGINE=InnoDB DEFAULT CHARSET=utf8mb4' : '') . ';';
+        if (strlen($sql) > self::MAX_SQL_BYTES) throw ApiException::fromCode('table_definition_invalid', 422);
+        return ['definition' => $definition, 'sql' => $sql, 'table' => $name, 'database' => $database,
+            'schema' => $engine === 'postgres' ? $schema : $database, 'engine' => $engine];
+    }
+
+    public function preview(array $input): array
+    {
+        $compiled = self::compile($input, $this->database->engine(), $this->database->name(), $this->database->schemaName());
+        if ($this->exists($compiled['table'])) throw ApiException::fromCode('table_definition_exists', 409, ['table' => $compiled['table']]);
+        return [...$compiled, 'definition_token' => self::token($compiled)];
+    }
+
+    public function create(array $input): array
+    {
+        if (!self::keys($input, ['definition', 'definition_token']) || !is_array($input['definition'])
+            || !is_string($input['definition_token']) || !preg_match('/\A[a-f0-9]{64}\z/D', $input['definition_token'])) {
+            throw ApiException::fromCode('table_definition_invalid', 422);
+        }
+        $compiled = $this->preview($input['definition']);
+        if (!hash_equals($compiled['definition_token'], $input['definition_token'])) {
+            throw ApiException::fromCode('table_definition_changed', 409);
+        }
+        try {
+            // PostgreSQL's dedicated SQL role has scoped DDL; the DML role does not.
+            // The request supplies no SQL, identifiers outside the generated definition, or credentials.
+            $this->database->scriptConnection()->exec($compiled['sql']);
+        } catch (\PDOException $exception) {
+            $state = (string) $exception->getCode();
+            $number = (int) ($exception->errorInfo[1] ?? 0);
+            if (in_array($state, ['42P07', '42S01'], true) || $number === 1050) {
+                throw ApiException::fromCode('table_definition_exists', 409, ['table' => $compiled['table']]);
+            }
+            if (str_starts_with($state, '08') || in_array($number, [2006, 2013], true)) {
+                throw ApiException::fromCode('table_definition_uncertain', 503, ['table' => $compiled['table']]);
+            }
+            throw ApiException::fromCode('table_definition_create_failed', 503, ['table' => $compiled['table']]);
+        }
+        $verified = false;
+        try { $this->database->discardReader(); $verified = $this->exists($compiled['table']); }
+        catch (\PDOException | ApiException) { /* DDL returned successfully; do not disguise creation as no effect. */ }
+        unset($compiled['definition_token']);
+        return [...$compiled, 'created' => true, 'verified' => $verified,
+            'scope_key' => ConnectionScope::scopeKey($this->database->engine() === 'postgres' ? 'postgres' : 'mariadb',
+                $this->database->name(), $this->database->schemaName())];
+    }
+
+    private function exists(string $name): bool
+    {
+        $pdo = $this->database->reader();
+        $q = $pdo->prepare('SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = ? AND LOWER(table_name) = LOWER(?)');
+        $q->execute([$this->database->schemaName(), $name]);
+        return (int) $q->fetchColumn() !== 0;
+    }
+
+    private static function token(array $compiled): string
+    {
+        return hash('sha256', json_encode($compiled, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
+    }
+
+    private static function keys(array $input, array $required, array $optional = []): bool
+    {
+        return array_diff($required, array_keys($input)) === [] && array_diff(array_keys($input), [...$required, ...$optional]) === [];
+    }
+
+    private static function name(mixed $value): string
+    {
+        if (!is_string($value) || !preg_match('/\A[a-z][a-z0-9_]{0,62}\z/D', $value)) {
+            throw ApiException::fromCode('table_definition_name', 422);
+        }
+        return $value;
+    }
+
+    private static function quoteLiteral(string $value, string $engine): string
+    {
+        // Both sessions explicitly set their string-literal modes. Backslashes
+        // and apostrophes are escaped separately; values can never become SQL.
+        return ($engine === 'postgres' ? 'E' : '') . "'" . str_replace(['\\', "'"], ['\\\\', "''"], $value) . "'";
+    }
+
+    private static function literal(mixed $value, string $type, int $precision, int $scale): string
+    {
+        if (is_bool($value) && $type === 'boolean') $value = $value ? 'true' : 'false';
+        elseif (is_int($value)) $value = (string) $value;
+        if (!is_string($value) || strlen($value) > 4096 || str_contains($value, "\0") || preg_match('//u', $value) !== 1) {
+            throw ApiException::fromCode('table_definition_default', 422);
+        }
+        $valid = match ($type) {
+            'text' => true,
+            'whole' => preg_match('/\A-?(?:0|[1-9][0-9]*)\z/D', $value) === 1 && self::wholeInRange($value),
+            'decimal' => self::decimalInRange($value, $precision, $scale),
+            'boolean' => in_array($value, ['true', 'false'], true),
+            'date' => self::validDate($value),
+            'datetime' => preg_match('/\A([0-9]{4}-[0-9]{2}-[0-9]{2})[ T]([0-9]{2}):([0-9]{2}):([0-9]{2})(?:\.[0-9]{1,6})?\z/D', $value, $parts) === 1
+                && self::validDate($parts[1]) && (int) $parts[2] < 24 && (int) $parts[3] < 60 && (int) $parts[4] < 60,
+        };
+        if (!$valid) throw ApiException::fromCode('table_definition_default', 422);
+        return $type === 'datetime' ? str_replace('T', ' ', $value) : $value;
+    }
+
+    private static function validDate(string $value): bool
+    {
+        return preg_match('/\A([0-9]{4})-([0-9]{2})-([0-9]{2})\z/D', $value, $p) === 1
+            && (int) $p[1] >= 1000 && checkdate((int) $p[2], (int) $p[3], (int) $p[1]);
+    }
+
+    private static function wholeInRange(string $value): bool
+    {
+        $negative = str_starts_with($value, '-'); $digits = ltrim($value, '-');
+        $limit = $negative ? '9223372036854775808' : '9223372036854775807';
+        return strlen($digits) < strlen($limit) || (strlen($digits) === strlen($limit) && strcmp($digits, $limit) <= 0);
+    }
+
+    private static function decimalInRange(string $value, int $precision, int $scale): bool
+    {
+        if (!preg_match('/\A-?(0|[1-9][0-9]*)(?:\.([0-9]+))?\z/D', $value, $p)) return false;
+        $integer = ltrim($p[1], '0'); $fraction = $p[2] ?? '';
+        return strlen($integer) <= $precision - $scale && strlen($fraction) <= $scale;
+    }
+}

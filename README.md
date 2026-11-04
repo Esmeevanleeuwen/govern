@@ -65,7 +65,8 @@ PostgreSQL is een optionele tweede verbinding. De bestaande tabelverkenner,
 structuurweergave, het schemadiagram en de recordkaart kunnen PostgreSQL-
 gegevens en relaties tonen. Via **Records** kun je ook rijen toevoegen, bewerken
 en verwijderen. **Onderzoeken** voert vrije PostgreSQL-SQL uit; via
-**Database → Tools → Importeren** lees je SQL- en tabelbestanden in.
+**Database toevoegen** importeer je een nieuwe database of dataset. Binnen een
+bestaande database gebruik je **Gegevens toevoegen** voor tabelbestanden.
 **Backups** bewaart en herstelt het gekozen PostgreSQL-schema. De visuele
 querybouwer, opgeslagen onderzoeken en AI zijn nog niet beschikbaar voor
 PostgreSQL. phpMyAdmin blijft bij MariaDB horen.
@@ -74,7 +75,7 @@ PostgreSQL. phpMyAdmin blijft bij MariaDB horen.
 2. Bewaar de standaardwaarden `PG_DATABASE=govern_pg` en `PG_SCHEMAS=public`,
    of kies de bestaande schema's die je wilt tonen, gescheiden door komma's.
 3. Start opnieuw met `.\start.cmd` in PowerShell, of `sh start.sh` op macOS/Linux.
-4. Log in en kies bovenaan de vermelding **govern_pg · public · PostgreSQL**.
+4. Log in en kies bovenaan de vermelding **govern_pg · PostgreSQL**; `public` is het afzonderlijke schema binnen die database.
 
 De startbestanden maken ontbrekende PostgreSQL-wachtwoorden aan en starten
 het optionele Docker-profiel. De nieuwe database is aanvankelijk leeg;
@@ -119,8 +120,9 @@ Meer over configuratie, schema's en de volgende bouwfasen:
 Database heeft drie vaste hoofdtaken: **Records**, **Explore** en **Schema**.
 Records is voor gewone tabelrijen en bewerken; Explore is voor verbindingen
 tussen echte records. Schema groepeert tabeldetails en het schemadiagram.
-Onder **Database → Tools** staan import en herstelpunten; MariaDB biedt daar
-ook de officiële phpMyAdmin-export. Onderzoeken is voor vrije SQL. De visuele
+Gebruik **Gegevens toevoegen** binnen een database voor datasets en **Backups**
+voor herstelpunten. De officiële phpMyAdmin-import en -export horen bij
+**Geavanceerde MariaDB-tools**. Onderzoeken is voor vrije SQL. De visuele
 querybouwer en opgeslagen onderzoeken zijn voorlopig alleen voor MariaDB.
 
 Open **Database → Explore** (`#verkennen`). Oude `#verbanden`-links openen
@@ -151,10 +153,10 @@ database en schema apart. Recordgegevens gaan niet naar browseropslag. Zie
 
 ## Een andere database kiezen of toevoegen
 
-De compacte bovenbalk houdt de databasekiezer en **Database openen / Open
+De compacte bovenbalk houdt de databasekiezer en **Database toevoegen / Add
 database** zichtbaar. Onder **Gereedschap / Tools** staan de selectieaanwijzer,
-het tweede scherm, de AI-assistent, verversen, context exporteren, databases
-toevoegen/importeren, taal en Account. Klik buiten het menu of druk op Escape
+het tweede scherm, de AI-assistent, verversen, context exporteren,
+**Geavanceerde MariaDB-tools**, taal en Account. Klik buiten het menu of druk op Escape
 om het te sluiten. De verbindingsstatus staat als stip bij de databasekiezer;
 de volledige status blijft beschikbaar via de tooltip en schermlezer.
 
@@ -163,51 +165,97 @@ context-export en herstelpunten volgen die keuze. Je onderzoeksconcept en
 tabelkeuze blijven tijdens deze browsersessie per database behouden; de keuze
 geldt alleen voor dit browsertabblad.
 
-Gebruik **Gereedschap → Database toevoegen of importeren**. Je hoeft
-daarvoor `.env` niet aan te passen:
+Gebruik **Database toevoegen / Add database** voor één van drie taken. De
+gewone databasekiezer opent uitsluitend bestaande databases en vermeldt altijd
+de engine. Aanmaken en importeren gebruiken dezelfde begeleide stappen; er
+staan geen twee gewone importformulieren boven elkaar.
 
-1. Vul een databasenaam in, bijvoorbeeld `onderzoek`.
-2. Kies **Database aanmaken** of **Aanmaken en SQL importeren**.
-3. Govern maakt een ontbrekende database leeg aan en kiest die database. Bij
-   importeren opent de importcontrole met een **eigen Govern-import** boven het bestaande phpMyAdmin-venster.
-4. Kies voor een UTF-8 `.sql`-bestand tot 256 KiB **Controleer bestand**, lees de risico's,
-   typ de exacte databasenaam en kies **Import uitvoeren**. Bekijk daarna de nacontrole.
-   Gebruik voor grotere of complexe dumps de officiële phpMyAdmin-import eronder.
+1. **Een lege database aanmaken / Create an empty database**: kies MariaDB of
+   PostgreSQL, vul de echte nieuwe naam in en kies de benoemde aanmaakactie.
+   Na succes kun je de lege database openen en **Eerste tabel toevoegen** kiezen.
+   De native tabelbouwer ondersteunt tekst, gehele getallen, decimalen, booleans,
+   datum en datum/tijd, een eenvoudige primaire sleutel, NULL en gecontroleerde
+   standaardwaarden. Geavanceerde enginefuncties blijven bij SQL en de echte
+   geavanceerde beheertools.
+2. **Een databaseback-up importeren / Import a database backup**: kies eerst het
+   bestand. Govern toont welke bronengine wordt herkend of vraagt je de
+   bronengine te bevestigen. Een MariaDB-dump gaat naar MariaDB en een
+   PostgreSQL-export naar PostgreSQL; een enginekeuze zet geen SQL om. Geef
+   daarna een nieuwe databasenaam op, controleer bron en bestemming en kies
+   **Aanmaken en importeren**. Deze route ondersteunt een begrensde selectie
+   gewone UTF-8 SQL tot 256 KiB en 4.096 statements. Clientcommando's zoals
+   PostgreSQL COPY-data, custom PGDMP-archieven, routines en dumps die een
+   oorspronkelijke database selecteren of buiten het ondersteunde schema
+   verwijzen worden vóór aanmaak geweigerd. Exporteer zulke bronnen opnieuw
+   met ondersteunde opties; Govern herschrijft geen bronverwijzingen.
+3. **Een dataset importeren / Import a dataset**: kies eerst CSV, TSV, TXT, XLSX
+   of JSON, controleer de parserinstellingen en kies daarna engine, nieuwe
+   database en tabelnamen. Bekijk de expliciete kolomkoppelingen, lege tekst
+   en NULL voordat je uitvoert. De eerste versie bewaart waarden als tekst of
+   NULL, zonder automatische conversie van bijvoorbeeld `00123` naar een getal.
+   Nieuwe tabellen krijgen een afzonderlijke gegenereerde rij-identificatie;
+   namen als `organization_id` maken geen relaties of foreign keys.
 
-De databasekiezer in het importvenster groepeert MariaDB en PostgreSQL. Je kunt
-daar tussen bestaande ingeschakelde databases en schema's wisselen. Het gekozen
-doel staat bij de import; de bevestiging moet exact dat doel bevatten. Een naam
-typen in het bevestigingsveld maakt of kiest geen database. Kies een ander doel
-vóór de bestandscontrole: wisselen wist de eerdere voorcontrole en bevestiging.
-Tijdens een lopende import blijft de keuze vaststaan. PostgreSQL gebruikt de
-eigen importweergave; phpMyAdmin hoort bij MariaDB.
+Elke globale import maakt een nieuwe database. Een bezette naam blokkeert de
+handeling; Govern kiest die bestaande database niet stilzwijgend en voegt geen
+suffix toe. De naam is het echte nieuwe doel, zonder een tweede bevestigingsveld
+waarin je hem opnieuw moet typen. Broncontrole en de laatste samenvatting maken
+nog niets aan; alleen de benoemde eindactie start de bewerking. Namen voor deze
+nieuwe taken beginnen met een kleine letter, bevatten daarna kleine letters,
+cijfers of underscores en zijn maximaal 63 tekens. Systeemnamen zijn uitgesloten.
+De rechten en nieuwe databases blijven na opnieuw starten zichtbaar.
 
-De tab **Import** toont vóór het uploaden hoeveel tabellen, views, relaties en records al
-bestaan. Na een SQL-import vergelijkt Govern de actuele structuur en
-rijaantallen met de voorcontrole. Onder **Tabellen en inhoudelijke volledigheid**
-zie je bij Bestuursatlas ook welke onderdelen ontbreken of nog leeg zijn.
-Foutmeldingen uit phpMyAdmin en de leescontrole worden zichtbaar gemaakt; het
-volledige importresultaat blijft in phpMyAdmin. Niet alle grote tabellen kunnen
-exact worden geteld: zulke aantallen staan uitdrukkelijk als niet gecontroleerd.
-Dit is geen garantie dat een import veilig of volledig is.
+Open een bestaande database en kies **Gegevens toevoegen / Add data** om een
+dataset naar een nieuwe tabel te importeren of rijen aan een bestaande,
+ondersteunde teksttabel toe te voegen. Engine, database en schema blijven daar
+vaststaan. Elke bronkolom krijgt een doel of een expliciete keuze om hem over
+te slaan. Bestaande rijen blijven behouden; bij herhalen kunnen dezelfde
+bronrijen opnieuw worden toegevoegd. Gewone Gegevens toevoegen bevat geen
+vervangen, samenvoegen of overschrijven. Een backup terugzetten blijft onder
+**Backups**, met zijn eigen destructieve gevolgen en bevestiging.
 
-In hetzelfde venster kun je een bestaande database kiezen of de import voor de
-geselecteerde database openen. Een bestaande naam toevoegen vervangt geen
-gegevens; de expliciete import kan dat wel doen, afhankelijk van het SQL-bestand.
-De eigen Govern-import maakt vooraf een herstelpunt als er al tabellen
-of views bestaan (ook interne Govern-tabellen). Het herstelpunt is geen algemene undo en de controle garandeert
-geen inhoudelijke volledigheid. Tijdens de eigen import worden overige
-Govern-bewerkingen vergrendeld; open phpMyAdmin-verzoeken volgen die lock niet.
-SQL heeft de rechten van het schrijvende databaseaccount en kan ook een andere
-reeds toegestane database wijzigen, bijvoorbeeld via `USE`. Importeer daarom alleen
-vertrouwde SQL-bestanden. De eigen begrenzing is voorlopig 256 KiB.
-De officiële phpMyAdmin-import blijft beschikbaar tot 128 MB en maximaal 300 seconden.
+Datasetbestanden hebben limieten van 16 MiB, 100.000 rijen, 256 kolommen en
+1.000.000 celposities in totaal. De interface toont begrensde voorbeelden en
+maakt onderscheid tussen voorbeeldrijen en volledig getelde bronrijen. XLSX
+gebruikt opgeslagen formulewaarden en voert geen formules of macro's uit;
+extra of verborgen werkbladen worden niet ongemerkt geselecteerd. JSON verwacht
+een lijst objecten; geneste waarden blijven geserialiseerde tekst. Een wijziging
+van parserinstellingen leest hetzelfde bestand opnieuw in en vraagt een nieuwe
+controle voordat de eerdere plannen worden uitgevoerd.
 
-Namen gebruiken letters, cijfers en underscores. Systeemdatabases kunnen niet
-worden toegevoegd. De bijbehorende rechten blijven in het databasevolume bewaard,
-zodat een toegevoegde database ook na opnieuw starten in de kiezer verschijnt.
-De privéservice voor databaseaanmaak moet bereikbaar zijn; een ontbrekende
-service geeft een melding en bewaart de ingevulde naam.
+Aanmaak en import lopen via een afzonderlijke werker met blijvend vastgelegde
+jobstatus. Je kunt het venster sluiten en de status later weer openen. Een
+stopverzoek wacht op een ondersteunde grens; het sluiten van een tabblad is
+geen database-annulering. Voltooid, gedeeltelijk, mislukt, geannuleerd en
+onbekend zijn verschillende uitkomsten. Bij onbekende uitvoer na een onderbreking
+wordt SQL niet automatisch herhaald. Controleer de bestemming voordat je een
+nieuwe import start. Een nieuw doel met een onvolledige uitkomst blijft waar
+zichtbaar gemarkeerd met **Actie vereist**; bestaande databases worden nooit
+als automatische importopruiming verwijderd. MariaDB-DDL en eerdere commits
+hebben geen algemene undo.
+
+Bronbestanden en de private SQLite-controleregistratie staan buiten de webroot
+in het afzonderlijke `import_data`-volume. Niet-ingediende bestanden verlopen
+na 24 uur; na een definitieve uitkomst blijven ze hoogstens 24 uur beschikbaar,
+met altijd een harde grens van zeven dagen na upload. Bronrijen worden niet
+naar de blijvende jobmetadata gekopieerd. Een verlopen bestand moet opnieuw
+worden gekozen en gecontroleerd. Het verwijderen van een bronbestand verwijdert
+niet de geïmporteerde database. Nieuwe doelen worden voorbereid door een smalle
+privéservice; de import gebruikt een afzonderlijk account met rechten op dat
+doel. De webapp ontvangt nooit het administratorwachtwoord.
+
+De officiële phpMyAdmin blijft beschikbaar als **Geavanceerde MariaDB-tools**
+voor expliciet geavanceerd beheer, waaronder grotere of niet-ondersteunde
+MariaDB-imports. Het is geen vierde gewone keuze in de wizard en nooit een
+PostgreSQL-tool. Het eigen formulier uit eerdere versies blijft als begrensde
+API beschikbaar voor compatibiliteit, met zijn oude bevestigingscontract;
+nieuwe normale taken gebruiken de begeleide route hierboven.
+
+Na een update start je vanuit de Govern-map opnieuw met `.\start.cmd` in
+PowerShell, of `sh start.sh` op macOS/Linux. Dit bouwt de bijgewerkte services en
+start ook de importwerker. Bewaar bestaande wachtwoorden en Docker-volumes.
+Als de werker of privé-aanmaakservice niet beschikbaar is, meldt de wizard dat;
+een knop of enginebadge alleen kan die ontbrekende backend niet vervangen.
 
 De bestaande opstartconfiguratie blijft ook beschikbaar. Om bijvoorbeeld vooraf
 extra databases te laten aanmaken:
@@ -221,8 +269,9 @@ extra databases te laten aanmaken:
 
 2. Bewaar de bestaande wachtwoorden en `DB_NAME`.
 3. Start opnieuw met `start.cmd` op Windows of `sh start.sh` op macOS / Linux.
-4. Kies de database bovenaan. Nieuwe extra databases zijn leeg; importeer je
-   bestaande SQL desgewenst via **Databasevenster** in de gekozen database.
+4. Kies de database bovenaan. Nieuwe extra databases zijn leeg; voeg zo nodig
+   een dataset toe via **Gegevens toevoegen** of importeer een databaseback-up via
+   **Database toevoegen** met een nieuwe doelnaam.
 
 De namen zijn een expliciete lijst met letters, cijfers en underscores, gescheiden
 door komma's; `DB_NAME` blijft altijd beschikbaar. Opstarten maakt ontbrekende

@@ -43,7 +43,13 @@ SELECT EXISTS (
  AND (r.rolsuper OR r.rolcreaterole OR r.rolcreatedb OR r.rolreplication OR r.rolbypassrls
    OR EXISTS (SELECT 1 FROM pg_database d WHERE d.datdba = r.oid)
    OR EXISTS (SELECT 1 FROM pg_auth_members m JOIN pg_roles parent ON parent.oid = m.roleid
-              WHERE m.member = r.oid AND NOT (r.rolname = :'sql_role' AND parent.rolname = :'restorer'))
+              WHERE m.member = r.oid AND NOT (r.rolname = :'sql_role' AND (parent.rolname = :'restorer'
+                OR (parent.rolname ~ '^govern_import_[a-f0-9]{16}$'
+                    AND NOT (parent.rolsuper OR parent.rolcreatedb OR parent.rolcreaterole OR parent.rolreplication OR parent.rolbypassrls)
+                    AND EXISTS (SELECT 1 FROM pg_database target
+                        WHERE pg_catalog.shobj_description(parent.oid, 'pg_authid') = 'govern-import-target:' || target.datname
+                        AND NOT target.datistemplate AND target.datname <> 'postgres'
+                        AND pg_catalog.has_database_privilege(parent.oid, target.oid, 'CONNECT'))))))
    OR EXISTS (SELECT 1 FROM pg_namespace n WHERE n.nspowner = r.oid
               AND (r.rolname IN (:'reader', :'writer') OR n.nspname NOT IN (SELECT name FROM allowed)))
    OR EXISTS (SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE c.relowner = r.oid

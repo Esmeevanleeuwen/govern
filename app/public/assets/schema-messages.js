@@ -71,7 +71,7 @@ const entries = {
     'storageUnavailable': ['Tabelposities blijven voor deze sessie beschikbaar, maar konden niet in deze browser worden bewaard.', 'Table positions remain available for this session, but could not be saved in this browser.'],
     'moved': ['{table} verplaatst.', '{table} moved.'],
     'empty': ['Nog geen databaseschema', 'No database schema yet'],
-    'emptyHelp': ['Importeer tabellen in het databasevenster en ververs de werkplek.', 'Import tables in the database window, then refresh the workspace.'],
+    'emptyHelp': ['Maak je eerste tabel of kies Gegevens toevoegen via Records. Gebruik Database toevoegen voor een afzonderlijke nieuwe database.', 'Create your first table or choose Add data in Records. Use Add database for a separate new database.'],
 };
 registerMessages('app.schema', Object.fromEntries(['nl', 'en'].map((language, index) =>
     [language, Object.fromEntries(Object.entries(entries).map(([key, values]) => [key, values[index]]))])));

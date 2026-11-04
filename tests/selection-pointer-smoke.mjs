@@ -81,9 +81,9 @@ try {
     await secondCell.click({modifiers: ['Shift']});
     await count(2);
     const beforeRefresh = bootstrapRequests.length;
-    await page.locator('#open-database').click();
+    await page.locator('#manage-databases').click();
     await count(1);
-    assert.equal(await page.locator('#database-dialog').isVisible(), false, 'Inspecting Open database must not open phpMyAdmin.');
+    assert.equal(await page.locator('#database-manager-dialog').isVisible(), false, 'Inspecting Add database must not open its wizard.');
     assert.equal(bootstrapRequests.length, beforeRefresh, 'Inspecting a workspace action must not refresh the application.');
     const hash = await page.evaluate(() => location.hash);
     await page.locator('#navigation [data-area="research"]').click();

@@ -22,20 +22,25 @@ final class DatasetImport
         return $file;
     }
 
-    public static function read(array $file): array
+    public static function read(array $file, array $settings = []): array
     {
         $name = $file['name'];
         if (!is_string($name) || strlen($name) > 512 || str_contains($name, "\0")) throw ApiException::fromCode('dataset_invalid', 422);
         $output = tempnam(sys_get_temp_dir(), 'govern-dataset-');
         if ($output === false) throw ApiException::fromCode('dataset_unavailable', 503);
         try {
-            $process = proc_open(['python3', '-I', dirname(__DIR__) . '/importers/tabular.py', $name],
+            if (array_diff(array_keys($settings), ['delimiter', 'header', 'skip_blank_rows', 'trim_whitespace', 'empty_as_null']) !== [])
+                throw ApiException::fromCode('dataset_invalid', 422);
+            $process = proc_open(['python3', '-I', dirname(__DIR__) . '/importers/tabular.py', $name,
+                json_encode((object) $settings, JSON_THROW_ON_ERROR)],
                 [0 => ['file', $file['tmp_name'], 'r'], 1 => ['file', $output, 'w'], 2 => ['file', '/dev/null', 'w']], $pipes);
             if (!is_resource($process)) throw ApiException::fromCode('dataset_unavailable', 503);
             $status = proc_close($process);
             if (filesize($output) > 67108864) throw ApiException::fromCode('dataset_invalid', 422);
             $parsed = json_decode((string) file_get_contents($output), true, 64);
             if ($status !== 0 || !isset($parsed['datasets'], $parsed['sha256'])) {
+                if (isset($parsed['row']) && is_int($parsed['row']))
+                    throw ApiException::fromCode('dataset_row_invalid', 422, ['row' => $parsed['row']]);
                 throw ApiException::fromCode('dataset_invalid', 422);
             }
             return $parsed;

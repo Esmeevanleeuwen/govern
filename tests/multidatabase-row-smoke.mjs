@@ -348,7 +348,7 @@ INSERT INTO ${table} (id,label,amount) VALUES (1,'${marker} seed',10.10);`);
     // Govern rereads B without changing the same-named record in A.
     await page.locator('[data-database-view="gegevens"]').click();
     await waitTable(second);
-    await page.locator('#open-database').click();
+    await clickWorkspaceTool(page, '#open-database');
     await page.locator('#database-dialog[open]').waitFor();
     await page.locator('#database-dialog .frame-message').waitFor({state: 'hidden'});
     await page.locator('#database-tab-sql').click();
