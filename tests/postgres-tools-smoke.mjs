@@ -104,17 +104,33 @@ try {
     await page.locator('#database-tab-sql').click();
     const pmaSql = page.frameLocator('#database-frame').locator('#sqlquery');
     await pmaSql.waitFor({state: 'attached'});
+    // Wait for the initialized CodeMirror instance bound to this textarea, not
+    // the separate SQL console; document load alone is not sufficient.
+    await page.waitForFunction(database => {
+        const frame = document.querySelector('#database-frame');
+        const contents = frame?.contentDocument;
+        if (contents?.readyState !== 'complete') return false;
+        const address = new URL(frame.contentWindow.location.href);
+        if (address.searchParams.get('route') !== '/database/sql' || address.searchParams.get('db') !== database) return false;
+        const textarea = contents.querySelector('#sqlquery');
+        return textarea && [...contents.querySelectorAll('.CodeMirror')]
+            .some(wrapper => wrapper.CodeMirror?.getTextArea?.() === textarea);
+    }, maria.name);
     const pmaDraft = "SELECT 'keep the MariaDB SQL draft';";
-    await pmaSql.evaluate(async (node, draft) => {
-        if (document.readyState !== 'complete') await new Promise(resolve => window.addEventListener('load', resolve, {once: true}));
-        document.querySelector('.CodeMirror')?.CodeMirror?.setValue(draft);
-        node.value = draft;
+    const preparedDraft = await pmaSql.evaluate((node, draft) => {
+        const editor = [...document.querySelectorAll('.CodeMirror')].map(wrapper => wrapper.CodeMirror)
+            .find(instance => instance?.getTextArea?.() === node);
+        editor.setValue(draft);
+        editor.save();
         window.governDraftRetained = draft;
+        return {textarea: node.value, editor: editor.getValue()};
     }, pmaDraft);
+    assert.deepEqual(preparedDraft, {textarea: pmaDraft, editor: pmaDraft}, 'Prepare the real initialized SQL editor before changing language.');
     await page.evaluate(async () => (await import('/assets/i18n.js')).setLanguage('nl'));
-    assert.equal(await pmaSql.inputValue(), pmaDraft, 'Language changes retain the real phpMyAdmin form.');
-    assert.equal(await pmaSql.evaluate(node => document.querySelector('.CodeMirror')?.CodeMirror?.getValue() ?? node.value), pmaDraft);
     assert.equal(await pmaSql.evaluate(() => window.governDraftRetained), pmaDraft, 'Language changes do not reload the iframe.');
+    assert.equal(await pmaSql.inputValue(), pmaDraft, 'Language changes retain the real phpMyAdmin form.');
+    assert.equal(await pmaSql.evaluate(node => [...document.querySelectorAll('.CodeMirror')].map(wrapper => wrapper.CodeMirror)
+        .find(instance => instance?.getTextArea?.() === node)?.getValue()), pmaDraft, 'Language changes retain the initialized SQL editor.');
     assert.deepEqual(await page.locator('#modal-database option').evaluateAll(options => options.map(option => option.value).sort()), expectedChoices);
     await page.locator('#modal-database').selectOption(scope);
     assert.equal(await page.locator('#database-tab-import').getAttribute('aria-selected'), 'true', 'MariaDB SQL becomes native import when entering PostgreSQL.');
