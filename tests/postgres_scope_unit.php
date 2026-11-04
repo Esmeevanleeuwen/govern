@@ -27,6 +27,7 @@ $values = ['PG_ENABLED' => '1', 'PG_HOST' => 'never-connect.invalid', 'PG_PORT' 
     'PG_USER' => 'scope_unit_writer', 'PG_PASSWORD' => 'writer-unit-test-value',
     'PG_SQL_USER' => 'scope_unit_sql', 'PG_SQL_PASSWORD' => 'sql-unit-test-value',
     'PG_RESTORE_USER' => 'scope_unit_restore', 'PG_TOOLS_SOCKET' => '/unit-only/postgres.sock',
+    'PG_DATABASE_REGISTRY' => '/unit-only/postgres-databases.json',
     'PG_READ_USER' => 'scope_unit_reader', 'PG_READ_PASSWORD' => 'only-a-unit-test-value'];
 $original = [];
 foreach ($values as $key => $value) { $original[$key] = getenv($key); putenv($key . '=' . $value); }
@@ -97,11 +98,11 @@ try {
     }
     foreach (['bootstrap', 'schema', 'structure', 'browse', 'explore', 'row-editor', 'insert-row', 'update-row', 'delete-row',
         'query', 'snapshots', 'create-snapshot', 'restore-snapshot', 'download-snapshot', 'import-inspection',
-        'native-import-preview', 'native-import-execute', 'dataset-preview', 'dataset-import'] as $action) {
+        'native-import-preview', 'native-import-execute', 'dataset-preview', 'dataset-import', 'prepare-database'] as $action) {
         ConnectionScope::requireAction($public, $action);
         $assert(true, 'Supported action allowed without connecting: ' . $action);
     }
-    foreach (['build-query', 'queries', 'save-query', 'delete-query', 'prepare-database',
+    foreach (['build-query', 'queries', 'save-query', 'delete-query',
         'ai-status', 'ai-context', 'ai-chat', 'context', 'unknown-action'] as $action) {
         $reject(static fn () => ConnectionScope::requireAction($public, $action), 'postgres_read_only');
         ConnectionScope::requireAction($base, $action);

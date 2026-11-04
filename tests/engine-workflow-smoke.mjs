@@ -69,7 +69,7 @@ try {
     assert.ok(original && !original.startsWith('postgres:'));
     assert.equal(bootstrap.engines.find(engine => engine.id === 'mariadb').capabilities.create_database, true);
     assert.equal(bootstrap.engines.find(engine => engine.id === 'postgres').configured, true);
-    assert.equal(bootstrap.engines.find(engine => engine.id === 'postgres').capabilities.create_database, false);
+    assert.equal(bootstrap.engines.find(engine => engine.id === 'postgres').capabilities.create_database, true);
     await selectWorkspaceLanguage(page, 'en');
     await clickWorkspaceTool(page, '#manage-databases'); await manager.waitFor(); await shot('manager-tasks');
     await manager.locator('#database-manager-task-create').click(); await shot('manager-engines');
@@ -103,12 +103,13 @@ try {
     assert.equal(phpMyAdmin.some(url => url.searchParams.get('db')?.startsWith('postgres:')), false);
     await closeModal(); await ready(created); await page.locator('#database-select').selectOption(pg); await ready(pg);
     await selectWorkspaceLanguage(page, 'en');
-    await openDatabaseTask(page, {task: 'create', engine: 'postgres', database: pg});
-    assert.match(await manager.locator('#database-manager-unavailable').innerText(), /cannot create a new PostgreSQL database/);
-    assert.equal(await manager.locator('#database-manager-name').count(), 0, 'Unsupported creation offers no misleading name field.');
-    assert.equal(await manager.locator('#database-manager-continue').isEnabled(), true, 'An existing schema can open SQL.');
+    await openDatabaseTask(page, {task: 'create', engine: 'postgres', name: ''});
+    assert.equal(await manager.locator('#database-manager-unavailable').count(), 0);
+    assert.equal(await manager.locator('#database-manager-name').getAttribute('maxlength'), '63');
+    assert.equal(await manager.locator('#database-manager-continue').isDisabled(), true, 'Actual creation needs a new database name.');
     await shot('pg-create-capability');
-    await manager.locator('#database-manager-continue').click();
+    await manager.locator('#database-manager-cancel').click();
+    await manager.waitFor({state: 'hidden'}); await page.locator('#open-database').click();
     await manager.waitFor({state: 'hidden'}); await page.locator('#sql-editor').waitFor();
     assert.equal(await page.locator('[data-database-view="onderzoeken"]').getAttribute('aria-current'), 'page');
     assert.equal(await page.locator('#database-select').inputValue(), pg);
@@ -116,7 +117,7 @@ try {
 
     const nativeBeforePg = phpMyAdmin.length;
     await openDatabaseTask(page, {task: 'database', engine: 'postgres', database: pg, targetMode: 'existing'});
-    assert.deepEqual(await manager.locator('#database-manager-target-mode option').evaluateAll(options => options.map(option => option.value)), ['existing']);
+    assert.deepEqual(await manager.locator('#database-manager-target-mode option').evaluateAll(options => options.map(option => option.value)), ['new', 'existing']);
     assert.ok((await manager.locator('#database-manager-existing option').evaluateAll(options => options.map(option => option.value)))
         .every(value => value.startsWith('postgres:')), 'Only destinations for the chosen engine are listed.');
     await manager.locator('#database-manager-continue').click(); await manager.waitFor({state: 'hidden'});

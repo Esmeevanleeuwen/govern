@@ -494,21 +494,25 @@ Show both MariaDB and PostgreSQL with their actual configuration and tools;
 derive availability from global engine metadata rather than the engine of the
 currently selected workspace. Keep the selected task, engine and target visible.
 
-**Create database** asks for a MariaDB name and opens the created database at
-Structure in the real phpMyAdmin, ready to design tables and columns. Selecting
-PostgreSQL explains that this version uses its configured database and schemas;
-offer **Open SQL workspace** for an existing scope. Do not label a schema as a
-new database or suggest that PostgreSQL provisioning has been implemented.
+**Create database** asks for a name for the chosen engine. MariaDB opens the
+created database at Structure in the real phpMyAdmin. PostgreSQL creates a real
+database with `public`, selects its complete scope and opens Queries with an
+editable `CREATE TABLE` example. The user runs that SQL explicitly; an existing
+draft stays intact when reopening a managed database. Keep phpMyAdmin exclusive
+to MariaDB. If PostgreSQL's private creation service is unavailable, explain
+the missing service and offer **Open SQL workspace** for an existing scope.
 
-**Import database** chooses a new or existing MariaDB destination, or an existing
-configured PostgreSQL database/schema, then opens a focused SQL import dialog.
+**Import database** chooses a new or existing destination for the selected
+engine, then opens a focused SQL import dialog. New PostgreSQL databases use
+`public`; existing configured scopes retain their schema selection.
 **Import table** chooses an existing engine-specific destination, then opens the
-focused file/preview/confirmation dialog. A user can create an empty MariaDB
+focused file/preview/confirmation dialog. A user can create an empty
 destination through the separate creation task first. Engine choices do not
 convert SQL dialects or connect another server.
 
-Creating a missing database starts empty. Preparing an existing name preserves
-its data and makes it available to Govern explicitly. Explain that importing SQL
+Creating a missing database starts empty. Preparing an existing MariaDB name or
+reopening a managed PostgreSQL database preserves its data. PostgreSQL refuses
+unmanaged existing names. Explain that importing SQL
 is a separate operation that can change or replace data. Do not turn the name
 form into a server administration panel or ask the user to paste credentials.
 If the private creation service is unavailable, retain the entered name, show

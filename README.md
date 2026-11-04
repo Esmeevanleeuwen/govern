@@ -174,23 +174,28 @@ Kies eerst de handeling en daarna de engine, **MariaDB** of **PostgreSQL**:
 
 - **Database aanmaken:** kies MariaDB, vul een naam in en kies **Aanmaken en
   ontwerpen**. Govern opent de nieuwe database direct op **Structure** in de
-  officiële phpMyAdmin. Daar maak je zelf tabellen en kolommen. Dit werkt ook
-  wanneer je daarvoor een PostgreSQL-werkplek gebruikte.
+  officiële phpMyAdmin. Kies je PostgreSQL, dan maakt Govern een echte nieuwe
+  database met het schema `public` en opent **Queries** met een bewerkbaar
+  `CREATE TABLE`-voorbeeld. Je voert de SQL zelf uit. Dit werkt onafhankelijk
+  van de engine van je huidige werkplek.
 - **Database importeren:** kies de engine en een bestemming. Bij MariaDB kun je
-  een nieuwe database aanmaken of een bestaande kiezen; bij PostgreSQL kies je
-  een ingesteld database/schema. Kies daarna je SQL-bestand, bekijk de
+  een nieuwe database aanmaken of een bestaande kiezen; PostgreSQL biedt dezelfde
+  keuze met een nieuw `public`-schema of een bestaand toegestaan database/schema.
+  Kies daarna je SQL-bestand, bekijk de
   voorcontrole en bevestig de exacte bestemming. Grotere MariaDB-bestanden
   kunnen via de expliciete knop naar de officiële phpMyAdmin-import.
 - **Tabel importeren:** kies de engine en een bestaande doeldatabase of een
   ingesteld PostgreSQL-schema. Kies vervolgens Excel, CSV, TSV, TXT, JSON of ZIP,
   bekijk het voorbeeld en kies een nieuwe tabel of passende bestaande tabel.
   Bevestig de getoonde bestemming. Na import opent **Tabel openen** de tabel in
-  Records. Maak een lege MariaDB-database desgewenst eerst via Database aanmaken.
+  Records. Maak een lege database desgewenst eerst via Database aanmaken.
 
-PostgreSQL toont of de verbinding is ingeschakeld. Govern maakt via deze
-weergave geen nieuwe PostgreSQL-databases aan: het gebruikt de ingestelde
-`PG_DATABASE` en `PG_SCHEMAS`. **SQL-werkplek openen** biedt daar een route om zelf
-tabellen te maken. Een SQL-bestand wordt niet naar een andere engine omgezet.
+PostgreSQL vereist `PG_ENABLED=1` en een bereikbare privéservice voor aanmaak.
+Start na deze update opnieuw met `start.cmd` of `sh start.sh`, zodat de bijgewerkte
+service wordt gebouwd en gestart. De ingestelde `PG_DATABASE` houdt zijn
+`PG_SCHEMAS`; extra aangemaakte databases beginnen met alleen `public`.
+Govern koppelt niet automatisch andere databases op de PostgreSQL-server.
+Een SQL-bestand wordt niet naar een andere engine omgezet.
 
 Het importvenster houdt één taak en bestemming zichtbaar. **Bestemming wijzigen**
 gaat terug naar de keuze met dezelfde handeling en engine. Wisselen van bestemming
@@ -208,8 +213,10 @@ volledige importresultaat blijft in phpMyAdmin. Niet alle grote tabellen kunnen
 exact worden geteld: zulke aantallen staan uitdrukkelijk als niet gecontroleerd.
 Dit is geen garantie dat een import veilig of volledig is.
 
-Een bestaande naam toevoegen vervangt geen gegevens; de expliciete import kan
-dat wel doen, afhankelijk van het SQL-bestand.
+Een bestaande MariaDB-naam toevoegen of een eerder door Govern aangemaakte
+PostgreSQL-database opnieuw openen vervangt geen gegevens. Een bestaande
+PostgreSQL-database buiten de ingestelde of beheerde lijst wordt geweigerd.
+De expliciete import kan wel gegevens vervangen, afhankelijk van het SQL-bestand.
 De eigen Govern-import maakt vooraf een herstelpunt als er al tabellen
 of views bestaan (ook interne Govern-tabellen). Het herstelpunt is geen algemene undo en de controle garandeert
 geen inhoudelijke volledigheid. Tijdens de eigen import worden overige
@@ -219,14 +226,16 @@ reeds toegestane database wijzigen, bijvoorbeeld via `USE`. Importeer daarom all
 vertrouwde SQL-bestanden. De eigen begrenzing is voorlopig 256 KiB.
 De officiële phpMyAdmin-import blijft beschikbaar tot 128 MB en maximaal 300 seconden.
 
-Namen gebruiken letters, cijfers en underscores. Systeemdatabases kunnen niet
-worden toegevoegd. De bijbehorende rechten blijven in het databasevolume bewaard,
-zodat een toegevoegde database ook na opnieuw starten in de kiezer verschijnt.
+Namen gebruiken letters, cijfers en underscores; PostgreSQL-namen zijn maximaal
+63 tekens. Systeemdatabases kunnen niet worden toegevoegd. De bijbehorende
+rechten blijven in het databasevolume bewaard. De PostgreSQL-beheerlijst blijft
+in het bestaande `postgres_management`-volume bewaard, zodat een toegevoegde
+database ook na opnieuw starten in de kiezer verschijnt.
 De privéservice voor databaseaanmaak moet bereikbaar zijn; een ontbrekende
 service geeft een melding en bewaart de ingevulde naam.
 
-De bestaande opstartconfiguratie blijft ook beschikbaar. Om bijvoorbeeld vooraf
-extra databases te laten aanmaken:
+De bestaande MariaDB-opstartconfiguratie blijft ook beschikbaar. Om bijvoorbeeld
+vooraf extra MariaDB-databases te laten aanmaken:
 
 1. Open `.env` in de projectmap. Voeg deze regel toe, of voeg de naam toe aan
    de bestaande lijst:

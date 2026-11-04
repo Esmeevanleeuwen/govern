@@ -80,7 +80,8 @@ bij de MariaDB-adapter. PostgreSQL gebruikt PDO PostgreSQL, een verbinding met
 `ConnectionScope` combineert de bestaande `DatabaseScope` met de optionele
 PostgreSQL-configuratie. Alleen de server bepaalt host, lees- en schrijfaccount.
 Ieder verzoek bevat de verbinding, database en het schema. De PostgreSQL-kiezer
-toont alleen de geconfigureerde database en de schema's uit `PG_SCHEMAS`;
+toont de geconfigureerde database met de schema's uit `PG_SCHEMAS`, plus de
+door de privéservice geregistreerde databases met alleen `public`;
 de werkelijke leesbaarheid wordt met het leesaccount gecontroleerd. Een
 ontbrekend of ontoegankelijk schema blijft herkenbaar als niet beschikbaar.
 
@@ -119,8 +120,29 @@ verlenen standaard lees- en rijschrijfrechten. Bestaande eigenaars worden bij
 opstarten niet overgedragen. Het bootstrap- en herstelwachtwoord komen nooit
 in de webapp.
 
-`PostgresBackupService` spreekt via een Unix-socket alleen vaste snapshotacties
-met de worker. De worker gebruikt PostgreSQL 18 `pg_dump`/`pg_restore`, bewaart
+`PostgresDatabaseProvisioner` spreekt via de privé-Unix-socket uitsluitend
+`prepare_database` met één gevalideerde naam. `postgres-tools` maakt een echte
+database aan, verleent exacte rechten en verifieert de vier bestaande rol-logins
+zonder hun wachtwoorden te wijzigen. De gewone app-accounts blijven zonder
+`CREATEDB`, superuser- en rolbeheerrechten. Onbekende bestaande databases worden
+geweigerd. Een willekeurige stagingnaam met uitgeschakelde verbindingen krijgt
+eerst een vaste herkomstmarkering voor de doelnaam; pas daarna wordt ze hernoemd.
+Een retry aanvaardt een niet-geregistreerde doelnaam alleen met die markering en de
+beheerder als eigenaar. Zo wordt een andere bestaande database niet overgenomen
+na een gedeeltelijke fout.
+
+De worker beheert `/run/govern-postgres/databases.json` in het bestaande
+`postgres_management`-volume onder een exclusieve bestandslock, met atomische
+schrijfvervanging. Bestand en bovenliggende map zijn root-beheerd en niet
+schrijfbaar voor de webapp. `PostgresDatabaseRegistry` leest alleen een geldige,
+begrensde lijst uit een regulier bestand zonder symlinks. De webapp mount dit
+volume alleen-lezen. Alleen `PG_DATABASE` en deze beheerde namen zijn selecteerbaar;
+aanvullende databases beginnen met `public`, zonder `PG_SCHEMAS` over te nemen.
+
+`PostgresBackupService` spreekt via dezelfde Unix-socket alleen vaste snapshotacties
+met de worker. Elke actie houdt haar eigen database/schema vast; de worker
+maakt een afzonderlijk scope-object en verandert geen gedeelde actieve database.
+De worker gebruikt PostgreSQL 18 `pg_dump`/`pg_restore`, bewaart
 custom-archieven met scope en checksum buiten de webroot en weigert onbekende
 objecten of inkomende schemadependencies. Dumpen gebruikt het leesaccount.
 Na de expliciete herstelbevestiging mag een vaste beheerhandeling de gekozen
@@ -128,17 +150,19 @@ schema-eigenaar tijdelijk aanpassen; de dumpinhoud loopt daarna volledig onder
 een werkelijk aangemeld, beperkt herstelaccount. De schema-inhoud wordt in één
 transactie vervangen zonder database-CREATE-recht; de bestaande schema-eigenaar
 wordt teruggezet, standaardrechten worden hersteld en bij een fout blijft
-de oude inhoud staan. `SET ROLE` op een adminverbinding wordt hiervoor niet
-gebruikt. Zie POSTGRESQL.md voor scope-, ownership- en objectbeperkingen.
+de oude inhoud staan. Herstelpunten en manifesten worden op de volledige
+database/schema-scope gescheiden. `SET ROLE` op een adminverbinding wordt hiervoor
+niet gebruikt. Zie POSTGRESQL.md voor scope-, ownership- en objectbeperkingen.
 
 SQL en import kunnen andere verleende schema’s raken. Native SQL-import maakt
 daarom vóór uitvoering per bestaand ingesteld schema een herstelpunt onder de
 gedeelde exclusieve onderhoudslock. De kopieën vormen geen algemene rollback.
 De browser houdt voor iedere handeling de database/schema-scope vast; PG-import
 en herstel vragen de exacte bevestiging `database.schema`.
-De startbestanden schakelen het profiel in bij `PG_ENABLED=1` en bewaren
-bestaande wachtwoorden en volumes. Zie [POSTGRESQL.md](POSTGRESQL.md) voor de
-configuratie en de grenzen van deze PostgreSQL-functies.
+De startbestanden schakelen het profiel in bij `PG_ENABLED=1`, bouwen de
+bijgewerkte worker en bewaren bestaande wachtwoorden en volumes. Zie
+[POSTGRESQL.md](POSTGRESQL.md) voor de configuratie en de grenzen van deze
+PostgreSQL-functies.
 
 ### Compatibiliteit met de eerdere recordverkenner
 
@@ -261,6 +285,7 @@ De onderdelen hebben een kleine, duidelijke taak:
 | `database-modal.js` | Het venster rondom de echte phpMyAdmin |
 | `database-manager.js` | Taak, engine en bestemming kiezen voor databaseaanmaak, SQL-import of tabelimport |
 | `DatabaseProvisioner.php` | Begrensde client voor de privéservice voor databaseaanmaak |
+| `PostgresDatabaseProvisioner.php`, `PostgresDatabaseRegistry.php` | Vaste PostgreSQL-aanmaakactie en vertrouwde beheerlijst voor de scopekeuze |
 | `docker/database-manager/server.php` en `DatabaseManager.php` | Privé Unix-socketserver en uitsluitend databaseaanmaak/rechten per expliciete naam |
 | `row-editor.js` | Rijformulier met vaste databasecontext, exacte waarden en conflictfeedback |
 | `DatabaseScope.php` | Toegestane databasekeuze, afzonderlijke herstelpuntpaden en gedeelde locklocatie |
@@ -303,20 +328,23 @@ taakgerichte dialoog: Database aanmaken, Database importeren of Tabel importeren
 gevolgd door engine en bestemming. `ConnectionScope::engines` levert voor
 `GET databases` en bootstrap dezelfde globale enginebeschrijving, onafhankelijk
 van de actuele werkplek. De oude scoped capabilityvelden blijven bestaan.
-Een ontbrekende PostgreSQL-configuratie en ontbrekende SQL-rechten blijven
-expliciet; deze weergave breidt PostgreSQL-databaseaanmaak niet uit.
+Een ontbrekende PostgreSQL-configuratie, ontbrekende SQL-rechten en een niet
+beschikbare privéservice blijven expliciet in de enginebeschrijving.
 
 Een bestaande bestemming kiezen gebruikt de normale wisselstroom. MariaDB-
 aanmaak gebruikt `POST prepare-database` met het bestaande exacte `{name}`-
-contract, CSRF en `default_database` als expliciete MariaDB-verzoekscope. Daardoor
-kan ook een gebruiker die PostgreSQL bekijkt bewust MariaDB aanmaken, zonder
-de huidige werkplek vooraf te wisselen. Het antwoord bevat de voorbereide naam,
-of die nieuw was, en de opnieuw uitgelezen databasekeuzes. Pas na succes verandert
-de selectie. Concepten van de vorige database blijven bewaard.
+contract, CSRF en `default_database` als expliciete MariaDB-verzoekscope.
+PostgreSQL-aanmaak gebruikt hetzelfde contract met een bekende PostgreSQL-scope
+in de URL en een afzonderlijke provisioner. De gekozen engine bepaalt dus de
+service; de actuele werkplek hoeft vooraf niet te wisselen. Het antwoord bevat
+de voorbereide scope, of die nieuw was, en de opnieuw uitgelezen databasekeuzes.
+Pas na succes verandert de selectie. Concepten van de vorige database blijven bewaard.
 
-Database aanmaken opent daarna de echte phpMyAdmin op Structure. SQL-import in
-een nieuwe of bestaande MariaDB-database, of een ingesteld PostgreSQL-schema,
-opent de bestaande native importcontrole in een taakgericht venster. Tabelimport
+MariaDB-aanmaak opent daarna de echte phpMyAdmin op Structure. PostgreSQL-aanmaak
+opent Queries met een nog niet uitgevoerd `CREATE TABLE`-voorbeeld; een bestaande
+conceptquery blijft bij opnieuw openen behouden. SQL-import in een nieuwe of
+bestaande database van beide engines opent de bestaande native importcontrole
+in een taakgericht venster. Tabelimport
 gebruikt een bestaande bestemming en de bestaande `DatasetImportPanel`.
 `DatabaseModal.workflow` bewaart of het om `import-database` of `import-table`
 gaat; Bestemming wijzigen geeft die taak, engine en scope terug aan de wizard.

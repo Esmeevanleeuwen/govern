@@ -3,7 +3,7 @@
 Govern kan naast MariaDB een optionele lokale PostgreSQL-verbinding tonen.
 Dezelfde werkplek laat tabellen, records, kolommen, indexen en relaties zien.
 Je kunt zoeken, bladeren, records verkennen en via **Records** rijen toevoegen,
-bewerken en verwijderen. **Onderzoeken** voert vrije SQL uit; via **Tools**
+bewerken en verwijderen. **Database → Queries** voert vrije SQL uit; via **Tools**
 kun je bestanden importeren en schemaherstelpunten beheren. De visuele
 querybouwer, opgeslagen onderzoeken, context-export en AI zijn nog niet
 beschikbaar voor PostgreSQL. phpMyAdmin blijft alleen voor MariaDB beschikbaar.
@@ -47,6 +47,32 @@ staan? Herlaad de werkplek met **Ctrl+Shift+R** (Mac: **Cmd+Shift+R**) en kies d
 PostgreSQL-verbinding opnieuw. Een oudere browsermodule kan nog in de cache
 staan. De API ondersteunt ook de volledige scopesleutel die deze module stuurt,
 met dezelfde controle op de ingestelde database en schema's.
+
+## Een database aanmaken of importeren
+
+Gebruik de plus naast de databasekiezer en kies **Database aanmaken → PostgreSQL**.
+Vul een naam met 1–63 letters, cijfers of underscores in en kies **Aanmaken en
+ontwerpen**. Govern maakt een echte database met het schema `public`, selecteert
+die werkplek en opent **Queries** met een bewerkbaar `CREATE TABLE`-voorbeeld.
+Je kiest de tabelnaam en kolommen en voert de SQL zelf uit. Records, Explore,
+Schema en Queries gebruiken daarna dezelfde database en tabellenlijst.
+
+Bij **Database importeren → PostgreSQL** kun je een nieuwe database aanmaken of
+een bestaande toegestane database/schema kiezen. Kies daarna je SQL-bestand,
+bekijk de voorcontrole en bevestig de exacte bestemming. **Tabel importeren**
+gebruikt een bestaande bestemming en behoudt de bestandskeuze en het voorbeeld.
+Maak een lege doeldatabase zo nodig eerst met de aanmaaktaak.
+
+Na deze update moet `start.cmd` of `sh start.sh` de bijgewerkte privéservice
+opnieuw bouwen en starten. Als die service ontbreekt, blijft de SQL-werkplek
+voor bestaande databases bereikbaar. De naamstap vraagt geen serveradres of
+beheerwachtwoord en zet geen SQL tussen engines om.
+
+De namen `postgres`, `template0`, `template1` en namen die met `pg_` beginnen
+zijn uitgesloten. Een herhaalde aanvraag voor een beheerde database behoudt
+de gegevens en kan een gedeeltelijke rechtenstap afronden. Govern neemt geen
+onbekende bestaande database over; alleen de ingestelde `PG_DATABASE` en door
+de privéservice aangemaakte databases zijn toegestaan.
 
 ## Voorbeeldgegevens toevoegen
 
@@ -239,9 +265,11 @@ geen AI of gegenereerde antwoorden. Zie [Explore](RECORD_MAP.md).
 
 ## Database en schema's
 
-`PG_DATABASE` kiest één PostgreSQL-database voor deze verbinding. `PG_SCHEMAS`
-is een lijst met bestaande schema's, gescheiden door komma's, bijvoorbeeld
-`public,archive`. De opstartservice maakt geen ontbrekende werkschema's of
+`PG_DATABASE` kiest de standaarddatabase voor deze verbinding. `PG_SCHEMAS`
+is haar lijst met bestaande schema's, gescheiden door komma's, bijvoorbeeld
+`public,archive`. Extra databases die via Govern worden aangemaakt krijgen
+alleen `public`; deze instelling wordt niet op die databases gekopieerd.
+De opstartservice maakt geen ontbrekende werkschema's of
 tabellen aan. Een ontbrekend schema blijft in de kiezer staan als niet
 beschikbaar. De database- en applicatierolnamen gebruiken letters, cijfers en
 underscores; schema-identifiers blijven afzonderlijk gequote.
@@ -256,13 +284,22 @@ gelden voor de bootstrapbeheerder. Objecten van een andere eigenaar vereisen
 passende rechten voor beide applicatieaccounts.
 
 Het bootstrapwachtwoord hoort alleen bij PostgreSQL en de privéservices voor
-rechten en vaste herstelhandelingen. Het komt niet in de webapp. Lezen gebruikt
+rechten, databaseaanmaak en vaste herstelhandelingen. Het komt niet in de webapp.
+Lezen gebruikt
 `PG_READ_USER`/`PG_READ_PASSWORD` in een read-only sessie; rijbewerkingen gebruiken
 `PG_USER`/`PG_PASSWORD`. Vrije SQL en imports gebruiken `PG_SQL_USER`/`PG_SQL_PASSWORD`
 met DML en CREATE binnen de ingestelde schema’s. Nieuwe SQL-objecten krijgen
 standaard passende applicatierechten. `PG_RESTORE_PASSWORD` wordt alleen aan de
 privéherstelservice gegeven; die gebruikt de native PostgreSQL 18-hulpmiddelen.
 Aanmelden bij Govern blijft hetzelfde installatieaccount gebruiken; PostgreSQL creëert geen nieuwe gebruikerstenants.
+
+De privéservice `postgres-tools` schrijft de beheerde databasenamen naar
+`/run/govern-postgres/databases.json` in het bestaande `postgres_management`-volume.
+Die root-beheerde lijst is alleen-lezen gemount in de webapp en blijft bij
+opnieuw starten bestaan. De app-accounts krijgen geen `CREATEDB`, superuser- of
+rolbeheerrechten. Aanmaak verleent hun alleen passende rechten in de exacte
+doeldatabase; bestaande wachtwoorden en gegevens blijven behouden. Een onbekende
+bestaande database wordt niet toegevoegd door alleen haar naam in te vullen.
 
 ## Gedeelde implementatie
 
@@ -278,10 +315,13 @@ API-verzoeken noemen verbinding, database en schema expliciet:
 /api.php?action=browse&connection=postgres&database=govern_pg&schema=public&table=example
 ```
 
-De server accepteert alleen de ingestelde database en schema's. De browser
-bewaart een complete scopesleutel voor selectie, verzoeken en diagramindeling.
+De server accepteert alleen de ingestelde database/schema's en de beheerde
+databases met `public`. De browser bewaart een complete scopesleutel voor
+selectie, verzoeken en diagramindeling.
 Zo blijven bijvoorbeeld `public.example` en `archive.example` verschillend,
-ook als beide dezelfde tabelnaam hebben. Zie [API.md](API.md) voor het contract.
+ook als beide dezelfde tabelnaam hebben. Ook gelijknamige tabellen, SQL-concepten
+en herstelpunten in verschillende databases blijven apart. Zie [API.md](API.md)
+voor het contract.
 
 ## Verdere bouwfasen
 

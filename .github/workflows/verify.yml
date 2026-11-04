@@ -61,6 +61,8 @@ jobs:
           docker compose exec -T database-manager sh -c 'find /opt/govern/docker/database-manager -name "*.php" -exec php -l {} \;'
       - name: Focused backend checks
         run: |
+          docker compose run --rm -T --no-deps --user root --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/postgres_database_provisioner_unit.php
+          docker compose run --rm -T --no-deps --entrypoint python3 -v "$PWD:/workspace:ro" postgres-tools /workspace/tests/postgres-tools-unit.py
           docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/backend_unit.php
           docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/postgres_scope_unit.php
           docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/sql_script_unit.php
@@ -127,6 +129,17 @@ jobs:
           python3 tests/postgres-row-http.py --base-url http://127.0.0.1:8080 --confirm-database=govern_pg
           python3 tests/record-explorer-http.py --base-url http://127.0.0.1:8080 --confirm-database=govern_pg
           python3 tests/record-map-http.py --base-url http://127.0.0.1:8080 --confirm-fixtures=record-map-ci
+      - name: PostgreSQL database creation, imports and restart persistence
+        env:
+          GOVERN_UI_WRITE_TESTS: "1"
+        run: |
+          python3 tests/postgres-create-http.py --base-url http://127.0.0.1:8080 --confirm-project=govern --confirm-database=govern_pg --state-file "$RUNNER_TEMP/govern-pg-created.json"
+          docker compose --profile postgres restart app postgres-tools
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:8080/api.php?action=health >/dev/null; then break; fi
+            sleep 1
+          done
+          python3 tests/postgres-create-http.py --base-url http://127.0.0.1:8080 --confirm-project=govern --confirm-database=govern_pg --state-file "$RUNNER_TEMP/govern-pg-created.json" --verify-state
       - name: Browser and visual query builder
         run: |
           node tests/i18n-unit.mjs
@@ -167,6 +180,7 @@ jobs:
             tests/dataset-import-smoke.mjs \
             tests/database-import-smoke.mjs \
             tests/engine-workflow-smoke.mjs \
+            tests/postgres-create-smoke.mjs \
             tests/frontend-smoke.mjs \
             tests/query-builder-smoke.mjs \
             tests/ui-settings-smoke.mjs \

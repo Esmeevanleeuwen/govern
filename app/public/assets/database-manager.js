@@ -2,6 +2,7 @@ import {request} from './api.js';
 import {t} from './i18n.js';
 import {el, button, icon, errorText} from './ui.js';
 import {attachDialog} from './modal-shell.js';
+import {parseConnectionScope} from './connection-scope.js';
 import './database-messages.js';
 import './database-flow-messages.js';
 
@@ -34,7 +35,7 @@ export function createDatabaseManager({getDatabase, getDatabases, getEngines = (
     const can = action => meta()?.configured === true && meta()?.capabilities?.[action] === true;
     const destinations = () => getDatabases().filter(item => engineOf(item) === draft.engine);
     const selected = () => destinations().find(item => keyOf(item) === draft.database);
-    const creating = () => draft.engine === 'mariadb' && (draft.task === 'create' || draft.task === 'database' && draft.mode === 'new');
+    const creating = () => can('create_database') && (draft.task === 'create' || draft.task === 'database' && draft.mode === 'new');
     const label = (tag, key, attrs = {}) => el(tag, attrs, text(key));
     const field = (key, input, help) => el('div', {class: 'database-flow-field'}, el('label', {class: 'field-label', for: input.id}, text(key)), input,
         help ? label('p', help, {class: 'field-hint'}) : null);
@@ -61,7 +62,7 @@ export function createDatabaseManager({getDatabase, getDatabases, getEngines = (
         const scroll = dialog.scrollTop;
         title.textContent = text(step === 0 ? 'title' : draft.task + 'Title');
         description.textContent = text(step === 0 ? 'description' : step === 1 ? 'engineHelp'
-            : draft.task === 'create' && draft.engine === 'postgres' ? 'existingDesignHelp' : draft.task + 'Help');
+            : draft.task === 'create' && draft.engine === 'postgres' && !can('create_database') ? 'existingDesignHelp' : draft.task + 'Help');
         relabel(close, 'close'); relabel(cancel, 'cancel'); relabel(back, 'back');
         progress.setAttribute('aria-label', text('steps'));
         progress.replaceChildren(...['taskStep', 'engineStep', 'destinationStep'].map((key, index) =>
@@ -93,7 +94,7 @@ export function createDatabaseManager({getDatabase, getDatabases, getEngines = (
                     content.append(field('destinationType', mode));
                 }
                 if (creating()) {
-                    const name = el('input', {id: 'database-manager-name', class: 'input', type: 'text', value: draft.name, maxlength: 64,
+                    const name = el('input', {id: 'database-manager-name', class: 'input', type: 'text', value: draft.name, maxlength: draft.engine === 'postgres' ? 63 : 64,
                         autocomplete: 'off', autocapitalize: 'none', spellcheck: 'false', 'aria-describedby': 'database-manager-name-help database-manager-error', 'aria-invalid': String(invalid),
                         on: {input: event => { draft.name = event.target.value; failure = null; invalid = false; syncControls(); }}});
                     content.append(field('databaseName', name), label('p', 'nameHelp', {id: 'database-manager-name-help', class: 'field-hint'}));
@@ -102,7 +103,7 @@ export function createDatabaseManager({getDatabase, getDatabases, getEngines = (
             }
         }
         back.hidden = step === 0; proceed.hidden = step !== 2;
-        relabel(proceed, draft.task === 'create' ? (draft.engine === 'postgres' ? 'openSql' : 'createAndDesign') : creating() ? 'createAndChooseFile' : 'chooseFile');
+        relabel(proceed, draft.task === 'create' ? (creating() ? 'createAndDesign' : draft.engine === 'postgres' ? 'openSql' : 'createAndDesign') : creating() ? 'createAndChooseFile' : 'chooseFile');
         syncControls();
         const restored = focused ? document.getElementById(focused) : null;
         if (restored && !restored.disabled) { restored.focus({preventScroll: true}); if (caret && typeof restored.setSelectionRange === 'function') restored.setSelectionRange(...caret); }
@@ -134,15 +135,22 @@ export function createDatabaseManager({getDatabase, getDatabases, getEngines = (
         const captured = {...draft}, importWorkflow = draft.task === 'table' ? 'import-table' : 'import-database';
         if (creating()) {
             const name = captured.name.trim();
-            invalid = !/^[A-Za-z0-9_]{1,64}$/.test(name) || name.replaceAll('_', '\\_').length > 64
-                || ['mysql', 'information_schema', 'performance_schema', 'sys'].includes(name.toLowerCase());
+            const postgres = captured.engine === 'postgres';
+            invalid = postgres ? !/^[A-Za-z0-9_]{1,63}$/.test(name) || name.toLowerCase().startsWith('pg_')
+                || ['postgres', 'template0', 'template1'].includes(name.toLowerCase())
+                : !/^[A-Za-z0-9_]{1,64}$/.test(name) || name.replaceAll('_', '\\_').length > 64
+                    || ['mysql', 'information_schema', 'performance_schema', 'sys'].includes(name.toLowerCase());
             if (invalid) { syncControls(); document.getElementById('database-manager-name')?.focus(); return; }
-            const database = getDefaultDatabase();
-            if (!database || database.startsWith('postgres:')) { failure = new Error(text('managerUnavailable')); syncControls(); return; }
+            const database = getDefaultDatabase(captured.engine);
+            if (!database || database.startsWith('postgres:') !== postgres) { failure = new Error(text('managerUnavailable')); syncControls(); return; }
             saving = true; failure = null; render();
             try {
                 const result = await request('prepare-database', {params: {database}, body: {name}});
-                if (result.database !== name || !Array.isArray(result.databases)) throw new Error(t('app.databases.managerResponseInvalid'));
+                const prepared = parseConnectionScope(result.database);
+                if ((prepared.connection || 'mariadb') !== captured.engine || prepared.database !== name
+                    || !Array.isArray(result.databases) || !result.databases.some(item => keyOf(item) === result.database && engineOf(item) === captured.engine)) {
+                    throw new Error(t('app.databases.managerResponseInvalid'));
+                }
                 saving = false; render();
                 await transition(() => onPrepared(result, {task: captured.task, importSql: captured.task !== 'create', importTab: 'import', workflow: importWorkflow, design: captured.task === 'create'}));
             } catch (caught) { failure = caught; saving = false; render(); error.focus({preventScroll: true}); }

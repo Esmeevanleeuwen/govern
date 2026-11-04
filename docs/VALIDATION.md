@@ -3,7 +3,46 @@
 Stand van de controles: **4 november 2026**. Eerdere resultaten hieronder horen
 bij hun beschreven wijziging en zijn niet automatisch opnieuw uitgevoerd.
 
+## Echte PostgreSQL-databaseaanmaak — 4 november 2026
+
+Database aanmaken en Database importeren kunnen nu een echte PostgreSQL-database
+met `public` aanmaken. De URL-scope kiest de engine; `{name}` blijft het volledige
+aanmaakcontract. Na aanmaak opent Queries met een nog niet uitgevoerd
+`CREATE TABLE`-voorbeeld. De ingestelde standaarddatabase behoudt haar bestaande
+schema's en de webapp leest de blijvende beheerlijst alleen-lezen.
+
+Uitgevoerd tegen het afzonderlijke Docker-testproject op poort 18081:
+
+- `postgres-create-http.py`: **102** echte HTTP-/databasecontroles voor twee
+  nieuwe databases, herhalen, ongeldige/systeemnamen, weigeren van onbekende
+  bestaande databases, beperkte rollen, SQL-/CSV-import, herstelpunten en
+  herstellen met teruglezen en database-isolatie.
+- `postgres-create-smoke.mjs`: echte browseraanmaak naar Queries, zelf een tabel
+  ontwerpen en uitvoeren, teruglezen in de vier databaseweergaven, Database
+  importeren naar een nieuwe PostgreSQL-database met SQL-import, CSV-import en
+  Tabel openen, en onafhankelijke SQL-concepten en zoekvelden bij gelijknamige
+  tabellen in twee PostgreSQL-databases.
+- **111** scope-/capabilitycontroles, **95** registry-/provisionercontroles
+  inclusief echte Unix-socketberichten, **68** workercontroles en de bestaande
+  PHP-proeven voor MariaDB-provisioning (**97**), PostgreSQL-backup (**12**),
+  import (**11**) en SQL (**37**), plus **15** algemene backendcontroles.
+- De aangepaste bestaande PostgreSQL-HTTP-proef slaagt met **69** controles.
+  Het registerbestand is gecontroleerd als root:33 met modus `0640`.
+- **13** controles na het daadwerkelijk herstarten van app en worker: beheerde
+  databases blijven selecteerbaar en leesbaar, met hun volledige scope en
+  onafhankelijke records.
+- De bestaande MariaDB-aanmaakproef (**38**) en PostgreSQL-SQL-proef (**31**)
+  slagen, evenals de browserregressies voor database-import, werkplekgereedschap,
+  PostgreSQL-bekijken, de oudere gecachete API-module en rijbewerking.
+
+Deze controles gebruiken eigen geïsoleerde gegevens en accounts. De
+gebruikerinstallatie en Windows zelf zijn niet uitgevoerd; de volledige
+GitHub Actions-uitslag hoort bij de commit.
+
 ## Engine kiezen na de handeling — 4 november 2026
+
+Dit beschrijft de eerdere enginekeuze vóór de uitbreiding hierboven; de toenmalige
+beperking op PostgreSQL-aanmaak geldt niet meer voor de actuele implementatie.
 
 De vernieuwde ingang begint met Database aanmaken, Database importeren of
 Tabel importeren, daarna de engine en bestemming. MariaDB-aanmaak opent de

@@ -40,6 +40,15 @@ beperking van de werkplek.
   Maak ontbrekende databases aan en verleen alleen rechten per exacte naam.
   Geen globale grants; escape `_` in databasepatronen. Bestaande gegevens en
   accountwachtwoorden blijven behouden, ook bij herhalen na een gedeeltelijke fout.
+- PostgreSQL-aanmaak loopt uitsluitend via de vaste `prepare_database`-actie
+  van de privéworker `postgres-tools`. App-rollen krijgen geen `CREATEDB` of
+  beheerdersrechten. Behoud `PG_DATABASE` met zijn ingestelde schema's en laat
+  extra beheerde databases alleen met `public` beginnen. Alleen de worker
+  schrijft de root-beheerde, atomisch vervangen lijst in `postgres_management`;
+  de webapp mount deze alleen-lezen. Neem onbekende bestaande databases niet
+  over: een retry buiten de lijst vereist de vaste herkomstmarkering én de
+  beheerder als eigenaar. Houd snapshots en workeracties per volledige scope
+  gescheiden zonder een veranderlijke actieve database.
 - De beperkte eigen SQL-import (maximaal 256 KiB UTF-8) gebruikt dezelfde SQL-parser
   en uitvoerder als Onderzoeken. Bewaar geen SQL-bestanden, toon voor- en nacontrole,
   eis bevestiging van de exacte databasenaam en neem vooraf bij bestaande
