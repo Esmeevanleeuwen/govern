@@ -12,7 +12,9 @@ registerMessages('app.navigation', {
         browse: 'Bladeren', structure: 'Structuur', sql: 'SQL', more: 'Meer',
         advanced: 'Geavanceerd: phpMyAdmin', exportVia: 'Exporteren via phpMyAdmin', exportBackup: 'Back-up exporteren',
         editStructure: 'Structuur wijzigen in phpMyAdmin', savedQueries: 'Opgeslagen queries', sqlHelp: 'Hulp bij SQL',
-        createTable: 'Tabel maken met SQL', emptyHelp: 'Importeer een bestand of open een bewerkbaar SQL-voorbeeld om je eerste tabel te maken.',
+        newTable: 'Tabel maken', newTableShort: 'Nieuw', createTable: 'Tabel maken met SQL', emptyHelp: 'Maak een tabel of importeer een bestand om te beginnen.',
+        createdRefreshNeeded: 'Tabel {name} is gemaakt. Vernieuw de tabellenlijst om de tabel te openen.',
+        openingTable: 'Tabel {name} openen…',
         emptySelection: 'Kies een tabel',
     },
     en: {
@@ -26,7 +28,9 @@ registerMessages('app.navigation', {
         browse: 'Browse', structure: 'Structure', sql: 'SQL', more: 'More',
         advanced: 'Advanced: phpMyAdmin', exportVia: 'Export via phpMyAdmin', exportBackup: 'Export backup',
         editStructure: 'Edit structure in phpMyAdmin', savedQueries: 'Saved queries', sqlHelp: 'SQL help',
-        createTable: 'Create a table with SQL', emptyHelp: 'Import a file or open an editable SQL example to create your first table.',
+        newTable: 'Create table', newTableShort: 'New', createTable: 'Create a table with SQL', emptyHelp: 'Create a table or import a file to get started.',
+        createdRefreshNeeded: 'Table {name} was created. Refresh the table list to open it.',
+        openingTable: 'Opening table {name}…',
         emptySelection: 'Choose a table',
     },
 });

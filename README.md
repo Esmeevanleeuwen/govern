@@ -10,6 +10,11 @@ staan naast elkaar; de tabellenlijst blijft beschikbaar. Zie
 bewaarde functies en grenzen. De eerdere integratie van databasefuncties staat
 in de [integratiebeschrijving](docs/INTEGRATION.md).
 
+Een tabel maken kan direct via **Tabellen → Nieuw**. Geef de tabel en kolommen
+een naam, kies de gegevenstypen en controleer het voorbeeld. Na **Tabel maken**
+opent de nieuwe tabel in Bladeren, klaar om rijen toe te voegen. Dit werkt voor
+MariaDB en PostgreSQL; je bestaande SQL-concept blijft bewaard.
+
 ## Beginnen
 
 Installeer en start Docker Desktop. Download deze repository en pak de map uit.

@@ -245,6 +245,14 @@ try {
         await route.fulfill({response, json: payload});
     });
     await empty.goto(new URL('/workspace.php#gegevens?' + new URLSearchParams({database: pgScope}), base).href, {waitUntil: 'networkidle'});
+    await empty.locator('#create-table-native').click();
+    await empty.locator('#table-builder-dialog').waitFor();
+    assert.equal(await empty.locator('#database-select').isDisabled(), true, 'The empty-state form keeps its selected PostgreSQL scope.');
+    await empty.locator('#table-builder-name').fill('empty_schema_notes');
+    await empty.locator('.table-builder-column input[id$="-name"]').fill('label');
+    await shot(empty, 'postgres-empty-native');
+    await empty.locator('#table-builder-back').click();
+    await empty.locator('#table-builder-dialog').waitFor({state: 'hidden'});
     await empty.locator('#create-table-sql').click();
     await empty.locator('#sql-editor').waitFor();
     assert.match(await empty.locator('#sql-editor').inputValue(), /CREATE TABLE "public"\."new_table"/);
@@ -252,6 +260,17 @@ try {
     assert.equal(await empty.locator('.query-result .data-table').count(), 0);
     assert.equal(await empty.locator('.query-builder, #query-library').count(), 0);
     await shot(empty, 'postgres-empty-sql');
+    const emptyDraft = 'SELECT 17 AS empty_schema_draft;';
+    await empty.locator('#sql-editor').fill(emptyDraft);
+    await clickDatabaseView(empty, 'gegevens');
+    await empty.locator('#create-table-native').click();
+    assert.equal(await empty.locator('#table-builder-name').inputValue(), 'empty_schema_notes', 'Cancel preserves the new-table draft.');
+    assert.equal(await empty.locator('.table-builder-column input[id$="-name"]').inputValue(), 'label');
+    await empty.locator('#table-builder-back').click();
+    await empty.locator('#table-builder-dialog').waitFor({state: 'hidden'});
+    await clickDatabaseView(empty, 'onderzoeken');
+    assert.equal(await empty.locator('#sql-editor').inputValue(), emptyDraft, 'Opening or cancelling native creation preserves written SQL.');
+    assert.equal(await empty.locator('.query-result .data-table').count(), 0);
 
     mobileContext = await authenticatedContext(browser, base, {locale: 'en-GB', viewport: {width: 320, height: 760}, isMobile: true, hasTouch: true});
     const mobile = await mobileContext.newPage(); track(mobile);

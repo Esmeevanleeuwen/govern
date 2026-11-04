@@ -2,6 +2,7 @@ import {request, setCsrf, endpoint, setDatabase, getDatabase} from './api.js';
 import {el, icon, button, badge, heading, loading, empty, errorPanel, errorText, notice, dataTable, number, fileSize, dateTime, quoteIdentifier as mariaIdentifier, toast, copyText, sqlDisclosure, confirmAction} from './ui.js';
 import {DatabaseModal} from './database-modal.js';
 import {createDatabaseManager} from './database-manager.js';
+import {createTableBuilder} from './table-builder.js';
 import {QueryBuilder} from './query-builder.js';
 import {t, getLanguage, setLanguage} from './i18n.js';
 import {getPreferences, updatePreferences, resetAppearance, subscribePreferences} from './preferences.js';
@@ -59,6 +60,8 @@ const state = {
     rowEditorOpen: false,
     switchingDatabase: false,
     databaseManagerOpen: false,
+    tableBuilderOpen: false,
+    tableCreationRefreshing: false,
     connectionError: null,
     queryError: null,
     querySaveError: null,
@@ -88,6 +91,7 @@ const navigation = document.getElementById('navigation');
 const workspaceContext = document.getElementById('workspace-context');
 const contextContent = document.getElementById('workspace-context-content');
 const panelToggle = document.getElementById('workspace-panel-toggle');
+const createTableButton = document.getElementById('workspace-create-table');
 const databaseViews = ['gegevens', 'structuur', 'onderzoeken', 'verkennen', 'schema'];
 const databasePrimaryViews = ['gegevens', 'structuur', 'onderzoeken'];
 const databaseSelect = document.getElementById('database-select');
@@ -200,6 +204,48 @@ const databaseManager = createDatabaseManager({getDatabase, getDatabases: () => 
         if (importSql && getDatabase() === data.database && !state.connectionError) databaseModal.open('', 'native-import');
     },
 });
+const tableBuilder = createTableBuilder({getDatabase,
+    isBusy: () => databaseBusy() || state.switchingDatabase || !state.bootstrap || state.bootstrap.database.status === 'unavailable' || !supports('create_table'),
+    onBusy: busy => { state.tableBuilderOpen = busy; syncDatabasePicker(); },
+    onCreated: async data => {
+        const target = getDatabase(), revision = databaseRevision, navigation = window.location.hash;
+        if (data.scope_key && data.scope_key !== target) return;
+        // Keep the destination fixed until its new catalog is ready. A successful
+        // CREATE must never fall back to displaying a different existing table.
+        state.tableCreationRefreshing = true;
+        const shell = document.querySelector('.app-shell');
+        shell.inert = true;
+        page.setAttribute('aria-busy', 'true');
+        globalNotice.replaceChildren(loading(t('app.navigation.openingTable', {name: data.table})));
+        syncDatabasePicker();
+        refreshButton.disabled = true;
+        openDatabase.disabled = true;
+        try {
+            await refreshBootstrap(false, {invalidateRecordMap: true});
+            if (target !== getDatabase() || revision !== databaseRevision || navigation !== window.location.hash) return;
+            if (state.connectionError || state.bootstrap?.database.status === 'unavailable' || !tables().some(table => table.name === data.table)) {
+                throw state.connectionError || Object.assign(new Error(t('app.navigation.createdRefreshNeeded', {name: data.table})),
+                    {translationKey: 'app.navigation.createdRefreshNeeded', error_params: {name: data.table}});
+            }
+            state.catalogSearch.database = '';
+            state.table = data.table;
+            history.replaceState(null, '', databaseHash('gegevens'));
+            closeSidebar();
+            render();
+            toast(t('app.tableBuilder.success', {name: data.table}));
+        } finally {
+            state.tableCreationRefreshing = false;
+            shell.inert = false;
+            page.removeAttribute('aria-busy');
+            refreshButton.disabled = state.restoring || Boolean(bootstrapController);
+            openDatabase.disabled = !supports('phpmyadmin') || state.restoring || !state.bootstrap || databaseModal.database !== getDatabase();
+            syncDatabasePicker();
+        }
+        document.getElementById('data-search')?.focus({preventScroll: true});
+    },
+});
+createTableButton.prepend(icon('plus'));
+createTableButton.addEventListener('click', () => tableBuilder.open());
 manageDatabases.append(icon('plus'));
 manageDatabases.addEventListener('click', () => databaseManager.open());
 
@@ -289,6 +335,7 @@ function syncWorkspaceNavigation() {
     workspaceContext.hidden = !hasContext || !isExplorerOpen();
     sidebar.classList.toggle('has-context', expanded);
     document.getElementById('workspace-context-title').textContent = t({database: 'app.navigation.tables', experiments: 'app.navigation.snapshots'}[area] || 'app.shell.workspace');
+    createTableButton.hidden = area !== 'database' || !state.bootstrap || !supports('create_table') || state.bootstrap.database.status === 'unavailable';
     panelToggle.setAttribute('aria-expanded', String(expanded));
     panelToggle.setAttribute('aria-label', t('app.navigation.hide'));
     const workspaceOpener = document.getElementById('workspace-explorer-open');
@@ -326,7 +373,7 @@ function routeHash(name, params = {}) {
 function databaseHash(name) { return routeHash(name, state.table ? {table: state.table} : {}); }
 
 function databaseOperationsBusy() {
-    return state.restoring || state.creatingSnapshot || state.savingQuery || state.deletingQuery || state.runningQuery || state.rowEditorOpen || databaseModal.dialog.open;
+    return state.restoring || state.creatingSnapshot || state.savingQuery || state.deletingQuery || state.runningQuery || state.rowEditorOpen || state.tableBuilderOpen || state.tableCreationRefreshing || databaseModal.dialog.open;
 }
 
 function databaseBusy() { return state.databaseManagerOpen || databaseOperationsBusy(); }
@@ -339,6 +386,7 @@ function syncDatabasePicker() {
         item.available === false ? t('app.databases.unavailable', {name: item.label || item.name}) : item.label || item.name)));
     databaseSelect.disabled = !options.length || databaseBusy() || state.switchingDatabase;
     manageDatabases.disabled = !state.bootstrap || databaseBusy() || state.switchingDatabase;
+    createTableButton.disabled = !state.bootstrap || !supports('create_table') || databaseBusy() || state.switchingDatabase;
     const contextExport = document.getElementById('context-export');
     if (supports('context')) contextExport.href = endpoint('context');
     else contextExport.removeAttribute('href');
@@ -1205,8 +1253,11 @@ function noTables() {
         const id = isPostgres() ? 'BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY' : 'BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY';
         return openResearch('CREATE TABLE ' + sqlTable('new_table') + ' (\n  ' + quoteIdentifier('id') + ' ' + id + ',\n  ' + quoteIdentifier('name') + ' VARCHAR(255) NOT NULL\n);');
     };
-    return empty(t('app.core.table.emptyTitle'), t('app.navigation.emptyHelp'),
-        supports('query') ? button(t('app.navigation.createTable'), createSql, {kind: 'primary', symbol: 'code', id: 'create-table-sql'}) : null);
+    const actions = el('div', {class: 'empty-table-actions'});
+    if (supports('create_table')) actions.append(button(t('app.navigation.newTable'), () => tableBuilder.open(),
+        {kind: 'primary', symbol: 'plus', id: 'create-table-native'}));
+    if (supports('query')) actions.append(button(t('app.navigation.createTable'), createSql, {symbol: 'code', id: 'create-table-sql'}));
+    return empty(t('app.core.table.emptyTitle'), t('app.navigation.emptyHelp'), actions);
 }
 
 async function renderData(scope) {

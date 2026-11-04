@@ -21,6 +21,7 @@ $governUser = \Govern\Web::user();
     <link rel="stylesheet" href="/assets/database-workspace.css">
     <link rel="stylesheet" href="/assets/row-editor.css">
     <link rel="stylesheet" href="/assets/database-manager.css">
+    <link rel="stylesheet" href="/assets/table-builder.css">
     <link rel="stylesheet" href="/assets/dataset-import.css">
     <link rel="stylesheet" href="/assets/ai-workspace.css">
     <link rel="stylesheet" href="/assets/modal-shell.css">
@@ -44,7 +45,13 @@ $governUser = \Govern\Web::user();
                 <div class="rail-bottom"><a class="nav-link settings-link" id="settings-link" href="#instellingen" data-area="settings"><span data-i18n="app.route.settings">Instellingen</span></a></div>
             </div>
             <section id="workspace-context" class="workspace-context" aria-labelledby="workspace-context-title" hidden>
-                <header class="workspace-context-heading"><h2 id="workspace-context-title"></h2><button id="workspace-panel-toggle" class="icon-button" type="button" aria-controls="workspace-context" aria-expanded="true"></button></header>
+                <header class="workspace-context-heading">
+                    <h2 id="workspace-context-title"></h2>
+                    <div class="workspace-context-actions">
+                        <button id="workspace-create-table" class="button button-secondary button-small" type="button" aria-label="Tabel maken" title="Tabel maken" data-i18n-aria="app.navigation.newTable" data-i18n-title="app.navigation.newTable" hidden><span data-i18n="app.navigation.newTableShort">Nieuw</span></button>
+                        <button id="workspace-panel-toggle" class="icon-button" type="button" aria-controls="workspace-context" aria-expanded="true"></button>
+                    </div>
+                </header>
                 <div id="workspace-context-content" class="workspace-context-content"></div>
                 <p class="workspace-context-foot" data-i18n="app.shell.localComputer">Lokaal op je computer</p>
             </section>

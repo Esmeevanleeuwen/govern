@@ -345,7 +345,7 @@ AI configuration.
 | Place | Task |
 | --- | --- |
 | Shared header | Choose a database; add a MariaDB database with **+**; Refresh; open Workspace |
-| Database sidebar | Search and select tables; optionally expand table details |
+| Database sidebar | Search and select tables; **New** creates a table; optionally expand table details |
 | Primary database row | **Browse / Bladeren**, **Structure / Structuur**, **SQL** |
 | Direct database actions | **Import**; **Export via phpMyAdmin** for MariaDB or **Export backup** for PostgreSQL |
 | **More / Meer** | **Explore / Verkennen**, **Diagram**, **Backups / Back-ups** |
@@ -354,9 +354,19 @@ AI configuration.
 **Browse** owns table search, pagination, rows and add/edit/delete. **Structure**
 shows columns, keys, relationships and available table definitions. It is a
 metadata view, not a native visual schema editor. Use SQL for structure changes;
-MariaDB also offers **Edit structure in phpMyAdmin**. An empty database offers
-**Create a table with SQL**, which prepares an engine-correct editable example
-without executing it.
+MariaDB also offers **Edit structure in phpMyAdmin**. **Tables → New** opens the
+native table builder for either engine. An empty database offers the same
+**Create table** action first. The secondary **Create a table with SQL** prepares
+an engine-correct editable example without executing it.
+
+The table builder keeps the destination visible and fixed. Start with the table
+name and column names/types; **Add ID column** is an explicit choice. Show one
+review before creation, with the generated SQL in a collapsed disclosure. Keep
+form drafts per database/schema and retain values, focus and caret when changing
+language. Cancel never creates a table. Creation opens the exact new table in
+Browse and clears the sidebar filter so it is visible, preserving SQL drafts.
+If creation succeeded but refreshing failed, say that the table was created and
+offer a read-only retry. Never automatically resend an uncertain CREATE.
 
 **SQL** stays in the same database workspace with the searchable table list
 available. Put the editor and results first. The visual query builder, saved
@@ -481,8 +491,8 @@ Closing import refreshes tables, structure and relationships without discarding
 valid workspace state. A language change preserves the file, preview,
 confirmation and input values; it never reloads an active phpMyAdmin form.
 Keep focus return and a usable single-column dialog at 320 px. In an empty
-database, **Create a table with SQL** only opens an editable example; execution
-uses the normal SQL action and existing confirmations.
+database, **Create table** opens the native builder. Its secondary SQL example
+still uses the normal SQL action and existing confirmations.
 
 ### Inspect any Govern element
 

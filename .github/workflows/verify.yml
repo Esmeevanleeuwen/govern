@@ -63,6 +63,7 @@ jobs:
         run: |
           docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/backend_unit.php
           docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/postgres_scope_unit.php
+          docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/table-definition-unit.php
           docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/sql_script_unit.php
           docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/postgres-sql-unit.php
           docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/native_import_unit.php
@@ -89,6 +90,10 @@ jobs:
         run: docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/postgres-row-integration.php --confirm-database=govern_pg
       - name: PostgreSQL native SQL sessions, exact values and transactions
         run: docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/postgres-sql-integration.php --confirm-database=govern_pg
+      - name: Native table creation on both engines
+        run: |
+          docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/table-definition-integration.php --engine=mariadb --confirm-database=bestuursatlas
+          docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/table-definition-integration.php --engine=postgres --confirm-database=govern_pg
       - name: Read-only record neighborhoods and exact identities
         run: docker compose run --rm -T --no-deps --user www-data --entrypoint php -v "$PWD:/workspace:ro" app /workspace/tests/record-explorer-integration.php --confirm-database=bestuursatlas --confirm-postgres=govern_pg
       - name: Real database integration
@@ -127,6 +132,7 @@ jobs:
           python3 tests/postgres-row-http.py --base-url http://127.0.0.1:8080 --confirm-database=govern_pg
           python3 tests/record-explorer-http.py --base-url http://127.0.0.1:8080 --confirm-database=govern_pg
           python3 tests/record-map-http.py --base-url http://127.0.0.1:8080 --confirm-fixtures=record-map-ci
+          python3 tests/table-definition-http.py --base-url http://127.0.0.1:8080 --confirm-project=govern --confirm-fixtures=table-definition-ci
       - name: Browser and visual query builder
         env:
           GOVERN_SCREENSHOT_DIR: ${{ runner.temp }}/govern-screenshots
@@ -155,6 +161,8 @@ jobs:
           failed_suites=()
           for suite in \
             tests/simple-workspace-smoke.mjs \
+            tests/table-definition-smoke.mjs \
+            tests/native-table-workspace-smoke.mjs \
             tests/record-map-smoke.mjs \
             tests/homepage-auth-smoke.mjs \
             tests/postgres-smoke.mjs \

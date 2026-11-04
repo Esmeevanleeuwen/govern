@@ -31,6 +31,7 @@ use Govern\RecordExplorer;
 use Govern\RecordMap;
 use Govern\NativeImport;
 use Govern\DatasetImport;
+use Govern\TableDefinition;
 
 try {
     $baseConfig = Config::fromEnvironment();
@@ -43,7 +44,7 @@ try {
         Http::json(['status' => 'ok']);
     }
     (new Auth())->requireUser();
-    $posts = ['build-query', 'query', 'save-query', 'delete-query', 'create-snapshot', 'restore-snapshot', 'insert-row', 'update-row', 'delete-row', 'ai-context', 'ai-chat', 'prepare-database', 'record-map', 'native-import-preview', 'native-import-execute'];
+    $posts = ['build-query', 'query', 'save-query', 'delete-query', 'create-snapshot', 'restore-snapshot', 'insert-row', 'update-row', 'delete-row', 'ai-context', 'ai-chat', 'prepare-database', 'record-map', 'native-import-preview', 'native-import-execute', 'table-definition-preview', 'table-definition-create'];
     $datasetUpload = in_array($action, ['dataset-preview', 'dataset-import'], true);
     $file = $datasetUpload ? DatasetImport::upload($csrf) : null;
     $input = in_array($action, $posts, true) ? Http::post($csrf) : [];
@@ -90,6 +91,14 @@ try {
         exit;
     }
     $database = new Database($config);
+    if (in_array($action, ['table-definition-preview', 'table-definition-create'], true)) {
+        // Like ordinary SQL DDL, this one CREATE shares the maintenance lock:
+        // catalog reads may continue, while recovery and SQL import stay excluded.
+        $lock = new MaintenanceLock($config['maintenance_dir']);
+        $definition = new TableDefinition($database);
+        Http::json($action === 'table-definition-preview' ? $definition->preview($input) : $definition->create($input),
+            $action === 'table-definition-create' ? 201 : 200);
+    }
     if ($datasetUpload) {
         $parsed = DatasetImport::read($file);
         $lock = new MaintenanceLock($config['maintenance_dir']);

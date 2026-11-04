@@ -162,7 +162,8 @@ PostgreSQL supports authenticated GET actions `bootstrap`, `schema`,
 `import-inspection`, `snapshots` and `download-snapshot`; the read-only POST
 `record-map`; and POST `insert-row`, `update-row`, `delete-row`, `query`,
 `native-import-preview`, `native-import-execute`, `dataset-preview`,
-`dataset-import`, `create-snapshot` and `restore-snapshot`. Normal methods,
+`dataset-import`, `table-definition-preview`, `table-definition-create`,
+`create-snapshot` and `restore-snapshot`. Normal methods,
 sessions and CSRF checks apply. `query` accepts manual SQL only; visual designs
 remain unsupported. Other scoped actions return 403 `postgres_read_only` before
 the corresponding service runs, including saved queries, database creation,
@@ -170,7 +171,7 @@ context export and AI. phpMyAdmin is never a PostgreSQL fallback.
 
 Bootstrap adds `scope_key` and `capabilities`, and database fields
 `connection`, `engine`, `schema` and `scope_key`. Read capabilities are true.
-`write` requires separate row-writer credentials. `query` and `import` require
+`write` requires separate row-writer credentials. `query`, `import` and `create_table` require
 SQL credentials; `snapshots` requires the configured tools socket. These flags
 describe configured routes, not a successful live connection; database grants
 and service errors remain authoritative. `query_builder`, `saved_queries`,
@@ -344,6 +345,66 @@ returns 503 `database_prepare_failed`; an invalid helper reply returns 502
 `database_manager_invalid`. Errors use the ordinary bilingual envelope and do
 not expose SQL or credentials.
 
+### Create a table in the selected database
+
+The native table builder uses the existing request scope and ordinary session,
+CSRF and JSON-body checks. It supports MariaDB and PostgreSQL. The additive
+`create_table` capability follows the configured SQL connection; the database's
+actual grants still determine whether creation succeeds.
+
+`POST table-definition-preview` accepts exactly `{name,columns}`. Names use
+`[a-z][a-z0-9_]{0,62}`; there must be 1–256 columns with unique names. Each column
+has `{name,type,nullable,primary,generated,default}`, plus `precision` and `scale`
+only for decimals. `type` is one of `text`, `whole`, `decimal`, `boolean`, `date`
+or `datetime`. The three flags are booleans. Only one column may be primary;
+it must be non-nullable and cannot have type `text`. `generated:true` requires
+a whole-number primary key with no default, and generates an identity or
+auto-increment column according to the selected engine.
+
+`default` is `{mode:"none"}`, `{mode:"null"}` or
+`{mode:"literal",value:string}`. Explicit NULL requires a nullable column.
+Literal defaults preserve exact text/numbers: use strings for BIGINT and
+decimal values, `"true"`/`"false"` for booleans, `YYYY-MM-DD` for dates and
+`YYYY-MM-DD HH:MM:SS[.ffffff]` for date/time. Integer JSON values and boolean
+JSON literals are also accepted for their supported types; floating-point
+JSON numbers are rejected. Literal values are limited to 4,096 UTF-8 bytes
+without NUL. Dates use the shared engine
+range 1000–9999. Decimal precision is an integer from 1–65 and scale is an
+integer from 0–30 no greater than precision; omitted values default to 18,2.
+Expressions, SQL fragments, composite keys, indexes, foreign keys and changes
+to existing tables use the ordinary SQL workspace.
+
+Preview reads the catalog, checks name conflicts and returns
+`{definition,sql,table,database,schema,engine,definition_token}` without writing
+anything. The normalized `definition` is the reviewed form. `sql` is one
+fully qualified engine-specific CREATE statement. The token is a deterministic
+SHA-256 fingerprint of that definition, SQL and destination; it binds the
+review to the submitted content, not a separate authorization mechanism. The
+generated SQL is limited to 256 KiB.
+
+`POST table-definition-create` accepts exactly
+`{definition,definition_token}`. The server recompiles, repeats the conflict
+check and verifies the fingerprint before running its generated SQL once
+through the existing scoped SQL connection. The request never supplies raw SQL.
+Success is HTTP 201 with
+`{definition,sql,table,database,schema,engine,scope_key,created:true,verified:boolean}`.
+`verified:false` means CREATE returned successfully but the subsequent catalog
+read did not confirm the new table; clients retry reading, not creation.
+
+Both endpoints take the shared maintenance lock, as ordinary SQL DDL does.
+Catalog reads can continue; an exclusive restore or native SQL import blocks
+either endpoint with 423 `maintenance_busy` before it proceeds. Existing objects
+are not replaced. A case-insensitive name conflict is 409
+`table_definition_exists`; PostgreSQL checks relation and type names in the
+selected schema as well as ordinary tables. A changed fingerprint is 409
+`table_definition_changed`; invalid names, columns, defaults or payloads use
+the corresponding 422 `table_definition_*` error. A failed CREATE is 503
+`table_definition_create_failed`; a lost connection during execution is 503
+`table_definition_uncertain`. An uncertain request is never automatically
+retried: refresh the catalog to establish what happened first.
+
+### Inspect an import
+
 `GET import-inspection?database=<name>` is a read-only snapshot of the selected database,
 using the same maintenance lock and the reader account. It returns
 `{database,tables:[name],views:[name],foreign_keys,row_counts:{table:integer},
@@ -405,6 +466,7 @@ interface and future feature rules.
 
 - GET `databases`: `{databases:[{name,available}],default_database,can_create}`; see database scope above.
 - POST `prepare-database` exactly `{name}`: `{database,created,databases:[{name,available}],default_database}`; see database preparation above.
+- POST `table-definition-preview` exactly `{name,columns}`: compiled definition, destination, generated SQL and review token without writes. POST `table-definition-create` exactly `{definition,definition_token}`: 201 creation result with `created` and readback `verified`; see native table creation above.
 - GET `bootstrap`: `{csrf, databases:[{name,available}],default_database,can_create_database,database:{name,version,status,available}, stats:{tables,views,rows_estimate}, tables:[{name,type:"table"|"view",comment,rows_estimate,columns}]}`. An unavailable database can also return `warning` and `warning_i18n`; bootstrap still supplies the selected database name and CSRF token for recovery.
 - GET `browse&table=...&page=1&page_size=25&q=...`: `{table,columns:[{name,type,nullable,default,generated,primary,comment}],rows:[{column:value}],key_columns:[name],row_keys:[object|null],page,page_size,total,sql,params,truncated,notice,notice_i18n}`. `row_keys` aligns with `rows` and is extracted before preview truncation; key values are exact strings, binary keys hex encoded. Named identifiers verified against live catalog; values bound; max page_size100. App-owned `_govern_` tables excluded from normal list, remain accessible in phpMyAdmin.
 - GET `structure&table=...`: `{table,columns:[...],indexes:[{name,unique,columns:[name]}],foreign_keys:[{name,columns:[name],referenced_table,referenced_columns:[name]}],create_sql}`.

@@ -7,6 +7,14 @@ namespace Govern;
 final class Messages
 {
     private const TEXT = [
+        'table_definition_invalid' => ['nl' => 'Controleer de tabeldefinitie en gebruik maximaal 256 kolommen.', 'en' => 'Check the table definition and use at most 256 columns.'],
+        'table_definition_name' => ['nl' => 'Gebruik een kleine letter gevolgd door kleine letters, cijfers of underscores, maximaal 63 tekens.', 'en' => 'Use a lowercase letter followed by lowercase letters, numbers or underscores, up to 63 characters.'],
+        'table_definition_column' => ['nl' => 'Controleer kolomnamen, typen, primaire sleutel, NULL en gegenereerde waarden. De eenvoudige bouwer ondersteunt één primaire sleutel en geen primaire tekstsleutel.', 'en' => 'Check column names, types, the primary key, NULL and generated values. The basic builder supports one primary key and no text primary key.'],
+        'table_definition_default' => ['nl' => 'Deze standaardwaarde past niet bij het gekozen type of de NULL-regel. Gebruik een letterlijke waarde, geen SQL-expressie.', 'en' => 'This default does not match its type or NULL rule. Use a literal value, not a SQL expression.'],
+        'table_definition_exists' => ['nl' => 'De naam {table} is al in gebruik. Kies een andere naam.', 'en' => 'The name {table} is already in use. Choose another name.'],
+        'table_definition_changed' => ['nl' => 'De definitie of bestemming is gewijzigd. Controleer de tabel opnieuw.', 'en' => 'The definition or destination changed. Review the table again.'],
+        'table_definition_create_failed' => ['nl' => 'De tabel kon niet worden gemaakt. Controleer de rechten en tabeldefinitie; bestaande tabellen zijn niet vervangen.', 'en' => 'The table could not be created. Check its permissions and definition; existing tables were not replaced.'],
+        'table_definition_uncertain' => ['nl' => 'Het resultaat voor {table} is onbekend. Controleer de database voordat je opnieuw probeert.', 'en' => 'The result for {table} is unknown. Inspect the database before trying again.'],
         'explore_key_invalid' => ['nl' => 'Kies een record met zijn volledige, exacte sleutel.', 'en' => 'Choose a record using its complete, exact key.'],
         'explore_record_missing' => ['nl' => 'Dit record is niet meer beschikbaar. Vernieuw de verkenning.', 'en' => 'This record is no longer available. Refresh the explorer.'],
         'record_map_input_invalid' => ['nl' => 'Kies een geldig record en een verbinding uit de kaart.', 'en' => 'Choose a valid record and a connection from the map.'],
