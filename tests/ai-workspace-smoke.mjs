@@ -191,7 +191,7 @@ try {
     assert.equal(queryRequests.length, 0, 'Generating an answer and SQL proposal never executes SQL.');
     await shot('answer-and-proposal');
 
-    await page.locator('#navigation [data-area="research"]').click();
+    await page.locator('[data-database-view="onderzoeken"]').click();
     await page.locator('#sql-editor').waitFor();
     const originalDraft = 'SELECT 101 AS original_draft;';
     await page.locator('#sql-editor').fill(originalDraft);
@@ -229,7 +229,7 @@ try {
     // A query result is a snapshot, with no reliable source table. Its visible
     // record text must not be sent as schema context when asking about it.
     await close();
-    await page.locator('#navigation [data-area="research"]').click();
+    await page.locator('[data-database-view="onderzoeken"]').click();
     const privateSnapshot = 'PRIVATE_QUERY_SNAPSHOT_DO_NOT_FORWARD';
     await page.locator('#sql-editor').fill("SELECT '" + privateSnapshot + "' AS snapshot;");
     const explicitQuery = page.waitForResponse(response => apiRoute('query')(new URL(response.url())));

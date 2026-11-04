@@ -35,7 +35,7 @@ try {
     assert.ok(await page.locator('[data-row-action="edit"]').count() > 0);
     assert.equal(await page.locator('#context-export').evaluate(link => link.hidden), true,
         'PostgreSQL disables export independently of whether Tools is open.');
-    assert.equal(await page.locator('[data-area="research"]').isVisible(), true);
+    assert.equal(await page.locator('[data-database-view="onderzoeken"]').isVisible(), true);
     assert.equal(await page.locator('[data-area="experiments"]').isVisible(), false);
     assert.ok((await row('literal%_value').first().textContent()).includes('123456789012345678901234.12'));
     const searched = page.waitForResponse(response => {

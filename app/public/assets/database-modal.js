@@ -38,6 +38,10 @@ export class DatabaseModal {
         this.importInspection = new ImportInspectionPanel(busy => this.setBusy(busy));
         this.datasetImport = new DatasetImportPanel(busy => {
             this.setBusy(busy);
+        }, imported => {
+            if (this.isBusy() || !this.dialog.open) return;
+            this.pendingImported = imported;
+            this.dialog.close();
         });
         this.dialog = el('dialog', {id: 'database-dialog', class: 'database-dialog', 'aria-labelledby': 'database-title'});
         this.name = el('span', {class: 'database-name sr-only'});
@@ -58,7 +62,7 @@ export class DatabaseModal {
         this.expand = el('button', {type: 'button', class: 'icon-button', title: t('modal.expand'), 'aria-label': t('modal.expand'), 'aria-pressed': 'false', on: {click: () => this.toggleExpanded()}}, icon('expand'));
         this.tabButtons = {};
         const tablist = el('div', {class: 'database-tabs', role: 'tablist', 'aria-label': t('modal.tools')});
-        for (const [key, label, symbol] of [['browse', 'Browse', 'table'], ['structure', 'Structure', 'layers'], ['sql', 'SQL', 'code'], ['import', t('modal.import'), 'download'], ['export', t('modal.export'), 'external'], ['dataset', t('dataset.title'), 'plus']]) {
+        for (const [key, label, symbol] of [['browse', 'Browse', 'table'], ['structure', 'Structure', 'layers'], ['sql', 'SQL', 'code'], ['import', t('modal.sqlImport'), 'download'], ['export', t('modal.export'), 'external'], ['dataset', t('dataset.title'), 'plus']]) {
             const tab = el('button', {type: 'button', class: 'database-tab', id: 'database-tab-' + key, role: 'tab', 'aria-controls': key === 'dataset' ? 'dataset-import-panel' : 'database-panel', 'aria-selected': 'false', on: {
                 click: () => { if (this.isBusy()) return; this.tab = key; this.navigate(); },
                 keydown: event => this.tabKeydown(event, key),
@@ -96,7 +100,9 @@ export class DatabaseModal {
             clearTimeout(this.loadTimeout);
             this.importInspection.close();
             this.onOpenChange?.(false);
-            this.onClose?.();
+            const imported = this.pendingImported || null;
+            this.pendingImported = null;
+            this.onClose?.({imported});
         });
         document.body.append(this.dialog);
         this.shell = attachDialog(this.dialog, {handle: this.dialog.querySelector('.database-dialog-header')});
@@ -105,6 +111,12 @@ export class DatabaseModal {
     isBusy() { return this.importInspection.ownWorking || this.importInspection.submitted || this.datasetImport.busy === true; }
 
     isPostgres() { return this.database.startsWith('postgres:'); }
+
+    descriptionKey() {
+        if (this.tab === 'dataset') return 'modal.fileImportDescription';
+        if (this.tab === 'import') return this.isPostgres() ? 'app.postgres.importDescription' : 'modal.sqlImportDescription';
+        return 'modal.description';
+    }
 
     setBusy() {
         const busy = this.isBusy();
@@ -132,9 +144,9 @@ export class DatabaseModal {
         this.closeButton.querySelector('span').textContent = t('modal.close');
         this.closeButton.setAttribute('aria-label', t('modal.close'));
         this.dialog.querySelector('[role="tablist"]').setAttribute('aria-label', t('modal.tools'));
-        this.tabButtons.import.lastChild.textContent = t('modal.import');
+        this.tabButtons.import.lastChild.textContent = t('modal.sqlImport');
         this.tabButtons.export.lastChild.textContent = t('modal.export');
-        this.dialog.querySelector('[data-i18n="modal.description"]').textContent = t(this.isPostgres() ? 'app.postgres.importDescription' : 'modal.description');
+        this.dialog.querySelector('[data-i18n="modal.description"]').textContent = t(this.descriptionKey());
         if (this.dialog.open) this.syncLocation();
         this.importInspection.translate();
         this.configure(this.database, this.tables, this.databases);
@@ -192,7 +204,7 @@ export class DatabaseModal {
         this.tabButtons.import.setAttribute('aria-controls', this.isPostgres() ? 'import-inspection' : 'database-panel');
         this.importInspection.panel.setAttribute('role', this.isPostgres() ? 'tabpanel' : 'region');
         this.importInspection.panel.setAttribute('aria-labelledby', this.isPostgres() ? 'database-tab-import' : 'import-inspection-title');
-        this.dialog.querySelector('[data-i18n="modal.description"]').textContent = t(this.isPostgres() ? 'app.postgres.importDescription' : 'modal.description');
+        this.dialog.querySelector('[data-i18n="modal.description"]').textContent = t(this.descriptionKey());
         this.datasetImport.configure(database);
         this.tables = tables;
         const scope = parseConnectionScope(database);
@@ -263,6 +275,7 @@ export class DatabaseModal {
             tab.tabIndex = key === this.tab ? 0 : -1;
         }
         this.panel.setAttribute('aria-labelledby', 'database-tab-' + this.tab);
+        this.dialog.querySelector('[data-i18n="modal.description"]').textContent = t(this.descriptionKey());
     }
 
     tabKeydown(event, current) {

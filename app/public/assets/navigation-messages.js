@@ -9,7 +9,7 @@ registerMessages('app.navigation', {
         noConnections: 'Geen gedeclareerde verwijzingen vanuit deze tabel.',
         ready: 'Verbonden', explore: 'Verkennen', schemaViews: 'Schemaweergave', tableDetails: 'Tabeldetails', diagram: 'Diagram',
         tools: 'Gereedschappen', import: 'Gegevens importeren', export: 'Gegevens exporteren', backups: 'Back-ups',
-        emptySelection: 'Kies een tabel',
+        emptySelection: 'Kies een tabel', queries: 'Queries',
     },
     en: {
         database: 'Database', views: 'Database view', open: 'Open tables and workspace',
@@ -19,6 +19,6 @@ registerMessages('app.navigation', {
         noConnections: 'No declared references from this table.',
         ready: 'Connected', explore: 'Explore', schemaViews: 'Schema view', tableDetails: 'Table details', diagram: 'Diagram',
         tools: 'Tools', import: 'Import data', export: 'Export data', backups: 'Backups',
-        emptySelection: 'Choose a table',
+        emptySelection: 'Choose a table', queries: 'Queries',
     },
 });

@@ -1,7 +1,41 @@
 # Validatie
 
-Stand van de controles: **3 november 2026**. Eerdere resultaten hieronder horen
+Stand van de controles: **4 november 2026**. Eerdere resultaten hieronder horen
 bij hun beschreven wijziging en zijn niet automatisch opnieuw uitgevoerd.
+
+## Gedeelde databasewerkplek en expliciete importkeuze
+
+Database gebruikt Records, Explore, Schema en Queries in dezelfde kop en met
+dezelfde doorzoekbare tabellenlijst. De bestaande onderzoekroute blijft
+werken. Tabelkeuze in Explore en Schema houdt het canvas gemount; in Queries
+blijven editor, SQL-concept en resultaten bij een tabelkeuze behouden.
+Importeren laat eerst bestandssoort en een bestaande of nieuwe bestemming
+kiezen. Tabelbestanden hebben drie stappen en een knop naar de geïmporteerde
+tabel in Records.
+
+De gerichte controles voor vertalingen, databasescope, voorkeuren, selectie,
+schema, recordkaart, canvas en venstergeometrie slagen. Schema is ook met de
+echte module en vaste metadata in Chromium gecontroleerd op externe
+tabelkeuze, behoud van viewport/focus en opruimen van listeners.
+
+De nieuwe `workspace-consistency-fixture.mjs` gebruikt de echte frontend met
+vaste API-antwoorden. De gedeelde tabellenlijst, zoekopdracht, tabelkeuze zonder
+canvasherbouw, direct zichtbare SQL-editor, resultaatweergave, notities en
+concepten per database slagen in Chromium. Nederlands/Engels en alle vier
+weergaven op 1440, 768 en 320 px zijn zonder horizontale overloop gecontroleerd.
+
+De importdialoog is met dezelfde aanpak gecontroleerd: bestandssoort,
+bestaande/nieuwe bestemming, geblokkeerde bediening tijdens een verzoek,
+exacte bevestiging, behoud bij taalwisseling, de vastgelegde database bij
+Tabel openen en 320 px zonder horizontale overloop. Deze proeven voeren geen
+SQL of import uit in een echte database.
+
+De volledige PHP-/database- en phpMyAdmin-integratie is lokaal niet uitgevoerd:
+het bouwen van de afzonderlijke Docker-teststack liep tegen de opslaggrens
+van de omgeving. Er zijn daarbij geen testcontainers of databases gestart.
+De bestaande browserproeven zijn aangepast aan de gedeelde navigatie en
+importkeuze voor de volledige CI; eerdere integratie-uitslagen hieronder
+zijn geen nieuwe uitslag voor deze wijziging.
 
 ## Gelijke canvasvormgeving voor Schema en Explore
 

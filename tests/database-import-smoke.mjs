@@ -122,10 +122,17 @@ try {
     assert.equal(forged.status, 422, 'The public API cannot turn the manager into a generic SQL interface.');
     await page.locator('#sql-editor').fill(beforeDraft);
     await openManager();
+    assert.equal(await manager.locator('#database-manager-existing').inputValue(), first,
+        'The current database is the initial import destination.');
+    assert.equal(await manager.locator('#database-manager-import-type').inputValue(), 'dataset',
+        'Table files are available directly from the common import entry.');
+    await manager.locator('#database-manager-import-type').selectOption('import');
     await nameInput.fill(created);
     await nameInput.evaluate(node => { node.focus(); node.setSelectionRange(4, 9); });
     await language('en');
     assert.equal(await nameInput.inputValue(), created, 'Language switching retains the database name draft.');
+    assert.equal(await manager.locator('#database-manager-import-type').inputValue(), 'import',
+        'Language switching retains the selected SQL import flow.');
     assert.deepEqual(await nameInput.evaluate(node => [node.selectionStart, node.selectionEnd]), [4, 9]);
     assert.equal(await nameInput.evaluate(node => node === document.activeElement), true);
     await shot('manager');
@@ -141,6 +148,8 @@ try {
     await manager.locator('#database-manager-create-import').click();
     await started;
     assert.equal(await manager.locator('#database-manager-create-import').isDisabled(), true);
+    assert.equal(await manager.locator('#database-manager-import-type').isDisabled(), true,
+        'An in-flight database preparation keeps its chosen import flow.');
     assert.equal(await manager.locator('#database-manager-cancel').isDisabled(), true);
     await page.keyboard.press('Escape');
     assert.equal(await manager.isVisible(), true, 'An in-flight preparation cannot silently lose its result.');

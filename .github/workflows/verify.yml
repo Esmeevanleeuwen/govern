@@ -152,6 +152,7 @@ jobs:
           export GOVERN_UI_WRITE_TESTS=1
           failed_suites=()
           for suite in \
+            tests/workspace-consistency-fixture.mjs \
             tests/record-map-smoke.mjs \
             tests/homepage-auth-smoke.mjs \
             tests/postgres-smoke.mjs \

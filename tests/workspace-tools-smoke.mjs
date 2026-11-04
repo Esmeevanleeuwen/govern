@@ -94,7 +94,7 @@ try {
     assert.equal(await page.locator('#selection-pointer-toggle').getAttribute('aria-pressed'), 'false');
 
     phase = 'language and drafts';
-    await page.locator('#navigation [data-area="research"]').click(); await page.locator('#sql-editor').waitFor();
+    await page.locator('[data-database-view="onderzoeken"]').click(); await page.locator('#sql-editor').waitFor();
     const draft = 'SELECT 42 AS compact_menu_draft;';
     await page.locator('#sql-editor').fill(draft);
     const language = await ensureWorkspaceTools(page, '#language-select');

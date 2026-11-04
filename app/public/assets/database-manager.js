@@ -38,6 +38,8 @@ export function createDatabaseManager({getDatabase, getDatabases, canCreate, isB
     const close = action('closeManager', () => dismiss(), {id: 'database-manager-close', symbol: 'close', className: 'icon-button database-manager-close'});
     const cancel = action('closeManager', () => dismiss(), {id: 'database-manager-cancel', className: 'button-small'});
     const existing = el('select', {id: 'database-manager-existing', class: 'input select', 'aria-describedby': 'database-manager-existing-help'});
+    const importType = el('select', {id: 'database-manager-import-type', class: 'input select', 'aria-describedby': 'database-manager-import-help'},
+        label('option', 'tableFiles', {value: 'dataset'}), label('option', 'sqlFile', {value: 'import'}));
     const name = el('input', {id: 'database-manager-name', class: 'input', type: 'text', maxlength: 64, autocomplete: 'off',
         autocapitalize: 'none', spellcheck: 'false', 'aria-describedby': 'database-manager-name-help database-manager-error'});
     const switchButton = action('openWorkspace', () => choose(false), {id: 'database-manager-switch', symbol: 'arrow', className: 'button-small'});
@@ -51,6 +53,9 @@ export function createDatabaseManager({getDatabase, getDatabases, canCreate, isB
         el('header', {class: 'database-manager-heading'}, el('div', {},
             label('h2', 'managerTitle', {id: 'database-manager-title'}),
             label('p', 'managerDescription', {id: 'database-manager-description', class: 'small muted'})), close),
+        el('section', {class: 'database-manager-section database-manager-format'},
+            el('label', {class: 'field-label', for: 'database-manager-import-type'}, label('span', 'importType'), importType),
+            label('p', 'tableFilesHelp', {id: 'database-manager-import-help', class: 'field-hint'})),
         el('section', {class: 'database-manager-section'},
             label('h3', 'existingDatabases'),
             el('label', {class: 'field-label', for: 'database-manager-existing'}, label('span', 'choose'), existing),
@@ -73,6 +78,7 @@ export function createDatabaseManager({getDatabase, getDatabases, canCreate, isB
         const selected = getDatabases().find(item => workspaceKey(item) === existing.value);
         dialog.setAttribute('aria-busy', String(saving));
         existing.disabled = saving || !getDatabases().length;
+        importType.disabled = saving;
         name.disabled = saving || !canCreate();
         switchButton.disabled = saving || !selected;
         importExisting.disabled = saving || !canImport(selected);
@@ -85,6 +91,7 @@ export function createDatabaseManager({getDatabase, getDatabases, canCreate, isB
         error.hidden = !failure && !inputError;
         error.textContent = inputError ? text('invalidDatabaseName') : failure ? errorText(failure) : '';
         name.setAttribute('aria-invalid', String(inputError));
+        dialog.querySelector('#database-manager-import-help').textContent = text(importType.value === 'dataset' ? 'tableFilesHelp' : 'sqlFileHelp');
     }
 
     function refreshChoices() {
@@ -124,7 +131,7 @@ export function createDatabaseManager({getDatabase, getDatabases, canCreate, isB
         const database = existing.value;
         const selected = getDatabases().find(item => workspaceKey(item) === database);
         if (!selected || importSql && !canImport(selected)) return;
-        await transition(() => importSql ? onImport(database) : onSelect(database));
+        await transition(() => importSql ? onImport(database, {tab: importType.value}) : onSelect(database));
     }
 
     async function prepare(importSql) {
@@ -139,7 +146,7 @@ export function createDatabaseManager({getDatabase, getDatabases, canCreate, isB
             const result = await request('prepare-database', {params: {database: getDatabase()}, body: {name: value}});
             if (result.database !== value || !Array.isArray(result.databases)) throw new Error(text('managerResponseInvalid'));
             saving = false; updateControls();
-            await transition(() => onPrepared(result, {importSql}));
+            await transition(() => onPrepared(result, {importSql, importTab: importType.value}));
         } catch (caught) {
             failure = caught;
             saving = false; updateControls();
@@ -154,11 +161,12 @@ export function createDatabaseManager({getDatabase, getDatabases, canCreate, isB
         existing.value = getDatabase();
         translate();
         dialog.showModal(); onBusy(true);
-        (canCreate() ? name : existing).focus({preventScroll: true});
+        existing.focus({preventScroll: true});
         return true;
     }
 
     existing.addEventListener('change', updateControls);
+    importType.addEventListener('change', updateControls);
     name.addEventListener('input', () => { failure = null; inputError = false; updateControls(); });
     dialog.addEventListener('cancel', event => { if (saving) event.preventDefault(); });
     dialog.addEventListener('close', () => {

@@ -39,7 +39,7 @@ const mode = async (page, name) => {
     await page.locator('[data-database-view="' + name + '"]').click();
     await page.waitForFunction(expected => location.hash.slice(1).split('?')[0] === expected, name);
 };
-const schemaSelection = (page, name) => page.locator('.schema-index [data-schema-select=' + JSON.stringify(name) + ']');
+const schemaSelection = (page, name) => page.locator('#workspace-context .catalog-item').filter({has: page.locator('.catalog-item-name', {hasText: exactText(name)})});
 const databasePlacement = async (page, schema = false) => {
     const title = page.locator('.database-heading h1');
     await title.waitFor();
@@ -82,10 +82,10 @@ try {
     }
     const tableCount = bootstrap.tables.length;
     assert.deepEqual(await page.locator('#navigation [data-area]').evaluateAll(links => links.map(link => link.dataset.area)),
-        ['overview', 'database', 'research']);
+        ['overview', 'database']);
     assert.equal(await page.locator('#workspace-context').isVisible(), false,
         'Overview opens directly, without another menu of the main areas.');
-    assert.equal(await page.locator('#navigation [data-area="research"]').count(), 1);
+    assert.equal(await page.locator('#navigation [data-area="research"]').count(), 0, 'Queries share Database rather than a separate area.');
     assert.equal(await page.locator('#navigation [data-area="experiments"]').count(), 0,
         'Backups belong to Database tools rather than a separate competing work area.');
     await shot(page, 'overview');
@@ -95,7 +95,7 @@ try {
     await waitForTable(page, 'organizations');
     await databasePlacement(page);
     assert.deepEqual(await page.locator('.database-views [data-database-view]').evaluateAll(links => links.map(link => link.dataset.databaseView)),
-        ['gegevens', 'verkennen', 'schema'], 'Database tasks have one stable Records, Explore, Schema order.');
+        ['gegevens', 'verkennen', 'schema', 'onderzoeken'], 'Database tasks have one stable Records, Explore, Schema, Queries order.');
     const backups = page.locator('[data-database-tool="backups"]');
     await backups.locator('xpath=ancestor::details[1]').locator('summary').click();
     assert.match(await backups.getAttribute('href'), /^#experimenten/);
@@ -146,16 +146,16 @@ try {
     await mode(page, 'schema');
     await page.locator('#schema-viewport').waitFor();
     await databasePlacement(page, true);
-    assert.equal(await page.locator('#schema-search').inputValue(), 'org',
+    assert.equal(await page.locator('#catalog-search').inputValue(), 'org',
         'Database view changes use one explorer search.');
     assert.equal(await page.locator('[data-schema-node]').count(), tableCount,
         'Searching the explorer does not silently filter the canvas.');
     await schemaSelection(page, 'organizations').click();
-    await page.locator('#schema-search').fill('');
-    assert.equal(await page.locator('.schema-index [data-schema-select]').count(), tableCount);
+    await page.locator('#catalog-search').fill('');
+    assert.equal(await page.locator('#workspace-context .catalog-item').count(), tableCount);
     await schemaSelection(page, 'sources').click();
     assert.match(await page.locator('#schema-selected').innerText(), /sources/);
-    assert.equal(await page.locator('.schema-index [data-schema-select]').count(), tableCount,
+    assert.equal(await page.locator('#workspace-context .catalog-item').count(), tableCount,
         'Schema selection details do not replace the table explorer.');
     await page.locator('#schema-zoom-in').click();
     const zoom = await page.locator('#schema-zoom-value').innerText();
@@ -193,27 +193,43 @@ try {
     assert.equal(await page.locator('#schema-zoom-value').innerText(), zoom);
     await shot(page, 'schema-persistent-explorer');
 
-    // A different area changes the single panel while preserving unsaved work.
-    await page.locator('#navigation [data-area="research"]').click();
+    await mode(page, 'verkennen');
+    await page.locator('#record-map-search').waitFor();
+    await databasePlacement(page);
+    assert.equal(await page.locator('#workspace-context').isVisible(), true, 'Explore shares the open table sidebar.');
+    assert.equal(await page.locator('#workspace-context .catalog-item').count(), tableCount);
+    await page.locator('.record-map-scene').evaluate(scene => { scene.dataset.navigationContinuity = 'kept'; });
+    await tableButton('organizations').click();
+    assert.equal(await page.locator('.record-map-scene').getAttribute('data-navigation-continuity'), 'kept', 'Choosing another source table preserves the mounted canvas.');
+    assert.equal(await page.locator('#record-map-table').inputValue(), 'organizations');
+
+    // Queries shares the same table explorer while preserving unsaved work.
+    await mode(page, 'onderzoeken');
     await page.locator('#sql-editor').fill('SELECT 42 AS navigation_draft;');
+    assert.equal(await page.locator('#workspace-context .catalog-item').count(), tableCount, 'Queries keeps the same available tables.');
+    await tableButton('sources').click();
+    assert.equal(await page.locator('#sql-editor').inputValue(), 'SELECT 42 AS navigation_draft;', 'Table selection preserves the SQL draft.');
+    await databasePlacement(page);
     assert.equal(await page.locator('#workspace-context .saved-list').count(), 1);
     assert.equal(await page.locator('#page .saved-list').count(), 0, 'Saved research has one home in the context panel.');
     await page.locator('#workspace-panel-toggle').click();
     assert.equal(await page.locator('#workspace-context').isVisible(), false);
-    assert.equal(await page.locator('#navigation [data-area="research"]').evaluate(link => link === document.activeElement), true,
-        'Collapsing Research returns focus to its active area in the rail.');
+    assert.equal(await page.locator('#workspace-explorer-open').evaluate(link => link === document.activeElement), true,
+        'Collapsing Queries returns focus to the Tables opener.');
     assert.equal(await page.locator('#sql-editor').inputValue(), 'SELECT 42 AS navigation_draft;');
-    await page.locator('#navigation [data-area="research"]').click();
-    assert.equal(await page.locator('#workspace-context').isVisible(), true);
     await page.locator('#navigation [data-area="database"]').click();
+    assert.equal(await page.locator('#workspace-context').isVisible(), true);
+    await mode(page, 'schema');
     await page.locator('#schema-viewport').waitFor();
-    await page.locator('#navigation [data-area="research"]').click();
+    await mode(page, 'onderzoeken');
     assert.equal(await page.locator('#sql-editor').inputValue(), 'SELECT 42 AS navigation_draft;');
     await page.locator('#settings-link').click();
     await page.locator('#preference-theme').waitFor();
     assert.equal(await page.locator('#workspace-context').isVisible(), false, 'Settings is its own screen.');
     await page.locator('[data-sidebar-choice="right"]').click();
     await page.locator('#navigation [data-area="database"]').click();
+    await page.locator('#sql-editor').waitFor();
+    await mode(page, 'schema');
     await page.locator('#schema-viewport').waitFor();
     const explorerBounds = await page.locator('#workspace-context').boundingBox();
     const canvasBounds = await page.locator('#schema-viewport').boundingBox();
@@ -267,7 +283,7 @@ try {
     await mobile.locator('#workspace-explorer-open').click();
     await schemaSelection(mobile, 'sources').click();
     assert.equal(await mobile.locator('#sidebar').getAttribute('aria-hidden'), 'false');
-    assert.equal(await mobile.locator('.schema-index [data-schema-select]').count(), tableCount);
+    assert.equal(await mobile.locator('#workspace-context .catalog-item').count(), tableCount);
     await mobile.keyboard.press('Escape');
     assert.equal(await mobile.locator('#sidebar').getAttribute('aria-hidden'), 'true');
     await mode(mobile, 'gegevens');

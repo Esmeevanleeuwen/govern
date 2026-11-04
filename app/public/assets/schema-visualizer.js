@@ -18,7 +18,7 @@ const svg = (tag, attributes = {}) => {
 };
 
 /** A read-only view of the current catalog. Coordinates never change the database. */
-export function mountSchemaVisualizer(root, {data, state = {}, contextRoot, onSelect, onSearch, initialSearch, onRefresh} = {}) {
+export function mountSchemaVisualizer(root, {data, state = {}, contextRoot, externalCatalog = false, onSelect, onSearch, initialSearch, onRefresh} = {}) {
     const model = normalizeSchema(data);
     const scopeKey = typeof data?.scope_key === 'string' ? data.scope_key : model.database;
     const storageKey = 'govern.schema-layout.v1.' + encodeURIComponent(scopeKey);
@@ -126,7 +126,7 @@ export function mountSchemaVisualizer(root, {data, state = {}, contextRoot, onSe
     const selected = el('section', {id: 'schema-selected', class: 'schema-selected', tabindex: '-1', 'aria-label': t('app.schema.selected')});
     const tablePanel = el('section', {id: 'schema-table-panel', 'aria-label': t('app.schema.tables')},
         el('label', {class: 'schema-explorer-search'}, el('span', {class: 'sr-only'}, t('app.schema.search')), search), count, index);
-    if (contextRoot) contextRoot.replaceChildren(tablePanel, selected);
+    if (contextRoot) contextRoot.replaceChildren(...(externalCatalog ? [selected] : [tablePanel, selected]));
     const scene = el('div', {class: 'schema-scene workspace-canvas-scene'}, canvas);
     const layout = el('div', {class: 'schema-layout schema-unified-layout'}, el('div', {class: 'schema-board'}, scene,
         el('p', {id: 'schema-canvas-help', class: 'sr-only'}, t('app.schema.canvasHelp'))));
@@ -177,6 +177,7 @@ export function mountSchemaVisualizer(root, {data, state = {}, contextRoot, onSe
     }
 
     function selectTable(name, center = false, rebuild = true) {
+        if (destroyed || !lookup.has(name)) return;
         const focusedContext = contextRoot?.contains(document.activeElement);
         if (state.selected !== name) state.columnsExpanded = false;
         state.selected = name;
@@ -185,7 +186,7 @@ export function mountSchemaVisualizer(root, {data, state = {}, contextRoot, onSe
         else { drawSelection(); drawDetails(); }
         syncCanvasSize();
         // Selecting an object keeps both the table list and its keyboard position.
-        if (focusedContext) (index.querySelector('[id="schema-index-' + encodeURIComponent(name) + '"]') || selected).focus({preventScroll: true});
+        if (focusedContext && !externalCatalog) (index.querySelector('[id="schema-index-' + encodeURIComponent(name) + '"]') || selected).focus({preventScroll: true});
         if (center) { pointToTable(name); state.centeredSelected = name; }
     }
 
@@ -451,7 +452,7 @@ export function mountSchemaVisualizer(root, {data, state = {}, contextRoot, onSe
             resizeObserver.observe(canvas);
         }
     }
-    return {destroy() {
+    return {selectTable(name, center = true) { selectTable(name, center); }, destroy() {
         destroyed = true; if (frame) cancelAnimationFrame(frame); resizeObserver?.disconnect();
         const active = pointer; pointer = null;
         if (active?.target.hasPointerCapture(active.id)) active.target.releasePointerCapture(active.id);

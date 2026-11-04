@@ -31,8 +31,14 @@ try {
     scope = await page.evaluate(async database => (await (await fetch('/api.php?' + new URLSearchParams({action: 'bootstrap', database}))).json()).data, database);
     assert.equal(scope.database.name, database);
     assert.equal(scope.database.engine, 'mariadb');
-    await clickWorkspaceTool(page, '#open-database');
-    await page.locator('#database-tab-dataset').click();
+    await clickWorkspaceTool(page, '#manage-databases');
+    const manager = page.locator('#database-manager-dialog');
+    await manager.waitFor({state: 'visible'});
+    assert.equal(await manager.locator('#database-manager-existing').inputValue(), database);
+    assert.equal(await manager.locator('#database-manager-import-type').inputValue(), 'dataset');
+    await manager.locator('#database-manager-import-existing').click();
+    await manager.waitFor({state: 'hidden'});
+    assert.equal(await page.locator('#database-tab-dataset').getAttribute('aria-selected'), 'true');
     await page.locator('#dataset-file').setInputFiles({name: 'media.csv', mimeType: 'text/csv', buffer: Buffer.from('ID;Title\n001;First\n002;Second\n')});
     let intercepted;
     const previewWaiting = new Promise(resolve => { intercepted = resolve; });
@@ -64,6 +70,9 @@ try {
     await page.locator('#dataset-table').fill(name);
     await page.evaluate(async () => (await import('/assets/i18n.js')).setLanguage('en'));
     assert.equal(await page.locator('#dataset-table').inputValue(), name);
+    await page.locator('#dataset-confirmation').fill('a_different_database');
+    assert.equal(await page.locator('#dataset-commit').isDisabled(), true,
+        'The confirmation cannot change the selected import destination.');
     await page.locator('#dataset-confirmation').fill(scope.database.name);
     await page.getByRole('button', {name: 'Import', exact: true}).click();
     await page.getByText('2 rows imported into', {exact: false}).waitFor();
@@ -78,8 +87,11 @@ try {
     assert.equal(csrfStatus, 403);
     await page.setViewportSize({width: 320, height: 750});
     assert.equal(await page.locator('#database-tab-dataset').isVisible(), true);
-    await page.getByRole('button', {name: 'Close', exact: true}).click();
+    await page.locator('#dataset-open-table').click();
     await page.locator('#database-dialog').waitFor({state: 'hidden'});
+    await page.locator('.table-heading h2').filter({hasText: name}).waitFor();
+    assert.equal(await page.locator('#database-select').inputValue(), database,
+        'Opening the imported table keeps its captured database destination.');
     assert.deepEqual(errors, []);
     console.log('PASS: upload, preview, retained draft/language, create, readback, CSRF and modal exit.');
 } finally {

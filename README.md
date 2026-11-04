@@ -64,7 +64,7 @@ De taal- en uiterlijkvoorkeuren blijven bij de browser, zonder accountsynchronis
 PostgreSQL is een optionele tweede verbinding. De bestaande tabelverkenner,
 structuurweergave, het schemadiagram en de recordkaart kunnen PostgreSQL-
 gegevens en relaties tonen. Via **Records** kun je ook rijen toevoegen, bewerken
-en verwijderen. **Onderzoeken** voert vrije PostgreSQL-SQL uit; via
+en verwijderen. **Database → Queries** voert vrije PostgreSQL-SQL uit; via
 **Database → Tools → Importeren** lees je SQL- en tabelbestanden in.
 **Backups** bewaart en herstelt het gekozen PostgreSQL-schema. De visuele
 querybouwer, opgeslagen onderzoeken en AI zijn nog niet beschikbaar voor
@@ -116,16 +116,20 @@ Meer over configuratie, schema's en de volgende bouwfasen:
 
 ## Records en verbanden verkennen
 
-Database heeft drie vaste hoofdtaken: **Records**, **Explore** en **Schema**.
-Records is voor gewone tabelrijen en bewerken; Explore is voor verbindingen
-tussen echte records. Schema groepeert tabeldetails en het schemadiagram.
+Database heeft vier vaste hoofdtaken: **Records**, **Explore**, **Schema** en
+**Queries**. Records is voor gewone tabelrijen en bewerken; Explore is voor
+verbindingen tussen echte records. Schema groepeert tabeldetails en het
+schemadiagram. Queries brengt vrije SQL, resultaten en opgeslagen onderzoeken
+in hetzelfde werkvlak. Alle vier gebruiken dezelfde tabellenlijst en zoekopdracht
+in de zijbalk; bij Queries staan opgeslagen onderzoeken onder de tabellen.
 Onder **Database → Tools** staan import en herstelpunten; MariaDB biedt daar
-ook de officiële phpMyAdmin-export. Onderzoeken is voor vrije SQL. De visuele
-querybouwer en opgeslagen onderzoeken zijn voorlopig alleen voor MariaDB.
+ook de officiële phpMyAdmin-export. De visuele querybouwer en opgeslagen
+onderzoeken zijn voorlopig alleen voor MariaDB. Bestaande `#onderzoeken`-links
+openen Queries.
 
 Open **Database → Explore** (`#verkennen`). Oude `#verbanden`-links openen
-hetzelfde werkvlak. Open de bronbibliotheek, kies een tabel en zoek of blader
-naar een beginrecord. Vanuit de inspecteur vouw je inkomende of uitgaande
+hetzelfde werkvlak. Kies een tabel in de gedeelde zijbalk. Zoek of blader in
+de bronbibliotheek naar een beginrecord. Vanuit de inspecteur vouw je inkomende of uitgaande
 verwijzingen uit; bij meer resultaten laad je bewust de volgende pagina.
 
 - Sleep recordkaarten of verschuif de achtergrond. Gebruik zoom en passend maken
@@ -163,16 +167,21 @@ context-export en herstelpunten volgen die keuze. Je onderzoeksconcept en
 tabelkeuze blijven tijdens deze browsersessie per database behouden; de keuze
 geldt alleen voor dit browsertabblad.
 
-Gebruik **Gereedschap → Database toevoegen of importeren**. Je hoeft
-daarvoor `.env` niet aan te passen:
+Gebruik de **plus naast de databasekiezer**, **Database → Tools → Importeren**
+of **Gereedschap → Database toevoegen of importeren**. Deze openen dezelfde
+keuze; je hoeft `.env` niet aan te passen:
 
-1. Vul een databasenaam in, bijvoorbeeld `onderzoek`.
-2. Kies **Database aanmaken** of **Aanmaken en SQL importeren**.
-3. Govern maakt een ontbrekende database leeg aan en kiest die database. Bij
-   importeren opent de importcontrole met een **eigen Govern-import** boven het bestaande phpMyAdmin-venster.
-4. Kies voor een UTF-8 `.sql`-bestand tot 256 KiB **Controleer bestand**, lees de risico's,
-   typ de exacte databasenaam en kies **Import uitvoeren**. Bekijk daarna de nacontrole.
-   Gebruik voor grotere of complexe dumps de officiële phpMyAdmin-import eronder.
+1. Kies **Tabelbestanden** (standaard: Excel, CSV, TXT, JSON of ZIP) of **SQL-bestand**.
+2. Kies een bestaande database als bestemming, of vul een nieuwe naam in,
+   bijvoorbeeld `onderzoek`, en kies **Aanmaken en importeren**. **Alleen aanmaken**
+   maakt een lege database zonder een import te starten.
+3. Bij tabelbestanden volg je **Bestand kiezen**, **Voorbeeld en doeltabel controleren**
+   en **Import bevestigen**. Kies een nieuwe tabel of een passende bestaande tabel.
+   Na import opent **Tabel openen** de geïmporteerde tabel in Records.
+4. Kies bij SQL voor een UTF-8 `.sql`-bestand tot 256 KiB **Controleer bestand**,
+   lees de risico's, typ de exacte databasenaam en kies **Import uitvoeren**. Bekijk
+   daarna de nacontrole. Voor grotere MariaDB-dumps blijft de officiële
+   phpMyAdmin-import eronder beschikbaar.
 
 De databasekiezer in het importvenster groepeert MariaDB en PostgreSQL. Je kunt
 daar tussen bestaande ingeschakelde databases en schema's wisselen. Het gekozen
@@ -255,15 +264,15 @@ de hierboven beschreven leesfuncties en directe rijbewerking in **Records**.
   kun je bijvoorbeeld de hele rij of tabel kiezen.
 - **Lokale AI:** open het AI-paneel bovenaan of kies **Vraag AI** bij je selectie.
   Bekijk welke schema-informatie wordt gebruikt, stel een vraag en zet een
-  SQL-voorstel desgewenst klaar in Onderzoeken. De koppeling staat standaard uit;
+  SQL-voorstel desgewenst klaar in Database → Queries. De koppeling staat standaard uit;
   beschikbaarheid wordt gecontroleerd bij je eigen Ollama-server. Kies
   **Projectcode** om de lokale implementatie met bronpassages en regelnummers
   te doorzoeken; de zoekactie werkt ook zonder AI.
-- **Eén menu:** kies Overzicht, Database of Onderzoeken in de hoofdbalk.
-  Instellingen staat onderaan. Database houdt de volgorde Records, Explore,
-  Schema aan. Explore gebruikt één zwevende bronbibliotheek; de andere
-  databaseweergaven gebruiken de bestaande tabellenlijst. Onderzoeken toont
-  opgeslagen onderzoeken in zijn contextpaneel.
+- **Eén menu:** kies Overzicht of Database in de hoofdbalk; Instellingen staat
+  onderaan. Database houdt de volgorde Records, Explore, Schema, Queries aan.
+  Alle weergaven delen de tabellenlijst en zoekopdracht. Schema toont details
+  onder de lijst; Queries toont daar ook opgeslagen onderzoeken. Explore houdt
+  zijn zwevende bronbibliotheek voor zoeken en bladeren door records.
 - **Database → Records:** bekijk records, zoek, blader en bekijk de gebruikte SQL.
   Gebruik **Rij toevoegen**, of **Bewerken** en **Verwijderen** bij een rij om
   rechtstreeks gegevens te veranderen. Het formulier toont database en tabel;
@@ -282,7 +291,7 @@ de hierboven beschreven leesfuncties en directe rijbewerking in **Records**.
   gegroepeerd boven het werkvlak: weergave, indeling, zoom en hulp. Ze blijven
   bereikbaar als je het paneel inklapt. **Help**
   opent een korte uitleg van alle mogelijkheden in dit scherm.
-- **Onderzoeken:** voer SQL uit, bekijk resultaten en bewaar queries met uitleg.
+- **Database → Queries:** voer SQL uit, bekijk resultaten en bewaar queries met uitleg.
   Schrijf ook `INSERT`, `UPDATE`, `DELETE`, `CREATE`, `ALTER` en `DROP`, of maak
   procedures, functies en triggers met `DELIMITER`. Meerdere opdrachten en alle
   resultaatsets van `CALL` blijven samen zichtbaar. Ingrijpende opdrachten vragen
@@ -361,7 +370,7 @@ antwoord niet in het project is gevonden. Dit traint het model niet en verwijder
 zijn vooraf geleerde algemene kennis niet. Een geldig citaat bewijst ook niet
 automatisch dat alle uitleg juist is. Zie de brongrens in de AI-gids.
 
-Een SQL-voorstel uit Database opent alleen een concept in **Onderzoeken**. Bekijk, wijzig en
+Een SQL-voorstel uit Database opent alleen een concept in **Database → Queries**. Bekijk, wijzig en
 voer het daar zelf uit. De AI krijgt geen uitvoerbare databasehandelingen.
 
 Voor het aansluiten van Ollama, `.env`-instellingen, de Windows/Docker-netwerkgrens
@@ -384,7 +393,7 @@ AI-koppeling vraagt een afzonderlijke vraag en een beschikbare lokale provider.
 
 ### Een vraag maken zonder eerst SQL te schrijven
 
-Open **Onderzoeken → Query samenstellen**. Kies `digital_systems`, selecteer
+Open **Database → Queries → Query samenstellen**. Kies `digital_systems`, selecteer
 bijvoorbeeld `code` en `name`, en voeg een filter op `name` toe met de waarde
 `DigiD`. Met **Query maken** zet je het ontwerp in de SQL-editor. Kies daarna
 **Query uitvoeren** om het resultaat te bekijken en **Onderzoek bewaren** om de
@@ -536,7 +545,7 @@ Govern voegt geen globale serverrechten toe. Verwijderen uit `DB_DATABASES`
 trekt bestaande rechten niet automatisch in.
 
 De **visuele querybouwer** gebruikt een apart databaseaccount met leesrechten.
-Vrije SQL in **Onderzoeken** en het databasevenster gebruiken het schrijfaccount
+Vrije SQL in **Database → Queries** en het databasevenster gebruiken het schrijfaccount
 voor de toegestane databases. Vrije SQL vraagt bevestiging voor ingrijpende opdrachten;
 eerdere opdrachten in een script kunnen al zijn uitgevoerd als een latere faalt.
 
@@ -546,11 +555,12 @@ van hosting, HTTPS, toegang en accountherstel nodig. De geleverde configuratie
 houdt de loopbackbinding en bestaande databasegrenzen aan.
 ## Excel, CSV, TXT en JSON rechtstreeks importeren
 
-Open **Database openen → Bestanden importeren**. Kies een `.xlsx`, `.csv`, `.tsv`,
-`.txt`, `.json` of een ZIP met zulke bestanden en klik **Importvoorbeeld bekijken**.
-Selecteer het werkblad, controleer de kolomnamen en kies een nieuwe tabelnaam.
-Typ de getoonde databasenaam en klik **Importeren**. Sluit het venster om de
-vernieuwde tabel in de gewone Govern-verkenner te bekijken.
+Open de **plus naast de databasekiezer** of **Database → Tools → Importeren**.
+Kies **Tabelbestanden** en een bestaande of nieuwe doeldatabase. Kies een `.xlsx`,
+`.csv`, `.tsv`, `.txt`, `.json` of een ZIP met zulke bestanden en klik
+**Importvoorbeeld bekijken**. Controleer het werkblad, de kolommen en de nieuwe
+of bestaande doeltabel. Typ de getoonde bestemming exact en klik **Importeren**.
+Kies na de import **Tabel openen** om de tabel direct in Records te bekijken.
 
 Het voorbeeld toont de eerste twintig rijen, een verdeling van die voorbeeldrijen,
 lege velden, mogelijke unieke sleutels en dubbele rijen uit het hele bestand.

@@ -100,11 +100,12 @@ their database and schema as well as the engine name, for example
 **govern_pg · public · PostgreSQL**. Keep identical table names in separate
 schemas visually and functionally scoped to their selected entry.
 
-Show a short localized notice that this PostgreSQL version supports browsing
-only. Make unsupported row editing, arbitrary SQL, research, restore points,
-phpMyAdmin/import, context export and AI unavailable rather than opening
-MariaDB tools against the selected PostgreSQL scope. These limits belong next
-to the affected task; keep the existing shared navigation and visual tokens.
+Show a short localized notice describing the selected PostgreSQL scope and its
+available tools. Records, Explore, Schema and Queries use the shared workspace;
+SQL/file import and schema backups use the native PostgreSQL services. Keep
+the unsupported visual query builder, saved queries, phpMyAdmin, context export
+and AI unavailable. These limits belong next to the affected task; keep the
+existing shared navigation and visual tokens.
 Do not create a separate PostgreSQL-themed UI or duplicate the table screens.
 
 Switching between engines preserves each complete scope's table, search and
@@ -117,12 +118,15 @@ same honest unavailable state as other connection failures.
 **Database → Explore / Verkennen** combines the guided record explorer and
 relationship map in one workspace. Records is for ordinary rows and editing;
 Explore is for following actual record connections; Schema groups table details
-and the table diagram. Keep these tasks in the fixed order **Records, Explore,
-Schema**. The old `#verbanden` hash is an alias of `#verkennen`.
+and the table diagram. Queries provides SQL editing and results in the same
+workspace. Keep these tasks in the fixed order **Records, Explore, Schema,
+Queries**. The old `#verbanden` hash is an alias of `#verkennen`; `#onderzoeken`
+remains the Queries route.
 
-Let the canvas dominate Explore. Use readable record cards, a floating source
-library and a selected-record inspector rather than a second fixed table list.
-The library owns table choice, record search and paginated starting records.
+Let the canvas dominate Explore. Keep the shared table catalog in the sidebar,
+with readable record cards, a floating source library and a selected-record
+inspector in the workspace. The library owns record search and paginated starting
+records for the selected table.
 The inspector owns the selected record's references, source actions and evidence.
 Cards, questions and inspector share one exact selection and the same reader API.
 
@@ -334,7 +338,8 @@ Keep primary actions visible without hover. Check the layout at 320 px, tablet w
   database; row estimates are labelled as estimates.
 
 - **Database / Database:** one fixed primary row: **Records**, **Explore /
-  Verkennen**, **Schema**. These are workspace views, not extra main rail areas.
+  Verkennen**, **Schema**, **Queries**. These are workspace views, not extra main
+  rail areas; each uses the same searchable table catalog.
 
   - **Records:** table selection, search, pagination, readable rows and optional
     SQL explanation. Add rows or edit/delete through focused row dialogs. Keep
@@ -345,14 +350,14 @@ Keep primary actions visible without hover. Check the layout at 320 px, tablet w
   - **Schema:** secondary **Table details / Tabeldetails** and **Diagram** views.
     Table details show columns, keys, relationships and definitions. Diagram
     shows the live whole-database table/foreign-key structure.
+  - **Queries:** visual query building, editable SQL, results and saved research.
+    Saved queries appear below the shared table catalog.
   - **Tools:** import and Backups, plus official phpMyAdmin actions for MariaDB.
     PostgreSQL uses native SQL/file imports and schema backups; keep engine
     capabilities explicit.
     Backup creation, download and recovery use the existing restore-point flow;
     old `#experimenten` bookmarks remain reachable.
 
-- **Research / Onderzoeken:** visual query building, editable SQL, results and
-  saved research. Keep it separate from visually following loaded records.
 
 - **Settings / Instellingen:** language, appearance, workspace preferences and
   existing local AI configuration. Keep its entry in a consistent position.
@@ -368,8 +373,8 @@ an unrelated server.
 
 | Layer | Responsibility | Content |
 | --- | --- | --- |
-| Main rail | Choose an area | Overview, Database and Research; Settings at the bottom |
-| Context panel or Explore library | Choose an object in that area | Tables, records, saved research or restore points |
+| Main rail | Choose an area | Overview and Database; Settings at the bottom |
+| Context panel | Choose a table | Shared table catalog and search; selected details, saved queries or restore points below |
 | Workspace | Read, inspect or act on the object | Database views, query builder and editor, restore controls and task tools |
 
 The rail and context panel form one connected glass surface with one shared
@@ -378,18 +383,19 @@ with context toggles its panel; switching area replaces that panel's contents.
 Overview and Settings open their own screens without a contextual menu of
 links to other main areas. A dashboard action may still resume a specific task.
 
-Records and Schema keep the searchable table explorer. Selecting a table
-highlights it and updates the workspace; details do not replace the list.
-Explore uses its single floating source library instead of duplicating that
-fixed panel. The selected table carries between the three Database tasks.
-Record search and pagination remain separate from table-catalog search.
+Records, Explore, Schema and Queries keep the same searchable table explorer.
+Selecting a table highlights it without replacing the list. The selected table
+and catalog search carry between all four tasks. Schema details stay below the
+list; Queries keeps saved queries there as well. Selecting a table in Queries
+preserves the current SQL draft and results. Explore uses its floating library
+for record search and pagination, separately from table-catalog search.
 
 ### Predictable placement within Database
 
 Use the same order across Database:
 
 1. A compact **Database** heading and the shared source/panel opener.
-2. One primary view row: **Records**, **Explore**, **Schema**, with the selected
+2. One primary view row: **Records**, **Explore**, **Schema**, **Queries**, with the selected
    table context. Allow wrapping on narrow screens. Database Tools stays here.
 3. Schema alone adds **Table details / Diagram** beneath its primary task.
 4. Local tools stay beside the content they control. Canvas tools may float
@@ -397,9 +403,9 @@ Use the same order across Database:
 5. Main content, then a compact loaded summary or optional explanation.
 
 Keep object selection separate from changing view or expanding details. The
-fixed explorer serves Records and Schema; Explore owns one floating library
-and inspector. Avoid a second table picker, another rail, or a permanent column
-for every tool.
+fixed table explorer serves all Database views; Explore retains its floating
+record library and inspector. Avoid another rail or a permanent column for
+every tool.
 
 In Schema, group the tool area by purpose: connection filtering and column
 display; arrangement; zoom, actual size and fit; then refresh and Help. Keep
@@ -432,10 +438,10 @@ first Records page. See [RECORD_MAP.md](RECORD_MAP.md) for controls and limits.
 
 The Database rail entry returns to the last Database view in the current
 session. Preserve direct links and existing hashes: `#gegevens`, `#structuur`,
-`#schema`, `#verkennen` and `#verbanden`, including table parameters. Changing navigation must
+`#schema`, `#verkennen`, `#verbanden` and `#onderzoeken`, including table parameters. Changing navigation must
 not discard research drafts, builder choices, table state or schema placement.
 
-Research uses the shared panel for saved research. Database Tools opens the
+Queries shows saved research below the shared table catalog. Database Tools opens the
 existing backup workspace and its restore-point context. Keep execution,
 saving and restoration controls in their workspace.
 Panel content must have its own loading, empty and error states. Recovery and
@@ -476,13 +482,14 @@ The phpMyAdmin window opens at the selected database and has its own deliberate
 database navigation. Its frame keeps unsaved work during incidental shell,
 theme and language updates; only explicit tool navigation loads another page.
 
-### Add a database and import SQL
+### Add a database and import files
 
-Keep one labelled create/import action in the Tools menu beside the shared
-database selector. It opens a focused glass dialog.
-The dialog offers existing database choice and import, plus a name field for a
-new database. Keep the selected target visible in every action; changing the
-name must not silently change the active workspace before the request succeeds.
+The plus beside the database selector, Database Tools → Import and the shared
+Tools create/import action open the same focused glass dialog. First choose
+**Table files** (the default) or **SQL file**, then an existing destination or
+a name for a new database. Keep the selected target visible in every action;
+changing the name must not silently change the active workspace before the
+request succeeds.
 
 Creating a missing database starts empty. Preparing an existing name preserves
 its data and makes it available to Govern explicitly. Explain that importing SQL
@@ -491,14 +498,13 @@ form into a server administration panel or ask the user to paste credentials.
 If the private creation service is unavailable, retain the entered name, show
 the failure and keep existing database selection/import usable.
 
-The create-and-import action prepares the database, switches through the shared
-database flow and opens the official phpMyAdmin Import screen. Import into an
-existing database opens that same screen directly. The user selects the file in
-phpMyAdmin; do not add a duplicate file picker that would require choosing the
-file twice. Keep **Import** and **Export** beside Browse, Structure and SQL
-as native modal shortcuts while leaving all of phpMyAdmin's tools available.
-Database Tools uses these same screens; it adds no competing import/export
-engine.
+Create and import prepares the database, switches through the shared database
+flow and opens the chosen file-import tab. Import into an existing database
+opens the same tab directly. Table files use the numbered Choose, Review and
+Confirm steps; success offers **Open table** to return to Records. SQL uses the
+existing Govern preview and explicit confirmation, with official phpMyAdmin
+available for larger MariaDB files. Keep the native modal shortcuts and all
+phpMyAdmin tools available; the entry points share the existing import services.
 
 Show pending state during preparation and prevent duplicate creation or a
 competing target switch. Keep validation and server errors beside the name and
@@ -815,7 +821,7 @@ Treat accessibility as part of the shared component, not a later screen specific
 
 For every addition, write down the user’s goal, entry point, information needed, main action, visible result and route back. Name the state that must survive if the user leaves or changes language. This short brief comes before new screens or controls.
 
-Place the addition in an existing area whenever its task belongs there. A new query capability belongs in Research; a reading tool belongs near Data or Research; a preference belongs in Settings. Add a top level navigation item only for a distinct, recurring task that cannot fit the existing structure clearly.
+Place the addition in an existing area whenever its task belongs there. A new query capability belongs in Database → Queries; a reading tool belongs near Records, Explore or Queries; a preference belongs in Settings. Add a top level navigation item only for a distinct, recurring task that cannot fit the existing structure clearly.
 
 ### Use this implementation sequence
 
@@ -888,7 +894,7 @@ Save layout edits as a draft until **Save layout**. Keep language and appearance
 
 ### Example of a future chart feature
 
-A chart could start from an existing saved query in Research. The user chooses **Create chart**, selects fields and a chart type, then sees the same query results presented visually. A new top level chart application is not needed for that first task.
+A chart could start from an existing saved query in Database → Queries. The user chooses **Create chart**, selects fields and a chart type, then sees the same query results presented visually. A new top level chart application is not needed for that first task.
 
 Use the existing query service, translation keys, glass panel and error patterns. Explain row limits and truncation; a chart of preview rows must not imply totals for the whole database. A dashboard version becomes an optional registered block referencing its saved query. Keep chart presentation settings separate from the saved SQL.
 
@@ -957,8 +963,9 @@ The existing application behaviour and integration boundaries are described in t
 
 ## Tabular file import
 
-A new **Bestanden importeren / Import files** tab lives inside the existing database
-window, alongside the official SQL-import shortcut. It uses shared buttons, input
+The **Bestanden importeren / Import files** tab lives inside the existing database
+window. The shared import dialog opens it for Table files after destination
+selection; SQL file opens the SQL-import tab. It uses shared buttons, input
 styles and semantic labels. Its panel has its own tabpanel ID and a contained scroll
 area for wide tables. The file preview explains its limits and distinguishes
 whole-file profile counts from the 20-row sample chart. The main action requires
@@ -966,6 +973,7 @@ the visible database name before import. During a pending request all context
 controls and close actions are disabled. A language change preserves the draft.
 Errors preserve the chosen file; an uncertain write response invalidates the old
 preview and asks the user to inspect the table before retrying. Success identifies
-database, table and record count; closing refreshes the normal Govern catalog.
+database, table and record count. **Open table** closes the window, refreshes
+the catalog and opens the imported table in Records; closing alone also refreshes.
 This first phase adds tabular readers and a sample visualization, without a new
 top-level area, persisted charts or maps.

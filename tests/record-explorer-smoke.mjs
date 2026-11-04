@@ -30,8 +30,8 @@ try {
     const info = await api('record-map', {database: 'bestuursatlas'}, rootInput);
     const incoming = info.relations.find(item => item.constraint === 'zz_record_map_project_lead' && item.direction === 'incoming');
     await page.goto(bookmark('bestuursatlas', rootInput.table), {waitUntil: 'networkidle'});
-    assert.equal(await page.locator('#workspace-context').isVisible(), false,
-        'Explore has one source library rather than a second fixed table sidebar.');
+    assert.equal(await page.locator('#workspace-context').isVisible(), true,
+        'Explore shares the persistent table sidebar with the other Database views.');
     await ensureSources();
     await page.locator('#record-map-search').fill('%_');
     const rootId = await selectSeed('Atlas%_');

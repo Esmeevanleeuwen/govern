@@ -697,7 +697,13 @@ export function mountRecordMap(root, {state = {}, tables = [], scopeKey = '', in
         handle.addEventListener('pointerdown', down); panelCleanups.push(() => handle.removeEventListener('pointerdown', down));
         const resize = new ResizeObserver(() => { if (active() && dimensions().width >= 600 && !node.hidden) state.panels[name].width = node.offsetWidth; }); resize.observe(node); panelCleanups.push(() => resize.disconnect());
     }
-    tableSelect.addEventListener('change', () => { state.table = tableSelect.value; state.search = ''; state.page = 1; state.seedResult = null; search.value = ''; onTableChange?.(state.table); loadSeeds(); });
+    function selectTable(name) {
+        if (!active() || !available.some(table => table.name === name)) return;
+        state.table = name; state.search = ''; state.page = 1; state.seedResult = null;
+        clearTimeout(searchTimer); tableSelect.value = name; search.value = '';
+        onTableChange?.(name); openSources(); loadSeeds();
+    }
+    tableSelect.addEventListener('change', () => selectTable(tableSelect.value));
     search.addEventListener('input', () => { state.search = search.value; state.page = 1; clearTimeout(searchTimer); searchTimer = setTimeout(loadSeeds, 180); });
     layout.addEventListener('change', () => { const before = new Map([...state.positions].map(([id, p]) => [id, {...p}])); recordMapCheckpoint(state); arrangeRecordMap(state, layout.value, state.focusId); renderGraph(); fit(); focusMobile(); animatePositions(before); announce(text('arranged')); });
     viewport.addEventListener('pointerdown', onPointerDown); viewport.addEventListener('pointermove', onPointerMove); viewport.addEventListener('pointerup', onPointerUp); viewport.addEventListener('pointercancel', onPointerUp); viewport.addEventListener('wheel', onWheel, {passive: false}); shell.addEventListener('keydown', onKey);
@@ -717,5 +723,5 @@ export function mountRecordMap(root, {state = {}, tables = [], scopeKey = '', in
     const restoredSelection = selectedRecordMapNodes(state);
     onSelectRecord?.(restoredSelection.length === 1 ? restoredSelection[0] : null);
     if (state.seedResult) renderSeeds(); else if (available.length) loadSeeds();
-    return {destroy, selectRecord, openSources, toggleSources, closePanels};
+    return {destroy, selectRecord, selectTable, openSources, toggleSources, closePanels};
 }

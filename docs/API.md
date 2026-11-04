@@ -101,6 +101,12 @@ the same check; official phpMyAdmin remains the actual application.
 
 ## Eerste eigen SQL-import
 
+De plus naast de databasekiezer en Database → Tools → Importeren openen dezelfde
+keuze voor tabelbestanden of SQL, gevolgd door een bestaande of nieuwe bestemming.
+Deze navigatie gebruikt de bestaande routes; de API-contracten veranderen niet.
+Database → Queries gebruikt dezelfde query-API als de behouden route `#onderzoeken`.
+De gedeelde tabellenlijst, zoekopdracht en geselecteerde tabel zijn browsertoestand.
+
 Govern ondersteunt naast de officiële phpMyAdmin-import een beperkte eigen route in de
 bestaande Import-tab. Deze route accepteert **UTF-8 SQL-bestanden tot 262144 bytes**.
 De browser leest het bestand lokaal als tekst en verstuurt JSON met CSRF, zonder
@@ -356,8 +362,9 @@ compares 23 known tables, three views and 54 foreign-key constraints and groups
 missing or empty tables into five content areas. These checks detect structural
 and numerical differences, not semantic truth or a successful transaction.
 
-SQL upload is handled by official phpMyAdmin, not by a new Govern import parser.
-The database modal's Import shortcut opens `/database/import` or `/table/import`
+Large or complex MariaDB SQL uploads can use official phpMyAdmin alongside
+the bounded Govern SQL import described above. The native Import shortcut opens
+`/database/import` or `/table/import`
 with the chosen `db` and optional `table`. The existing 128 MB upload and 300-second
 execution settings apply. Import may modify or replace data according to its
 SQL; DDL is not generally transactional and no universal rollback is promised.
@@ -1118,7 +1125,10 @@ body convention: they accept multipart FormData with a single `file` upload.
 Both require an approved installation account, the ordinary `X-CSRF-Token`,
 same-origin session and explicit URL scope. PostgreSQL additionally carries
 `connection=postgres` and `schema`, or the compatible packed workspace key.
-Both engines reuse the same upload reader.
+Both engines reuse the same upload reader. The shared import dialog defaults
+to Table files; after destination selection the UI presents Choose, Review and
+Confirm steps. On success, Open table refreshes the catalog and navigates to
+Records without an additional write request.
 They return the usual JSON envelope. The PHP upload limit is
 16 MB (18 MB multipart envelope); ordinary JSON POST remains limited to 1 MB.
 

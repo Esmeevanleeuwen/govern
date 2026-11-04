@@ -259,7 +259,7 @@ De onderdelen hebben een kleine, duidelijke taak:
 | `LocalCodeSearch.php` | Begrensde lokale zoekindex van alleen `app/` en `docs/`, met bronpassages en regelnummers |
 | `AiService.php` en `OllamaClient.php` | Gevalideerde vragen, lokaal providerverzoek, gecontroleerde projectcitaten en antwoord zonder uitvoering |
 | `database-modal.js` | Het venster rondom de echte phpMyAdmin |
-| `database-manager.js` | Dialoog voor databasekeuze, expliciete aanmaak en openen van de officiële import |
+| `database-manager.js` | Gedeelde importkeuze voor tabelbestanden of SQL, bestaande bestemming of expliciete databaseaanmaak |
 | `DatabaseProvisioner.php` | Begrensde client voor de privéservice voor databaseaanmaak |
 | `docker/database-manager/server.php` en `DatabaseManager.php` | Privé Unix-socketserver en uitsluitend databaseaanmaak/rechten per expliciete naam |
 | `row-editor.js` | Rijformulier met vaste databasecontext, exacte waarden en conflictfeedback |
@@ -296,14 +296,18 @@ zelf een databasekeuze. Het volgt expliciete navigatie binnen phpMyAdmin zonder
 een formulier door gewone shellupdates of taal-/themawisselingen te herladen.
 De gedeelde phpMyAdmin-opslag blijft in de oorspronkelijke `DB_NAME`-database.
 
-## Database toevoegen en SQL importeren
+## Database toevoegen en bestanden importeren
 
-De actie in Gereedschap opent een eigen, kleine dialoog. Een bestaande
-database kiezen gebruikt de normale wisselstroom. Een naam voorbereiden gebruikt
+De plus naast de databasekiezer, Database → Tools → Importeren en de actie in
+Gereedschap openen dezelfde dialoog. Eerst kiest de gebruiker tabelbestanden
+(standaard) of SQL; daarna een bestaande bestemming of een nieuwe database.
+Een bestaande database kiezen gebruikt de normale wisselstroom. Een naam voorbereiden gebruikt
 `POST prepare-database` met CSRF en de expliciete huidige databasescope. Het
 antwoord bevat de voorbereide naam, of die nieuw was, en de opnieuw uitgelezen
 databasekeuzes. Pas na een geslaagd antwoord verandert de browser zijn selectie.
-Concepten van de vorige database blijven bewaard.
+Concepten van de vorige database blijven bewaard. Aanmaken en importeren opent
+na die wissel de gekozen bestaande `dataset`- of `import`-tab; alleen aanmaken
+start geen import. De API-contracten veranderen hierdoor niet.
 
 De webapp praat via een lokale Unix-socket met de afzonderlijke Compose-service
 `database-manager`. Alleen deze service en de bestaande opstart-/databaseprocessen
@@ -390,7 +394,7 @@ gedeclareerde relaties. Selecties die niet meer in het scherm staan blijven
 herkenbare momentopnamen. Een recordquery vereist alle werkelijke primaire-
 sleutelvelden; samengestelde sleutels blijven intact en rijen zonder sleutel
 worden niet als blijvend geïdentificeerde records behandeld. De vervolgstap kan
-een leesquery in Onderzoeken klaarzetten, maar voert die niet uit. De selectie
+een leesquery in Database → Queries klaarzetten, maar voert die niet uit. De selectie
 verandert geen records, contextexports of opgeslagen voorkeuren. De vertalingen
 gebruiken dezelfde berichtregistratie als de rest van de interface.
 
@@ -493,11 +497,17 @@ bewust bij; de kaart doet geen volledige databasescan of automatische
 recursieve expansie. Niet-ondersteunde sleutels, views en externe schema's
 krijgen een herkenbare grens in de interface.
 
+`app.js` biedt binnen Database de vaste volgorde Records, Explore, Schema en
+Queries. Alle vier gebruiken dezelfde catalogus, tabelzoekopdracht en selectie
+in de zijbalk. Queries behoudt de route `#onderzoeken` en toont opgeslagen queries
+onder de tabellen. Schema ontvangt dezelfde catalogus van de werkplek en toont
+zijn geselecteerde tabeldetails eronder; selecteren behoudt het canvas.
+
 `record-map.js` verzorgt canvas, bronbibliotheek en inspectie. Het zuivere
 `record-map-model.js` beheert de identiteit van records en lijnen, selectie en
-lokale presentatie. De bronbibliotheek kiest tabel en beginrecord; de vaste
-werkpleknavigatie blijft daarvan los. Een tweede vaste tabelkiezer naast de
-canvasbibliotheek wordt in Explore niet getoond.
+lokale presentatie. De gedeelde catalogus kiest de tabel; de bronbibliotheek
+zoekt en bladert door beginrecords. Een tabelwissel werkt de bibliotheek bij
+zonder de geladen kaart of indeling opnieuw op te bouwen.
 
 Kaarten kunnen worden verplaatst, vastgezet en uit het werkvlak verborgen.
 Orbit en Flow geven de kaart een andere indeling; Manual bewaart zelfgekozen
@@ -817,9 +827,11 @@ Werk de ontwerpdocumentatie en het API-contract in dezelfde wijziging bij.
 
 ## Gedeelde import voor tabelbestanden
 
-De taak begint in Database openen → Bestanden importeren: lokaal bestand kiezen,
-voorvertonen, werkblad en bestemming controleren, expliciet bevestigen, importeren
-naar de zichtbare database en terugkeren naar de gewone live tabelverkenner.
+De taak begint via de plus naast de databasekiezer of Database → Tools →
+Importeren: tabelbestanden kiezen, een bestaande of nieuwe database bepalen,
+en daarna de genummerde stappen bestand kiezen, voorbeeld en doeltabel
+controleren, en expliciet bevestigen. Na import opent Tabel openen de nieuwe
+of aangevulde tabel in Records, na verversen van de live catalogus.
 `DatasetImportPanel` bewaart tijdelijke bestands- en formulierconcepten per database.
 Taalwisselen behoudt het concept. Tijdens een verzoek blokkeren sluiten, tabwisselen
 en databasewisselen. Verzoeken houden hun oorspronkelijke database vast.
