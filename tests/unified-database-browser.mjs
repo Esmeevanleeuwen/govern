@@ -100,6 +100,7 @@ try {
     verify(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'The workspace has no horizontal page overflow at 320 px.');
     verify(await manager.evaluate(el => el.scrollWidth <= el.clientWidth + 1), 'The chooser stays within its narrow dialog.');
     await page.keyboard.press('Escape'); await manager.waitFor({state: 'hidden'});
+    await page.waitForFunction(() => document.activeElement?.id === 'manage-databases', null, {timeout: 2000});
     verify(await page.locator('#manage-databases').evaluate(el => document.activeElement === el), 'Escape restores focus to Add database.');
     assert.deepEqual(failures, []); checks++;
     console.log(`PASS: ${checks} actual unified database browser checks.`);
