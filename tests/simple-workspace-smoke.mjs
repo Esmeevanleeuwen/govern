@@ -99,6 +99,9 @@ try {
     assert.equal(new URL(executed.url()).searchParams.get('database'), catalog.database.name);
     assert.equal(result.ok, true);
     assert.equal(result.data.failed, null);
+    // SELECT also refreshes metadata; wait for that render to finish before
+    // opening disclosures or entering a new draft into the replacement page.
+    await page.locator('#run-query:not([disabled])').waitFor();
     await page.locator('.query-result .data-table td').filter({hasText: /^42$/}).waitFor();
     await shot(page, 'sql-desktop');
     await openQueryLibrary(page);
