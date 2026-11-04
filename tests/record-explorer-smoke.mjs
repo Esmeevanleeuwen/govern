@@ -1,4 +1,4 @@
-import {selectWorkspaceLanguage, clickWorkspaceTool} from './workspace-tools.mjs';
+import {selectWorkspaceLanguage, clickWorkspaceTool, clickDatabaseView} from './workspace-tools.mjs';
 /** Flexible canvas interaction against real, isolated record-map fixtures. */
 import assert from 'node:assert/strict';
 import {exploreHarness} from './explore-helpers.mjs';
@@ -126,7 +126,7 @@ try {
     assert.deepEqual((await sourceRead).postDataJSON().key, first.key, 'Opening Data passes the complete composite record key.');
     await page.locator('#selected-source-record .data-table').waitFor();
     assert.ok((await page.locator('#selected-source-record').textContent()).includes(first.label));
-    await page.locator('[data-database-view="verkennen"]').click();
+    await clickDatabaseView(page, 'verkennen');
     await page.locator('#record-map-layout').waitFor();
     assert.equal(await page.locator('[data-record-node]').count(), 3, 'Data and Explore share the selected record without discarding the canvas.');
     assert.equal(await outer(first.id).getAttribute('data-pinned'), 'true');

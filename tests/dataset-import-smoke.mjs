@@ -65,7 +65,7 @@ try {
     await page.evaluate(async () => (await import('/assets/i18n.js')).setLanguage('en'));
     assert.equal(await page.locator('#dataset-table').inputValue(), name);
     await page.locator('#dataset-confirmation').fill(scope.database.name);
-    await page.getByRole('button', {name: 'Import', exact: true}).click();
+    await dialog.getByRole('button', {name: 'Import', exact: true}).click();
     await page.getByText('2 rows imported into', {exact: false}).waitFor();
     const readback = await page.evaluate(async ({name, database}) => (await (await fetch('/api.php?' + new URLSearchParams({action: 'browse', database, table: name}))).json()), {name, database: scope.database.name});
     assert.equal(readback.ok, true);

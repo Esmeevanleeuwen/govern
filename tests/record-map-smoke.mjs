@@ -1,4 +1,4 @@
-import {selectWorkspaceLanguage} from './workspace-tools.mjs';
+import {selectWorkspaceLanguage, clickDatabaseView} from './workspace-tools.mjs';
 /** Real record graph, source inspector and state isolation in a disposable stack. */
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
@@ -52,7 +52,7 @@ const selectScope = async value => {
         await page.waitForFunction(key => document.querySelector('#database-select')?.value === key
             && !document.querySelector('#database-select')?.disabled && !document.querySelector('#refresh-app')?.disabled, value);
         // Each database restores its own last Database view; a new scope starts in Data.
-        if (!await page.locator('#record-map-table').count()) await page.locator('[data-database-view="verkennen"]').click();
+        if (!await page.locator('#record-map-table').count()) await clickDatabaseView(page, 'verkennen');
         await page.locator('#record-map-table').waitFor({state: 'attached'});
         await ensureSources();
     } catch (error) {
@@ -130,7 +130,7 @@ try {
     await page.locator('[data-map-open-table="zz_record_map_people"]').click();
     await page.locator('#selected-source-record .data-table').waitFor();
     assert.ok((await page.locator('#selected-source-record').textContent()).includes(rootKey.id), 'The source table opens with the exact selected record.');
-    await page.locator('[data-database-view="verkennen"]').click();
+    await clickDatabaseView(page, 'verkennen');
     await count(graphNodes, 3);
     assert.equal(await page.locator('#record-map-search').inputValue(), '%_', 'View switching preserves the graph search.');
     await selectWorkspaceLanguage(page, 'nl');
@@ -173,11 +173,11 @@ try {
     assert.equal(await page.locator('#record-map-search').inputValue(), '%_');
     await ensureSources();
     await page.locator('#record-map-table').selectOption('zz_record_map_projects');
-    await page.locator('[data-database-view="gegevens"]').click();
+    await clickDatabaseView(page, 'gegevens');
     await page.locator('.table-heading h2').filter({hasText: 'zz_record_map_projects'}).waitFor();
     assert.equal(await page.locator('.table-heading h2').innerText(), 'zz_record_map_projects', 'Changing the map table updates the shared Data destination.');
     assert.equal(await page.evaluate(() => new URLSearchParams(location.hash.split('?')[1]).get('table')), 'zz_record_map_projects');
-    await page.locator('[data-database-view="verkennen"]').click();
+    await clickDatabaseView(page, 'verkennen');
     assert.equal(await page.locator('#record-map-table').inputValue(), 'zz_record_map_projects');
     await ensureSources();
     await page.locator('#record-map-table').selectOption('zz_record_map_people');

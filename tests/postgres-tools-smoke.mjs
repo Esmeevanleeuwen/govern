@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 import {authenticatedContext} from './auth-session.mjs';
-import {selectWorkspaceLanguage} from './workspace-tools.mjs';
+import {selectWorkspaceLanguage, clickDatabaseTool} from './workspace-tools.mjs';
 
 assert.equal(process.env.GOVERN_UI_WRITE_TESTS, '1', 'Use an isolated stack and GOVERN_UI_WRITE_TESTS=1.');
 const require = createRequire(import.meta.url);
@@ -65,8 +65,7 @@ const run = async sql => {
 };
 const openImports = async () => {
     await page.goto(href('gegevens', 'govern_pg_values'), {waitUntil: 'networkidle'});
-    await page.locator('#database-tools > summary').click();
-    await page.locator('[data-database-tool="import"]').click();
+    await clickDatabaseTool(page, 'import');
     await page.locator('#native-import-file').waitFor();
     assert.equal(await page.locator('#database-select').isDisabled(), true);
     assert.equal(await page.locator('#modal-database').isEnabled(), true);
@@ -74,7 +73,7 @@ const openImports = async () => {
     assert.equal(await page.locator('#database-frame').isVisible(), false);
     assert.equal(await page.locator('#database-tab-sql').isVisible(), false);
 };
-let snapshot, releaseImport;
+let snapshot, releaseImport, releaseSnapshotList;
 try {
     await page.goto(href('gegevens', 'govern_pg_values'), {waitUntil: 'networkidle'});
     const before = await browse('govern_pg_values');
@@ -96,21 +95,42 @@ try {
     const scopePlan = await read(await scopePreview);
     await page.locator('#native-import-confirm').fill(scopePlan.confirmation);
     await page.locator('#modal-database').selectOption(maria.scope_key || maria.name);
+    assert.equal(await page.locator('#database-tab-native-import').getAttribute('aria-selected'), 'true', 'Routine import stays native after engine switching.');
+    assert.equal(await page.locator('#database-frame').isVisible(), false);
+    assert.equal(await page.locator('#native-import-file').evaluate(node => node.files.length), 0);
+    assert.equal(await page.locator('#native-import-confirm').inputValue(), '');
+    await page.locator('#advanced-import').click();
     await page.frameLocator('#database-frame').locator('#input_import_file').waitFor();
     await page.locator('#database-tab-sql').click();
     const pmaSql = page.frameLocator('#database-frame').locator('#sqlquery');
     await pmaSql.waitFor({state: 'attached'});
+    // Wait for the initialized CodeMirror instance bound to this textarea, not
+    // the separate SQL console; document load alone is not sufficient.
+    await page.waitForFunction(database => {
+        const frame = document.querySelector('#database-frame');
+        const contents = frame?.contentDocument;
+        if (contents?.readyState !== 'complete') return false;
+        const address = new URL(frame.contentWindow.location.href);
+        if (address.searchParams.get('route') !== '/database/sql' || address.searchParams.get('db') !== database) return false;
+        const textarea = contents.querySelector('#sqlquery');
+        return textarea && [...contents.querySelectorAll('.CodeMirror')]
+            .some(wrapper => wrapper.CodeMirror?.getTextArea?.() === textarea);
+    }, maria.name);
     const pmaDraft = "SELECT 'keep the MariaDB SQL draft';";
-    await pmaSql.evaluate(async (node, draft) => {
-        if (document.readyState !== 'complete') await new Promise(resolve => window.addEventListener('load', resolve, {once: true}));
-        document.querySelector('.CodeMirror')?.CodeMirror?.setValue(draft);
-        node.value = draft;
+    const preparedDraft = await pmaSql.evaluate((node, draft) => {
+        const editor = [...document.querySelectorAll('.CodeMirror')].map(wrapper => wrapper.CodeMirror)
+            .find(instance => instance?.getTextArea?.() === node);
+        editor.setValue(draft);
+        editor.save();
         window.governDraftRetained = draft;
+        return {textarea: node.value, editor: editor.getValue()};
     }, pmaDraft);
+    assert.deepEqual(preparedDraft, {textarea: pmaDraft, editor: pmaDraft}, 'Prepare the real initialized SQL editor before changing language.');
     await page.evaluate(async () => (await import('/assets/i18n.js')).setLanguage('nl'));
-    assert.equal(await pmaSql.inputValue(), pmaDraft, 'Language changes retain the real phpMyAdmin form.');
-    assert.equal(await pmaSql.evaluate(node => document.querySelector('.CodeMirror')?.CodeMirror?.getValue() ?? node.value), pmaDraft);
     assert.equal(await pmaSql.evaluate(() => window.governDraftRetained), pmaDraft, 'Language changes do not reload the iframe.');
+    assert.equal(await pmaSql.inputValue(), pmaDraft, 'Language changes retain the real phpMyAdmin form.');
+    assert.equal(await pmaSql.evaluate(node => [...document.querySelectorAll('.CodeMirror')].map(wrapper => wrapper.CodeMirror)
+        .find(instance => instance?.getTextArea?.() === node)?.getValue()), pmaDraft, 'Language changes retain the initialized SQL editor.');
     assert.deepEqual(await page.locator('#modal-database option').evaluateAll(options => options.map(option => option.value).sort()), expectedChoices);
     await page.locator('#modal-database').selectOption(scope);
     assert.equal(await page.locator('#database-tab-import').getAttribute('aria-selected'), 'true', 'MariaDB SQL becomes native import when entering PostgreSQL.');
@@ -121,10 +141,30 @@ try {
     await page.locator('.database-dialog-header .modal-tools button').last().click();
     await page.locator('#database-dialog').waitFor({state: 'hidden'});
     await page.waitForFunction(value => document.querySelector('#database-select')?.value === value && !document.querySelector('#database-select').disabled, scope);
+    await page.locator('#refresh-app:not([disabled])').waitFor();
     await page.evaluate(async () => (await import('/assets/i18n.js')).setLanguage('en'));
 
-    await page.goto(href('experimenten'), {waitUntil: 'networkidle'});
+    // Hash navigation can finish before this read. Keep it pending so the
+    // backup action must wait for its own shared-lock read to finish.
+    const listGate = new Promise(resolve => { releaseSnapshotList = resolve; });
+    const snapshotListRoute = url => url.pathname === '/api.php' && url.searchParams.get('action') === 'snapshots'
+        && url.searchParams.get('connection') === 'postgres' && url.searchParams.get('database') === 'govern_pg'
+        && url.searchParams.get('schema') === 'public';
+    const holdSnapshotList = async route => { await listGate; await route.continue(); };
+    await page.route(snapshotListRoute, holdSnapshotList);
+    const listStarted = page.waitForRequest(request => snapshotListRoute(new URL(request.url())), {timeout: 120000});
+    await clickDatabaseTool(page, 'backups');
+    await listStarted;
+    assert.equal(await page.locator('.snapshot-list').getAttribute('aria-busy'), 'true');
+    assert.equal(await page.locator('#create-snapshot').isDisabled(), true,
+        'A backup cannot start while the workspace is still loading its checkpoint list.');
     await page.locator('#snapshot-label').fill(marker);
+    const listed = waitApi('snapshots');
+    releaseSnapshotList(); releaseSnapshotList = null;
+    await read(await listed);
+    await page.locator('#create-snapshot:not([disabled])').waitFor();
+    assert.equal(await page.locator('.snapshot-list').getAttribute('aria-busy'), 'false');
+    await page.unroute(snapshotListRoute, holdSnapshotList);
     const created = waitApi('create-snapshot');
     await page.locator('#create-snapshot').click();
     snapshot = await read(await created);
@@ -226,6 +266,7 @@ try {
     console.log('PASS: PostgreSQL Free SQL, native SQL/CSV import, scoped archive download and real schema restore/readback in Dutch/mobile.');
 } finally {
     releaseImport?.();
+    releaseSnapshotList?.();
     // The successful restore removes the test's own tables and row edit. A failed
     // restore deliberately keeps its diagnostic state in this isolated database.
     await context.close();

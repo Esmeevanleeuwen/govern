@@ -1,4 +1,4 @@
-import {selectWorkspaceLanguage} from './workspace-tools.mjs';
+import {selectWorkspaceLanguage, clickDatabaseView} from './workspace-tools.mjs';
 /**
  * Follow the unified navigation with real catalog data on a disposable local
  * stack. This test does not write database records or create restore points.
@@ -31,14 +31,7 @@ const waitForTable = async (page, name) => {
     await page.locator('.table-heading h2').filter({hasText: name}).waitFor();
     assert.equal(await page.locator('.table-heading h2').innerText(), name);
 };
-const mode = async (page, name) => {
-    if (name === 'structuur' && !await page.locator('[data-database-view="structuur"]').count()) {
-        await page.locator('[data-database-view="schema"]').click();
-        await page.locator('#schema-viewport').waitFor();
-    }
-    await page.locator('[data-database-view="' + name + '"]').click();
-    await page.waitForFunction(expected => location.hash.slice(1).split('?')[0] === expected, name);
-};
+const mode = clickDatabaseView;
 const schemaSelection = (page, name) => page.locator('.schema-index [data-schema-select=' + JSON.stringify(name) + ']');
 const databasePlacement = async (page, schema = false) => {
     const title = page.locator('.database-heading h1');
@@ -82,10 +75,10 @@ try {
     }
     const tableCount = bootstrap.tables.length;
     assert.deepEqual(await page.locator('#navigation [data-area]').evaluateAll(links => links.map(link => link.dataset.area)),
-        ['overview', 'database', 'research']);
+        ['overview', 'database']);
     assert.equal(await page.locator('#workspace-context').isVisible(), false,
         'Overview opens directly, without another menu of the main areas.');
-    assert.equal(await page.locator('#navigation [data-area="research"]').count(), 1);
+    assert.equal(await page.locator('#navigation [data-area="research"]').count(), 0, 'SQL belongs to the database workspace.');
     assert.equal(await page.locator('#navigation [data-area="experiments"]').count(), 0,
         'Backups belong to Database tools rather than a separate competing work area.');
     await shot(page, 'overview');
@@ -95,7 +88,7 @@ try {
     await waitForTable(page, 'organizations');
     await databasePlacement(page);
     assert.deepEqual(await page.locator('.database-views [data-database-view]').evaluateAll(links => links.map(link => link.dataset.databaseView)),
-        ['gegevens', 'verkennen', 'schema'], 'Database tasks have one stable Records, Explore, Schema order.');
+        ['gegevens', 'structuur', 'onderzoeken'], 'Database tasks have one stable Browse, Structure, SQL order.');
     const backups = page.locator('[data-database-tool="backups"]');
     await backups.locator('xpath=ancestor::details[1]').locator('summary').click();
     assert.match(await backups.getAttribute('href'), /^#experimenten/);
@@ -115,25 +108,23 @@ try {
     await page.locator('#data-search').fill('DigiD');
     await page.waitForFunction(() => document.querySelectorAll('.data-table tbody tr').length === 1 &&
         document.querySelector('.data-table')?.textContent.includes('DigiD'));
-    const catalogList = page.locator('#workspace-context .catalog-list');
-    await catalogList.evaluate(list => { list.scrollTop = list.scrollHeight; });
+    await page.setViewportSize({width: 1440, height: 700});
+    const explorerScroll = page.locator('#workspace-context-content');
+    await explorerScroll.evaluate(list => { list.scrollTop = list.scrollHeight; });
     await tableButton('sources').scrollIntoViewIfNeeded();
-    const beforeTableSwitch = await catalogList.evaluate(list => ({list: list.scrollTop,
-        outer: document.getElementById('workspace-context-content').scrollTop}));
-    assert.ok(beforeTableSwitch.list > 0, 'Exercise a scrolled table explorer, not its initial position.');
+    const beforeTableSwitch = await explorerScroll.evaluate(list => list.scrollTop);
+    assert.ok(beforeTableSwitch > 0, 'Exercise the single scrolled table explorer, not its initial position.');
     await tableButton('sources').click();
     await waitForTable(page, 'sources');
-    const afterTableSwitch = await catalogList.evaluate(list => ({list: list.scrollTop,
-        outer: document.getElementById('workspace-context-content').scrollTop}));
-    assert.ok(Math.abs(afterTableSwitch.list - beforeTableSwitch.list) <= 1,
-        'Selecting a table retains the scrolled table list.');
-    assert.ok(Math.abs(afterTableSwitch.outer - beforeTableSwitch.outer) <= 1,
-        'Selecting a table retains the outer explorer position.');
+    const afterTableSwitch = await explorerScroll.evaluate(list => list.scrollTop);
+    assert.ok(Math.abs(afterTableSwitch - beforeTableSwitch) <= 1,
+        'Selecting a table retains the single explorer scroll position.');
     const selectedRowIsVisible = await tableButton('sources').evaluate(row => {
-        const rowBox = row.getBoundingClientRect(), listBox = row.closest('.catalog-list').getBoundingClientRect();
+        const rowBox = row.getBoundingClientRect(), listBox = document.getElementById('workspace-context-content').getBoundingClientRect();
         return rowBox.top >= listBox.top - 1 && rowBox.bottom <= listBox.bottom + 1;
     });
     assert.equal(selectedRowIsVisible, true, 'The newly selected row remains visible for fast neighboring-table switches.');
+    await page.setViewportSize({width: 1440, height: 1100});
     await tableButton('digital_systems').click();
     await waitForTable(page, 'digital_systems');
     assert.equal(await page.locator('#data-search').inputValue(), 'DigiD',
@@ -193,27 +184,28 @@ try {
     assert.equal(await page.locator('#schema-zoom-value').innerText(), zoom);
     await shot(page, 'schema-persistent-explorer');
 
-    // A different area changes the single panel while preserving unsaved work.
-    await page.locator('#navigation [data-area="research"]').click();
+    // SQL shares the catalog while saved queries stay in its own disclosure.
+    await clickDatabaseView(page, 'onderzoeken');
     await page.locator('#sql-editor').fill('SELECT 42 AS navigation_draft;');
-    assert.equal(await page.locator('#workspace-context .saved-list').count(), 1);
-    assert.equal(await page.locator('#page .saved-list').count(), 0, 'Saved research has one home in the context panel.');
+    assert.equal(await page.locator('#workspace-context .catalog-item').count(), tableCount);
+    assert.equal(await page.locator('#workspace-context .saved-list').count(), 0);
+    assert.equal(await page.locator('#query-library .saved-list').count(), 1, 'Saved SQL has one home inside the SQL workspace.');
     await page.locator('#workspace-panel-toggle').click();
     assert.equal(await page.locator('#workspace-context').isVisible(), false);
-    assert.equal(await page.locator('#navigation [data-area="research"]').evaluate(link => link === document.activeElement), true,
-        'Collapsing Research returns focus to its active area in the rail.');
+    assert.equal(await page.locator('#workspace-explorer-open').evaluate(button => button === document.activeElement), true,
+        'Collapsing the SQL catalog returns focus to its visible opener.');
     assert.equal(await page.locator('#sql-editor').inputValue(), 'SELECT 42 AS navigation_draft;');
-    await page.locator('#navigation [data-area="research"]').click();
+    await page.locator('#workspace-explorer-open').click();
     assert.equal(await page.locator('#workspace-context').isVisible(), true);
-    await page.locator('#navigation [data-area="database"]').click();
+    await clickDatabaseView(page, 'schema');
     await page.locator('#schema-viewport').waitFor();
-    await page.locator('#navigation [data-area="research"]').click();
+    await clickDatabaseView(page, 'onderzoeken');
     assert.equal(await page.locator('#sql-editor').inputValue(), 'SELECT 42 AS navigation_draft;');
     await page.locator('#settings-link').click();
     await page.locator('#preference-theme').waitFor();
     assert.equal(await page.locator('#workspace-context').isVisible(), false, 'Settings is its own screen.');
     await page.locator('[data-sidebar-choice="right"]').click();
-    await page.locator('#navigation [data-area="database"]').click();
+    await clickDatabaseView(page, 'schema');
     await page.locator('#schema-viewport').waitFor();
     const explorerBounds = await page.locator('#workspace-context').boundingBox();
     const canvasBounds = await page.locator('#schema-viewport').boundingBox();
@@ -245,6 +237,7 @@ try {
     });
     await boundary.goto(new URL('/workspace.php#gegevens?table=organizations', base).href, {waitUntil: 'networkidle'});
     await waitForTable(boundary, 'organizations');
+    await boundary.locator('.workspace-table-details > summary').click();
     await boundary.locator('#workspace-selected .workspace-detail').nth(1).locator('summary').click();
     const externalTarget = boundary.locator('#workspace-selected .workspace-related').filter({
         has: boundary.locator('code', {hasText: exactText('external_catalog.sources')}),

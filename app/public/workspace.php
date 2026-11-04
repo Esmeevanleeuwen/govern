@@ -53,7 +53,6 @@ $governUser = \Govern\Web::user();
             <header class="topbar">
                 <div class="topbar-location">
                     <button id="menu-toggle" class="icon-button mobile-menu" type="button" aria-label="Navigatie openen" data-i18n-aria="app.shell.openNavigation" aria-expanded="false"></button>
-                    <span class="topbar-brand">govern</span>
                     <div class="topbar-project">
                         <strong id="workspace-database" class="sr-only" data-i18n="app.shell.personal">Persoonlijke werkplek</strong>
                         <div class="database-picker-group">
@@ -75,7 +74,7 @@ $governUser = \Govern\Web::user();
                     <a class="icon-button" href="/api.php?action=context" id="context-export" aria-label="Context exporteren" data-i18n-aria="app.shell.export" title="Context exporteren" data-i18n-title="app.shell.export"><span class="sr-only" data-i18n="app.shell.export">Context exporteren</span></a>
                     <button id="refresh-app" class="icon-button" type="button" aria-label="Werkplek verversen" data-i18n-aria="app.shell.refresh" data-i18n-title="app.shell.refresh" title="Werkplek verversen"></button>
                     <button id="workspace-tools-toggle" class="button button-secondary button-small workspace-tools-toggle" type="button" aria-haspopup="dialog" aria-controls="workspace-tools" aria-expanded="false" data-selection-ui="" disabled><span>Gereedschap</span></button>
-                    <button id="open-database" class="button button-secondary" type="button" disabled><span data-i18n="app.shell.openDatabase">Database openen</span></button>
+                    <button id="open-database" class="button button-secondary" type="button" disabled><span data-i18n="app.navigation.advanced">Geavanceerd: phpMyAdmin</span></button>
                 </div>
             </header>
             <div id="companion-launch-notice" class="notice companion-launch-notice" role="status" hidden></div>

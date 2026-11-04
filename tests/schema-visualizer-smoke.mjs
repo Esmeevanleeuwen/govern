@@ -1,4 +1,4 @@
-import {selectWorkspaceLanguage} from './workspace-tools.mjs';
+import {selectWorkspaceLanguage, clickDatabaseView} from './workspace-tools.mjs';
 /**
  * Schema visualizer integration against a disposable local Govern stack.
  * Uses the same Playwright environment as the other browser tests. This test
@@ -102,11 +102,11 @@ try {
         'Visualizer metadata contains no table records or unnecessary DDL.');
     assert.equal(await page.locator('[data-schema-node]').count(), schema.tables.length);
     const schemaAppearance = await canvasAppearance('.schema-scene');
-    await page.locator('[data-database-view="verkennen"]').click();
+    await clickDatabaseView(page, 'verkennen');
     await page.locator('.record-map-scene').waitFor();
     assert.deepEqual(await canvasAppearance('.record-map-scene'), schemaAppearance,
         'Switching between Schema and Explore preserves the canvas material, grid, sizing and toolbar style.');
-    await page.locator('[data-database-view="schema"]').click();
+    await clickDatabaseView(page, 'schema');
     await page.locator('#schema-search').waitFor({state: 'attached'});
     const renderedColumns = await page.locator('[data-schema-node]').evaluateAll(nodes =>
         nodes.map(node => ({name: node.dataset.schemaNode,
@@ -437,13 +437,13 @@ try {
     assert.ok(await page.locator('[data-schema-node]').count() < allCount, 'Neighborhood filters to related tables.');
     await page.locator('#schema-neighborhood').uncheck();
     await selectTable(table.name);
-    await page.locator('[data-database-view="gegevens"]').click();
+    await clickDatabaseView(page, 'gegevens');
     await page.waitForFunction(name => location.hash.startsWith('#gegevens') &&
         new URLSearchParams(location.hash.split('?')[1]).get('table') === name, table.name);
     await page.locator('.table-heading').waitFor();
     await load(page);
     await selectTable(table.name);
-    await page.locator('[data-database-view="structuur"]').click();
+    await clickDatabaseView(page, 'structuur');
     await page.waitForFunction(name => location.hash.startsWith('#structuur') &&
         new URLSearchParams(location.hash.split('?')[1]).get('table') === name, table.name);
     await page.locator('.structure-section').first().waitFor();

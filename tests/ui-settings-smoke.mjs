@@ -1,4 +1,4 @@
-import {selectWorkspaceLanguage, clickWorkspaceTool} from './workspace-tools.mjs';
+import {selectWorkspaceLanguage, clickWorkspaceTool, clickDatabaseView, openQueryBuilder, openQueryLibrary} from './workspace-tools.mjs';
 /**
  * Real browser check of Govern language, appearance and dashboard continuity.
  * Run against an isolated local stack seeded with Bestuursatlas.
@@ -37,16 +37,8 @@ const responseFor = action => page.waitForResponse(response => {
     return url.pathname === '/api.php' && url.searchParams.get('action') === action;
 });
 const navigate = async route => {
-    if (['gegevens', 'structuur', 'schema'].includes(route)) {
-        const current = await page.evaluate(() => location.hash.slice(1).split('?')[0]);
-        if (!['gegevens', 'structuur', 'schema'].includes(current)) {
-            await page.locator('#navigation [data-area="database"]').click();
-        }
-        if (route === 'structuur' && !await page.locator('[data-database-view="structuur"]').count()) {
-            await page.locator('[data-database-view="schema"]').click();
-            await page.locator('#schema-viewport').waitFor();
-        }
-        await page.locator('[data-database-view="' + route + '"]').click();
+    if (['gegevens', 'structuur', 'schema', 'onderzoeken'].includes(route)) {
+        await clickDatabaseView(page, route);
     } else await page.locator('#navigation [data-route="' + route + '"]').click();
     await page.waitForFunction(expected => location.hash.split('?')[0] === '#' + expected, route);
 };
@@ -189,9 +181,11 @@ const verifyExampleDraft = async () => {
             if (!response.ok || !payload.ok) throw new Error(payload.error);
             return payload.data.id;
         }, {name, sql: originalSql});
-        await draftPage.locator('#navigation [data-route="onderzoeken"]').click();
+        await clickDatabaseView(draftPage, 'onderzoeken');
+        await openQueryLibrary(draftPage);
         await draftPage.locator('.saved-item-open').filter({hasText: name}).click();
         assert.equal(await draftPage.locator('#sql-editor').inputValue(), originalSql);
+        await draftPage.locator('.query-help > summary').click();
         await draftPage.locator('.learning-help details').first().locator('summary').click();
         await draftPage.getByRole('button', {name: 'Use an example', exact: true}).click();
         const exampleSql = await draftPage.locator('#sql-editor').inputValue();
@@ -221,6 +215,8 @@ const verifyExampleDraft = async () => {
 
 try {
     await page.goto(new URL('/workspace.php#onderzoeken?table=digital_systems', base).href, {waitUntil: 'networkidle'});
+    await openQueryBuilder(page);
+    await openQueryLibrary(page);
     await page.locator('.builder-actions button').waitFor();
     assert.equal(await page.locator('#language-select').inputValue(), 'nl');
     await page.getByRole('button', {name: 'Kolomkeuze wissen voor de basistabel', exact: true}).click();

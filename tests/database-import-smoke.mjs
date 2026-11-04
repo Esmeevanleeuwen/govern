@@ -81,8 +81,14 @@ const shot = async name => {
     await mkdir(process.env.SCREENSHOTS_DIR, {recursive: true});
     await page.screenshot({path: path.join(process.env.SCREENSHOTS_DIR, 'database-import-' + name + '.png'), fullPage: true});
 };
-const waitImport = async database => {
+const waitImport = async (database, {advanced = false} = {}) => {
     await nativeDialog.waitFor({state: 'visible'});
+    await page.locator('#native-import-file').waitFor();
+    assert.equal(await page.locator('#modal-database').inputValue(), database);
+    assert.equal(await page.locator('#database-tab-native-import').getAttribute('aria-selected'), 'true');
+    assert.equal(await page.locator('#database-frame').isVisible(), false);
+    if (!advanced) return;
+    await page.locator('#advanced-import').click();
     await frame.locator('#input_import_file').waitFor({state: 'visible'});
     await page.waitForFunction(database => {
         const node = document.querySelector('#database-frame');
@@ -154,7 +160,7 @@ try {
     assert.ok(prepared.data.databases.some(item => item.name === created && item.available));
     await page.unroute(preparationRoute, holdPreparation);
     await manager.waitFor({state: 'hidden'});
-    await waitImport(created);
+    await waitImport(created, {advanced: true});
     assert.equal(await page.locator('#database-select').inputValue(), created);
     const beforeImport = data(await api('import-inspection', created));
     assert.deepEqual(beforeImport.tables, []);
@@ -170,6 +176,7 @@ try {
         && !document.querySelector('#database-dialog .database-dialog-header .button')?.disabled,
     null, {timeout: 5000});
     assert.equal(await nativeDialog.locator('#native-import-file').isDisabled(), false);
+    assert.equal(await nativeDialog.locator('.native-import').isVisible(), false, 'Advanced imports expose only the official upload form.');
 
     const dump = `-- Govern isolated native import fixture\nSET NAMES utf8mb4;\n`
         + 'CREATE TABLE imported_people (id INT PRIMARY KEY, name VARCHAR(100)) ENGINE=InnoDB;\n'
@@ -321,7 +328,7 @@ try {
     await manager.locator('#database-manager-existing').selectOption(created);
     await manager.locator('#database-manager-import-existing').click();
     await manager.waitFor({state: 'hidden'});
-    await waitImport(created);
+    await waitImport(created, {advanced: true});
     await page.waitForFunction(() => document.querySelector('#import-inspection .import-inspection-warnings')?.textContent.includes('already contains 2 tables'));
     const frameSrc = await page.locator('#database-frame').getAttribute('src');
     await language('nl');
@@ -333,7 +340,7 @@ try {
     await openManager();
     await nameInput.fill('retained_cancel_draft');
     await closeManager();
-    await page.waitForFunction(() => document.activeElement?.id === 'workspace-tools-toggle');
+    await page.waitForFunction(() => document.activeElement?.id === 'manage-databases');
 
     const mobile = await context.newPage();
     await mobile.setViewportSize({width: 320, height: 900});

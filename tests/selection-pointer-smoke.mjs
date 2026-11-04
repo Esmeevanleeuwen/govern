@@ -1,4 +1,4 @@
-import {clickWorkspaceTool, selectWorkspaceLanguage} from './workspace-tools.mjs';
+import {clickWorkspaceTool, selectWorkspaceLanguage, clickDatabaseView} from './workspace-tools.mjs';
 /** Inspect real database data and arbitrary interface elements without activating them. */
 import {authenticatedContext} from './auth-session.mjs';
 import assert from 'node:assert/strict';
@@ -81,12 +81,12 @@ try {
     await secondCell.click({modifiers: ['Shift']});
     await count(2);
     const beforeRefresh = bootstrapRequests.length;
-    await page.locator('#open-database').click();
+    await page.locator('#refresh-app').click();
     await count(1);
-    assert.equal(await page.locator('#database-dialog').isVisible(), false, 'Inspecting Open database must not open phpMyAdmin.');
+    assert.equal(await page.locator('#database-dialog').isVisible(), false, 'Inspecting Refresh must not open phpMyAdmin.');
     assert.equal(bootstrapRequests.length, beforeRefresh, 'Inspecting a workspace action must not refresh the application.');
     const hash = await page.evaluate(() => location.hash);
-    await page.locator('#navigation [data-area="research"]').click();
+    await page.locator('[data-database-view="onderzoeken"]').click();
     await count(1);
     assert.equal(await page.evaluate(() => location.hash), hash, 'Selecting a navigation item must not navigate.');
     const searchBefore = await page.locator('#data-search').inputValue();
@@ -196,7 +196,7 @@ try {
         && document.querySelectorAll('.table-workspace .data-table tbody tr').length === 1, firstValue);
     await page.locator('#data-search').fill('');
     await page.locator('.table-workspace .data-table tbody tr').nth(1).waitFor();
-    await page.locator('[data-database-view="schema"]').click();
+    await clickDatabaseView(page, 'schema');
     await page.locator('#schema-viewport').waitFor();
     await page.locator('#schema-table-panel [data-schema-select="organizations"]').click();
     await page.locator('#schema-actual').click();

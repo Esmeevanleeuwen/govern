@@ -25,11 +25,11 @@ setLanguage(getPreferences().language);
 
 const routes = {
     overzicht: {labelKey: 'app.route.overview', icon: 'grid'},
-    gegevens: {labelKey: 'app.route.data', icon: 'table'},
-    structuur: {labelKey: 'app.route.structure', icon: 'layers'},
+    gegevens: {labelKey: 'app.navigation.browse', icon: 'table'},
+    structuur: {labelKey: 'app.navigation.structure', icon: 'layers'},
     schema: {labelKey: 'app.route.schema', icon: 'network'},
     verkennen: {labelKey: 'app.navigation.explore', icon: 'network'},
-    onderzoeken: {labelKey: 'app.route.research', icon: 'search'},
+    onderzoeken: {labelKey: 'app.navigation.sql', icon: 'code'},
     experimenten: {labelKey: 'app.route.experiments', icon: 'flask'},
     instellingen: {labelKey: 'app.route.settings', icon: 'settings'},
 };
@@ -44,7 +44,8 @@ const state = {
     queryRevision: 0,
     queryDesign: null,
     builderDraft: null,
-    builderOpen: true,
+    builderOpen: false,
+    queryLibraryOpen: false,
     restoring: false,
     dataViews: new Map(),
     catalogSearch: {},
@@ -67,7 +68,7 @@ const state = {
     recordMapState: {},
     selectedRecord: null,
     databaseView: 'gegevens',
-    contextOpen: {database: true, research: true, experiments: true},
+    contextOpen: {database: true, experiments: true},
     structureData: new Map(),
     inspectorExpanded: {},
     explorerScroll: {},
@@ -87,21 +88,21 @@ const navigation = document.getElementById('navigation');
 const workspaceContext = document.getElementById('workspace-context');
 const contextContent = document.getElementById('workspace-context-content');
 const panelToggle = document.getElementById('workspace-panel-toggle');
-const databaseViews = ['gegevens', 'verkennen', 'structuur', 'schema'];
-const databasePrimaryViews = ['gegevens', 'verkennen', 'schema'];
+const databaseViews = ['gegevens', 'structuur', 'onderzoeken', 'verkennen', 'schema'];
+const databasePrimaryViews = ['gegevens', 'structuur', 'onderzoeken'];
 const databaseSelect = document.getElementById('database-select');
 const manageDatabases = document.getElementById('manage-databases');
 const aiToggle = document.getElementById('ai-toggle');
 const databaseCache = new Map();
 const databaseStateKeys = ['bootstrap', 'table', 'queryDraft', 'queryName', 'queryNotes', 'queryId', 'queryResult', 'queryRevision',
-    'queryDesign', 'builderDraft', 'builderOpen', 'dataViews', 'catalogSearch', 'snapshotLabel', 'savedQueries', 'queryDirty',
+    'queryDesign', 'builderDraft', 'builderOpen', 'queryLibraryOpen', 'dataViews', 'catalogSearch', 'snapshotLabel', 'savedQueries', 'queryDirty',
     'connectionError', 'queryError', 'querySaveError', 'snapshotError', 'schemaData', 'schemaView', 'databaseView',
     'contextOpen', 'structureData', 'inspectorExpanded', 'explorerScroll', 'recordMapState', 'selectedRecord'];
 const emptyDatabaseState = () => ({bootstrap: null, table: '', queryDraft: '', queryName: '', queryNotes: '', queryId: null,
-    queryResult: null, queryRevision: 0, queryDesign: null, builderDraft: null, builderOpen: true, dataViews: new Map(),
+    queryResult: null, queryRevision: 0, queryDesign: null, builderDraft: null, builderOpen: false, queryLibraryOpen: false, dataViews: new Map(),
     catalogSearch: {}, snapshotLabel: '', savedQueries: null, queryDirty: false, connectionError: null, queryError: null,
     querySaveError: null, snapshotError: null, schemaData: null, schemaView: {}, databaseView: 'gegevens',
-    contextOpen: {database: true, research: true, experiments: true}, structureData: new Map(), inspectorExpanded: {}, explorerScroll: {}, recordMapState: {}, selectedRecord: null});
+    contextOpen: {database: true, experiments: true}, structureData: new Map(), inspectorExpanded: {}, explorerScroll: {}, recordMapState: {}, selectedRecord: null});
 const scopeKey = item => item.scope_key || item.name;
 const schemaName = () => state.bootstrap?.database?.schema || state.bootstrap?.database?.name || '';
 function supports(capability) {
@@ -174,7 +175,7 @@ const databaseModal = new DatabaseModal(() => {
         } else { invalidateCanvasSources({allScopes: true}); work = switchDatabase(databaseModal.database); }
     } else work = refreshBootstrap(false, {invalidateRecordMap: true, allRecordMaps: true});
     work.then(() => {
-        if (!databaseModal.dialog.open && document.activeElement === document.body && !openDatabase.disabled) openDatabase.focus();
+        if (!databaseModal.dialog.open && document.activeElement === document.body) document.getElementById('workspace-tools-toggle').focus();
     }).catch(error => toast(errorText(error), 'error'));
 }, () => syncDatabasePicker());
 const databaseManager = createDatabaseManager({getDatabase, getDatabases: () => knownDatabases,
@@ -188,7 +189,7 @@ const databaseManager = createDatabaseManager({getDatabase, getDatabases: () => 
     onImport: async database => {
         if (database !== getDatabase()) await switchDatabase(database);
         else await refreshBootstrap(false);
-        if (getDatabase() === database && !state.connectionError && supports('import')) databaseModal.open('', 'import');
+        if (getDatabase() === database && !state.connectionError && supports('import')) databaseModal.open('', 'native-import');
         else if (getDatabase() === database && !supports('import')) toast(t('app.postgres.unavailable'), 'error');
     },
     onPrepared: async (data, {importSql}) => {
@@ -196,7 +197,7 @@ const databaseManager = createDatabaseManager({getDatabase, getDatabases: () => 
         if (data.database !== getDatabase()) await switchDatabase(data.database);
         else await refreshBootstrap(false);
         toast(t('app.databases.' + (data.created ? 'createdDatabase' : 'enabledDatabase'), {name: data.database}));
-        if (importSql && getDatabase() === data.database && !state.connectionError) databaseModal.open('', 'import');
+        if (importSql && getDatabase() === data.database && !state.connectionError) databaseModal.open('', 'native-import');
     },
 });
 manageDatabases.append(icon('plus'));
@@ -205,7 +206,6 @@ manageDatabases.addEventListener('click', () => databaseManager.open());
 for (const [area, key, labelKey, symbol] of [
     ['overview', 'overzicht', 'app.route.overview', 'grid'],
     ['database', 'gegevens', 'app.navigation.database', 'database'],
-    ['research', 'onderzoeken', 'app.route.research', 'search'],
 ]) {
     navigation.append(el('a', {class: 'nav-link', href: '#' + key, 'data-route': key, 'data-area': area},
         icon(symbol), el('span', {'data-i18n': labelKey}, t(labelKey))));
@@ -271,7 +271,7 @@ function syncSidebar() {
 }
 
 function workspaceArea(name = route().name) {
-    return databaseViews.includes(name) ? 'database' : ({overzicht: 'overview', onderzoeken: 'research', experimenten: 'experiments', instellingen: 'settings'}[name]);
+    return databaseViews.includes(name) ? 'database' : ({overzicht: 'overview', experimenten: 'experiments', instellingen: 'settings'}[name]);
 }
 
 function isRecordCanvas() { return route().name === 'verkennen'; }
@@ -288,7 +288,7 @@ function syncWorkspaceNavigation() {
     const expanded = hasContext && state.contextOpen[area];
     workspaceContext.hidden = !hasContext || !isExplorerOpen();
     sidebar.classList.toggle('has-context', expanded);
-    document.getElementById('workspace-context-title').textContent = t({database: 'app.navigation.tables', research: supports('saved_queries') ? 'app.navigation.saved' : 'app.route.research', experiments: 'app.navigation.snapshots'}[area] || 'app.shell.workspace');
+    document.getElementById('workspace-context-title').textContent = t({database: 'app.navigation.tables', experiments: 'app.navigation.snapshots'}[area] || 'app.shell.workspace');
     panelToggle.setAttribute('aria-expanded', String(expanded));
     panelToggle.setAttribute('aria-label', t('app.navigation.hide'));
     const workspaceOpener = document.getElementById('workspace-explorer-open');
@@ -304,7 +304,6 @@ function syncWorkspaceNavigation() {
     }
     document.querySelector('.rail-brand').href = routeHash('overzicht');
     for (const link of document.querySelectorAll('#navigation [data-area], #settings-link')) {
-        link.hidden = link.dataset.area === 'research' && !supports('query') || link.dataset.area === 'experiments' && !supports('snapshots');
         const active = link.dataset.area === area || link === databaseLink && area === 'experiments';
         link.classList.toggle('active', active);
         if (active) link.setAttribute('aria-current', 'page'); else link.removeAttribute('aria-current');
@@ -380,7 +379,7 @@ async function switchDatabase(database, {fromHash = false} = {}) {
     if (selectionPointer.dialog.open) selectionPointer.dialog.close();
     selectionPointer.modalItems = []; selectionPointer.selected.clear(); selectionPointer.setOn(false);
     const params = requestedTable ? {table: requestedTable} : (state.table ? {table: state.table} : {});
-    const targetRoute = !fromHash && databaseViews.includes(currentRoute) ? state.databaseView : currentRoute;
+    const targetRoute = !fromHash && currentRoute !== 'onderzoeken' && databaseViews.includes(currentRoute) ? state.databaseView : currentRoute;
     history.replaceState(null, '', routeHash(targetRoute, params));
     contextContent.replaceChildren(); globalNotice.replaceChildren();
     page.replaceChildren(loading(t('app.databases.changing')));
@@ -468,8 +467,8 @@ function localizeShell() {
     document.querySelectorAll('[data-i18n-aria]').forEach(node => node.setAttribute('aria-label', t(node.dataset.i18nAria)));
     document.querySelectorAll('[data-i18n-title]').forEach(node => node.title = t(node.dataset.i18nTitle));
     document.getElementById('language-select').value = getLanguage();
-    openDatabase.setAttribute('aria-label', t('app.shell.openDatabase'));
-    openDatabase.title = t('app.shell.openDatabase');
+    openDatabase.setAttribute('aria-label', t('app.navigation.advanced'));
+    openDatabase.title = t('app.navigation.advanced');
     if (state.connectionError) document.getElementById('connection-state').replaceChildren(el('span', {class: 'status-dot offline'}), el('span', {}, t('app.core.connection.offline')));
     else if (state.bootstrap) document.getElementById('connection-state').replaceChildren(el('span', {class: 'status-dot ' + (state.bootstrap.database.status === 'unavailable' ? 'offline' : '')}), el('span', {}, t(state.bootstrap.database.status === 'unavailable' ? 'app.core.connection.offline' : 'app.navigation.ready')));
     const current = routes[route().name];
@@ -530,7 +529,7 @@ localizeShell();
 function route() {
     const [requested, query = ''] = window.location.hash.slice(1).split('?');
     const name = requested === 'verbanden' ? 'verkennen' : requested;
-    return {name: routes[name] ? name : 'overzicht', params: new URLSearchParams(query)};
+    return {name: routes[name] ? name : 'gegevens', params: new URLSearchParams(query)};
 }
 
 function go(name, params = {}) {
@@ -627,7 +626,7 @@ function syncRestoreControls() {
 
 function syncSnapshotControls() {
     syncDatabasePicker();
-    const busy = state.restoring || state.creatingSnapshot;
+    const busy = state.restoring || state.creatingSnapshot || Boolean(document.querySelector('.snapshot-list[aria-busy="true"]'));
     document.querySelectorAll('[data-snapshot-action]').forEach(control => { control.disabled = busy || control.dataset.snapshotUnavailable === 'true'; });
 }
 
@@ -1040,50 +1039,63 @@ function selectWorkspaceTable(name, view = state.databaseView) {
 }
 
 function databaseTools() {
-    if (!supports('phpmyadmin') && !supports('snapshots') && !supports('import')) return null;
     const menu = el('details', {class: 'database-tools', id: 'database-tools'});
-    const summary = el('summary', {'aria-label': t('app.navigation.tools')}, icon('settings'), t('app.navigation.tools'));
+    const view = route().name;
+    const secondary = {verkennen: 'app.navigation.explore', schema: 'app.navigation.diagram', experimenten: 'app.navigation.backups'};
+    const summary = el('summary', {'aria-label': t('app.navigation.more'), class: secondary[view] ? 'active' : ''},
+        icon('down'), t(secondary[view] || 'app.navigation.more'));
     const actions = el('div', {class: 'database-tools-menu'});
-    const native = (tool, label, symbol) => button(t(label), () => { menu.open = false; databaseModal.open('', tool); },
-        {className: 'database-tool-action', kind: 'ghost', symbol, 'data-database-tool': tool});
-    if (supports('import')) actions.append(native('import', 'app.navigation.import', 'download'));
-    if (supports('phpmyadmin')) actions.append(native('export', 'app.navigation.export', 'external'));
-    if (supports('snapshots')) actions.append(el('a', {class: 'database-tool-action', href: routeHash('experimenten'),
-        'data-database-tool': 'backups', on: {click: () => { menu.open = false; }}}, icon('clock'), t('app.navigation.backups')));
+    for (const [name, key, symbol, capability] of [
+        ['verkennen', 'app.navigation.explore', 'network', 'record_map'],
+        ['schema', 'app.navigation.diagram', 'layers', 'schema'],
+        ['experimenten', 'app.navigation.backups', 'clock', 'snapshots'],
+    ]) {
+        if (!supports(capability)) continue;
+        actions.append(el('a', {class: 'database-tool-action' + (view === name ? ' active' : ''), href: databaseHash(name),
+            'data-database-view': name, 'data-schema-view': name === 'schema' ? name : null,
+            'data-database-tool': name === 'experimenten' ? 'backups' : null,
+            'aria-current': view === name ? 'page' : null, on: {click: () => { menu.open = false; }}}, icon(symbol), t(key)));
+    }
     menu.append(summary, actions);
     menu.addEventListener('keydown', event => { if (event.key === 'Escape') { menu.open = false; summary.focus(); event.stopPropagation(); } });
     return menu;
 }
 
 function databaseHeading(view) {
-    const schemaFamily = view === 'schema' || view === 'structuur';
-    const modeLinks = el('nav', {class: 'database-views', 'aria-label': t('app.navigation.views')}, databasePrimaryViews.map(name => {
-        const active = name === view || name === 'schema' && schemaFamily;
+    const modeLinks = el('nav', {class: 'database-views', 'aria-label': t('app.navigation.views')}, databasePrimaryViews.filter(name => name !== 'onderzoeken' || supports('query')).map(name => {
+        const active = name === view;
         return registerSelection(el('a', {class: 'database-view' + (active ? ' active' : ''), href: databaseHash(name), 'data-database-view': name,
             'aria-current': active ? 'page' : null}, t(routes[name].labelKey)),
             {kind: 'control', key: 'view:' + name, label: t(routes[name].labelKey), purpose: 'changeView', table: state.table});
     }));
-    const explorer = view === 'verkennen' ? null : button(t('app.navigation.tables'), openWorkspaceContext, {id: 'workspace-explorer-open', symbol: 'table',
+    const explorerLabel = view === 'experimenten' ? 'app.navigation.snapshots' : 'app.navigation.tables';
+    const explorer = view === 'verkennen' ? null : button(t(explorerLabel), openWorkspaceContext, {id: 'workspace-explorer-open', symbol: 'table',
         'aria-label': t('app.navigation.open'), 'aria-controls': 'workspace-context', 'aria-expanded': String(isExplorerOpen())});
     if (explorer) {
         explorer.hidden = isExplorerOpen();
         registerSelection(explorer, {kind: 'control', key: 'database:explorer', label: t('app.navigation.tables'), purpose: 'openNavigation'});
     }
-    const schemaLinks = schemaFamily ? el('nav', {class: 'schema-view-options', 'aria-label': t('app.navigation.schemaViews')},
-        el('a', {class: 'schema-view-option' + (view === 'structuur' ? ' active' : ''), href: databaseHash('structuur'),
-            'data-database-view': 'structuur', 'aria-current': view === 'structuur' ? 'page' : null}, t('app.navigation.tableDetails')),
-        el('a', {class: 'schema-view-option' + (view === 'schema' ? ' active' : ''), href: databaseHash('schema'),
-            'data-schema-view': 'schema', 'aria-current': view === 'schema' ? 'page' : null}, t('app.navigation.diagram'))) : null;
+    const actions = el('div', {class: 'database-heading-actions'}, explorer);
+    if (supports('import')) actions.append(button(t('app.navigation.import'), () => databaseModal.open('', 'native-import'),
+        {symbol: 'download', className: 'button-small', 'data-database-tool': 'import'}));
+    if (supports('phpmyadmin')) actions.append(button(t('app.navigation.exportVia'), () => databaseModal.open(state.table, 'export'),
+        {symbol: 'external', className: 'button-small', 'data-database-tool': 'export'}));
+    else if (supports('snapshots')) actions.append(el('a', {class: 'button button-secondary button-small', href: routeHash('experimenten'),
+        'data-database-tool': 'export-backup'}, icon('download'), t('app.navigation.exportBackup')));
+    actions.append(databaseTools());
     return el('header', {class: 'page-heading database-heading'},
-        el('div', {class: 'database-heading-main'}, el('h1', {}, t('app.navigation.database')), el('div', {class: 'database-heading-actions'}, explorer, databaseTools())),
+        el('div', {class: 'database-heading-main'}, el('h1', {}, t(view === 'experimenten' ? 'app.navigation.backups' : 'app.navigation.database')), actions),
         el('div', {class: 'database-viewbar'}, modeLinks,
-            el('p', {class: 'database-selection'}, el('span', {}, t('app.navigation.selected')),
-                el('code', {class: 'database-selected-table', id: 'database-selected-table'}, state.table || t('app.navigation.emptySelection')))), schemaLinks);
+            el('p', {class: 'database-selection'},
+                el('code', {class: 'database-selected-table', id: 'database-selected-table'}, state.table || t('app.navigation.emptySelection')))));
 }
 
 function databaseContext(view, scope) {
     const inspector = el('section', {class: 'workspace-selected', id: 'workspace-selected', 'aria-label': t('app.navigation.inspector')});
-    contextContent.append(catalog(view), inspector);
+    const details = el('details', {class: 'workspace-table-details', open: Boolean(state.inspectorExpanded.tableDetails)},
+        el('summary', {}, t('app.navigation.tableDetails')), inspector);
+    details.addEventListener('toggle', () => { if (scope.live()) state.inspectorExpanded.tableDetails = details.open; });
+    contextContent.append(catalog(view), details);
     return inspector;
 }
 
@@ -1122,9 +1134,9 @@ function drawTableInspector(inspector, table, data) {
 
 function tableHeader(table, tab) {
     return el('div', {class: 'table-heading'},
-        el('div', {}, el('div', {class: 'table-heading-title'}, el('h2', {}, table.name), badge(table.type === 'view' ? t('app.core.table.viewBadge') : t('app.core.table.tableBadge'), table.type === 'view' ? 'badge-blue' : 'badge-green'))),
-        el('div', {class: 'table-heading-actions'}, supports('phpmyadmin')
-            ? button(tab === 'structure' ? t('app.core.table.openStructure') : t('app.core.table.openBrowse'), () => databaseModal.open(table.name, tab), {className: 'button-small', symbol: 'database'}) : null));
+        el('div', {}, el('div', {class: 'table-heading-title'}, el('h2', {class: 'sr-only'}, table.name), badge(table.type === 'view' ? t('app.core.table.viewBadge') : t('app.core.table.tableBadge'), table.type === 'view' ? 'badge-blue' : 'badge-green'))),
+        el('div', {class: 'table-heading-actions'}, tab === 'structure' && supports('phpmyadmin')
+            ? button(t('app.navigation.editStructure'), () => databaseModal.open(table.name, 'structure'), {className: 'button-small', symbol: 'external'}) : null));
 }
 
 function openRecordMap(table, key = null) {
@@ -1189,8 +1201,12 @@ async function selectedSourceRecord(root, table, scope) {
 }
 
 function noTables() {
-    return empty(t('app.core.table.emptyTitle'), t('app.core.table.emptyHelp'),
-        supports('phpmyadmin') ? button(t('app.core.table.openDatabase'), () => databaseModal.open('', 'sql'), {kind: 'primary', symbol: 'database'}) : null);
+    const createSql = () => {
+        const id = isPostgres() ? 'BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY' : 'BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY';
+        return openResearch('CREATE TABLE ' + sqlTable('new_table') + ' (\n  ' + quoteIdentifier('id') + ' ' + id + ',\n  ' + quoteIdentifier('name') + ' VARCHAR(255) NOT NULL\n);');
+    };
+    return empty(t('app.core.table.emptyTitle'), t('app.navigation.emptyHelp'),
+        supports('query') ? button(t('app.navigation.createTable'), createSql, {kind: 'primary', symbol: 'code', id: 'create-table-sql'}) : null);
 }
 
 async function renderData(scope) {
@@ -1420,8 +1436,8 @@ async function renderSchema(scope) {
 }
 
 async function renderResearch(scope) {
-    page.append(heading(t('app.core.research.eyebrow'), t('app.core.research.title'), t(isPostgres() ? 'app.postgres.sqlHelp' : 'app.core.research.help'),
-        [supports('phpmyadmin') ? button(t('app.core.research.fullEditor'), () => databaseModal.open(state.table, 'sql'), {symbol: 'external'}) : null, databaseTools()]));
+    page.append(databaseHeading('onderzoeken'));
+    contextContent.append(catalog('onderzoeken'));
     if (!state.queryDraft) state.queryDraft = defaultSql();
     const result = el('div', {class: 'query-result'});
     const editor = el('textarea', {id: 'sql-editor', class: 'sql-editor', spellcheck: 'false', autocapitalize: 'off', autocomplete: 'off', 'aria-label': t('app.core.research.sqlLabel')}, state.queryDraft);
@@ -1452,8 +1468,6 @@ async function renderResearch(scope) {
     const saveLabel = el('span', {}, state.queryId ? t('app.core.research.saveChanges') : t('app.core.research.save'));
     const saveButton = el('button', {id: 'save-research', class: 'button button-primary', type: 'submit', disabled: state.savingQuery}, icon('bookmark'), saveLabel);
     const savedList = el('div', {class: 'saved-list'}, loading(t('app.core.research.loadingSaved')));
-    if (supports('saved_queries')) contextContent.append(savedList);
-    else contextContent.append(notice(t('app.postgres.savedUnavailable')));
     const saveError = el('div');
     if (state.querySaveError) saveError.append(errorPanel(state.querySaveError));
     const form = el('form', {class: 'save-query-form', novalidate: true},
@@ -1784,7 +1798,7 @@ async function renderResearch(scope) {
         tables: tables(), database: state.bootstrap.database.name, initialTable: state.table,
         draft: state.builderDraft, open: state.builderOpen, scope,
         onDraft: draft => { state.builderDraft = structuredClone(draft); },
-        onToggle: open => { state.builderOpen = open; },
+        onToggle: open => { if (scope.live()) state.builderOpen = open; },
         getRevision: () => state.queryRevision,
         onApply: (built, design) => {
             state.queryRevision += 1;
@@ -1797,10 +1811,21 @@ async function renderResearch(scope) {
             drawResult(); drawExplanation();
         },
     }) : null;
+    const library = supports('saved_queries') ? el('details', {id: 'query-library', class: 'card query-library', open: state.queryLibraryOpen},
+        el('summary', {}, icon('bookmark'), t('app.navigation.savedQueries')),
+        el('div', {class: 'query-library-content'},
+            el('section', {class: 'research-save'}, el('h2', {}, t('app.core.research.save')), form),
+            el('section', {}, el('h2', {}, t('app.navigation.savedQueries')), savedList))) : null;
+    library?.addEventListener('toggle', () => { if (scope.live()) state.queryLibraryOpen = library.open; });
+    scope.cleanup.push(() => {
+        // Details toggle events are queued. Capture the visible state before
+        // replacing this view or caching it during a database switch.
+        if (builder) state.builderOpen = builder.element.open;
+        if (library) state.queryLibraryOpen = library.open;
+    });
     page.append(el('div', {class: 'research-layout unified-research'},
-        builder?.element, editorCard, result,
-        supports('saved_queries') ? el('section', {class: 'card research-save'}, el('div', {class: 'card-header'}, el('h2', {}, t('app.core.research.save')), icon('bookmark')), form) : null,
-        help));
+        editorCard, result, builder?.element, library,
+        el('details', {class: 'query-help'}, el('summary', {}, t('app.navigation.sqlHelp')), help)));
     drawResult();
     drawExplanation();
     try { if (supports('saved_queries')) await updateSavedList(); } catch (error) {
@@ -1809,18 +1834,15 @@ async function renderResearch(scope) {
 }
 
 async function renderExperiments(scope) {
-    const opener = button(t('app.navigation.snapshots'), openWorkspaceContext, {id: 'workspace-explorer-open', symbol: 'clock',
-        'aria-label': t('app.navigation.show'), 'aria-controls': 'workspace-context', 'aria-expanded': String(isExplorerOpen())});
-    opener.hidden = isExplorerOpen();
-    page.append(heading(t('app.navigation.tools'), t('app.navigation.backups'), t(isPostgres() ? 'app.postgres.snapshotsHelp' : 'app.core.experiments.help'),
-        [opener, el('a', {class: 'button button-secondary', href: databaseHash(state.databaseView)}, icon('database'), t('app.navigation.database')), databaseTools()]));
-    const list = el('div', {class: 'snapshot-list'});
+    page.append(databaseHeading('experimenten'), el('p', {class: 'muted'}, t(isPostgres() ? 'app.postgres.snapshotsHelp' : 'app.core.experiments.help')));
+    const list = el('div', {class: 'snapshot-list', 'aria-busy': 'true'});
+    let loadingSnapshots = true;
     const snapshotIndex = el('nav', {class: 'snapshot-index', 'aria-label': t('app.navigation.snapshots')});
     contextContent.append(snapshotIndex);
     const counter = el('span');
     const label = el('input', {id: 'snapshot-label', class: 'input', maxlength: '160', value: state.snapshotLabel, placeholder: t('app.core.experiments.namePlaceholder'), 'aria-label': t('app.core.experiments.nameLabel')});
     label.addEventListener('input', () => { state.snapshotLabel = label.value; });
-    const createButton = button(t('app.core.experiments.create'), () => createSnapshot(), {id: 'create-snapshot', kind: 'primary', symbol: 'plus', disabled: state.creatingSnapshot || state.restoring, 'data-snapshot-action': 'create'});
+    const createButton = button(t('app.core.experiments.create'), () => createSnapshot(), {id: 'create-snapshot', kind: 'primary', symbol: 'plus', disabled: true, 'data-snapshot-action': 'create'});
     const status = el('div');
     if (state.restoring) status.append(notice(t('app.core.experiments.restoring')));
     else if (state.creatingSnapshot) status.append(notice(t('app.core.experiments.creating')));
@@ -1831,6 +1853,9 @@ async function renderExperiments(scope) {
             el('p', {}, t(isPostgres() ? 'app.postgres.snapshotIncludes' : 'app.core.experiments.includes', {database: state.bootstrap.database.name, schema: schemaName()})),
             el('label', {class: 'field-label'}, t('app.core.experiments.recognisableName'), label), createButton, status));
     const load = async () => {
+        loadingSnapshots = true;
+        list.setAttribute('aria-busy', 'true');
+        syncSnapshotControls();
         list.replaceChildren(loading(t('app.core.experiments.loading')));
         snapshotIndex.replaceChildren(loading(t('app.core.experiments.loading')));
         try {
@@ -1863,10 +1888,16 @@ async function renderExperiments(scope) {
                 list.replaceChildren(errorPanel(error, load));
                 snapshotIndex.replaceChildren(el('p', {class: 'small muted'}, errorText(error)));
             }
+        } finally {
+            if (scope.live()) {
+                loadingSnapshots = false;
+                list.setAttribute('aria-busy', 'false');
+                syncSnapshotControls();
+            }
         }
     };
     const createSnapshot = async () => {
-        if (state.creatingSnapshot || state.restoring) return;
+        if (!scope.live() || loadingSnapshots || state.creatingSnapshot || state.restoring) return;
         state.creatingSnapshot = true;
         state.snapshotError = null;
         syncSnapshotControls();
@@ -1891,7 +1922,7 @@ async function renderExperiments(scope) {
         }
     };
     const restoreSnapshot = async (snapshot, restoreButton) => {
-        if (state.restoring || state.creatingSnapshot) return;
+        if (!scope.live() || loadingSnapshots || state.restoring || state.creatingSnapshot) return;
         const database = state.bootstrap.database.name;
         const schema = schemaName();
         const target = isPostgres() ? database + '.' + schema : database;

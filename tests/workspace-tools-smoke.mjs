@@ -4,7 +4,7 @@ import {createRequire} from 'node:module';
 import {mkdir} from 'node:fs/promises';
 import path from 'node:path';
 import {authenticatedContext} from './auth-session.mjs';
-import {ensureWorkspaceTools, clickWorkspaceTool, closeWorkspaceTools} from './workspace-tools.mjs';
+import {ensureWorkspaceTools, clickWorkspaceTool, closeWorkspaceTools, clickDatabaseView} from './workspace-tools.mjs';
 
 const require = createRequire(import.meta.url);
 const {chromium} = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
@@ -43,9 +43,11 @@ try {
     await page.goto(new URL('/workspace.php#overzicht', base).href, {waitUntil: 'networkidle'});
     await page.locator('.stats-grid').waitFor(); await ready(page);
     assert.equal(await trigger.isVisible(), true);
-    assert.equal(await page.locator('#open-database').isVisible(), true);
+    assert.equal(await page.locator('#open-database').isVisible(), false);
+    assert.equal(await page.locator('#refresh-app').isVisible(), true);
+    assert.equal(await page.locator('#manage-databases').isVisible(), true);
     assert.equal(await menu.isVisible(), false);
-    for (const id of ['open-companion', 'ai-toggle', 'selection-pointer-toggle', 'refresh-app', 'context-export', 'manage-databases', 'language-select', 'workspace-account']) {
+    for (const id of ['open-database', 'open-companion', 'ai-toggle', 'selection-pointer-toggle', 'context-export', 'language-select', 'workspace-account']) {
         assert.equal(await page.locator('#' + id).count(), 1, 'Original unique control: ' + id);
         assert.equal(await page.locator('#' + id).isVisible(), false, 'Secondary action starts inside Tools: ' + id);
     }
@@ -75,7 +77,7 @@ try {
     assert.equal(await menu.isVisible(), false);
     await page.locator('#database-manager-close').click();
     await page.locator('#database-manager-dialog').waitFor({state: 'hidden'});
-    await page.waitForFunction(() => document.activeElement?.id === 'workspace-tools-toggle');
+    await page.waitForFunction(() => document.activeElement?.id === 'manage-databases');
     await clickWorkspaceTool(page, '#ai-toggle'); await page.locator('#ai-workspace-panel[open]').waitFor();
     await page.locator('#ai-prompt').fill('Keep this local assistant draft.');
     await page.locator('#ai-close').click(); await page.locator('#ai-workspace-panel').waitFor({state: 'hidden'});
@@ -94,7 +96,7 @@ try {
     assert.equal(await page.locator('#selection-pointer-toggle').getAttribute('aria-pressed'), 'false');
 
     phase = 'language and drafts';
-    await page.locator('#navigation [data-area="research"]').click(); await page.locator('#sql-editor').waitFor();
+    await clickDatabaseView(page, 'onderzoeken'); await page.locator('#sql-editor').waitFor();
     const draft = 'SELECT 42 AS compact_menu_draft;';
     await page.locator('#sql-editor').fill(draft);
     const language = await ensureWorkspaceTools(page, '#language-select');
@@ -113,7 +115,7 @@ try {
     await popup.close();
 
     phase = 'scoped capabilities and dark appearance';
-    await page.locator('#navigation [data-area="database"]').click();
+    await clickDatabaseView(page, 'gegevens');
     await page.locator('#database-select').selectOption('postgres:govern_pg:public'); await ready(page);
     await ensureWorkspaceTools(page, '#language-select');
     assert.equal(await page.locator('#context-export').isVisible(), false, 'PostgreSQL export stays unavailable even inside the open menu.');

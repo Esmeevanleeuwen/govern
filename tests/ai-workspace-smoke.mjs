@@ -1,4 +1,4 @@
-import {clickWorkspaceTool, selectWorkspaceLanguage} from './workspace-tools.mjs';
+import {clickWorkspaceTool, selectWorkspaceLanguage, clickDatabaseView} from './workspace-tools.mjs';
 /** Real schema context with isolated provider-response fixtures; never calls a model. */
 import {authenticatedContext} from './auth-session.mjs';
 import assert from 'node:assert/strict';
@@ -191,7 +191,7 @@ try {
     assert.equal(queryRequests.length, 0, 'Generating an answer and SQL proposal never executes SQL.');
     await shot('answer-and-proposal');
 
-    await page.locator('#navigation [data-area="research"]').click();
+    await clickDatabaseView(page, 'onderzoeken');
     await page.locator('#sql-editor').waitFor();
     const originalDraft = 'SELECT 101 AS original_draft;';
     await page.locator('#sql-editor').fill(originalDraft);
@@ -209,8 +209,7 @@ try {
     await panel.waitFor({state: 'hidden'});
 
     // Existing selection inspection passes only the selected table/column to AI.
-    await page.locator('#navigation [data-area="database"]').click();
-    await page.locator('[data-database-view="gegevens"]').click();
+    await clickDatabaseView(page, 'gegevens');
     const table = page.locator('.table-workspace .data-table');
     await table.locator('tbody tr').first().waitFor();
     const nameIndex = await table.locator('thead th').evaluateAll(cells => cells.findIndex(cell => cell.textContent.trim() === 'name'));
@@ -229,7 +228,7 @@ try {
     // A query result is a snapshot, with no reliable source table. Its visible
     // record text must not be sent as schema context when asking about it.
     await close();
-    await page.locator('#navigation [data-area="research"]').click();
+    await clickDatabaseView(page, 'onderzoeken');
     const privateSnapshot = 'PRIVATE_QUERY_SNAPSHOT_DO_NOT_FORWARD';
     await page.locator('#sql-editor').fill("SELECT '" + privateSnapshot + "' AS snapshot;");
     const explicitQuery = page.waitForResponse(response => apiRoute('query')(new URL(response.url())));
