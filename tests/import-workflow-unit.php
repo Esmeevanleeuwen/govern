@@ -29,6 +29,17 @@ rejects(fn()=>ImportBackupSql::analyze('CREATE DATABASE original;','postgres'),'
 rejects(fn()=>ImportBackupSql::analyze('CREATE FUNCTION fn() RETURNS int RETURN 1;','mariadb'),'workflow_backup_unsupported');
 rejects(fn()=>ImportBackupSql::text(str_repeat('x',262145)),'workflow_backup_unsupported');
 rejects(fn()=>ImportWorkflowStore::id('../../private'),'workflow_invalid');
+ImportWorkflow::assertUnused('configured_missing','mariadb',[
+    ['engine'=>'mariadb','name'=>'configured_missing','available'=>false],
+    ['engine'=>'postgres','name'=>'configured_missing','available'=>true],
+]);
+check(true,'Unavailable configured placeholder permits a fresh creation review');
+rejects(fn()=>ImportWorkflow::assertUnused('occupied','postgres',[
+    ['engine'=>'postgres','name'=>'OCCUPIED','available'=>true],
+]),'workflow_target_exists');
+rejects(fn()=>ImportWorkflow::assertUnused('occupied','mariadb',[
+    ['engine'=>'mariadb','name'=>'occupied'],
+]),'workflow_target_exists');
 $dir=sys_get_temp_dir().'/govern-workflow-unit-'.bin2hex(random_bytes(8)); mkdir($dir,0700);
 $fake=new DatabaseProvisioner(null,static fn(array $request):array=>throw new RuntimeException('Unit must not provision'));
 $workflow=new ImportWorkflow(Config::fromEnvironment(),$dir,$fake,static fn(int $id):bool=>true);

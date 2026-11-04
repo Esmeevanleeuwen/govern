@@ -295,8 +295,15 @@ final class ImportWorkflow
     }
     private function availableName(string $name, string $engine): void
     {
-        foreach ((new ConnectionScope($this->base))->databases() as $item) {
-            if ($item['engine'] === $engine && strcasecmp($item['name'], $name) === 0) throw ApiException::fromCode('workflow_target_exists', 409);
+        self::assertUnused($name, $engine, (new ConnectionScope($this->base))->databases());
+    }
+    /** Unavailable configured entries are placeholders, not proof of occupancy. */
+    public static function assertUnused(string $name, string $engine, array $databases): void
+    {
+        foreach ($databases as $item) {
+            if (($item['available'] ?? true) !== false && $item['engine'] === $engine && strcasecmp($item['name'], $name) === 0) {
+                throw ApiException::fromCode('workflow_target_exists', 409);
+            }
         }
     }
     private function sourcePath(string $id): string { return $this->store->directory . '/' . ImportWorkflowStore::id($id) . '.source'; }

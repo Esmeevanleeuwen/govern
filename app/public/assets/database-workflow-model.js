@@ -64,7 +64,8 @@ export function identifierIssue(value, engine = 'mariadb', table = false) {
     return '';
 }
 export function nameCollision(name, engine, databases) {
-    return (databases || []).some(database => engineId(database.engine || database.connection || 'mariadb') === engineId(engine)
+    return (databases || []).some(database => database.available !== false
+        && engineId(database.engine || database.connection || 'mariadb') === engineId(engine)
         && String(database.name || '').toLowerCase() === name.trim().toLowerCase());
 }
 export function jobState(job) { const state = String(job?.state || '').toLowerCase(); return JOB_STATES.has(state) ? state : 'unknown'; }

@@ -25,6 +25,13 @@ assert.equal(identifierIssue('a'+'n'.repeat(60)+'__','mariadb'),'databasePattern
 assert.equal(identifierIssue('a'+'n'.repeat(60)+'__','postgres'),'','PostgreSQL does not escape a database grant pattern');
 assert.equal(nameCollision('test','postgres',[{name:'test',engine:'mariadb'}]),false,'Names on distinct engines are distinct destinations');
 assert.equal(nameCollision('test','postgres',[{name:'test',engine:'postgres'}]),true);
+for (const engine of ['mariadb','postgres']) {
+ assert.equal(nameCollision('configured_missing',engine,[{name:'configured_missing',engine,available:false}]),false,'An unavailable configured entry does not prove a physical database exists');
+ assert.equal(nameCollision('occupied',engine,[{name:'occupied',engine,available:true}]),true,'Available databases remain occupied');
+ assert.equal(nameCollision('occupied',engine,[{name:'occupied',engine}]),true,'Legacy entries without an availability flag remain occupied');
+ assert.equal(nameCollision('occupied',engine,[{name:'OCCUPIED',engine,available:true}]),true,'Keep the existing case-insensitive collision rule');
+ assert.equal(nameCollision('occupied',engine,[{name:'occupied',engine:engine==='mariadb'?'postgres':'mariadb',available:true}]),false,'Other engines do not occupy this destination');
+}
 const contextual=blankDraft({scope:{name:'existing',engine:'mariadb'},table:' Exact table '});
 Object.assign(contextual,{source:{source_id:'existing-source'},tables:[{selected:true,dataset:0,table:' Exact table ',version:'revision',mapping:[{source:'code',target:' Exact column ',skip:false,empty_as_null:false}]}]});
 const append=planPayload(contextual);

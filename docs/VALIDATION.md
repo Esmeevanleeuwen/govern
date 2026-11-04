@@ -12,7 +12,7 @@ bewerkingen op bestaande gebruikersdatabases uit.
 
 - Alle **18 PHP-unitbestanden** en **16 JavaScript-unitbestanden** slagen,
   waaronder de nieuwe aanmaak-, taak-, koppeling- en tabeldefinitiegrenzen.
-  De workflowcontrole heeft **43** assertions, verse provisioning **35**,
+  De workflowcontrole heeft **46** assertions, verse provisioning **35**,
   tabeldefinities **65** en datasetkoppelingen **14**. Bestaande SQL-parsers,
   accounts, scopeselectie, herstelpuntclient en AI-controles blijven slagen.
 - De echte API/worker-reeks heeft **61 controles** en controleert beide engines: nieuwe lege database,
