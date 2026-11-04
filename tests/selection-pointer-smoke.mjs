@@ -86,7 +86,7 @@ try {
     assert.equal(await page.locator('#database-dialog').isVisible(), false, 'Inspecting Open database must not open phpMyAdmin.');
     assert.equal(bootstrapRequests.length, beforeRefresh, 'Inspecting a workspace action must not refresh the application.');
     const hash = await page.evaluate(() => location.hash);
-    await page.locator('#navigation [data-area="research"]').click();
+    await page.locator('[data-database-view="onderzoeken"]').click();
     await count(1);
     assert.equal(await page.evaluate(() => location.hash), hash, 'Selecting a navigation item must not navigate.');
     const searchBefore = await page.locator('#data-search').inputValue();
@@ -198,7 +198,7 @@ try {
     await page.locator('.table-workspace .data-table tbody tr').nth(1).waitFor();
     await page.locator('[data-database-view="schema"]').click();
     await page.locator('#schema-viewport').waitFor();
-    await page.locator('#schema-table-panel [data-schema-select="organizations"]').click();
+    await page.locator('.catalog-item').filter({has: page.locator('.catalog-item-name', {hasText: /^organizations$/})}).click();
     await page.locator('#schema-actual').click();
     await clickWorkspaceTool(page, '#selection-pointer-toggle');
     const header = page.locator('[data-schema-header="organizations"]');

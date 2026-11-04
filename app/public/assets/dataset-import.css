@@ -1,6 +1,10 @@
 .dataset-import {padding: 24px; overflow: auto; min-height: 0; flex: 1;}
 .dataset-import[hidden] {display: none;}
 .dataset-import h3 {margin-top: 0;}
+.dataset-destination {padding: 12px 16px; border-radius: 12px; background: var(--g-row); font-weight: 600;}
+.dataset-step {margin: 24px 0 12px; font-size: 15px;}
+.dataset-result {margin: 20px 0; padding: 16px; border-radius: 16px; background: var(--g-row);}
+.dataset-result p {margin: 0 0 12px;}
 .dataset-import p {overflow-wrap: anywhere;}
 .dataset-field {display: grid; gap: 8px; margin: 16px 0; max-width: 620px;}
 .dataset-field label {font-weight: 600;}
@@ -14,3 +18,21 @@
 @media (max-width: 600px) {.dataset-import {padding: 12px;} .database-tabs {overflow-x: auto;}}
 
 .database-frame-panel[hidden] {display: none;}
+
+.database-toolbar[hidden], .modal-import-context[hidden], .modal-import-fallback[hidden] {display: none;}
+.database-dialog .modal-tools > [hidden], #modal-change-destination[hidden] {display: none;}
+.modal-import-context {display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 23px; background: var(--g-row); flex-shrink: 0;}
+.modal-import-context .eyebrow {margin: 0 0 6px;}
+.modal-import-source {display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 0; min-width: 0;}
+.modal-import-source code {overflow-wrap: anywhere;}
+.modal-import-context .button {flex-shrink: 0;}
+.modal-import-fallback {margin: 0 18px 12px; padding: 12px 15px; border-radius: 14px; background: var(--g-row); flex-shrink: 0;}
+.modal-import-fallback p {font-size: 12px; line-height: 1.5; margin: 0 0 10px;}
+.database-dialog.focused-import .import-inspection {flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain;}
+.database-dialog:not(.focused-import):not(.postgres-import) .import-inspection {max-height: min(38dvh, 360px); overflow: auto; flex-shrink: 0; overscroll-behavior: contain;}
+@media (max-width: 600px) {
+    .modal-import-context {padding: 12px; flex-wrap: wrap; gap: 10px;}
+    .modal-import-context .button {min-height: 44px;}
+    .modal-import-fallback {margin: 0 10px 10px; padding: 10px;}
+    .modal-import-fallback .button {min-height: 44px;}
+}

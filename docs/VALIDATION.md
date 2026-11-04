@@ -1,7 +1,141 @@
 # Validatie
 
-Stand van de controles: **3 november 2026**. Eerdere resultaten hieronder horen
+Stand van de controles: **4 november 2026**. Eerdere resultaten hieronder horen
 bij hun beschreven wijziging en zijn niet automatisch opnieuw uitgevoerd.
+
+## Echte PostgreSQL-databaseaanmaak — 4 november 2026
+
+Database aanmaken en Database importeren kunnen nu een echte PostgreSQL-database
+met `public` aanmaken. De URL-scope kiest de engine; `{name}` blijft het volledige
+aanmaakcontract. Na aanmaak opent Queries met een nog niet uitgevoerd
+`CREATE TABLE`-voorbeeld. De ingestelde standaarddatabase behoudt haar bestaande
+schema's en de webapp leest de blijvende beheerlijst alleen-lezen.
+
+Uitgevoerd tegen het afzonderlijke Docker-testproject op poort 18081:
+
+- `postgres-create-http.py`: **102** echte HTTP-/databasecontroles voor twee
+  nieuwe databases, herhalen, ongeldige/systeemnamen, weigeren van onbekende
+  bestaande databases, beperkte rollen, SQL-/CSV-import, herstelpunten en
+  herstellen met teruglezen en database-isolatie.
+- `postgres-create-smoke.mjs`: echte browseraanmaak naar Queries, zelf een tabel
+  ontwerpen en uitvoeren, teruglezen in de vier databaseweergaven, Database
+  importeren naar een nieuwe PostgreSQL-database met SQL-import, CSV-import en
+  Tabel openen, en onafhankelijke SQL-concepten en zoekvelden bij gelijknamige
+  tabellen in twee PostgreSQL-databases.
+- **111** scope-/capabilitycontroles, **95** registry-/provisionercontroles
+  inclusief echte Unix-socketberichten, **68** workercontroles en de bestaande
+  PHP-proeven voor MariaDB-provisioning (**97**), PostgreSQL-backup (**12**),
+  import (**11**) en SQL (**37**), plus **15** algemene backendcontroles.
+- De aangepaste bestaande PostgreSQL-HTTP-proef slaagt met **69** controles.
+  Het registerbestand is gecontroleerd als root:33 met modus `0640`.
+- **13** controles na het daadwerkelijk herstarten van app en worker: beheerde
+  databases blijven selecteerbaar en leesbaar, met hun volledige scope en
+  onafhankelijke records.
+- De bestaande MariaDB-aanmaakproef (**38**) en PostgreSQL-SQL-proef (**31**)
+  slagen, evenals de browserregressies voor database-import, werkplekgereedschap,
+  PostgreSQL-bekijken, de oudere gecachete API-module en rijbewerking.
+
+Deze controles gebruiken eigen geïsoleerde gegevens en accounts. De
+gebruikerinstallatie en Windows zelf zijn niet uitgevoerd; de volledige
+GitHub Actions-uitslag hoort bij de commit.
+
+## Engine kiezen na de handeling — 4 november 2026
+
+Dit beschrijft de eerdere enginekeuze vóór de uitbreiding hierboven; de toenmalige
+beperking op PostgreSQL-aanmaak geldt niet meer voor de actuele implementatie.
+
+De vernieuwde ingang begint met Database aanmaken, Database importeren of
+Tabel importeren, daarna de engine en bestemming. MariaDB-aanmaak opent de
+officiële Structure-weergave; PostgreSQL toont zijn bestaande database/schema
+en de beschikbare SQL-werkplek. De imports behouden hun eigen voorcontrole,
+exacte bevestiging en brongebonden uitvoering. De globale `engines`-metadata
+laat MariaDB-aanmaak ook vanuit een PostgreSQL-werkplek kiezen.
+
+Vóór deze aanpassing is de echte toepassing doorlopen in een afzonderlijk
+Docker-project op poort 18081, met PHP 8.4, MariaDB, PostgreSQL en de officiële
+phpMyAdmin. De doorloop omvat de publieke pagina, accounts, Overzicht, Records,
+Explore, Schema en tabeldetails, Queries met echte SQL voor beide engines,
+instellingen, mobiele navigatie en phpMyAdmin. De negen betrokken
+browserproeven slaagden als nulmeting; een kaartproef kreeg eerst Fit om de
+benodigde kaarten in het kleinere werkvlak zichtbaar te maken.
+
+Alle 27 uitgevoerde backend-, HTTP- en herstelproeven op deze geïsoleerde stack
+slagen, naast de bestaande PHP-unitcontroles. De aanvullende metadata is
+gecontroleerd met 111 scope-/capabilitycontroles, 42 MariaDB-HTTP-controles en
+63 PostgreSQL-HTTP-controles. Die metadata bevat geen hosts of credentials en
+verandert de bestaande scoped capabilityvelden niet. PostgreSQL zonder
+SQL-credentials en een uitgeschakelde PostgreSQL-verbinding zijn in de
+databasevrije unitproef gecontroleerd.
+
+Dit is een echte lokale integratieomgeving met eigen gegevens en accounts.
+De eerdere opslaggrens hieronder hoort bij de vorige validatiepoging; deze
+keer draaiden beide engines en de volledige toepassing.
+
+De nieuwe engine-browserproef slaagt tegen deze stack voor de expliciete
+enginekeuze zonder voortijdige werkplekwissel, Terug, behoud van naam en caret
+bij taalwisseling, MariaDB-aanmaak vanuit PostgreSQL met de expliciete
+standaard-MariaDB-verzoekscope en Enter naar de officiële Structure-weergave.
+PostgreSQL-SQL- en tabelvoorbeelden worden via de echte API gelezen. De
+meldingen voor niet-ingeschakeld en alleen-lezen PostgreSQL gebruiken apart
+gecontroleerde UI-metadata op 320 px, in donker thema en met verminderde
+transparantie; de test schakelt de echte server daarvoor niet uit.
+
+De aangepaste database-importbrowserproef slaagt voor upload via de officiële
+phpMyAdmin, de eigen SQL-voorcontrole en bevestiging, teruglezen van de records
+en handmatig een tabel aanmaken in phpMyAdmin. De tabelimportbrowserproef,
+inclusief echte import, teruglezen en de mobiele controles, slaagt. Ook de
+bijgewerkte frontend-, Gereedschap- en PostgreSQL-browserproeven en de proeven
+voor Explore, Schema en Queries slagen tegen de laatste broncode. De gefocuste
+importfixture slaagt met vaste API-antwoorden en
+controleert geen echte database-uitvoering. Syntax, vertaalsleutels met 1.542
+tweetalige berichten en `git diff --check` slagen.
+
+De verdere echte browserdoorloop slaagt voor startpagina/accounts,
+instellingen, gedeelde navigatie, vrije SQL, losse vensters, vergelijking,
+recordkaart, de verkenningsgids en de AI-interface/projectzoeker. De laatste
+PostgreSQL-gereedschapsproef controleert SQL, SQL-/CSV-import, archiefdownload
+en echt herstellen/teruglezen in Nederlands en op mobiel. Ook die proef slaagt.
+De phpMyAdmin-taalcontrole wacht expliciet op de zichtbare, geïnitialiseerde
+SQL-editor voordat het concept wordt ingevuld; de iframe-markering en tekst
+blijven tijdens taalwisseling behouden.
+
+De installatie op de gebruikercomputer, Windows zelf en een lokaal taalmodel
+zijn niet hiermee gecontroleerd; de volledige GitHub Actions-uitslag hoort
+bij de commit.
+
+## Gedeelde databasewerkplek en expliciete importkeuze
+
+Database gebruikt Records, Explore, Schema en Queries in dezelfde kop en met
+dezelfde doorzoekbare tabellenlijst. De bestaande onderzoekroute blijft
+werken. Tabelkeuze in Explore en Schema houdt het canvas gemount; in Queries
+blijven editor, SQL-concept en resultaten bij een tabelkeuze behouden.
+Importeren laat eerst bestandssoort en een bestaande of nieuwe bestemming
+kiezen. Tabelbestanden hebben drie stappen en een knop naar de geïmporteerde
+tabel in Records.
+
+De gerichte controles voor vertalingen, databasescope, voorkeuren, selectie,
+schema, recordkaart, canvas en venstergeometrie slagen. Schema is ook met de
+echte module en vaste metadata in Chromium gecontroleerd op externe
+tabelkeuze, behoud van viewport/focus en opruimen van listeners.
+
+De nieuwe `workspace-consistency-fixture.mjs` gebruikt de echte frontend met
+vaste API-antwoorden. De gedeelde tabellenlijst, zoekopdracht, tabelkeuze zonder
+canvasherbouw, direct zichtbare SQL-editor, resultaatweergave, notities en
+concepten per database slagen in Chromium. Nederlands/Engels en alle vier
+weergaven op 1440, 768 en 320 px zijn zonder horizontale overloop gecontroleerd.
+
+De importdialoog is met dezelfde aanpak gecontroleerd: bestandssoort,
+bestaande/nieuwe bestemming, geblokkeerde bediening tijdens een verzoek,
+exacte bevestiging, behoud bij taalwisseling, de vastgelegde database bij
+Tabel openen en 320 px zonder horizontale overloop. Deze proeven voeren geen
+SQL of import uit in een echte database.
+
+De volledige PHP-/database- en phpMyAdmin-integratie is lokaal niet uitgevoerd:
+het bouwen van de afzonderlijke Docker-teststack liep tegen de opslaggrens
+van de omgeving. Er zijn daarbij geen testcontainers of databases gestart.
+De bestaande browserproeven zijn aangepast aan de gedeelde navigatie en
+importkeuze voor de volledige CI; eerdere integratie-uitslagen hieronder
+zijn geen nieuwe uitslag voor deze wijziging.
 
 ## Gelijke canvasvormgeving voor Schema en Explore
 

@@ -61,7 +61,8 @@ final class Config
                 'schema' => $pgSchemas[0], 'schemas' => $pgSchemas, 'read_user' => $pgReadUser,
                 'read_password' => $env('PG_READ_PASSWORD'), 'user' => $pgUser,
                 'password' => $env('PG_PASSWORD'), 'sql_user' => $pgSqlUser, 'sql_password' => $env('PG_SQL_PASSWORD'),
-                'restore_user' => $pgRestoreUser, 'tools_socket' => $env('PG_TOOLS_SOCKET', '/run/govern-postgres/tools.sock'), 'socket' => ''];
+                'restore_user' => $pgRestoreUser, 'tools_socket' => $env('PG_TOOLS_SOCKET', '/run/govern-postgres/tools.sock'),
+                'registry_file' => $env('PG_DATABASE_REGISTRY', '/run/govern-postgres/databases.json'), 'socket' => ''];
         }
         return [
             'engine' => 'mariadb',

@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Private PostgreSQL checkpoint helper. Never accepts SQL, credentials or paths."""
+"""Private PostgreSQL database/checkpoint helper. No caller SQL or paths."""
 import contextlib
 import datetime as dt
+import fcntl
 import hashlib
 import json
 import os
@@ -20,6 +21,7 @@ ID = re.compile(r"[0-9]{8}T[0-9]{6}Z_[a-f0-9]{16}\Z")
 MAX_REQUEST = 4096
 MAX_RESPONSE = 1048576
 MAX_DUMP = 536870912
+MAX_REGISTRY = 65536
 APP_UID = APP_GID = 33
 
 
@@ -45,12 +47,115 @@ def block(body):
             return "DO " + delimiter + "\n" + body + "\n" + delimiter + ";\n"
 
 
+def database_name(value):
+    return (isinstance(value, str) and re.fullmatch(r"[A-Za-z0-9_]{1,63}", value) is not None
+            and value.lower() not in ("postgres", "template0", "template1")
+            and not value.lower().startswith("pg_"))
+
+
+class DatabaseRegistry:
+    """Only the privileged worker can change completed workspace names."""
+    def __init__(self, path):
+        self.path = Path(path)
+        self.lock = self.path.with_name(self.path.name + ".lock")
+        if not self.path.is_absolute():
+            raise Failure("postgres_tools_invalid")
+
+    @contextlib.contextmanager
+    def locked(self):
+        parent = self.path.parent
+        try:
+            try:
+                parent.mkdir(mode=0o750, parents=True)
+                os.chown(parent, 0, APP_GID)
+            except FileExistsError:
+                pass
+            metadata = parent.lstat()
+            if not stat.S_ISDIR(metadata.st_mode) or metadata.st_uid != 0 or metadata.st_mode & 0o022:
+                raise Failure("postgres_tools_invalid")
+            descriptor = os.open(self.lock, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+            with os.fdopen(descriptor, "rb+") as stream:
+                metadata = os.fstat(stream.fileno())
+                if not stat.S_ISREG(metadata.st_mode) or metadata.st_uid != 0 or metadata.st_mode & 0o077:
+                    raise Failure("postgres_tools_invalid")
+                fcntl.flock(stream, fcntl.LOCK_EX)
+                yield
+        except OSError:
+            raise Failure("postgres_tools_invalid") from None
+
+    @staticmethod
+    def encoded(names):
+        raw = (json.dumps({"version": 1, "databases": names}, separators=(",", ":")) + "\n").encode()
+        if len(raw) > MAX_REGISTRY:
+            raise Failure("database_prepare_failed")
+        return raw
+
+    def read(self, *, missing=False):
+        try:
+            parent = self.path.parent.lstat()
+            if not stat.S_ISDIR(parent.st_mode) or parent.st_uid != 0 or parent.st_mode & 0o022:
+                raise Failure("postgres_tools_invalid")
+            descriptor = os.open(self.path, os.O_RDONLY | os.O_NOFOLLOW)
+            with os.fdopen(descriptor, "rb") as stream:
+                metadata = os.fstat(stream.fileno())
+                if (not stat.S_ISREG(metadata.st_mode) or metadata.st_uid != 0
+                        or metadata.st_mode & 0o022 or metadata.st_size > MAX_REGISTRY):
+                    raise Failure("postgres_tools_invalid")
+                raw = stream.read(MAX_REGISTRY + 1)
+            data = json.loads(raw)
+            if (len(raw) > MAX_REGISTRY or not isinstance(data, dict) or set(data) != {"version", "databases"}
+                    or type(data["version"]) is not int or data["version"] != 1
+                    or not isinstance(data["databases"], list)
+                    or any(not database_name(name) for name in data["databases"])
+                    or len(set(data["databases"])) != len(data["databases"])):
+                raise Failure("postgres_tools_invalid")
+            return data["databases"]
+        except FileNotFoundError:
+            if missing:
+                return []
+            raise Failure("postgres_tools_invalid") from None
+        except (OSError, ValueError, UnicodeDecodeError):
+            raise Failure("postgres_tools_invalid") from None
+
+    def write(self, names):
+        raw = self.encoded(names)
+        temporary = None
+        try:
+            descriptor, temporary = tempfile.mkstemp(prefix=".govern-databases-", dir=self.path.parent)
+            with os.fdopen(descriptor, "wb") as stream:
+                os.fchown(stream.fileno(), 0, APP_GID)
+                os.fchmod(stream.fileno(), 0o640)
+                stream.write(raw)
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.replace(temporary, self.path)
+            temporary = None
+            descriptor = os.open(self.path.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+            try:
+                os.fsync(descriptor)
+            finally:
+                os.close(descriptor)
+        except OSError:
+            raise Failure("database_prepare_failed") from None
+        finally:
+            if temporary is not None:
+                with contextlib.suppress(OSError):
+                    os.unlink(temporary)
+
+    def initialize(self):
+        with self.locked():
+            names = self.read(missing=True)
+            if not self.path.exists():
+                self.write(names)
+
+
 class Tools:
     def __init__(self, environment=None):
         self.env = dict(os.environ if environment is None else environment)
         self.database = self.env.get("PGDATABASE", "")
         self.schemas = list(dict.fromkeys(x.strip() for x in self.env.get("PG_SCHEMAS", "public").split(",") if x.strip()))
         self.restore_user = self.env.get("PG_RESTORE_USER", "govern_pg_restore")
+        self.registry = DatabaseRegistry(self.env.get("PG_DATABASE_REGISTRY", "/run/govern-postgres/databases.json"))
         self.root = Path(self.env.get("BACKUP_DIR", "/var/lib/govern/backups"))
         self.timeout = max(10, min(180, int(self.env.get("PG_TOOLS_TIMEOUT_SECONDS", "90"))))
         names = [self.database, self.restore_user, self.env.get("PGUSER", ""),
@@ -64,13 +169,17 @@ class Tools:
                 not x or x.startswith("pg_") or x == "information_schema" or len(x.encode()) > 63
                 or any(ord(c) < 32 or ord(c) == 127 for c in x) for x in self.schemas):
             raise Failure("postgres_tools_invalid")
-        if not self.env.get("PGPASSWORD") or not self.env.get("PG_READ_PASSWORD") or not self.env.get("PG_RESTORE_PASSWORD"):
+        if any(not self.env.get(key) for key in ("PGPASSWORD", "PG_READ_PASSWORD", "PG_RESTORE_PASSWORD")):
             raise Failure("postgres_tools_invalid")
 
     def process_env(self, role):
         result = dict(self.env)
         if role == "reader":
             result["PGUSER"], result["PGPASSWORD"] = self.env["PG_READ_USER"], self.env["PG_READ_PASSWORD"]
+        elif role == "writer":
+            result["PGUSER"], result["PGPASSWORD"] = self.env["PG_USER"], self.env["PG_PASSWORD"]
+        elif role == "sql":
+            result["PGUSER"], result["PGPASSWORD"] = self.env["PG_SQL_USER"], self.env["PG_SQL_PASSWORD"]
         elif role == "restore":
             result["PGUSER"], result["PGPASSWORD"] = self.restore_user, self.env["PG_RESTORE_PASSWORD"]
         result["PGCONNECT_TIMEOUT"] = "5"
@@ -103,9 +212,18 @@ class Tools:
                         role=role, input=sql.encode(), error=error).decode().strip()
 
     def request(self, request):
-        if not isinstance(request, dict) or request.get("database") != self.database or request.get("schema") not in self.schemas:
+        if isinstance(request, dict) and request.get("action") == "prepare_database":
+            if set(request) != {"action", "name"} or not database_name(request["name"]):
+                raise Failure("database_create_invalid")
+            return self.prepare_database(request["name"])
+        if not isinstance(request, dict):
             raise Failure("postgres_tools_invalid")
-        action, schema = request.get("action"), request["schema"]
+        database, schema = request.get("database"), request.get("schema")
+        schemas = self.schemas if database == self.database else ["public"] if database in self.registry.read() else []
+        if schema not in schemas:
+            raise Failure("postgres_tools_invalid")
+        scoped = self if database == self.database else self.scoped(database, schemas)
+        action = request.get("action")
         expected = {"action", "database", "schema"}
         if action == "create":
             expected.add("label")
@@ -114,14 +232,101 @@ class Tools:
         if set(request) != expected:
             raise Failure("postgres_tools_invalid")
         if action == "list":
-            return self.list(schema)
+            return scoped.list(schema)
         if action == "create":
-            return self.create(schema, request["label"])
+            return scoped.create(schema, request["label"])
         if action == "download":
-            return self.manifest(schema, request["id"], verify=True)
+            return scoped.manifest(schema, request["id"], verify=True)
         if action == "restore":
-            return self.restore(schema, request["id"])
+            return scoped.restore(schema, request["id"])
         raise Failure("postgres_tools_invalid")
+
+    def scoped(self, database, schemas):
+        return Tools({**self.env, "PGDATABASE": database, "PG_SCHEMAS": ",".join(schemas)})
+
+    def prepare_database(self, name):
+        if not self.env.get("PG_PASSWORD") or not self.env.get("PG_SQL_PASSWORD"):
+            raise Failure("database_prepare_failed")
+        with self.registry.locked():
+            names = self.registry.read()
+            if name not in names and name != self.database:
+                self.registry.encoded([*names, name])
+            # Administration stays on a fixed maintenance database even when
+            # the configured workspace is missing. The caller cannot choose it.
+            admin = self.scoped("postgres", ["public"])
+            admin.check_provision_roles()
+            marker = "govern-created-database-v1:" + name
+            existing = admin.sql("SELECT (datdba=(SELECT oid FROM pg_catalog.pg_roles WHERE rolname=current_user)"
+                                 " AND NOT datistemplate),COALESCE(pg_catalog.shobj_description(oid,'pg_database')="
+                                 + literal(marker) + ",false) FROM pg_catalog.pg_database WHERE datname=" + literal(name) + ";",
+                                 error="database_prepare_failed")
+            if existing and (not existing.startswith("t|")
+                             or (existing != "t|t" and name not in [*names, self.database])):
+                raise Failure("database_prepare_failed")
+            created = not existing
+            if created:
+                # Mark a private, disconnected staging database before its
+                # final name exists. A crash cannot leave an unmarked final DB
+                # that a later retry might confuse with unrelated user data.
+                staging = identifier("govern_pending_" + secrets.token_hex(12))
+                admin.sql("CREATE DATABASE " + staging + " TEMPLATE template0 OWNER "
+                          + identifier(self.env["PGUSER"]) + " ALLOW_CONNECTIONS false;", error="database_prepare_failed")
+                admin.sql("COMMENT ON DATABASE " + staging + " IS " + literal(marker) + ";\n"
+                          "ALTER DATABASE " + staging + " RENAME TO " + identifier(name) + ";",
+                          error="database_prepare_failed")
+            # New databases inherit PUBLIC CONNECT. Remove it while the
+            # database is still disconnected, before entering it for grants.
+            admin.sql("REVOKE ALL ON DATABASE " + identifier(name) + " FROM PUBLIC;\n"
+                      "ALTER DATABASE " + identifier(name) + " ALLOW_CONNECTIONS true;", error="database_prepare_failed")
+            schemas = self.schemas if name == self.database else ["public"]
+            scoped = self.scoped(name, schemas)
+            scoped.sql(scoped.provision_sql(schemas), error="database_prepare_failed")
+            for role in ("reader", "writer", "sql", "restore"):
+                scoped.sql("SELECT 1;", role=role, error="database_prepare_failed")
+            if name not in names and name != self.database:
+                self.registry.write([*names, name])
+            return {"database": name, "created": created}
+
+    def check_provision_roles(self):
+        roles = [self.env[key] for key in ("PG_READ_USER", "PG_USER", "PG_SQL_USER", "PG_RESTORE_USER")]
+        sql_role, restorer = literal(roles[2]), literal(roles[3])
+        values = ",".join(literal(role) for role in roles)
+        safe = self.sql("SELECT count(*)=4 AND bool_and(rolcanlogin AND NOT (rolsuper OR rolcreatedb OR rolcreaterole"
+                        " OR rolreplication OR rolbypassrls OR EXISTS(SELECT 1 FROM pg_catalog.pg_database d WHERE d.datdba=r.oid)"
+                        " OR EXISTS(SELECT 1 FROM pg_catalog.pg_auth_members m JOIN pg_catalog.pg_roles p ON p.oid=m.roleid"
+                        " WHERE m.member=r.oid AND NOT (r.rolname=" + sql_role + " AND p.rolname=" + restorer
+                        + " AND NOT m.admin_option AND NOT m.inherit_option AND m.set_option))))"
+                        " FROM pg_catalog.pg_roles r WHERE rolname IN (" + values + ");", error="database_prepare_failed")
+        if safe != "t":
+            raise Failure("database_prepare_failed")
+
+    def provision_sql(self, schemas):
+        roles = [identifier(self.env[key]) for key in ("PG_READ_USER", "PG_USER", "PG_SQL_USER", "PG_RESTORE_USER")]
+        reader, writer, sql_role, restorer = roles
+        database = identifier(self.database)
+        statements = ["BEGIN;", f"REVOKE ALL ON DATABASE {database} FROM PUBLIC;"]
+        for role in roles:
+            statements += [f"REVOKE ALL ON DATABASE {database} FROM {role};", f"GRANT CONNECT ON DATABASE {database} TO {role};",
+                           f"ALTER ROLE {role} IN DATABASE {database} SET default_transaction_read_only = {'on' if role == reader else 'off'};"]
+        for schema in schemas:
+            quoted = identifier(schema)
+            statements += [f"CREATE SCHEMA IF NOT EXISTS {quoted};", f"REVOKE CREATE ON SCHEMA {quoted} FROM PUBLIC;",
+                           f"REVOKE ALL ON ALL TABLES IN SCHEMA {quoted} FROM PUBLIC;",
+                           f"REVOKE ALL ON ALL SEQUENCES IN SCHEMA {quoted} FROM PUBLIC;"]
+            for role in roles:
+                table_rights = "SELECT" if role == reader else "SELECT,INSERT,UPDATE,DELETE" + (",REFERENCES,TRIGGER" if role in (sql_role, restorer) else "")
+                sequence_rights = "SELECT" if role == reader else "USAGE"
+                statements += [f"REVOKE ALL ON SCHEMA {quoted} FROM {role};",
+                               f"GRANT USAGE{',CREATE' if role in (sql_role, restorer) else ''} ON SCHEMA {quoted} TO {role};",
+                               f"REVOKE ALL ON ALL TABLES IN SCHEMA {quoted} FROM {role};",
+                               f"REVOKE ALL ON ALL SEQUENCES IN SCHEMA {quoted} FROM {role};",
+                               f"GRANT {table_rights} ON ALL TABLES IN SCHEMA {quoted} TO {role};",
+                               f"GRANT {sequence_rights} ON ALL SEQUENCES IN SCHEMA {quoted} TO {role};"]
+                for creator in (identifier(self.env["PGUSER"]), sql_role, restorer):
+                    prefix = f"ALTER DEFAULT PRIVILEGES FOR ROLE {creator} IN SCHEMA {quoted}"
+                    statements += [f"{prefix} REVOKE ALL ON TABLES FROM {role};", f"{prefix} REVOKE ALL ON SEQUENCES FROM {role};",
+                                   f"{prefix} GRANT {table_rights} ON TABLES TO {role};", f"{prefix} GRANT {sequence_rights} ON SEQUENCES TO {role};"]
+        return "\n".join([*statements, "COMMIT;"])
 
     def directory(self, schema):
         scope = "postgres:" + quote(self.database, safe="-_.~") + ":" + quote(schema, safe="-_.~")
@@ -466,6 +671,7 @@ def serve():
     path.parent.mkdir(mode=0o750, parents=True, exist_ok=True)
     os.chown(path.parent, 0, APP_GID)
     os.chmod(path.parent, 0o750)
+    tools.registry.initialize()
     if path.exists() or path.is_symlink():
         if path.is_symlink() or not stat.S_ISSOCK(path.lstat().st_mode):
             raise Failure("postgres_tools_invalid")

@@ -242,12 +242,13 @@ INSERT INTO ${table} (id,label,amount) VALUES (1,'${marker} seed',10.10);`);
     // Saved SQL and unfinished editor content belong to their own database.
     const savedA = data(await api('save-query', first, {body: {name: 'A saved ' + name, sql: 'SELECT 111 AS saved_a;', notes: ''}}));
     saved.push({database: first, id: savedA.id});
-    await page.locator('#navigation [data-area="research"]').click();
+    await page.locator('[data-database-view="onderzoeken"]').click();
     await page.locator('#sql-editor').fill('SELECT 111 AS draft_a;');
     await page.locator('#query-name').fill('A unfinished title');
     await page.locator('#query-notes').fill('A unfinished notes');
     await page.locator('.saved-item-open').filter({hasText: 'A saved ' + name}).waitFor();
     await switchDatabase(second);
+    await page.locator('[data-database-view="onderzoeken"]').click();
     await page.locator('#sql-editor').waitFor();
     assert.notEqual(await page.locator('#sql-editor').inputValue(), 'SELECT 111 AS draft_a;');
     assert.equal(await page.locator('.saved-item-open').filter({hasText: 'A saved ' + name}).count(), 0);
@@ -270,6 +271,12 @@ INSERT INTO ${table} (id,label,amount) VALUES (1,'${marker} seed',10.10);`);
     const unknown = await api('bootstrap', '__govern_unknown_database_' + name);
     assert.equal(unknown.status, 403, 'An unknown target never silently falls back to the active database.');
 
+    // Choose Records for A before leaving it. Each database now remembers its
+    // own workspace view, including Queries, rather than sharing one global view.
+    await switchDatabase(first);
+    await page.locator('[data-database-view="gegevens"]').click();
+    await waitTable(first);
+    await switchDatabase(second);
     await page.locator('#navigation [data-area="database"]').click();
     await page.locator('[data-database-view="gegevens"]').click();
     await waitTable(second);

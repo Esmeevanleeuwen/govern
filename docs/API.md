@@ -23,7 +23,8 @@ and header `X-CSRF-Token` from authenticated bootstrap
 or account status. PHP session cookie, same origin only. Except fixed database
 readiness, every database API route requires an approved installation account.
 One MySQL/MariaDB server with multiple selectable databases, plus an optional
-server-configured PostgreSQL connection with a selected database and allowlisted schemas.
+server-configured PostgreSQL connection with configured or managed databases and
+allowlisted schemas.
 The optional local Ollama connection is disabled by default; only the separate AI
 endpoints can call that configured provider. Ordinary database operations and
 selection explanations do not require a model.
@@ -101,6 +102,15 @@ the same check; official phpMyAdmin remains the actual application.
 
 ## Eerste eigen SQL-import
 
+De plus naast de databasekiezer en Database → Tools → Importeren openen dezelfde
+keuze voor Database aanmaken, Database importeren of Tabel importeren, gevolgd
+door engine en bestemming. De import- en querycontracten blijven gelijk;
+bootstrap en de databaselijst krijgen de aanvullende globale `engines`-metadata
+die hieronder is beschreven. De taakgerichte importmodal gebruikt dezelfde
+preview/uitvoering en biedt een route om de bestemming te wijzigen.
+Database → Queries gebruikt dezelfde query-API als de behouden route `#onderzoeken`.
+De gedeelde tabellenlijst, zoekopdracht en geselecteerde tabel zijn browsertoestand.
+
 Govern ondersteunt naast de officiële phpMyAdmin-import een beperkte eigen route in de
 bestaande Import-tab. Deze route accepteert **UTF-8 SQL-bestanden tot 262144 bytes**.
 De browser leest het bestand lokaal als tekst en verstuurt JSON met CSRF, zonder
@@ -133,7 +143,7 @@ De phpMyAdmin-import blijft nodig voor grote of niet-ondersteunde SQL-bestanden.
 ### Optional PostgreSQL connection
 
 The default connection remains `mariadb`. PostgreSQL requests specify
-`connection=postgres&database=<configured database>&schema=<configured schema>`
+`connection=postgres&database=<allowed database>&schema=<allowed schema>`
 on every scoped API URL. Missing `database`/`schema` parameters use that
 connection's configured defaults. The browser cannot submit a hostname, port,
 role or password. Unknown connections, databases and schemas return 403
@@ -154,27 +164,31 @@ are `postgres:` + RFC 3986 percent-encoded database + `:` + percent-encoded sche
 The UI stores this complete key in its per-tab selection, state caches, diagram
 layout and bookmarks. API requests expand it into separate connection/database/
 schema parameters, so equal table names in separate schemas stay independent.
-Only names from `PG_DATABASE` and `PG_SCHEMAS` are listed for PostgreSQL;
-configured schemas that cannot be read remain visible with `available:false`.
+PostgreSQL lists `PG_DATABASE` with its configured `PG_SCHEMAS`, plus names in
+the private worker's trusted database registry with only `public`. Unavailable
+configured or registered scopes remain visible with `available:false`. Arbitrary
+databases on the same server are not selectable merely because they exist.
 
 PostgreSQL supports authenticated GET actions `bootstrap`, `schema`,
 `structure`, `browse`, `explore`, `record-map-records`, `row-editor`,
 `import-inspection`, `snapshots` and `download-snapshot`; the read-only POST
 `record-map`; and POST `insert-row`, `update-row`, `delete-row`, `query`,
 `native-import-preview`, `native-import-execute`, `dataset-preview`,
-`dataset-import`, `create-snapshot` and `restore-snapshot`. Normal methods,
-sessions and CSRF checks apply. `query` accepts manual SQL only; visual designs
+`dataset-import`, `create-snapshot`, `restore-snapshot` and `prepare-database`.
+Normal methods, sessions and CSRF checks apply. `query` accepts manual SQL only; visual designs
 remain unsupported. Other scoped actions return 403 `postgres_read_only` before
-the corresponding service runs, including saved queries, database creation,
+the corresponding service runs, including saved queries,
 context export and AI. phpMyAdmin is never a PostgreSQL fallback.
 
 Bootstrap adds `scope_key` and `capabilities`, and database fields
 `connection`, `engine`, `schema` and `scope_key`. Read capabilities are true.
 `write` requires separate row-writer credentials. `query` and `import` require
-SQL credentials; `snapshots` requires the configured tools socket. These flags
-describe configured routes, not a successful live connection; database grants
+SQL credentials; `snapshots` requires the configured tools socket.
+`create_database` requires SQL credentials, a valid readable registry and the
+private Unix socket. These flags describe configured routes, not a successful
+live connection; database grants
 and service errors remain authoritative. `query_builder`, `saved_queries`,
-`phpmyadmin`, `create_database`, `ai` and `context` remain false for PostgreSQL.
+`phpmyadmin`, `ai` and `context` remain false for PostgreSQL.
 The normalized catalog/browse response retains the existing table, column and
 relationship fields. PostgreSQL browse includes exact `row_keys` and
 `key_columns` for supported complete identities, independently of preview
@@ -292,7 +306,7 @@ and POST alike. The request body does not change the target database. Omitting
 the parameter retains `DB_NAME` for older clients and links. There is no mutable
 server-session selection; two browser tabs can use different databases safely.
 
-`GET databases` returns `{databases:[{name,available,...}],default_database,can_create}` without
+`GET databases` returns `{databases:[{name,available,...}],default_database,can_create,engines}` without
 requiring a selected database connection. Available names are the intersection
 of the writer's and reader's live `SHOW DATABASES` results, excluding
 `information_schema`, `mysql`, `performance_schema` and `sys`. `DB_NAME` and
@@ -308,21 +322,54 @@ session storage, and keeps table/search state, SQL drafts, results and visual
 builder state separately per database in memory. Changing scope cancels old
 reads and ignores late replies. Async mutations capture their original scope.
 
+Both `GET databases` and `GET bootstrap` include the same additive `engines`
+array, independent of the selected workspace:
+
+```json
+{"id":"mariadb","label":"MariaDB","configured":true,
+ "capabilities":{"create_database":true,"import":true,"query":true,"phpmyadmin":true}}
+```
+
+The array always lists `mariadb` and `postgres`. `configured` describes server
+configuration, not live connection health; destination availability remains on
+the individual database/schema entries. MariaDB's `create_database` reflects
+the private broker's availability. PostgreSQL's SQL/import flags require its
+separate SQL credentials. Its `create_database` requires those credentials, the
+trusted registry and private worker socket; `phpmyadmin` remains false.
+An unconfigured PostgreSQL entry has every capability set to false.
+Descriptors contain no hosts, account names or credentials.
+`databases.can_create` retains its MariaDB meaning; scoped `can_create_database`
+reports the selected engine's creation availability.
+The browser uses the returned MariaDB `default_database` or a server-issued
+PostgreSQL scope as the explicit preparation request scope for the chosen engine,
+independently of the currently selected workspace.
+
 ### Create or prepare a database for import
 
 `POST prepare-database` accepts exactly `{name:string}` with the ordinary CSRF
-header and explicit current `database` URL parameter. The current selection is
-still validated; `name` names the database to prepare rather than silently
-changing that request's scope. The response is
-`{database:string,created:boolean,databases:[{name,available}],default_database}`.
-The refreshed list is read from the actual writer/reader visibility after the
-operation. The browser deliberately selects the returned database after success.
-The status is 201 when a database was created and 200 when an existing database
-was prepared without replacing its data.
+header and an explicit allowed `database` URL scope. PostgreSQL uses the normal
+explicit connection/schema parameters or compatible packed key. The URL scope
+selects the engine; there is no body `engine` field. The supplied scope is still
+validated, and `name` names the database to prepare rather than silently changing
+that request's scope. The browser selects the returned scope only after success.
+The status is 201 when a database was created and 200 for a successful repeat
+without replacing data.
 
-Names contain 1–64 ASCII letters, digits or underscores. The escaped GRANT
+MariaDB retains the response
+`{database:string,created:boolean,databases:[{name,available,...}],default_database}`.
+PostgreSQL returns
+`{database:"postgres:newdb:public",name:"newdb",created:boolean,connection:"postgres",schema:"public",scope_key:"postgres:newdb:public",databases:[...],default_database}`.
+`database` and `scope_key` are the full newly selected workspace key; `name` is
+the actual database name. A repeat for configured `PG_DATABASE` uses its configured
+default schema instead of forcing `public`. `default_database` remains the
+MariaDB default. The refreshed list follows the normal engine-specific discovery
+rules, including the newly registered PostgreSQL scope.
+
+MariaDB names contain 1–64 ASCII letters, digits or underscores. The escaped GRANT
 pattern must also fit the supported database-name length. System names
 `mysql`, `information_schema`, `performance_schema` and `sys` are rejected
+case-insensitively. PostgreSQL names contain 1–63 ASCII letters, digits or
+underscores and reject `postgres`, `template0`, `template1` and the `pg_` prefix
 case-insensitively. Extra input fields, invalid names and system names return
 422 `database_create_invalid`. The browser cannot provide SQL, account names,
 collation, root credentials, a socket path or an import file to this endpoint.
@@ -336,8 +383,31 @@ partial failure; it does not drop data or reset account passwords. Grants persis
 in the MariaDB volume, so newly prepared databases remain discoverable after
 restart without an edit to `DB_DATABASES`.
 
-`can_create` and bootstrap's additive `can_create_database` report availability
-of this local preparation path, independently of ordinary database browsing.
+For PostgreSQL, `PostgresDatabaseProvisioner` sends only
+`{action:"prepare_database",name}` to the existing `postgres-tools` Unix socket.
+The worker uses its private administrator connection to create an empty real
+database with `public`, revoke public database rights and grant exact access to
+the existing reader, row writer, SQL and restore roles. It verifies actual role
+logins and does not create new users, change passwords or grant application
+roles `CREATEDB`, superuser or role management. Unknown existing databases are
+refused rather than adopted. Repeats may finish a managed or configured database;
+an unregistered target left after a partial creation must have both the worker's
+target-bound provenance marker and the administrator as owner.
+
+The worker creates a random staging database with connections disabled, marks
+it before renaming to the requested target and records the name only after
+access setup succeeds. Interrupted unlisted staging databases are not exposed
+or automatically deleted. Completed names persist in
+`/run/govern-postgres/databases.json` on the existing `postgres_management` volume:
+`{version:1,databases:["newdb",...]}`. The root-owned registry is limited to
+65,536 bytes, validated for exact keys and unique permitted names, locked and
+atomically replaced. The PHP reader requires a root-owned regular file and
+root-owned nonsymlink parent with no group/world write permissions. The app
+mounts that volume read-only; it cannot register arbitrary names itself.
+
+`databases.can_create` reports the MariaDB path; bootstrap's additive
+`can_create_database` and `engines[].capabilities.create_database` report their
+engine's local preparation path, independently of ordinary database browsing.
 They do not guarantee that a later create request succeeds. An unavailable
 socket returns 503 `database_manager_unavailable`; a failed database operation
 returns 503 `database_prepare_failed`; an invalid helper reply returns 502
@@ -356,8 +426,9 @@ compares 23 known tables, three views and 54 foreign-key constraints and groups
 missing or empty tables into five content areas. These checks detect structural
 and numerical differences, not semantic truth or a successful transaction.
 
-SQL upload is handled by official phpMyAdmin, not by a new Govern import parser.
-The database modal's Import shortcut opens `/database/import` or `/table/import`
+Large or complex MariaDB SQL uploads can use official phpMyAdmin alongside
+the bounded Govern SQL import described above. The native Import shortcut opens
+`/database/import` or `/table/import`
 with the chosen `db` and optional `table`. The existing 128 MB upload and 300-second
 execution settings apply. Import may modify or replace data according to its
 SQL; DDL is not generally transactional and no universal rollback is promised.
@@ -403,9 +474,9 @@ interface and future feature rules.
 
 ## Endpoints
 
-- GET `databases`: `{databases:[{name,available}],default_database,can_create}`; see database scope above.
+- GET `databases`: `{databases:[{name,available}],default_database,can_create,engines}`; see database scope above.
 - POST `prepare-database` exactly `{name}`: `{database,created,databases:[{name,available}],default_database}`; see database preparation above.
-- GET `bootstrap`: `{csrf, databases:[{name,available}],default_database,can_create_database,database:{name,version,status,available}, stats:{tables,views,rows_estimate}, tables:[{name,type:"table"|"view",comment,rows_estimate,columns}]}`. An unavailable database can also return `warning` and `warning_i18n`; bootstrap still supplies the selected database name and CSRF token for recovery.
+- GET `bootstrap`: `{csrf, databases:[{name,available}],default_database,can_create_database,engines,database:{name,version,status,available}, stats:{tables,views,rows_estimate}, tables:[{name,type:"table"|"view",comment,rows_estimate,columns}]}`. An unavailable database can also return `warning` and `warning_i18n`; bootstrap still supplies the selected database name and CSRF token for recovery.
 - GET `browse&table=...&page=1&page_size=25&q=...`: `{table,columns:[{name,type,nullable,default,generated,primary,comment}],rows:[{column:value}],key_columns:[name],row_keys:[object|null],page,page_size,total,sql,params,truncated,notice,notice_i18n}`. `row_keys` aligns with `rows` and is extracted before preview truncation; key values are exact strings, binary keys hex encoded. Named identifiers verified against live catalog; values bound; max page_size100. App-owned `_govern_` tables excluded from normal list, remain accessible in phpMyAdmin.
 - GET `structure&table=...`: `{table,columns:[...],indexes:[{name,unique,columns:[name]}],foreign_keys:[{name,columns:[name],referenced_table,referenced_columns:[name]}],create_sql}`.
 - GET `schema`: `{database:string,tables:[{name,type:"table"|"view",comment,columns:[...],foreign_keys:[{name,columns:[name],referenced_schema,referenced_table,referenced_columns:[name]}]}]}`. Full live metadata for the schema visualizer, read through the restricted reader with three batched catalog queries. No table rows, DDL, credentials or saved queries; `_govern_` source tables are excluded.
@@ -825,7 +896,10 @@ unavailable post-inspection is reported without inventing exact counts.
 
 `PostgresBackupService` uses a private Unix-socket worker for list/create/
 restore/download, never arbitrary SQL, archive upload or caller paths. Server
-configuration fixes the database, schema allowlist, credentials and backup root.
+configuration fixes credentials and the backup root. Database/schema choices
+must match configured `PG_DATABASE`/`PG_SCHEMAS` or a registered database with
+`public`. Each request uses a separate scoped worker object, with no mutable
+shared active database. Archive directories and manifests bind the full scope.
 Each checkpoint includes scope, format `postgres-custom-v1`, byte size, SHA256
 and creation time. IDs and confined regular files are verified before use;
 symlinks, scope mismatches and altered archives are refused. Download is an
@@ -1118,7 +1192,10 @@ body convention: they accept multipart FormData with a single `file` upload.
 Both require an approved installation account, the ordinary `X-CSRF-Token`,
 same-origin session and explicit URL scope. PostgreSQL additionally carries
 `connection=postgres` and `schema`, or the compatible packed workspace key.
-Both engines reuse the same upload reader.
+Both engines reuse the same upload reader. Import table chooses its engine and
+an existing database/schema first; the focused dialog then presents Choose, Review and
+Confirm steps. On success, Open table refreshes the catalog and navigates to
+Records without an additional write request.
 They return the usual JSON envelope. The PHP upload limit is
 16 MB (18 MB multipart envelope); ordinary JSON POST remains limited to 1 MB.
 

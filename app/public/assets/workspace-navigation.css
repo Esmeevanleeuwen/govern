@@ -49,6 +49,8 @@
 .workspace-selected { display: grid; gap: 10px; min-width: 0; margin-top: 26px; }
 .workspace-selected .eyebrow { margin: 0; font-size: 11px; }
 .workspace-selected h3 { font: 13px/1.5 var(--mono); color: var(--g-accent-text); overflow-wrap: anywhere; }
+.workspace-saved > h3 { font-family: inherit; color: var(--g-ink); }
+.database-query-help { margin: 0 0 18px; max-width: 78ch; }
 .workspace-detail { padding: 8px 0; min-width: 0; }
 .workspace-detail summary { color: var(--g-accent-text); font-size: 12px; }
 .workspace-column-list { display: grid; gap: 9px; padding-top: 12px; }
@@ -158,7 +160,7 @@
     .page-heading.database-heading { gap: 12px; margin-bottom: 15px; }
     .database-heading h1 { font-size: 24px; }
     .database-views { width: 100%; }
-    .database-view { padding: 10px; }
+    .database-view { padding: 10px; flex-basis: calc(50% - 3px); }
     .workspace-context .catalog-list { display: grid; max-height: 38dvh; padding: 2px; }
     .unified-research .save-query-form { grid-template-columns: minmax(0, 1fr); }
     .unified-research .save-query-form > .field-label:nth-child(2) { grid-row: auto; }

@@ -62,6 +62,20 @@ def main():
     check(status == 200 and result["ok"], "Authenticated PostgreSQL bootstrap succeeds")
     data = result["data"]
     csrf = data["csrf"]
+    engines = {item["id"]: item for item in data["engines"]}
+    check(set(engines) == {"mariadb", "postgres"}, "Bootstrap lists both engines independently of the selected scope")
+    check(engines["mariadb"]["configured"] and engines["mariadb"]["capabilities"]["create_database"]
+          and data["can_create_database"] is True,
+          "A PostgreSQL workspace advertises its own available creation broker alongside MariaDB")
+    check(engines["postgres"]["configured"] and engines["postgres"]["capabilities"] == {
+          "create_database": True, "import": True, "query": True, "phpmyadmin": False},
+          "PostgreSQL creation requires the private worker while phpMyAdmin remains MariaDB-only")
+    check(all(set(item) == {"id", "label", "configured", "capabilities"} for item in engines.values()),
+          "Engine descriptors contain no host or credential fields")
+    status, result = request("databases")
+    check(status == 200 and result["data"]["engines"] == data["engines"]
+          and result["data"]["can_create"] == engines["mariadb"]["capabilities"]["create_database"],
+          "The unscoped database listing uses the same engine metadata as PostgreSQL bootstrap")
     packed = {"database": "postgres:govern_pg:public", "connection": None, "schema": None}
     status, result = request("bootstrap", parameters=packed)
     check(status == 200 and result["data"]["scope_key"] == "postgres:govern_pg:public",
@@ -87,10 +101,10 @@ def main():
           and data["database"]["connection"] == "postgres" and data["database"]["available"],
           "Bootstrap reports the actual engine, database and schema")
     check(data["scope_key"] == "postgres:govern_pg:public", "Selection carries its stable scoped identity")
-    check(all(data["capabilities"].get(name) is True for name in ["browse", "schema", "structure", "write", "query", "snapshots", "import"]),
+    check(all(data["capabilities"].get(name) is True for name in ["browse", "schema", "structure", "write", "query", "snapshots", "import", "create_database"]),
           "PostgreSQL advertises its supported catalog, SQL, import and checkpoint operations")
     check(all(data["capabilities"].get(name) is False for name in ["query_builder", "saved_queries",
-          "phpmyadmin", "create_database", "ai", "context"]), "Unsupported capabilities remain explicit")
+          "phpmyadmin", "ai", "context"]), "Unsupported capabilities remain explicit")
     public_entry = next(item for item in data["databases"] if item.get("scope_key") == "postgres:govern_pg:public")
     archive_entry = next(item for item in data["databases"] if item.get("scope_key") == "postgres:govern_pg:archive")
     check(public_entry["name"] == archive_entry["name"] == "govern_pg" and public_entry["schema"] != archive_entry["schema"],
@@ -120,7 +134,7 @@ def main():
     for action, payload in [
         ("query", {"design": {}}), ("build-query", {"design": {}}),
         ("save-query", {"name": "unsupported", "sql": "SELECT 1"}), ("delete-query", {"id": 1}),
-        ("prepare-database", {"name": "unsupported"}), ("ai-context", {}), ("ai-chat", {}),
+        ("ai-context", {}), ("ai-chat", {}),
     ]:
         status, result = request(action, payload)
         check(status == 403 and result.get("error_code") == "postgres_read_only", "PostgreSQL rejects unsupported POST " + action)
@@ -137,6 +151,16 @@ def main():
               "PostgreSQL previews table files and refuses import without explicit confirmation")
     status, result = request("query", {"sql": "SELECT 1"}, token=False)
     check(status == 403 and result.get("error_code") == "csrf_invalid", "CSRF remains enforced for writable PostgreSQL SQL")
+    status, result = request("prepare-database", {"name": "forbidden_without_csrf"}, token=False)
+    check(status == 403 and result.get("error_code") == "csrf_invalid", "Database creation requires CSRF validation before provisioning")
+    status, result = request("prepare-database", {"name": "forbidden_for_guest"}, authenticated=False)
+    check(status == 401 and result.get("error_code") == "auth_required", "Guests cannot provision databases")
+    for payload in [{"name": "postgres"}, {"name": "template0"}, {"name": "pg_private"},
+                    {"name": "unsafe;name"}, {"name": "new_db", "sql": "SELECT 1"},
+                    {"name": "new_db", "host": "another-host"}]:
+        status, result = request("prepare-database", payload)
+        check(status == 422 and result.get("error_code") == "database_create_invalid",
+              "PostgreSQL creation accepts only an exact validated name")
     status, result = request("bootstrap", parameters={"schema": "pg_catalog"})
     check(status == 403 and not result["ok"], "Unconfigured PostgreSQL namespaces are not selectable")
     status, result = request("bootstrap", parameters={"database": "postgres"})

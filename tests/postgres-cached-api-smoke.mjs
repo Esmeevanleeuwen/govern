@@ -57,7 +57,7 @@ try {
         'A new record window decodes its captured scope while the pre-upgrade request module is cached.');
     assert.ok((await recordWindow.textContent()).includes('literal%_value'), 'The old client still reads the exact captured record.');
     await recordWindow.locator('.modal-shell-close').click();
-    assert.equal(await page.locator('#open-database').isDisabled(), true);
+    assert.equal(await page.locator('#open-database').isEnabled(), true, 'PostgreSQL database tools remain available for SQL.');
     await page.goto(bookmark('schema', publicKey), {waitUntil: 'networkidle'});
     await page.locator('[data-schema-node="govern_pg_child"]').waitFor();
     await page.goto(bookmark('gegevens', publicKey, 'govern_pg_values'), {waitUntil: 'networkidle'});

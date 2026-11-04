@@ -80,7 +80,8 @@ bij de MariaDB-adapter. PostgreSQL gebruikt PDO PostgreSQL, een verbinding met
 `ConnectionScope` combineert de bestaande `DatabaseScope` met de optionele
 PostgreSQL-configuratie. Alleen de server bepaalt host, lees- en schrijfaccount.
 Ieder verzoek bevat de verbinding, database en het schema. De PostgreSQL-kiezer
-toont alleen de geconfigureerde database en de schema's uit `PG_SCHEMAS`;
+toont de geconfigureerde database met de schema's uit `PG_SCHEMAS`, plus de
+door de privéservice geregistreerde databases met alleen `public`;
 de werkelijke leesbaarheid wordt met het leesaccount gecontroleerd. Een
 ontbrekend of ontoegankelijk schema blijft herkenbaar als niet beschikbaar.
 
@@ -119,8 +120,29 @@ verlenen standaard lees- en rijschrijfrechten. Bestaande eigenaars worden bij
 opstarten niet overgedragen. Het bootstrap- en herstelwachtwoord komen nooit
 in de webapp.
 
-`PostgresBackupService` spreekt via een Unix-socket alleen vaste snapshotacties
-met de worker. De worker gebruikt PostgreSQL 18 `pg_dump`/`pg_restore`, bewaart
+`PostgresDatabaseProvisioner` spreekt via de privé-Unix-socket uitsluitend
+`prepare_database` met één gevalideerde naam. `postgres-tools` maakt een echte
+database aan, verleent exacte rechten en verifieert de vier bestaande rol-logins
+zonder hun wachtwoorden te wijzigen. De gewone app-accounts blijven zonder
+`CREATEDB`, superuser- en rolbeheerrechten. Onbekende bestaande databases worden
+geweigerd. Een willekeurige stagingnaam met uitgeschakelde verbindingen krijgt
+eerst een vaste herkomstmarkering voor de doelnaam; pas daarna wordt ze hernoemd.
+Een retry aanvaardt een niet-geregistreerde doelnaam alleen met die markering en de
+beheerder als eigenaar. Zo wordt een andere bestaande database niet overgenomen
+na een gedeeltelijke fout.
+
+De worker beheert `/run/govern-postgres/databases.json` in het bestaande
+`postgres_management`-volume onder een exclusieve bestandslock, met atomische
+schrijfvervanging. Bestand en bovenliggende map zijn root-beheerd en niet
+schrijfbaar voor de webapp. `PostgresDatabaseRegistry` leest alleen een geldige,
+begrensde lijst uit een regulier bestand zonder symlinks. De webapp mount dit
+volume alleen-lezen. Alleen `PG_DATABASE` en deze beheerde namen zijn selecteerbaar;
+aanvullende databases beginnen met `public`, zonder `PG_SCHEMAS` over te nemen.
+
+`PostgresBackupService` spreekt via dezelfde Unix-socket alleen vaste snapshotacties
+met de worker. Elke actie houdt haar eigen database/schema vast; de worker
+maakt een afzonderlijk scope-object en verandert geen gedeelde actieve database.
+De worker gebruikt PostgreSQL 18 `pg_dump`/`pg_restore`, bewaart
 custom-archieven met scope en checksum buiten de webroot en weigert onbekende
 objecten of inkomende schemadependencies. Dumpen gebruikt het leesaccount.
 Na de expliciete herstelbevestiging mag een vaste beheerhandeling de gekozen
@@ -128,17 +150,19 @@ schema-eigenaar tijdelijk aanpassen; de dumpinhoud loopt daarna volledig onder
 een werkelijk aangemeld, beperkt herstelaccount. De schema-inhoud wordt in één
 transactie vervangen zonder database-CREATE-recht; de bestaande schema-eigenaar
 wordt teruggezet, standaardrechten worden hersteld en bij een fout blijft
-de oude inhoud staan. `SET ROLE` op een adminverbinding wordt hiervoor niet
-gebruikt. Zie POSTGRESQL.md voor scope-, ownership- en objectbeperkingen.
+de oude inhoud staan. Herstelpunten en manifesten worden op de volledige
+database/schema-scope gescheiden. `SET ROLE` op een adminverbinding wordt hiervoor
+niet gebruikt. Zie POSTGRESQL.md voor scope-, ownership- en objectbeperkingen.
 
 SQL en import kunnen andere verleende schema’s raken. Native SQL-import maakt
 daarom vóór uitvoering per bestaand ingesteld schema een herstelpunt onder de
 gedeelde exclusieve onderhoudslock. De kopieën vormen geen algemene rollback.
 De browser houdt voor iedere handeling de database/schema-scope vast; PG-import
 en herstel vragen de exacte bevestiging `database.schema`.
-De startbestanden schakelen het profiel in bij `PG_ENABLED=1` en bewaren
-bestaande wachtwoorden en volumes. Zie [POSTGRESQL.md](POSTGRESQL.md) voor de
-configuratie en de grenzen van deze PostgreSQL-functies.
+De startbestanden schakelen het profiel in bij `PG_ENABLED=1`, bouwen de
+bijgewerkte worker en bewaren bestaande wachtwoorden en volumes. Zie
+[POSTGRESQL.md](POSTGRESQL.md) voor de configuratie en de grenzen van deze
+PostgreSQL-functies.
 
 ### Compatibiliteit met de eerdere recordverkenner
 
@@ -259,8 +283,9 @@ De onderdelen hebben een kleine, duidelijke taak:
 | `LocalCodeSearch.php` | Begrensde lokale zoekindex van alleen `app/` en `docs/`, met bronpassages en regelnummers |
 | `AiService.php` en `OllamaClient.php` | Gevalideerde vragen, lokaal providerverzoek, gecontroleerde projectcitaten en antwoord zonder uitvoering |
 | `database-modal.js` | Het venster rondom de echte phpMyAdmin |
-| `database-manager.js` | Dialoog voor databasekeuze, expliciete aanmaak en openen van de officiële import |
+| `database-manager.js` | Taak, engine en bestemming kiezen voor databaseaanmaak, SQL-import of tabelimport |
 | `DatabaseProvisioner.php` | Begrensde client voor de privéservice voor databaseaanmaak |
+| `PostgresDatabaseProvisioner.php`, `PostgresDatabaseRegistry.php` | Vaste PostgreSQL-aanmaakactie en vertrouwde beheerlijst voor de scopekeuze |
 | `docker/database-manager/server.php` en `DatabaseManager.php` | Privé Unix-socketserver en uitsluitend databaseaanmaak/rechten per expliciete naam |
 | `row-editor.js` | Rijformulier met vaste databasecontext, exacte waarden en conflictfeedback |
 | `DatabaseScope.php` | Toegestane databasekeuze, afzonderlijke herstelpuntpaden en gedeelde locklocatie |
@@ -296,14 +321,36 @@ zelf een databasekeuze. Het volgt expliciete navigatie binnen phpMyAdmin zonder
 een formulier door gewone shellupdates of taal-/themawisselingen te herladen.
 De gedeelde phpMyAdmin-opslag blijft in de oorspronkelijke `DB_NAME`-database.
 
-## Database toevoegen en SQL importeren
+## Database toevoegen en bestanden importeren
 
-De actie in Gereedschap opent een eigen, kleine dialoog. Een bestaande
-database kiezen gebruikt de normale wisselstroom. Een naam voorbereiden gebruikt
-`POST prepare-database` met CSRF en de expliciete huidige databasescope. Het
-antwoord bevat de voorbereide naam, of die nieuw was, en de opnieuw uitgelezen
-databasekeuzes. Pas na een geslaagd antwoord verandert de browser zijn selectie.
-Concepten van de vorige database blijven bewaard.
+De plus naast de databasekiezer en Database → Tools → Importeren openen dezelfde
+taakgerichte dialoog: Database aanmaken, Database importeren of Tabel importeren,
+gevolgd door engine en bestemming. `ConnectionScope::engines` levert voor
+`GET databases` en bootstrap dezelfde globale enginebeschrijving, onafhankelijk
+van de actuele werkplek. De oude scoped capabilityvelden blijven bestaan.
+Een ontbrekende PostgreSQL-configuratie, ontbrekende SQL-rechten en een niet
+beschikbare privéservice blijven expliciet in de enginebeschrijving.
+
+Een bestaande bestemming kiezen gebruikt de normale wisselstroom. MariaDB-
+aanmaak gebruikt `POST prepare-database` met het bestaande exacte `{name}`-
+contract, CSRF en `default_database` als expliciete MariaDB-verzoekscope.
+PostgreSQL-aanmaak gebruikt hetzelfde contract met een bekende PostgreSQL-scope
+in de URL en een afzonderlijke provisioner. De gekozen engine bepaalt dus de
+service; de actuele werkplek hoeft vooraf niet te wisselen. Het antwoord bevat
+de voorbereide scope, of die nieuw was, en de opnieuw uitgelezen databasekeuzes.
+Pas na succes verandert de selectie. Concepten van de vorige database blijven bewaard.
+
+MariaDB-aanmaak opent daarna de echte phpMyAdmin op Structure. PostgreSQL-aanmaak
+opent Queries met een nog niet uitgevoerd `CREATE TABLE`-voorbeeld; een bestaande
+conceptquery blijft bij opnieuw openen behouden. SQL-import in een nieuwe of
+bestaande database van beide engines opent de bestaande native importcontrole
+in een taakgericht venster. Tabelimport
+gebruikt een bestaande bestemming en de bestaande `DatasetImportPanel`.
+`DatabaseModal.workflow` bewaart of het om `import-database` of `import-table`
+gaat; Bestemming wijzigen geeft die taak, engine en scope terug aan de wizard.
+Een scopewissel wist de eerdere voorcontrole en bevestiging. De volledige
+officiële MariaDB-bediening blijft apart bereikbaar via Databasegereedschap;
+PostgreSQL gebruikt daar de bestaande Queries-route.
 
 De webapp praat via een lokale Unix-socket met de afzonderlijke Compose-service
 `database-manager`. Alleen deze service en de bestaande opstart-/databaseprocessen
@@ -333,9 +380,10 @@ andere geselecteerde databases. SQL kan daarom met `USE` of gekwalificeerde
 namen andere toegestane databases raken. De UI waarschuwt daarvoor en voert
 geen SQL uit zonder afzonderlijke bevestiging. Er is geen algemene undo.
 
-Voor grotere of complexe SQL-bestanden gebruikt Govern de echte phpMyAdmin. De extra snelkeuze
-**Import** opent de officiële database- of tabelimport met dezelfde context als
-de overige tabs. De gebruiker kiest zijn SQL-bestand en start de import daar;
+Voor grotere of complexe MariaDB-SQL-bestanden opent een expliciete actie de
+echte phpMyAdmin-import vanuit het taakgerichte venster. De snelkeuze **Import**
+in de volledige databasegereedschappen blijft dezelfde officiële database- of
+tabelimport openen. De gebruiker kiest zijn SQL-bestand en start de import daar;
 Govern leest of herschrijft het bestand niet met een eigen parser. Bij sluiten
 worden catalogus, tabellen en relaties opnieuw uitgelezen. De ingestelde
 uploadgrens is 128 MB en de uitvoeringstijd is 300 seconden. De SQL kan bestaande
@@ -390,7 +438,7 @@ gedeclareerde relaties. Selecties die niet meer in het scherm staan blijven
 herkenbare momentopnamen. Een recordquery vereist alle werkelijke primaire-
 sleutelvelden; samengestelde sleutels blijven intact en rijen zonder sleutel
 worden niet als blijvend geïdentificeerde records behandeld. De vervolgstap kan
-een leesquery in Onderzoeken klaarzetten, maar voert die niet uit. De selectie
+een leesquery in Database → Queries klaarzetten, maar voert die niet uit. De selectie
 verandert geen records, contextexports of opgeslagen voorkeuren. De vertalingen
 gebruiken dezelfde berichtregistratie als de rest van de interface.
 
@@ -493,11 +541,17 @@ bewust bij; de kaart doet geen volledige databasescan of automatische
 recursieve expansie. Niet-ondersteunde sleutels, views en externe schema's
 krijgen een herkenbare grens in de interface.
 
+`app.js` biedt binnen Database de vaste volgorde Records, Explore, Schema en
+Queries. Alle vier gebruiken dezelfde catalogus, tabelzoekopdracht en selectie
+in de zijbalk. Queries behoudt de route `#onderzoeken` en toont opgeslagen queries
+onder de tabellen. Schema ontvangt dezelfde catalogus van de werkplek en toont
+zijn geselecteerde tabeldetails eronder; selecteren behoudt het canvas.
+
 `record-map.js` verzorgt canvas, bronbibliotheek en inspectie. Het zuivere
 `record-map-model.js` beheert de identiteit van records en lijnen, selectie en
-lokale presentatie. De bronbibliotheek kiest tabel en beginrecord; de vaste
-werkpleknavigatie blijft daarvan los. Een tweede vaste tabelkiezer naast de
-canvasbibliotheek wordt in Explore niet getoond.
+lokale presentatie. De gedeelde catalogus kiest de tabel; de bronbibliotheek
+zoekt en bladert door beginrecords. Een tabelwissel werkt de bibliotheek bij
+zonder de geladen kaart of indeling opnieuw op te bouwen.
 
 Kaarten kunnen worden verplaatst, vastgezet en uit het werkvlak verborgen.
 Orbit en Flow geven de kaart een andere indeling; Manual bewaart zelfgekozen
@@ -579,7 +633,7 @@ beschikbaar.
 `workspace-tools.js` verplaatst de bestaande werkplekbediening naar één
 gegroepeerde popover. IDs, handlers, rechten, disabled/hidden-toestand en
 actieve hulpmiddelen blijven bij de oorspronkelijke DOM-elementen. De
-databasekiezer en primaire phpMyAdmin-knop blijven in de bovenbalk. De
+databasekiezer, aangrenzende plus en Databasegereedschap blijven in de bovenbalk. De
 non-modale popover gebruikt native focus en buitenklik, met een fallback voor
 browsers zonder Popover API. Sluiten vóór een handeling geeft nieuwe dialogen
 een zichtbare opener; de selectieaanwijzer gebruikt dezelfde Tools-knop als
@@ -817,9 +871,11 @@ Werk de ontwerpdocumentatie en het API-contract in dezelfde wijziging bij.
 
 ## Gedeelde import voor tabelbestanden
 
-De taak begint in Database openen → Bestanden importeren: lokaal bestand kiezen,
-voorvertonen, werkblad en bestemming controleren, expliciet bevestigen, importeren
-naar de zichtbare database en terugkeren naar de gewone live tabelverkenner.
+De taak begint via de plus naast de databasekiezer of Database → Tools →
+Importeren: Tabel importeren kiezen, daarna de engine en een bestaande bestemming,
+en vervolgens de genummerde stappen bestand kiezen, voorbeeld en doeltabel
+controleren, en expliciet bevestigen. Na import opent Tabel openen de nieuwe
+of aangevulde tabel in Records, na verversen van de live catalogus.
 `DatasetImportPanel` bewaart tijdelijke bestands- en formulierconcepten per database.
 Taalwisselen behoudt het concept. Tijdens een verzoek blokkeren sluiten, tabwisselen
 en databasewisselen. Verzoeken houden hun oorspronkelijke database vast.

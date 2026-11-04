@@ -189,7 +189,8 @@ const verifyExampleDraft = async () => {
             if (!response.ok || !payload.ok) throw new Error(payload.error);
             return payload.data.id;
         }, {name, sql: originalSql});
-        await draftPage.locator('#navigation [data-route="onderzoeken"]').click();
+        await draftPage.locator('#navigation [data-area="database"]').click();
+        await draftPage.locator('[data-database-view="onderzoeken"]').click();
         await draftPage.locator('.saved-item-open').filter({hasText: name}).click();
         assert.equal(await draftPage.locator('#sql-editor').inputValue(), originalSql);
         await draftPage.locator('.learning-help details').first().locator('summary').click();

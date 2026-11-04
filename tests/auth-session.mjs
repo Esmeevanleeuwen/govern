@@ -21,7 +21,8 @@ async function authenticate(context, base) {
     });
     const result = await response.json();
     assert.ok(response.ok() && result.ok && result.data.user?.status === 'active',
-        'The dedicated test account must be approved. Initialize it with tests/auth_http.py --initialize.');
+        'The dedicated test account must be approved. Initialize it with tests/auth_http.py --initialize.'
+        + ' HTTP ' + response.status() + (result.error_code ? ': ' + result.error_code : ''));
 }
 
 export async function authenticatedContext(browser, base, options = {}) {

@@ -74,7 +74,7 @@ try {
     await page.goto(bookmark(), {waitUntil: 'networkidle'});
     await waitRows('Original public row');
     assert.equal(await page.locator('[data-postgres-editing]').count(), 1);
-    assert.equal(await page.locator('#open-database').isDisabled(), true);
+    assert.equal(await page.locator('#open-database').isEnabled(), true, 'PostgreSQL database tools remain available for SQL.');
     await page.locator('#add-row').click();
     await field('label').waitFor();
     assert.equal(await page.locator('#database-select').isDisabled(), true,

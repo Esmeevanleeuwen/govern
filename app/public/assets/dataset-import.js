@@ -6,8 +6,9 @@ import {parseConnectionScope} from './connection-scope.js';
 
 /** One draft per database, with immutable request scope and no automatic retries. */
 export class DatasetImportPanel {
-    constructor(onBusy) {
+    constructor(onBusy, onImported) {
         this.onBusy = onBusy;
+        this.onImported = onImported;
         this.drafts = new Map();
         this.panel = el('section', {id: 'dataset-import-panel', class: 'dataset-import', hidden: true, role: 'tabpanel', 'aria-labelledby': 'database-tab-dataset'});
     }
@@ -35,9 +36,16 @@ export class DatasetImportPanel {
         }}});
         const previewButton = button(t('dataset.preview'), () => this.preview(), {id: 'dataset-preview', kind: 'primary', disabled: !d.file});
         const content = [el('h3', {}, t('dataset.title')), el('p', {}, t('dataset.description')),
-            el('p', {}, this.target()), this.field('file', file), d.file ? el('p', {}, d.file.name) : null,
+            el('p', {class: 'dataset-destination'}, t('dataset.destination', {database: this.target()})),
+            el('h4', {class: 'dataset-step'}, t('dataset.chooseStep')), this.field('file', file), d.file ? el('p', {}, d.file.name) : null,
             el('p', {}, t('dataset.limits')), previewButton];
-        if (d.result) content.push(el('p', {role: 'status'}, t('dataset.saved', {count: d.result.imported, ...d.result})));
+        if (d.result) {
+            const imported = {database: this.database, table: d.result.table};
+            content.push(el('div', {class: 'dataset-result'},
+                el('p', {role: 'status'}, t('dataset.saved', {count: d.result.imported, ...d.result})),
+                this.onImported ? button(t('dataset.openTable'), () => this.onImported(imported),
+                    {id: 'dataset-open-table', symbol: 'table', kind: 'primary'}) : null));
+        }
         if (d.error) content.push(el('p', {role: 'alert', class: 'error-text'}, d.error));
         if (d.preview && !d.result) {
             const item = d.preview.datasets[d.index];
@@ -49,7 +57,8 @@ export class DatasetImportPanel {
             const name = el('input', {class: 'input', value: d.name, maxlength: this.database.startsWith('postgres:') ? 63 : 64, on: {input: e => {d.name = e.target.value;}}});
             if (!item.targets.some(v => v.name === d.target)) d.target = item.targets[0]?.name || '';
             const target = el('select', {class: 'input', on: {change: e => {d.target = e.target.value;}}}, item.targets.map(v => el('option', {value: v.name, selected: v.name === d.target}, v.name)));
-            content.push(this.field('sheet', sheet), el('p', {}, t('dataset.summary', {count: item.count, columns: item.columns.length, duplicates: item.duplicate_rows})),
+            content.push(el('h4', {class: 'dataset-step'}, t('dataset.previewStep')),
+                this.field('sheet', sheet), el('p', {}, t('dataset.summary', {count: item.count, columns: item.columns.length, duplicates: item.duplicate_rows})),
                 el('p', {}, t('dataset.storage')), item.formulas ? el('p', {}, t('dataset.cached', {count: item.formulas})) : null,
                 this.field('mode', mode), d.mode === 'create' ? this.field('table', name) : this.field('target', target),
                 el('div', {class: 'dataset-scroll'}, el('table', {class: 'data-table'},
@@ -71,7 +80,12 @@ export class DatasetImportPanel {
             content.push(this.field('chart', group), chart, el('p', {}, t('dataset.consequence', {database: this.target()})));
             const commit = button(t('dataset.import'), () => this.commit(), {id: 'dataset-commit', kind: 'primary', disabled: d.confirmation !== this.target()});
             const confirm = el('input', {class: 'input', value: d.confirmation, autocomplete: 'off', on: {input: e => {d.confirmation = e.target.value; commit.disabled = d.confirmation !== this.target();}}});
-            content.push(this.field('confirmation', confirm), commit);
+            confirm.setAttribute('aria-describedby', 'dataset-confirm-help');
+            confirm.placeholder = this.target();
+            const confirmation = this.field('confirmation', confirm);
+            confirmation.querySelector('label').textContent = t('dataset.confirmExact', {database: this.target()});
+            content.push(el('h4', {class: 'dataset-step'}, t('dataset.confirmStep')), confirmation,
+                el('p', {id: 'dataset-confirm-help', class: 'field-hint'}, t('dataset.confirmHelp')), commit);
         }
         this.panel.replaceChildren(...content.filter(Boolean));
         if (this.busy) this.panel.querySelectorAll('button,input,select').forEach(n => {n.disabled = true;});
@@ -80,6 +94,7 @@ export class DatasetImportPanel {
         if (this.busy) return;
         const d = this.draft;
         const database = this.database;
+        if (commit && (!d.preview || d.confirmation !== this.target())) return;
         if (!d.file) {d.error = t('dataset.choose'); this.render(); return;}
         this.busy = true; d.error = ''; this.onBusy?.(true); this.render();
         const progress = el('p', {role: 'status'}, t('dataset.' + (commit ? 'saving' : 'loading')));

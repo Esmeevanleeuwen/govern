@@ -37,7 +37,9 @@ const shot = async (page, name) => {
 };
 const load = async (page, hash = '#schema') => {
     await page.goto(new URL('/workspace.php' + hash, base).href, {waitUntil: 'networkidle'});
-    await page.locator('#schema-search').waitFor({state: 'attached'});
+    // The shared catalog appears before the schema response has mounted its
+    // canvas. Wait for the view whose nodes this suite is about to inspect.
+    await page.locator('#schema-viewport').waitFor({state: 'attached'});
 };
 const ensureExplorer = async (current = page) => {
     // A resize can precede the matchMedia change handler that refreshes ARIA.
@@ -51,13 +53,13 @@ const ensureExplorer = async (current = page) => {
 };
 const searchFor = async (value, current = page) => {
     await ensureExplorer(current);
-    await current.locator('#schema-search').fill(value);
+    await current.locator('#catalog-search').fill(value);
 };
 const selectTable = async (name, current = page) => {
     // Selection updates details without replacing the persistent table explorer.
     await ensureExplorer(current);
-    await current.locator('#schema-table-panel [data-schema-select=' + JSON.stringify(name) + ']').click();
-    assert.equal(await current.locator('#schema-table-panel').isVisible(), true,
+    await current.locator('.catalog-item').filter({has: current.locator('.catalog-item-name', {hasText: new RegExp('^' + name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$')})}).click();
+    assert.equal(await current.locator('.catalog').isVisible(), true,
         'Selecting a table leaves the table explorer available for a one-click switch.');
 };
 const node = name => page.locator('[data-schema-node]').filter({has: page.locator('[data-schema-header="' + name + '"]')});
@@ -107,7 +109,7 @@ try {
     assert.deepEqual(await canvasAppearance('.record-map-scene'), schemaAppearance,
         'Switching between Schema and Explore preserves the canvas material, grid, sizing and toolbar style.');
     await page.locator('[data-database-view="schema"]').click();
-    await page.locator('#schema-search').waitFor({state: 'attached'});
+    await page.locator('#schema-viewport').waitFor({state: 'attached'});
     const renderedColumns = await page.locator('[data-schema-node]').evaluateAll(nodes =>
         nodes.map(node => ({name: node.dataset.schemaNode,
             columns: [...node.querySelectorAll('[data-schema-column]')].map(column => column.dataset.schemaColumn)})));
@@ -312,9 +314,9 @@ try {
     await page.locator('#schema-actual').click();
     await page.locator('#schema-selected').waitFor();
     assert.match(await page.locator('#schema-selected').innerText(), new RegExp(table.name));
-    assert.equal(await page.locator('#schema-table-panel').isVisible(), true,
+    assert.equal(await page.locator('.catalog').isVisible(), true,
         'Choosing a table keeps the explorer in place beside its details.');
-    assert.equal(await page.locator('#schema-table-panel [aria-pressed="true"]').count(), 1,
+    assert.equal(await page.locator('.catalog .catalog-item[aria-current="true"]').count(), 1,
         'The table explorer identifies the selected table.');
     const panelViewport = await viewportState(page);
     await page.locator('#workspace-panel-toggle').click();
@@ -330,7 +332,7 @@ try {
     assert.equal(await page.locator('#workspace-explorer-open').getAttribute('aria-expanded'), 'false', 'Language retains a collapsed panel.');
     await selectWorkspaceLanguage(page, 'nl');
     await page.locator('#workspace-explorer-open').click();
-    assert.equal(await page.locator('#schema-table-panel').isVisible(), true, 'Reopening restores the explorer.');
+    assert.equal(await page.locator('.catalog').isVisible(), true, 'Reopening restores the explorer.');
     assert.match(await page.locator('#schema-selected').innerText(), new RegExp(table.name), 'Reopening retains the selected-table details.');
     await page.locator('#schema-column-summary').click();
     assert.deepEqual(await page.locator('.schema-detail-columns li > div > code').allTextContents(),
@@ -366,7 +368,7 @@ try {
     assert.equal(await page.locator('#schema-zoom-value').textContent(), '100%');
     await page.locator('#schema-neighborhood').check();
     assert.equal(await page.locator('#schema-neighborhood').isChecked(), true, 'The canvas filter focuses the selected table connections.');
-    assert.equal(await page.locator('#schema-search').inputValue(), table.name, 'Direct connections leaves the independent explorer search intact.');
+    assert.equal(await page.locator('#catalog-search').inputValue(), table.name, 'Direct connections leaves the independent explorer search intact.');
     const neighbors = new Set([table.name]);
     schema.tables.forEach(source => source.foreign_keys.forEach(key => {
         if (key.referenced_schema !== schema.database) return;
@@ -410,8 +412,8 @@ try {
     await focusLanguagePage.goto(new URL('/workspace.php#instellingen', base).href, {waitUntil: 'networkidle'});
     await selectWorkspaceLanguage(focusLanguagePage, 'en');
     await page.waitForFunction(() => document.documentElement.lang === 'en');
-    await page.locator('#schema-search').waitFor();
-    assert.equal(await page.locator('#schema-search').inputValue(), table.name, 'Language keeps the filter.');
+    await page.locator('#catalog-search').waitFor();
+    assert.equal(await page.locator('#catalog-search').inputValue(), table.name, 'Language keeps the filter.');
     assert.deepEqual(await position(table.name), moved, 'Language keeps node positions.');
     assert.equal(await header.evaluate(element => element === document.activeElement), true, 'Language restores focused table header.');
     assert.equal(await page.locator('.schema-world').evaluate(element => element.style.transform), viewportBeforeLanguage,
@@ -421,15 +423,15 @@ try {
     assert.equal((await page.locator('#page').innerText()).includes('app.schema.'), false, 'No untranslated keys leak.');
     await focusLanguagePage.close();
     await page.reload({waitUntil: 'networkidle'});
-    await page.locator('#schema-search').waitFor();
+    await page.locator('#schema-viewport').waitFor();
     assert.deepEqual(await position(table.name), moved, 'Positions are restored on reload.');
     await searchFor('no_such_table_or_column_8237');
-    assert.equal(await page.locator('#schema-table-panel [data-schema-select]').count(), 0, 'The explorer has a filtered-empty state.');
+    assert.equal(await page.locator('.catalog .catalog-item').count(), 0, 'The explorer has a filtered-empty state.');
     assert.equal(await page.locator('[data-schema-node]').count(), schema.tables.length, 'An empty explorer search leaves the canvas intact.');
     await searchFor('');
     assert.equal(await page.locator('[data-schema-node]').count(), schema.tables.length);
-    await searchFor('parent_function_id');
-    assert.ok(await page.locator('#schema-table-panel [data-schema-select="public_functions"]').count(), 'Explorer search finds columns as well as tables.');
+    await searchFor('public_functions');
+    assert.ok(await page.locator('.catalog .catalog-item-name').filter({hasText: /^public_functions$/}).count(), 'The shared table search finds exact table names in every view.');
     await searchFor('');
     await selectTable('public_functions');
     const allCount = await page.locator('[data-schema-node]').count();
@@ -457,22 +459,22 @@ try {
     await page.locator('#settings-link').click();
     await page.locator('#preference-theme').selectOption('dark');
     await page.goto(new URL('/workspace.php#schema', base).href);
-    await page.locator('#schema-search').waitFor();
+    await page.locator('#schema-viewport').waitFor();
     await searchFor('organizations');
     await selectTable('organizations');
     await page.locator('#schema-fit').click();
     await searchFor('');
-    assert.equal(await page.locator('#schema-table-panel [data-schema-select]').count(), schema.tables.length,
+    assert.equal(await page.locator('.catalog .catalog-item').count(), schema.tables.length,
         'Opening table details keeps every table available in the shared explorer.');
     await page.locator('#schema-column-summary').click();
-    assert.equal(await page.locator('#schema-table-panel').isVisible(), true,
+    assert.equal(await page.locator('.catalog').isVisible(), true,
         'Expanding columns does not replace the table explorer.');
     await page.locator('#schema-column-summary').click();
     await shot(page, 'selection-dark-en');
     await page.locator('#settings-link').click();
     await page.locator('#preference-reduceTransparency').check();
     await page.goto(new URL('/workspace.php#schema', base).href);
-    await page.locator('#schema-search').waitFor();
+    await page.locator('#schema-viewport').waitFor();
     assert.equal(await page.locator('.schema-node, .schema-node-header, #schema-viewport').evaluateAll(nodes =>
         nodes.every(element => getComputedStyle(element).backdropFilter === 'none')), true,
         'Schema materials support reduced transparency.');
@@ -493,7 +495,7 @@ try {
     const rightCanvas = await page.locator('#schema-viewport').boundingBox();
     const rightPanel = await page.locator('#workspace-context').boundingBox();
     assert.ok(rightPanel.x > rightCanvas.x, 'Right navigation places the context panel on the right side of the diagram.');
-    assert.equal(await page.locator('#schema-table-panel').isVisible(), true);
+    assert.equal(await page.locator('.catalog').isVisible(), true);
     assert.match(await page.locator('#schema-selected').innerText(), /organizations/, 'Changing navigation side retains the selected table.');
     await noOverflow(page, 'Right-side context menu');
     await shot(page, 'context-right');
@@ -544,7 +546,7 @@ try {
     assert.ok(mobilePanel.width <= 375 && mobilePanel.height <= 900,
         'The shared explorer fits the mobile drawer.');
     await selectTable('sources', mobilePage);
-    assert.equal(await mobilePage.locator('#schema-table-panel').isVisible(), true,
+    assert.equal(await mobilePage.locator('.catalog').isVisible(), true,
         'A mobile table choice leaves the explorer available for another choice.');
     assert.match(await mobilePage.locator('#schema-selected').innerText(), /sources/);
     await noOverflow(mobilePage, 'Fresh mobile context menu');
@@ -582,6 +584,12 @@ try {
         {name: 'report_view', type: 'view', comment: '', columns: [column('a')], foreign_keys: []},
     ]};
     let fixtureMode = 'normal';
+    await fixturePage.route(apiRoute('bootstrap'), async route => {
+        const response = await route.fetch();
+        const payload = await response.json();
+        payload.data.tables = fixtureMode === 'empty' ? [] : fixture.tables.map(table => ({...table, columns: table.columns.length, rows_estimate: 0}));
+        await route.fulfill({response, json: payload});
+    });
     await fixturePage.route(apiRoute('schema'), async route => {
         assert.equal(route.request().method(), 'GET');
         if (fixtureMode === 'error') return route.fulfill({status: 503, json: {ok: false, error: 'Catalog temporarily unavailable',
@@ -610,7 +618,7 @@ try {
     await fixturePage.locator('#workspace-context-content .notice-error button').waitFor();
     fixtureMode = 'normal';
     await fixturePage.locator('#page .notice-error button').click();
-    await fixturePage.locator('#schema-search').waitFor();
+    await fixturePage.locator('#schema-viewport').waitFor();
     fixtureMode = 'empty';
     await fixturePage.reload({waitUntil: 'networkidle'});
     await fixturePage.locator('#page .empty-state').waitFor();
@@ -626,7 +634,7 @@ try {
     });
     fixtureMode = 'normal';
     await fixturePage.reload({waitUntil: 'networkidle'});
-    await fixturePage.locator('#schema-search').waitFor();
+    await fixturePage.locator('#schema-viewport').waitFor();
     await selectTable('parent', fixturePage);
     const fixtureHeader = fixturePage.locator('[data-schema-header="parent"]');
     const storageBefore = await fixturePage.locator('[data-schema-node="parent"]').evaluate(element => element.style.left);

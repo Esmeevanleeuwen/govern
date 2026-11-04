@@ -14,6 +14,31 @@
 .database-manager-actions .button { flex: 1 1 180px; min-width: 0; }
 .database-manager-footnote { margin: 18px 0 0; line-height: 1.65; }
 .database-manager-footer { display: flex; justify-content: flex-end; margin-top: 20px; }
+.database-flow-progress { display: flex; gap: 16px; padding: 0; margin: 0 0 24px; list-style: none; }
+.database-flow-progress li { display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: 12px; }
+.database-flow-progress li > span { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 8px; background: var(--g-frost); }
+.database-flow-progress li.active { color: var(--g-accent-text); }
+.database-flow-progress li[aria-current="step"] { font-weight: 600; }
+.database-flow-choices { display: grid; gap: 12px; }
+.database-flow-choice { display: flex; align-items: center; gap: 14px; width: 100%; padding: 18px; text-align: left; border: 0; border-radius: 17px; background: var(--g-frost); box-shadow: var(--g-control-depth); color: var(--ink); }
+.database-flow-choice:hover { background: var(--g-dense-frost); }
+.database-flow-choice > .icon { flex: none; width: 21px; height: 21px; color: var(--g-accent-text); }
+.database-flow-choice > .icon:last-child { margin-left: auto; width: 17px; }
+.database-flow-choice > span { display: grid; gap: 5px; min-width: 0; }
+.database-flow-choice strong { font-size: 15px; }
+.database-flow-choice small { font-size: 12px; line-height: 1.6; color: var(--muted); }
+.database-flow-content > h3 { margin: 0 0 16px; font-size: 16px; }
+.database-flow-context { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 22px; color: var(--muted); font-size: 13px; }
+.database-flow-context strong { color: var(--g-accent-text); }
+.database-flow-field { display: grid; gap: 8px; margin: 18px 0; }
+.database-flow-field .input { width: 100%; }
+.database-flow-field .field-hint { margin: 0; }
+.database-flow-content .field-hint, .database-flow-next { font-size: 12px; color: var(--muted); line-height: 1.65; overflow-wrap: anywhere; }
+.database-flow-next { padding: 14px; border-radius: 13px; background: var(--g-frost); }
+.database-flow-footer { align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 28px; }
+.database-flow-footer #database-manager-back { margin-right: auto; }
+.database-flow-footer .button { min-height: 44px; }
+.database-manager-dialog [hidden] { display: none; }
 .database-manager-dialog .notice { margin-top: 12px; font-size: 12px; line-height: 1.6; }
 .database-picker-group { display: flex; align-items: center; gap: 5px; min-width: 0; }
 .database-picker-group .database-picker { min-width: 0; }
@@ -25,6 +50,10 @@
     .database-manager-dialog form { padding: 18px; }
     .database-manager-section { padding: 14px; }
     .database-manager-actions .button { flex-basis: 100%; }
+    .database-flow-progress { gap: 10px; flex-wrap: wrap; }
+    .database-flow-progress li { gap: 5px; font-size: 11px; }
+    .database-flow-choice { padding: 15px 12px; gap: 10px; }
+    .database-flow-footer #database-manager-continue { flex: 1 1 100%; }
     .database-picker-group .database-picker select { max-width: min(180px, calc(100vw - 160px)); }
 }
 @media (pointer: coarse) {

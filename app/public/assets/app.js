@@ -29,7 +29,7 @@ const routes = {
     structuur: {labelKey: 'app.route.structure', icon: 'layers'},
     schema: {labelKey: 'app.route.schema', icon: 'network'},
     verkennen: {labelKey: 'app.navigation.explore', icon: 'network'},
-    onderzoeken: {labelKey: 'app.route.research', icon: 'search'},
+    onderzoeken: {labelKey: 'app.navigation.queries', icon: 'code'},
     experimenten: {labelKey: 'app.route.experiments', icon: 'flask'},
     instellingen: {labelKey: 'app.route.settings', icon: 'settings'},
 };
@@ -67,7 +67,7 @@ const state = {
     recordMapState: {},
     selectedRecord: null,
     databaseView: 'gegevens',
-    contextOpen: {database: true, research: true, experiments: true},
+    contextOpen: {database: true, experiments: true},
     structureData: new Map(),
     inspectorExpanded: {},
     explorerScroll: {},
@@ -87,8 +87,8 @@ const navigation = document.getElementById('navigation');
 const workspaceContext = document.getElementById('workspace-context');
 const contextContent = document.getElementById('workspace-context-content');
 const panelToggle = document.getElementById('workspace-panel-toggle');
-const databaseViews = ['gegevens', 'verkennen', 'structuur', 'schema'];
-const databasePrimaryViews = ['gegevens', 'verkennen', 'schema'];
+const databaseViews = ['gegevens', 'verkennen', 'structuur', 'schema', 'onderzoeken'];
+const databasePrimaryViews = ['gegevens', 'verkennen', 'schema', 'onderzoeken'];
 const databaseSelect = document.getElementById('database-select');
 const manageDatabases = document.getElementById('manage-databases');
 const aiToggle = document.getElementById('ai-toggle');
@@ -101,7 +101,7 @@ const emptyDatabaseState = () => ({bootstrap: null, table: '', queryDraft: '', q
     queryResult: null, queryRevision: 0, queryDesign: null, builderDraft: null, builderOpen: true, dataViews: new Map(),
     catalogSearch: {}, snapshotLabel: '', savedQueries: null, queryDirty: false, connectionError: null, queryError: null,
     querySaveError: null, snapshotError: null, schemaData: null, schemaView: {}, databaseView: 'gegevens',
-    contextOpen: {database: true, research: true, experiments: true}, structureData: new Map(), inspectorExpanded: {}, explorerScroll: {}, recordMapState: {}, selectedRecord: null});
+    contextOpen: {database: true, experiments: true}, structureData: new Map(), inspectorExpanded: {}, explorerScroll: {}, recordMapState: {}, selectedRecord: null});
 const scopeKey = item => item.scope_key || item.name;
 const schemaName = () => state.bootstrap?.database?.schema || state.bootstrap?.database?.name || '';
 function supports(capability) {
@@ -163,7 +163,7 @@ const rowEditor = createRowEditor({getDatabase,
     },
     onPhpMyAdmin: table => databaseModal.open(table, 'browse'),
 });
-const databaseModal = new DatabaseModal(() => {
+const databaseModal = new DatabaseModal(({imported} = {}) => {
     if (state.restoring) return;
     let work;
     if (databaseModal.database !== getDatabase()) {
@@ -174,29 +174,52 @@ const databaseModal = new DatabaseModal(() => {
         } else { invalidateCanvasSources({allScopes: true}); work = switchDatabase(databaseModal.database); }
     } else work = refreshBootstrap(false, {invalidateRecordMap: true, allRecordMaps: true});
     work.then(() => {
+        if (imported && imported.database === getDatabase() && tables().some(table => table.name === imported.table)) {
+            go('gegevens', {table: imported.table});
+        }
         if (!databaseModal.dialog.open && document.activeElement === document.body && !openDatabase.disabled) openDatabase.focus();
     }).catch(error => toast(errorText(error), 'error'));
-}, () => syncDatabasePicker());
+}, () => syncDatabasePicker(), context => {
+    databaseManager.open({task: context.workflow === 'import-table' ? 'table' : 'database',
+        engine: context.database.startsWith('postgres:') ? 'postgres' : 'mariadb', database: context.database});
+    refreshBootstrap(false, {invalidateRecordMap: true, allRecordMaps: true});
+});
 const databaseManager = createDatabaseManager({getDatabase, getDatabases: () => knownDatabases,
-    canCreate: () => state.bootstrap?.can_create_database === true,
+    getEngines: () => state.bootstrap?.engines || [],
+    getDefaultDatabase: engine => engine === 'postgres'
+        ? scopeKey(knownDatabases.find(item => item.connection === 'postgres') || {name: ''})
+        : state.bootstrap?.default_database || '',
     isBusy: () => databaseOperationsBusy() || state.switchingDatabase,
     onBusy: busy => { state.databaseManagerOpen = busy; syncDatabasePicker(); },
-    onSelect: async database => {
+    onSelect: async (database, {view} = {}) => {
         if (database !== getDatabase()) await switchDatabase(database);
         else await refreshBootstrap(false);
+        if (view && getDatabase() === database && !state.connectionError) go(view);
     },
-    onImport: async database => {
+    onImport: async (database, {tab = 'dataset', workflow} = {}) => {
         if (database !== getDatabase()) await switchDatabase(database);
         else await refreshBootstrap(false);
-        if (getDatabase() === database && !state.connectionError && supports('import')) databaseModal.open('', 'import');
-        else if (getDatabase() === database && !supports('import')) toast(t('app.postgres.unavailable'), 'error');
+        if (getDatabase() !== database || state.connectionError) throw state.connectionError || new Error(t('app.databases.managerResponseInvalid'));
+        if (!supports('import')) throw new Error(t('app.postgres.unavailable'));
+        databaseModal.open('', tab, {workflow});
     },
-    onPrepared: async (data, {importSql}) => {
+    onPrepared: async (data, {importSql, importTab = 'dataset', workflow, design}) => {
         knownDatabases = data.databases;
         if (data.database !== getDatabase()) await switchDatabase(data.database);
         else await refreshBootstrap(false);
-        toast(t('app.databases.' + (data.created ? 'createdDatabase' : 'enabledDatabase'), {name: data.database}));
-        if (importSql && getDatabase() === data.database && !state.connectionError) databaseModal.open('', 'import');
+        toast(t('app.databases.' + (data.created ? 'createdDatabase' : 'enabledDatabase'), {name: data.name || data.database}));
+        if (getDatabase() !== data.database || state.connectionError) throw state.connectionError || new Error(t('app.databases.managerResponseInvalid'));
+        if (design) {
+            if (supports('phpmyadmin')) {
+                go('gegevens');
+                databaseModal.open('', 'structure');
+            } else if (supports('query')) {
+                if (data.created && !state.queryDraft) await openResearch('CREATE TABLE ' + sqlTable('my_table') + ' (\n    '
+                    + quoteIdentifier('id') + ' bigint GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,\n    '
+                    + quoteIdentifier('name') + ' text\n);');
+                else go('onderzoeken');
+            }
+        } else if (importSql) databaseModal.open('', importTab, {workflow});
     },
 });
 manageDatabases.append(icon('plus'));
@@ -205,7 +228,6 @@ manageDatabases.addEventListener('click', () => databaseManager.open());
 for (const [area, key, labelKey, symbol] of [
     ['overview', 'overzicht', 'app.route.overview', 'grid'],
     ['database', 'gegevens', 'app.navigation.database', 'database'],
-    ['research', 'onderzoeken', 'app.route.research', 'search'],
 ]) {
     navigation.append(el('a', {class: 'nav-link', href: '#' + key, 'data-route': key, 'data-area': area},
         icon(symbol), el('span', {'data-i18n': labelKey}, t(labelKey))));
@@ -217,7 +239,10 @@ document.getElementById('database-picker-icon').append(icon('database'));
 databaseSelect.addEventListener('change', () => switchDatabase(databaseSelect.value));
 document.getElementById('language-select').addEventListener('change', event => changePreference({language: event.target.value}));
 openDatabase.prepend(icon('database'));
-openDatabase.addEventListener('click', () => { if (supports('phpmyadmin')) databaseModal.open(state.table, 'browse'); });
+openDatabase.addEventListener('click', () => {
+    if (supports('phpmyadmin')) databaseModal.open(state.table, 'browse');
+    else if (supports('query')) go('onderzoeken');
+});
 refreshButton.append(icon('refresh'));
 refreshButton.addEventListener('click', () => refreshBootstrap(true));
 document.getElementById('context-export').prepend(icon('download'));
@@ -234,7 +259,7 @@ navigation.addEventListener('click', event => {
     const link = event.target.closest('a');
     if (!link || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     const area = workspaceArea();
-    if (link.dataset.area === area && Object.hasOwn(state.contextOpen, area) && !isRecordCanvas()) {
+    if (link.dataset.area === area && Object.hasOwn(state.contextOpen, area)) {
         event.preventDefault(); toggleWorkspaceContext();
     } else closeSidebar();
 });
@@ -271,24 +296,23 @@ function syncSidebar() {
 }
 
 function workspaceArea(name = route().name) {
-    return databaseViews.includes(name) ? 'database' : ({overzicht: 'overview', onderzoeken: 'research', experimenten: 'experiments', instellingen: 'settings'}[name]);
+    return databaseViews.includes(name) ? 'database' : ({overzicht: 'overview', experimenten: 'experiments', instellingen: 'settings'}[name]);
 }
 
 function isRecordCanvas() { return route().name === 'verkennen'; }
 
 function isExplorerOpen() {
-    if (isRecordCanvas()) return false;
     const area = workspaceArea();
     return Boolean(state.contextOpen[area]) && (!mobileViewport.matches || document.body.classList.contains('sidebar-open'));
 }
 
 function syncWorkspaceNavigation() {
     const area = workspaceArea();
-    const hasContext = Object.hasOwn(state.contextOpen, area) && !isRecordCanvas();
+    const hasContext = Object.hasOwn(state.contextOpen, area);
     const expanded = hasContext && state.contextOpen[area];
     workspaceContext.hidden = !hasContext || !isExplorerOpen();
     sidebar.classList.toggle('has-context', expanded);
-    document.getElementById('workspace-context-title').textContent = t({database: 'app.navigation.tables', research: supports('saved_queries') ? 'app.navigation.saved' : 'app.route.research', experiments: 'app.navigation.snapshots'}[area] || 'app.shell.workspace');
+    document.getElementById('workspace-context-title').textContent = t({database: 'app.navigation.tables', experiments: 'app.navigation.snapshots'}[area] || 'app.shell.workspace');
     panelToggle.setAttribute('aria-expanded', String(expanded));
     panelToggle.setAttribute('aria-label', t('app.navigation.hide'));
     const workspaceOpener = document.getElementById('workspace-explorer-open');
@@ -304,11 +328,11 @@ function syncWorkspaceNavigation() {
     }
     document.querySelector('.rail-brand').href = routeHash('overzicht');
     for (const link of document.querySelectorAll('#navigation [data-area], #settings-link')) {
-        link.hidden = link.dataset.area === 'research' && !supports('query') || link.dataset.area === 'experiments' && !supports('snapshots');
+        link.hidden = link.dataset.area === 'experiments' && !supports('snapshots');
         const active = link.dataset.area === area || link === databaseLink && area === 'experiments';
         link.classList.toggle('active', active);
         if (active) link.setAttribute('aria-current', 'page'); else link.removeAttribute('aria-current');
-        if (Object.hasOwn(state.contextOpen, link.dataset.area) && !isRecordCanvas()) {
+        if (Object.hasOwn(state.contextOpen, link.dataset.area)) {
             link.setAttribute('aria-expanded', String(active && isExplorerOpen()));
             link.setAttribute('aria-controls', 'workspace-context');
         } else {
@@ -349,6 +373,17 @@ function syncDatabasePicker() {
     aiToggle.hidden = !supports('ai');
     const selectionAi = document.getElementById('selection-ask-ai');
     if (selectionAi) { selectionAi.hidden = !supports('ai'); selectionAi.disabled = !supports('ai'); }
+    syncDatabaseTool();
+}
+
+function syncDatabaseTool() {
+    const native = supports('phpmyadmin');
+    const label = native ? 'app.shell.openDatabase' : 'app.shell.sqlWorkspace';
+    const caption = openDatabase.querySelector('span');
+    caption.dataset.i18n = label; caption.textContent = t(label);
+    openDatabase.setAttribute('aria-label', t(label)); openDatabase.title = t(label);
+    openDatabase.disabled = !state.bootstrap || state.restoring || state.switchingDatabase
+        || (!native && !supports('query')) || native && databaseModal.database !== getDatabase();
 }
 
 function rememberDatabase() {
@@ -393,7 +428,6 @@ async function switchDatabase(database, {fromHash = false} = {}) {
 
 
 function openWorkspaceContext() {
-    if (isRecordCanvas()) { currentScope?.recordMap?.openSources(); return; }
     const area = workspaceArea();
     if (!Object.hasOwn(state.contextOpen, area)) return;
     state.contextOpen[area] = true;
@@ -403,7 +437,6 @@ function openWorkspaceContext() {
 }
 
 function toggleWorkspaceContext() {
-    if (isRecordCanvas()) { currentScope?.recordMap?.toggleSources(); return; }
     const area = workspaceArea();
     if (!Object.hasOwn(state.contextOpen, area)) return;
     if (!isExplorerOpen()) { openWorkspaceContext(); return; }
@@ -468,8 +501,7 @@ function localizeShell() {
     document.querySelectorAll('[data-i18n-aria]').forEach(node => node.setAttribute('aria-label', t(node.dataset.i18nAria)));
     document.querySelectorAll('[data-i18n-title]').forEach(node => node.title = t(node.dataset.i18nTitle));
     document.getElementById('language-select').value = getLanguage();
-    openDatabase.setAttribute('aria-label', t('app.shell.openDatabase'));
-    openDatabase.title = t('app.shell.openDatabase');
+    syncDatabaseTool();
     if (state.connectionError) document.getElementById('connection-state').replaceChildren(el('span', {class: 'status-dot offline'}), el('span', {}, t('app.core.connection.offline')));
     else if (state.bootstrap) document.getElementById('connection-state').replaceChildren(el('span', {class: 'status-dot ' + (state.bootstrap.database.status === 'unavailable' ? 'offline' : '')}), el('span', {}, t(state.bootstrap.database.status === 'unavailable' ? 'app.core.connection.offline' : 'app.navigation.ready')));
     const current = routes[route().name];
@@ -617,7 +649,7 @@ function renderConnectionNotice() {
 }
 
 function syncRestoreControls() {
-    openDatabase.disabled = !supports('phpmyadmin') || state.restoring || state.switchingDatabase || !state.bootstrap || databaseModal.database !== getDatabase();
+    syncDatabaseTool();
     document.getElementById('language-select').disabled = state.restoring;
     menuToggle.disabled = state.restoring;
     refreshButton.disabled = state.restoring;
@@ -680,7 +712,7 @@ async function refreshBootstrap(notify = false, {preserveFocus = false, focusFal
         state.structureData.clear();
         setCsrf(data.csrf);
         if (!databaseModal.dialog.open && (supports('phpmyadmin') || supports('import'))) databaseModal.configure(selectedScope, data.tables || [], knownDatabases);
-        openDatabase.disabled = !supports('phpmyadmin') || state.restoring;
+        syncDatabaseTool();
         syncDatabasePicker();
         const ready = data.database.status !== 'unavailable';
         document.getElementById('connection-state').replaceChildren(
@@ -727,7 +759,7 @@ async function refreshBootstrap(notify = false, {preserveFocus = false, focusFal
         if (revision === databaseRevision && bootstrapController === controller) {
             bootstrapController = null; state.switchingDatabase = false;
             refreshButton.disabled = state.restoring;
-            openDatabase.disabled = !supports('phpmyadmin') || state.restoring || !state.bootstrap || databaseModal.database !== getDatabase();
+            syncDatabaseTool();
             syncDatabasePicker();
         }
     }
@@ -1035,8 +1067,27 @@ function selectWorkspaceTable(name, view = state.databaseView) {
     state.table = name;
     // Object changes stay inside the open explorer, including on mobile.
     history.replaceState(null, '', databaseHash(view));
-    render();
+    if (view === 'schema' && currentScope?.schema) currentScope.schema.selectTable(name);
+    else if (view === 'verkennen' && currentScope?.recordMap) currentScope.recordMap.selectTable(name);
+    else if (view === 'onderzoeken' && currentScope?.tableInspector) {
+        syncSelectedTable();
+        loadTableInspector(currentScope.tableInspector, currentScope);
+    } else render();
     contextContent.querySelector('.catalog-item.active')?.focus({preventScroll: true});
+}
+
+function syncSelectedTable() {
+    const label = document.getElementById('database-selected-table');
+    if (label) label.textContent = state.table || t('app.navigation.emptySelection');
+    for (const item of contextContent.querySelectorAll('.catalog-item')) {
+        const active = item.querySelector('.catalog-item-name')?.textContent === state.table;
+        item.classList.toggle('active', active);
+        if (active) item.setAttribute('aria-current', 'true'); else item.removeAttribute('aria-current');
+    }
+    for (const link of document.querySelectorAll('[data-database-view], [data-schema-view]')) {
+        link.href = databaseHash(link.dataset.databaseView || link.dataset.schemaView);
+    }
+    syncWorkspaceNavigation();
 }
 
 function databaseTools() {
@@ -1046,7 +1097,8 @@ function databaseTools() {
     const actions = el('div', {class: 'database-tools-menu'});
     const native = (tool, label, symbol) => button(t(label), () => { menu.open = false; databaseModal.open('', tool); },
         {className: 'database-tool-action', kind: 'ghost', symbol, 'data-database-tool': tool});
-    if (supports('import')) actions.append(native('import', 'app.navigation.import', 'download'));
+    if (supports('import')) actions.append(button(t('app.navigation.import'), () => { menu.open = false; databaseManager.open(); },
+        {className: 'database-tool-action', kind: 'ghost', symbol: 'download', 'data-database-tool': 'import'}));
     if (supports('phpmyadmin')) actions.append(native('export', 'app.navigation.export', 'external'));
     if (supports('snapshots')) actions.append(el('a', {class: 'database-tool-action', href: routeHash('experimenten'),
         'data-database-tool': 'backups', on: {click: () => { menu.open = false; }}}, icon('clock'), t('app.navigation.backups')));
@@ -1057,13 +1109,13 @@ function databaseTools() {
 
 function databaseHeading(view) {
     const schemaFamily = view === 'schema' || view === 'structuur';
-    const modeLinks = el('nav', {class: 'database-views', 'aria-label': t('app.navigation.views')}, databasePrimaryViews.map(name => {
+    const modeLinks = el('nav', {class: 'database-views', 'aria-label': t('app.navigation.views')}, databasePrimaryViews.filter(name => name !== 'onderzoeken' || supports('query')).map(name => {
         const active = name === view || name === 'schema' && schemaFamily;
         return registerSelection(el('a', {class: 'database-view' + (active ? ' active' : ''), href: databaseHash(name), 'data-database-view': name,
             'aria-current': active ? 'page' : null}, t(routes[name].labelKey)),
             {kind: 'control', key: 'view:' + name, label: t(routes[name].labelKey), purpose: 'changeView', table: state.table});
     }));
-    const explorer = view === 'verkennen' ? null : button(t('app.navigation.tables'), openWorkspaceContext, {id: 'workspace-explorer-open', symbol: 'table',
+    const explorer = button(t('app.navigation.tables'), openWorkspaceContext, {id: 'workspace-explorer-open', symbol: 'table',
         'aria-label': t('app.navigation.open'), 'aria-controls': 'workspace-context', 'aria-expanded': String(isExplorerOpen())});
     if (explorer) {
         explorer.hidden = isExplorerOpen();
@@ -1085,6 +1137,17 @@ function databaseContext(view, scope) {
     const inspector = el('section', {class: 'workspace-selected', id: 'workspace-selected', 'aria-label': t('app.navigation.inspector')});
     contextContent.append(catalog(view), inspector);
     return inspector;
+}
+
+function loadTableInspector(inspector, scope) {
+    const table = tables().find(item => item.name === state.table);
+    if (!table) { inspector.replaceChildren(); return; }
+    drawTableInspector(inspector, table);
+    tableStructure(table.name, scope).then(data => {
+        if (scope.live() && state.table === table.name) drawTableInspector(inspector, table, data);
+    }).catch(error => {
+        if (error.name !== 'AbortError' && scope.live() && state.table === table.name) inspector.append(errorPanel(error));
+    });
 }
 
 async function tableStructure(name, scope) {
@@ -1136,6 +1199,8 @@ function openRecordMap(table, key = null) {
 
 function renderRecordMap(scope) {
     page.append(databaseHeading('verkennen'));
+    const inspector = databaseContext('verkennen', scope);
+    loadTableInspector(inspector, scope);
     const root = el('section', {class: 'record-map-workspace'});
     page.append(root);
     const pending = state.recordMapState.pendingRecord;
@@ -1147,8 +1212,8 @@ function renderRecordMap(scope) {
             if (!scope.live()) return;
             state.table = table;
             history.replaceState(null, '', databaseHash('verkennen'));
-            page.querySelector('.database-heading')?.replaceWith(databaseHeading('verkennen'));
-            syncWorkspaceNavigation();
+            syncSelectedTable();
+            loadTableInspector(inspector, scope);
         },
         onSelectRecord: node => {
             if (!scope.live()) return;
@@ -1190,7 +1255,8 @@ async function selectedSourceRecord(root, table, scope) {
 
 function noTables() {
     return empty(t('app.core.table.emptyTitle'), t('app.core.table.emptyHelp'),
-        supports('phpmyadmin') ? button(t('app.core.table.openDatabase'), () => databaseModal.open('', 'sql'), {kind: 'primary', symbol: 'database'}) : null);
+        supports('import') ? button(t('app.navigation.import'), () => databaseManager.open(), {kind: 'primary', symbol: 'download'})
+            : supports('phpmyadmin') ? button(t('app.core.table.openDatabase'), () => databaseModal.open('', 'sql'), {kind: 'primary', symbol: 'database'}) : null);
 }
 
 async function renderData(scope) {
@@ -1384,7 +1450,8 @@ async function renderStructure(scope) {
 
 async function renderSchema(scope) {
     page.append(databaseHeading('schema'));
-    contextContent.append(loading(t('app.schema.loading')));
+    const inspector = el('div', {class: 'workspace-selected'});
+    contextContent.append(catalog('schema'), inspector);
     const workspace = el('section', {id: 'schema-workspace'}, loading(t('app.schema.loading')));
     page.append(workspace);
     try {
@@ -1398,30 +1465,30 @@ async function renderSchema(scope) {
             data: {...state.schemaData, scope_key: scope.database},
             state: state.schemaView,
             onRefresh: () => refreshBootstrap(true),
-            contextRoot: contextContent,
-            initialSearch: state.catalogSearch.database || '',
-            onSearch: value => { state.catalogSearch.database = value; },
+            contextRoot: inspector,
+            externalCatalog: true,
             onSelect: name => {
                 state.table = name;
                 history.replaceState(null, '', databaseHash('schema'));
-                document.getElementById('database-selected-table').textContent = name;
-                document.querySelectorAll('[data-database-view], [data-schema-view]').forEach(link => { link.href = databaseHash(link.dataset.databaseView || link.dataset.schemaView); });
-                syncWorkspaceNavigation();
+                syncSelectedTable();
             },
         });
+        scope.schema = visualizer;
         scope.cleanup.push(() => visualizer.destroy());
         restoreExplorerScroll('database');
     } catch (error) {
         if (error.name !== 'AbortError' && scope.live()) {
             workspace.replaceChildren(errorPanel(error, () => render()));
-            contextContent.replaceChildren(errorPanel(error, () => render()));
+            inspector.replaceChildren(errorPanel(error, () => render()));
         }
     }
 }
 
 async function renderResearch(scope) {
-    page.append(heading(t('app.core.research.eyebrow'), t('app.core.research.title'), t(isPostgres() ? 'app.postgres.sqlHelp' : 'app.core.research.help'),
-        [supports('phpmyadmin') ? button(t('app.core.research.fullEditor'), () => databaseModal.open(state.table, 'sql'), {symbol: 'external'}) : null, databaseTools()]));
+    page.append(databaseHeading('onderzoeken'));
+    scope.tableInspector = databaseContext('onderzoeken', scope);
+    loadTableInspector(scope.tableInspector, scope);
+    page.append(el('p', {class: 'database-query-help small muted'}, t(isPostgres() ? 'app.postgres.sqlHelp' : 'app.core.research.help')));
     if (!state.queryDraft) state.queryDraft = defaultSql();
     const result = el('div', {class: 'query-result'});
     const editor = el('textarea', {id: 'sql-editor', class: 'sql-editor', spellcheck: 'false', autocapitalize: 'off', autocomplete: 'off', 'aria-label': t('app.core.research.sqlLabel')}, state.queryDraft);
@@ -1452,7 +1519,8 @@ async function renderResearch(scope) {
     const saveLabel = el('span', {}, state.queryId ? t('app.core.research.saveChanges') : t('app.core.research.save'));
     const saveButton = el('button', {id: 'save-research', class: 'button button-primary', type: 'submit', disabled: state.savingQuery}, icon('bookmark'), saveLabel);
     const savedList = el('div', {class: 'saved-list'}, loading(t('app.core.research.loadingSaved')));
-    if (supports('saved_queries')) contextContent.append(savedList);
+    if (supports('saved_queries')) contextContent.append(el('section', {class: 'workspace-selected workspace-saved'},
+        el('h3', {}, t('app.navigation.saved')), savedList));
     else contextContent.append(notice(t('app.postgres.savedUnavailable')));
     const saveError = el('div');
     if (state.querySaveError) saveError.append(errorPanel(state.querySaveError));
@@ -1795,10 +1863,11 @@ async function renderResearch(scope) {
             state.queryError = null;
             editor.value = built.sql;
             drawResult(); drawExplanation();
+            editor.focus();
         },
     }) : null;
     page.append(el('div', {class: 'research-layout unified-research'},
-        builder?.element, editorCard, result,
+        editorCard, result, builder?.element,
         supports('saved_queries') ? el('section', {class: 'card research-save'}, el('div', {class: 'card-header'}, el('h2', {}, t('app.core.research.save')), icon('bookmark')), form) : null,
         help));
     drawResult();

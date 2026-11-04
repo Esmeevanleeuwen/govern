@@ -26,6 +26,7 @@ use Govern\PostgresDatasetImport;
 use Govern\SavedQueries;
 use Govern\AiService;
 use Govern\DatabaseProvisioner;
+use Govern\PostgresDatabaseProvisioner;
 use Govern\ImportInspection;
 use Govern\RecordExplorer;
 use Govern\RecordMap;
@@ -51,17 +52,26 @@ try {
         Http::get();
     }
     $scope = new ConnectionScope($baseConfig);
-    if ($action === 'databases') Http::json(['databases' => $scope->databases(), 'default_database' => $baseConfig['name'],
-        'can_create' => (new DatabaseProvisioner())->isAvailable()]);
+    if ($action === 'databases') {
+        $canCreateMariaDb = (new DatabaseProvisioner())->isAvailable();
+        Http::json(['databases' => $scope->databases(), 'default_database' => $baseConfig['name'],
+            'can_create' => $canCreateMariaDb, 'engines' => $scope->engines($canCreateMariaDb)]);
+    }
     $config = $scope->selectRequest(Http::text($_GET, 'database', false),
         array_key_exists('connection', $_GET) ? Http::text($_GET, 'connection', false) : null,
         array_key_exists('schema', $_GET) ? Http::text($_GET, 'schema', false) : null);
     ConnectionScope::requireAction($config, $action);
     if ($action === 'prepare-database') {
         $lock = new MaintenanceLock($config['maintenance_dir']);
-        $prepared = (new DatabaseProvisioner())->prepare($input);
+        $prepared = $config['engine'] === 'postgres'
+            ? (new PostgresDatabaseProvisioner($config))->prepare($input) : (new DatabaseProvisioner())->prepare($input);
         // Permissions changed: discard the catalog cached before provisioning.
         $freshScope = new ConnectionScope($baseConfig);
+        if ($config['engine'] === 'postgres') {
+            $selected = $freshScope->select($prepared['database'], 'postgres');
+            $prepared = [...$prepared, 'name' => $prepared['database'], 'database' => $selected['scope_key'],
+                'connection' => 'postgres', 'schema' => $selected['schema'], 'scope_key' => $selected['scope_key']];
+        }
         Http::json([...$prepared, 'databases' => $freshScope->databases(), 'default_database' => $baseConfig['name']],
             $prepared['created'] ? 201 : 200);
     }
@@ -120,8 +130,11 @@ try {
         Http::json($action === 'ai-context' ? $ai->previewContext($input) : $ai->chat($input));
     }
     if ($action === 'bootstrap') {
+        $canCreateMariaDb = (new DatabaseProvisioner())->isAvailable();
         $data = ['csrf' => $csrf, 'databases' => $scope->databases(), 'default_database' => $baseConfig['name'],
-            'can_create_database' => $config['engine'] === 'mariadb' && (new DatabaseProvisioner())->isAvailable(),
+            'can_create_database' => $config['engine'] === 'mariadb' ? $canCreateMariaDb
+                : (new PostgresDatabaseProvisioner($config))->isAvailable(),
+            'engines' => $scope->engines($canCreateMariaDb),
             'scope_key' => $config['scope_key'], 'capabilities' => ConnectionScope::capabilities($config),
             'database' => ['name' => $config['name'], 'connection' => $config['connection'], 'engine' => $config['engine'],
                 'schema' => $config['schema'] ?? $config['name'], 'scope_key' => $config['scope_key'],
