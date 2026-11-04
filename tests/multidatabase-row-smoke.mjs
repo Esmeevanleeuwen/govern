@@ -260,6 +260,10 @@ INSERT INTO ${table} (id,label,amount) VALUES (1,'${marker} seed',10.10);`);
     await page.waitForFunction(() => document.querySelector('#sql-editor')?.value === 'SELECT 111 AS draft_a;');
     assert.equal(await page.locator('#query-name').inputValue(), 'A unfinished title');
     assert.equal(await page.locator('#query-notes').inputValue(), 'A unfinished notes');
+    // SQL is a Database view too. Deliberately leave A in Browse so the later
+    // A/B picker check exercises distinct remembered Browse/Schema views.
+    await clickDatabaseView(page, 'gegevens');
+    await waitTable(first);
     await switchDatabase(second);
     await page.waitForFunction(() => document.querySelector('#sql-editor')?.value === 'SELECT 222 AS draft_b;');
     assert.equal(await page.locator('#query-name').inputValue(), 'B unfinished title');

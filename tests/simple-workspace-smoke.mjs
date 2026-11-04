@@ -28,8 +28,8 @@ const track = current => {
     });
 };
 track(page);
-const shot = async (current, name) => {
-    if (screenshots) await current.screenshot({path: path.join(screenshots, 'simple-' + name + '.png'), fullPage: true});
+const shot = async (current, name, fullPage = true) => {
+    if (screenshots) await current.screenshot({path: path.join(screenshots, 'simple-' + name + '.png'), fullPage, animations: 'disabled'});
 };
 const fits = async (current, label) => assert.equal(await current.evaluate(() =>
     document.documentElement.scrollWidth <= innerWidth), true, label + ' fits the viewport.');
@@ -215,11 +215,16 @@ try {
     await tableButton(mobile, alternate).click();
     await mobile.keyboard.press('Escape');
     assert.equal(await mobile.locator('#workspace-context').isVisible(), false);
+    await mobile.waitForFunction(() => {
+        const sidebar = document.querySelector('#sidebar');
+        const bounds = sidebar.getBoundingClientRect();
+        return sidebar.getAttribute('aria-hidden') === 'true' && (bounds.right <= 0 || bounds.left >= innerWidth);
+    });
     assert.equal(await mobile.locator('#sql-editor').inputValue(), 'SELECT 91 AS mobile_draft;');
     await fits(mobile, '320px SQL'); await shot(mobile, 'sql-mobile');
     await clickDatabaseTool(mobile, 'import');
     await mobile.locator('#native-import-file').waitFor();
-    await fits(mobile, '320px native import'); await shot(mobile, 'import-mobile');
+    await fits(mobile, '320px native import'); await shot(mobile, 'import-mobile', false);
     assert.deepEqual(posts, ['query', 'native-import-preview'], 'Navigation, previews and empty-table guidance never execute writes.');
     assert.deepEqual(errors, []);
     console.log('PASS: simple defaults, shared catalog, SQL scope/draft/results, native import/keyboard/language, advanced fallback, empty PostgreSQL guidance and 320px layout.');
