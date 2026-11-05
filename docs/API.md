@@ -1258,34 +1258,36 @@ Other stable errors include `studio_disabled`, `studio_config_invalid`,
 `studio_recording_stopped`, `studio_busy`, `studio_recording_busy`,
 `studio_audio_invalid` and `studio_transcription_*` configuration/transport errors.
 
-## Dictation archive and read-only GhostSketch feed
+## GhostSketch storage and archive inspection
 
-The separate `/dictation-api.php` retains the normal approved installation session,
-Host/Origin checks and CSRF boundary. Every request carries the packed explicit
-`database=postgres:<database>:<schema>` scope; only the configured Studio namespace
-is accepted. Tables are provisioned by the private CLI migration, never by a request.
+GhostSketch owns recording, transcription and linking. Govern only archives source
+audio/transcripts. `/dictation-api.php` uses the normal approved installation session
+for GET `list` and GET `recording` with validated database scope. It has no upload or
+transcribe action. `/dictation.php` is an inspection screen.
 
-| Method/action | Input | Data |
+`/ghostsketch-storage.php` requires `Authorization: Bearer <GHOSTSKETCH_STORAGE_TOKEN>`
+(minimum 32 characters; blank disables access). It fixes the database and schema to
+server configuration and permits only these actions:
+
+| Method / action | Input | Result |
 | --- | --- | --- |
-| GET `list` | explicit scope | `{csrf,recordings}` (latest 500) |
-| GET `recording` | scope, `id` UUID | metadata plus ordered `segments` |
-| POST `import` | scope, multipart `file`, `X-CSRF-Token` | saved recording, deduplicated by audio SHA-256 |
-| POST `transcribe` | scope, JSON `{id}`, `X-CSRF-Token` | recording after the next committed 6-second fragment |
+| POST `upload` | multipart `file` | validated archived audio metadata, deduplicated by SHA-256 |
+| POST `complete` | JSON `{id,sha256,text}` | one immutable full-file transcript, ready status |
+| GET `list` | none | latest 500 recordings |
+| GET `recording` | UUID `id` | metadata and ordered transcript fragments |
+| GET `audio` | UUID `id` | original binary audio |
 
-Import archives up to 16 MiB/30 minutes after ffprobe and actual audio decoding.
-Transcription releases the maintenance lock before the provider call and rechecks
-source checksum/progress under a row lock before commit. A private recording lock
-prevents overlapping model calls. Saved progress makes retries after a lost response
-resume from the next fragment. The original audio remains in PostgreSQL.
+JSON actions use the normal `{ok,data}` / `{ok:false,error,...}` envelope. Binary
+responses use `application/octet-stream` and no-store headers. Upload is limited to
+16 MiB / 30 minutes and validated with ffmpeg/ffprobe (WAV/M4A/MP3). Transcripts are
+bounded to 512 KiB UTF-8; GhostSketch additionally bounds them to 100,000 characters.
+`complete` locks the recording row, verifies the audio checksum and commits transcript
+and status together. Identical completion is idempotent; changed text or a previous
+partial transcript returns 409. Audio is retained if transcription fails elsewhere.
+No model runs here. Provisioning migration 003 expands the original fragment text
+constraint without replacing existing data.
 
-`GET /dictation-feed.php` uses only `Authorization: Bearer <GHOSTSKETCH_READ_TOKEN>`
-(minimum 32 characters, disabled with an unset/short token) plus ordinary Host/Origin
-checks. It deliberately does not require a browser login. The token is authorized
-for this fixed configured transcript namespace only; query scope parameters do not
-change it. No CORS, SQL, mutations or audio-download operation. No id returns
-`{recordings:[{id,filename,sha256,duration_ms,next_ms,status,created_at}]}`; `?id=<uuid>`
-returns the same metadata plus `segments:[{id,sequence,start_ms,end_ms,text,provider,filename}]`.
-Responses retain Govern's `{ok,data}` envelope. Numeric database fields may be
-strings, consistently with the PostgreSQL adapter. The token client validates/coerces
-them. `pending` transcripts can be viewed in Govern; GhostSketch imports only `ready`.
-See [DICTATION.md](DICTATION.md) for setup and the separate-repository boundary.
+`GET /dictation-feed.php` remains an optional read-only feed using its separate
+`GHOSTSKETCH_READ_TOKEN` and reader connection. No id returns recordings; id returns
+the selected metadata/transcript. It never returns audio. The browser never receives
+either service token. See [DICTATION.md](DICTATION.md) for setup.

@@ -875,12 +875,13 @@ Deze fase maakt geen relaties op grond van kolomnamen, geen blijvende grafieken 
 geen geografische weergave. De bestaande catalogus toont geïmporteerde tabellen na
 sluiten van het databasevenster. SQL blijft bij officiële phpMyAdmin.
 
-## Dictation source boundary
+## GhostSketch source storage boundary
 
-`DictationService` stores archived audio and immutable transcript fragments in the
-configured PostgreSQL namespace, separately from legacy Studio boards.
-`DictationAudio` decodes local uploads with ffmpeg/ffprobe and argument arrays.
-`dictation-api.php` uses installation sessions/CSRF for source management;
-`dictation-feed.php` exposes only transcript reads through a fixed-scope token and
-the reader connection. GhostSketch's separate backend uses that feed and owns
-notebook content. See DICTATION.md and API.md.
+GhostSketch owns capture, import, local transcription and notebook links.
+`DictationService` archives validated audio and immutable transcripts in PostgreSQL.
+The Bearer-authenticated `ghostsketch-storage.php` exposes a fixed-schema storage API;
+its upload path uses ffmpeg/ffprobe only for validation. Its completion transaction
+locks the source, checks checksum and existing text, and commits once.
+`dictation-api.php` and its page inspect sources using the normal installation session.
+The optional `dictation-feed.php` retains read-only compatibility. GhostSketch keeps
+notebook edits in SQLite and never exposes the storage token to its browser.

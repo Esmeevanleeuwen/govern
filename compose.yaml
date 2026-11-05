@@ -186,6 +186,7 @@ services:
       PG_TOOLS_SOCKET: /run/govern-postgres/tools.sock
       WORKBENCH_SCHEMA_FILE: /var/www/workbench.sql
       APP_ALLOWED_HOSTS: ${APP_ALLOWED_HOSTS:-localhost,127.0.0.1,::1}
+      GHOSTSKETCH_STORAGE_TOKEN: ${GHOSTSKETCH_STORAGE_TOKEN:-}
       GHOSTSKETCH_READ_TOKEN: ${GHOSTSKETCH_READ_TOKEN:-}
       STUDIO_ENABLED: ${STUDIO_ENABLED:-0}
       STUDIO_SCHEMA: ${STUDIO_SCHEMA:-brainstorm}

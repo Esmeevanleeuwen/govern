@@ -60,44 +60,35 @@ final class DictationService
         $stmt->execute([$filename,hash('sha256',$bytes),base64_encode($bytes),$duration]);
         return $this->recording($stmt->fetchColumn());
     }
-    public function transcribe(string $id): array
+    /** Accept a complete transcript computed by GhostSketch, never invoke a model here. */
+    public function complete(array $input): array
     {
-        $id = self::id($id);
-        $path = $this->config['maintenance_dir'] . '/.dictation-' . hash('sha256',$this->config['scope_key'] . $id) . '.lock';
-        $handle = fopen($path, 'c');
-        if ($handle === false) throw ApiException::fromCode('dictation_busy', 503);
-        $tmp = false;
-        try {
-            if (!flock($handle, LOCK_EX | LOCK_NB)) throw ApiException::fromCode('dictation_busy', 423);
-            $maintenance = new MaintenanceLock($this->config['maintenance_dir']);
-            $row = $this->recording($id, true);
-            if ($row['status'] === 'ready') { unset($row['audio']); return $row; }
-            $tmp = tempnam(sys_get_temp_dir(), 'dictation-');
-            if ($tmp === false) throw ApiException::fromCode('dictation_decode', 503);
-            chmod($tmp,0600);
-            file_put_contents($tmp,base64_decode($row['audio'],true));
-            unset($row['audio'], $maintenance);
-            $start = (int) $row['next_ms'];
-            $text = (new StudioTranscriber(StudioTranscriber::fromEnvironment()))->transcribe(DictationAudio::chunk($tmp,$start));
-            $end = min($start + 6000,(int) $row['duration_ms']);
-            $maintenance = new MaintenanceLock($this->config['maintenance_dir']);
-            $this->db->beginTransaction();
-            // Restore/other writers may have changed the source while the model ran.
-            $stmt = $this->db->prepare('SELECT sha256,next_ms FROM ' . $this->prefix . '_govern_dictation_recordings WHERE id=? FOR UPDATE');
-            $stmt->execute([$id]); $current = $stmt->fetch(\PDO::FETCH_ASSOC);
-            if (!$current || $current['sha256'] !== $row['sha256'] || (int) $current['next_ms'] !== $start) {
-                throw ApiException::fromCode('dictation_changed',409);
-            }
-            $stmt = $this->db->prepare('INSERT INTO ' . $this->prefix . '_govern_dictation_segments(recording_id,sequence,start_ms,end_ms,text) VALUES(?,?,?,?,?)');
-            $stmt->execute([$id,(int) ($start / 6000),$start,$end,$text]);
-            $stmt = $this->db->prepare('UPDATE ' . $this->prefix . '_govern_dictation_recordings SET next_ms=?,status=? WHERE id=?');
-            $stmt->execute([$end,$end === (int) $row['duration_ms'] ? 'ready' : 'pending',$id]);
-            $this->db->commit();
-            return $this->recording($id);
-        } finally {
-            if ($this->db->inTransaction()) $this->db->rollBack();
-            if (is_string($tmp)) @unlink($tmp);
-            flock($handle, LOCK_UN); fclose($handle);
+        $id = self::id(Http::text($input,'id'));
+        $sha = Http::text($input,'sha256');
+        Http::text($input,'text',false); // Validate UTF-8; retain the exact source text below.
+        $text = $input['text'] ?? '';
+        if (!preg_match('/\A[a-f0-9]{64}\z/D',$sha) || strlen($text)>524288) {
+            throw ApiException::fromCode('dictation_input',422);
         }
+        $this->db->beginTransaction();
+        try {
+            $stmt = $this->db->prepare('SELECT sha256,status FROM ' . $this->prefix . '_govern_dictation_recordings WHERE id=? FOR UPDATE');
+            $stmt->execute([$id]); $current = $stmt->fetch(\PDO::FETCH_ASSOC);
+            if (!$current || $current['sha256'] !== $sha) throw ApiException::fromCode('dictation_changed',409);
+            $row = $this->recording($id);
+            if ($row['status'] === 'ready') {
+                if (count($row['segments'])!==1 || $row['segments'][0]['text']!==$text) {
+                    throw ApiException::fromCode('dictation_changed',409);
+                }
+                $this->db->commit(); return $row;
+            }
+            // Previous-version partial transcripts remain intact; never replace a source.
+            if ($row['segments']!==[]) throw ApiException::fromCode('dictation_changed',409);
+            $stmt = $this->db->prepare('INSERT INTO ' . $this->prefix . '_govern_dictation_segments(recording_id,sequence,start_ms,end_ms,text,provider) VALUES(?,0,0,?,?,?)');
+            $stmt->execute([$id,$row['duration_ms'],$text,'ghostsketch-whisper']);
+            $stmt = $this->db->prepare('UPDATE ' . $this->prefix . "_govern_dictation_recordings SET next_ms=duration_ms,status='ready' WHERE id=?");
+            $stmt->execute([$id]); $this->db->commit();
+            return $this->recording($id);
+        } finally { if ($this->db->inTransaction()) $this->db->rollBack(); }
     }
 }

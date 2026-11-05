@@ -1,79 +1,78 @@
-# Dictafoon als bron voor GhostSketch
+# GhostSketch: dictafoon en notities, Govern: bronopslag
 
-Govern bewaart de oorspronkelijke opnames en transcripties. GhostSketch blijft
-in [zijn eigen repository](https://github.com/Esmeevanleeuwen/GhostSketch) en
-beheert notitieboeken, secties, pagina's, automatische aantekeningen en tekeningen.
-De browser van GhostSketch hoeft geen Govern-venster of Govern-login open te houden.
+GhostSketch blijft in [zijn eigen repository](https://github.com/Esmeevanleeuwen/GhostSketch).
+Daar neem je op, importeer je telefoonopnames, transcribeer je lokaal en koppel je
+het gesprek aan automatische notities. Govern bewaart de oorspronkelijke audio en
+transcripties in PostgreSQL. `/dictation.php` toont die gegevens; het is geen recorder
+of transcriptiescherm. De GhostSketch-browser heeft geen Govern-login nodig.
 
 ## Inrichten op Windows
 
-Behoud bestaande wachtwoorden, gegevens en volumes. Stel in de Govern-`.env` in:
+Behoud bestaande wachtwoorden, gegevens en volumes. Stel in Govern `.env` in:
 
 ```dotenv
 PG_ENABLED=1
 PG_SCHEMAS=public,brainstorm
 STUDIO_ENABLED=1
 STUDIO_SCHEMA=brainstorm
-GHOSTSKETCH_READ_TOKEN=<zelfgekozen-willekeurige-sleutel-van-minstens-32-tekens>
+GHOSTSKETCH_STORAGE_TOKEN=<willekeurige-sleutel-van-minstens-32-tekens>
 ```
 
-Behoud andere bestaande schema's in `PG_SCHEMAS`. De bestaande Studio-naam is
-voorlopig een compatibele configuratienaam voor het bronschema, geen vereiste om
-het oude whiteboard te gebruiken. Maak een willekeurige sleutel bijvoorbeeld met
-`python -c "import secrets; print(secrets.token_urlsafe(32))"`. Zet die alleen in
-beide lokale `.env`-bestanden, nooit in Git of een browser-URL.
+Behoud bestaande schema's in `PG_SCHEMAS`. De Studio-configuratienaam blijft voor
+compatibiliteit; het oude whiteboard hoeft niet gebruikt te worden. Maak een sleutel
+met `python -c "import secrets; print(secrets.token_urlsafe(32))"` en bewaar deze alleen
+in de lokale `.env`-bestanden. Zet de sleutel niet in Git of een browser-URL.
 
-Start Govern met `.\start.cmd`; voer vervolgens
-`.\scripts\provision-studio.cmd` uit. Op Linux/macOS gebruik je `sh start.sh`
-en `sh scripts/provision-studio.sh`. De provisioning past de bestaande foundation
-toe en voegt de afzonderlijke dictatietabellen toe zonder whiteboards te wissen.
-De app-image bevat ffmpeg en ffprobe voor audiodecodering.
+Start Govern met `.\start.cmd` en voer `.\scripts\provision-studio.cmd` uit.
+Op Linux/macOS: `sh start.sh` en `sh scripts/provision-studio.sh`. Dit voegt het
+opnamearchief toe en past de transcriptlimiet aan, met behoud van bestaande data.
+De Govern-app-image bevat ffmpeg/ffprobe om uploads als echte audio te controleren.
+Voor deze koppeling draait de spraakservice bij GhostSketch, niet bij Govern.
 
-Gebruik de bestaande transcriptieprovider uit [STUDIO.md](STUDIO.md), inclusief
-het zelf geïnstalleerde meertalige model en de Compose-aanvulling. Een ingestelde
-provider is geen garantie dat het model bereikbaar is. Er is geen cloudfallback.
-
-Open `http://localhost:8080/dictation.php`, log in en laad een M4A-, WAV- of
-MP3-opname uit Dictafoon in. Audio wordt echt gedecodeerd en daarna met checksum
-in PostgreSQL bewaard. Deze eerste route accepteert maximaal 16 MiB en 30 minuten.
-Kies **Transcriptie starten / hervatten**. De browser verwerkt achtereenvolgens
-zes seconden per verzoek. Afgeronde fragmenten blijven bewaard als je stopt of
-als de provider uitvalt. Hervatten begint bij het volgende opgeslagen fragment.
-Een herhaalde upload van hetzelfde bestand opent de bestaande opname.
-
-## Verbinding met GhostSketch
-
-Stel in de aparte GhostSketch-`.env` in:
+Stel in GhostSketch `.env` in:
 
 ```dotenv
-GHOSTSKETCH_GOVERN_URL=http://127.0.0.1:8080/dictation-feed.php
-GHOSTSKETCH_GOVERN_TOKEN=<dezelfde-willekeurige-sleutel>
+GHOSTSKETCH_GOVERN_URL=http://127.0.0.1:8080/ghostsketch-storage.php
+GHOSTSKETCH_GOVERN_TOKEN=<dezelfde-sleutel>
+GHOSTSKETCH_WHISPER_URL=http://127.0.0.1:8081
 ```
 
-Herstart GhostSketch. Open een notitieboek en kies **Uit Govern** op een pagina.
-Een gereed transcript wordt een nieuwe pagina. De bestaande Nederlandse tekstregels
-of het expliciet gekozen lokale Ollama-model maken automatische voorstellen.
-Herhaald ophalen opent dezelfde pagina en bewaart eigen wijzigingen en penstreken.
+Herstart beide apps. Configureer GhostSketchs lokale whisper.cpp-server met een
+zelf geïnstalleerd meertalig model volgens de GhostSketch README. M4A/MP3 vereisen
+ook ffmpeg op de computer waarop GhostSketch draait. Er is geen cloudfallback.
 
-De koppeling gebruikt een aparte alleen-lezen sleutel. Die kan uitsluitend de
-lijst en inhoud van transcripties uit het ingestelde schema ophalen. Geen SQL,
-accountbeheer, opname-upload of audiobestanden via deze feed. De sleutel komt niet
-in de GhostSketch-frontend. Roteren: wijzig beide `.env`-bestanden en herstart
-beide apps. Er is nog geen sleutelbeheer per gebruiker. De koppeling is gedeeld
-op installatieniveau en de eerste client ondersteunt alleen lokale loopback-HTTP.
+## Gebruiken
 
-## Opslag en herstel
+1. Open een notitieboek in GhostSketch. Kies **Importeren → Audio-opname** of
+   **Neem gesprek op**. WAV, M4A en MP3 worden ondersteund: maximaal 16 MiB en
+   30 minuten per bestand. Live opnemen verstuurt zelfstandige WAV-fragmenten.
+2. GhostSketch bewaart de audio eerst in Govern. Daarna transcribeert de lokale
+   GhostSketch-spraakservice de opname en bewaart het transcript in Govern.
+3. GhostSketch voegt de tekst en automatische notitievoorstellen toe aan je pagina,
+   met opname-ID, transcript-ID en checksum als bronverwijzing.
+4. Bij een transcriptiefout blijft de opname in Govern. Open **Opnames** in
+   GhostSketch om opnieuw te transcriberen en een pagina te maken. Reeds voltooide
+   opnames kun je daar ook openen zonder opnieuw te transcriberen.
 
-`_govern_dictation_recordings` bewaart de audio en importvoortgang;
-`_govern_dictation_segments` de oorspronkelijke transcriptfragmenten. De views
-`dictation_recordings` en `dictation_transcripts` maken de brongegevens zichtbaar
-in de gewone Govern-catalogus, zonder audiobytes in de weergave. Selecteer daarvoor
-de PostgreSQL-database en het `brainstorm`-schema.
+Dezelfde upload wordt op checksum herkend. Een voltooid transcript is onveranderlijk;
+herhalen met dezelfde inhoud is veilig, een andere inhoud geeft een conflict.
+Een oudere gedeeltelijke transcriptie wordt niet overschreven. Voltooide oudere
+transcripties met meerdere fragmenten blijven via **Opnames** importeerbaar.
 
-De bestaande PostgreSQL-schemaherstelpunten omvatten ook de opnames. Ze groeien
-daarom mee met het opnamearchief. Een Docker-volume is geen backup. GhostSketch
-bewaart een herleidbare transcriptkopie met Govern-adres, opname-ID, fragment-ID,
-checksum en tijdsgrenzen naast de eigen notities. De audiobron blijft in Govern.
-Bestaande `/studio.php`-whiteboards blijven voor compatibiliteit beschikbaar;
-ze worden niet automatisch overgezet of verwijderd. Live synchronisatie tussen
-telefoon en laptop en automatisch ophalen van nieuwe opnames zijn vervolgstappen.
+## Opslag en toegang
+
+`_govern_dictation_recordings` bewaart audio, checksum en voortgang.
+`_govern_dictation_segments` bewaart de transcripties. De views `dictation_recordings`
+en `dictation_transcripts` tonen brongegevens in Govern.
+
+`ghostsketch-storage.php` is een afgebakende serverkoppeling met een aparte Bearer-
+sleutel. Die geeft alleen toegang tot het ingestelde opnamearchief: audio uploaden,
+teruglezen en transcripties toevoegen. Geen willekeurige SQL of databasekeuze.
+De oude `dictation-feed.php` met `GHOSTSKETCH_READ_TOKEN` blijft optioneel alleen-lezen
+beschikbaar. Die sleutel kan niet uploaden of transcriberen.
+
+Notitieboeken, eigen tekst, kaarten en tekeningen blijven in GhostSketchs lokale
+SQLite-opslag; de bronopnames en oorspronkelijke transcripties staan in Govern.
+Een notitieboek verwijderen verwijdert geen bronopname. Maak van beide opslagen
+back-ups: een GhostSketch JSON-export bevat geen audio en een Docker-volume is
+geen back-up. De verbinding werkt in deze versie op dezelfde computer via loopback.

@@ -116,9 +116,10 @@ Meer over configuratie, schema's en de volgende bouwfasen:
 
 ## Dictafoon en GhostSketch
 
-Laad je dictafoonopnames in via `/dictation.php`. Govern bewaart de oorspronkelijke
-opname en transcriptie; de aparte GhostSketch-app haalt de tekst op via een
-alleen-lezen API en maakt er notitiepagina's van. Zie [inrichten en gebruiken](docs/DICTATION.md).
+Opnemen, audio importeren, transcriberen en koppelen aan notities gebeurt in de
+aparte GhostSketch-app. Govern bewaart de audio en oorspronkelijke transcripties
+in PostgreSQL; `/dictation.php` toont de opgeslagen bronnen.
+Zie [inrichten en gebruiken](docs/DICTATION.md).
 De bestaande Studio-whiteboards hieronder blijven beschikbaar voor bestaande gegevens.
 
 ## Live whiteboard naast Govern

@@ -63,6 +63,12 @@ final class Http
         if (!is_string($received) || !hash_equals($token, $received)) {
             throw ApiException::fromCode('csrf_invalid', 403);
         }
+        return self::jsonInput();
+    }
+
+    /** Bounded body parser; callers must authenticate and check the HTTP method. */
+    public static function jsonInput(): array
+    {
         if (!str_starts_with(strtolower($_SERVER['CONTENT_TYPE'] ?? ''), 'application/json')) {
             throw ApiException::fromCode('json_required', 415);
         }

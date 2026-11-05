@@ -3,14 +3,14 @@ import {el, heading, loading, notice, empty} from './ui.js';
 import {t, registerMessages, getLanguage} from './i18n.js';
 
 registerMessages('studioMonitor', {
-    nl: {title: 'Opnames en bronnen', help: 'Laad dictafoonopnames in voor GhostSketch. Bestaande Studio-whiteboards blijven hieronder beschikbaar.',
+    nl: {title: 'Opnames en bronnen', help: 'Bekijk de brongegevens die GhostSketch hier opslaat. Bestaande Studio-whiteboards blijven hieronder beschikbaar.',
         open: 'Open whiteboard', board: 'Whiteboard', disabled: 'Whiteboard staat uit. Schakel Studio en PostgreSQL in via de serverconfiguratie.',
         setup: 'Richt eerst het whiteboardschema in met scripts/provision-studio.sh.',
         emptyTitle: 'Nog geen whiteboards', emptyHelp: 'Maak je eerste whiteboard in de aparte app.',
         noNotes: 'Nog geen notities. Voeg een kaart toe of start een opname in de whiteboard-app.',
         live: 'Bijgewerkt · revisie {revision}', original: 'Oorspronkelijke uitspraak', manual: 'Handmatige kaart',
         disconnected: 'Verversen is mislukt. De getoonde notities kunnen verouderd zijn.', note: 'Notitie', kind: 'Soort', source: 'Bron'},
-    en: {title: 'Recordings and sources', help: 'Import voice recordings for GhostSketch. Existing Studio whiteboards remain available below.',
+    en: {title: 'Recordings and sources', help: 'Inspect source data stored here by GhostSketch. Existing Studio whiteboards remain available below.',
         open: 'Open whiteboard', board: 'Whiteboard', disabled: 'Whiteboard is disabled. Enable Studio and PostgreSQL in the server configuration.',
         setup: 'Provision the whiteboard schema with scripts/provision-studio.sh first.',
         emptyTitle: 'No whiteboards yet', emptyHelp: 'Create your first whiteboard in the separate app.',
@@ -21,7 +21,7 @@ registerMessages('studioMonitor', {
 
 /** Read-only live monitor. Scope is the configured Studio store, never a global selection. */
 export async function mountStudioMonitor(container, {scopeKey, signal, initialBoard = '', onBoard = () => {}}) {
-    const dictationLink = el('a', {class:'button button-primary', href:'/dictation.php'}, getLanguage() === 'en' ? 'Voice recordings' : 'Dictafoon');
+    const dictationLink = el('a', {class:'button button-primary', href:'/dictation.php'}, getLanguage() === 'en' ? 'Recording archive' : 'Opnamearchief');
     const appLink = el('a', {class: 'button button-primary', href: '/studio.php'}, t('studioMonitor.open'));
     container.append(heading('Govern', t('studioMonitor.title'), t('studioMonitor.help'), [dictationLink, appLink]));
     if (!scopeKey) { container.append(notice(t('studioMonitor.disabled'))); return; }
