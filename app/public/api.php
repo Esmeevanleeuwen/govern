@@ -31,6 +31,8 @@ use Govern\RecordExplorer;
 use Govern\RecordMap;
 use Govern\NativeImport;
 use Govern\DatasetImport;
+use Govern\StudioApi;
+use Govern\StudioAudio;
 
 try {
     $baseConfig = Config::fromEnvironment();
@@ -43,11 +45,13 @@ try {
         Http::json(['status' => 'ok']);
     }
     (new Auth())->requireUser();
-    $posts = ['build-query', 'query', 'save-query', 'delete-query', 'create-snapshot', 'restore-snapshot', 'insert-row', 'update-row', 'delete-row', 'ai-context', 'ai-chat', 'prepare-database', 'record-map', 'native-import-preview', 'native-import-execute'];
+    $posts = ['build-query', 'query', 'save-query', 'delete-query', 'create-snapshot', 'restore-snapshot', 'insert-row', 'update-row', 'delete-row', 'ai-context', 'ai-chat', 'prepare-database', 'record-map', 'native-import-preview', 'native-import-execute',
+        'studio-create-board', 'studio-mutate', 'studio-start-recording', 'studio-stop-recording'];
     $datasetUpload = in_array($action, ['dataset-preview', 'dataset-import'], true);
+    $studioUpload = $action === 'studio-audio' ? StudioAudio::upload($csrf) : null;
     $file = $datasetUpload ? DatasetImport::upload($csrf) : null;
     $input = in_array($action, $posts, true) ? Http::post($csrf) : [];
-    if (!$datasetUpload && !in_array($action, $posts, true)) {
+    if (!$datasetUpload && $studioUpload === null && !in_array($action, $posts, true)) {
         Http::get();
     }
     $scope = new ConnectionScope($baseConfig);
@@ -57,6 +61,9 @@ try {
         array_key_exists('connection', $_GET) ? Http::text($_GET, 'connection', false) : null,
         array_key_exists('schema', $_GET) ? Http::text($_GET, 'schema', false) : null);
     ConnectionScope::requireAction($config, $action);
+    if (in_array($action, StudioApi::ACTIONS, true)) {
+        StudioApi::dispatch($action, $config, $csrf, $input, $studioUpload);
+    }
     if ($action === 'prepare-database') {
         $lock = new MaintenanceLock($config['maintenance_dir']);
         $prepared = (new DatabaseProvisioner())->prepare($input);
@@ -121,6 +128,9 @@ try {
     }
     if ($action === 'bootstrap') {
         $data = ['csrf' => $csrf, 'databases' => $scope->databases(), 'default_database' => $baseConfig['name'],
+            'studio' => ['enabled' => ($baseConfig['studio']['enabled'] ?? false) && $baseConfig['postgres'] !== null,
+                'scope_key' => $baseConfig['postgres'] !== null
+                    ? ConnectionScope::scopeKey('postgres', $baseConfig['postgres']['name'], $baseConfig['studio']['schema']) : null],
             'can_create_database' => $config['engine'] === 'mariadb' && (new DatabaseProvisioner())->isAvailable(),
             'scope_key' => $config['scope_key'], 'capabilities' => ConnectionScope::capabilities($config),
             'database' => ['name' => $config['name'], 'connection' => $config['connection'], 'engine' => $config['engine'],

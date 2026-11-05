@@ -66,6 +66,10 @@ final class Config
         return [
             'engine' => 'mariadb',
             'postgres' => $postgres,
+            // Studio remains opt-in. Its database/schema are checked at its own
+            // API boundary, so an unavailable module cannot break the workbench.
+            'studio' => ['enabled' => $env('STUDIO_ENABLED', '0') === '1',
+                'schema' => $env('STUDIO_SCHEMA', 'brainstorm')],
             'host' => $env('DB_HOST', 'database'),
             'port' => $port,
             'name' => $name,
