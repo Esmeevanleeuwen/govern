@@ -31,6 +31,7 @@ $governUser = \Govern\Web::user();
     <link rel="stylesheet" href="/assets/workspace-tools.css">
     <link rel="stylesheet" href="/assets/record-map.css">
     <link rel="stylesheet" href="/assets/canvas-workspace.css">
+    <link rel="stylesheet" href="/assets/studio-monitor.css">
     <script type="module" src="/assets/app.js"></script>
     <script type="module" src="/assets/workspace-account.js"></script>
 </head>

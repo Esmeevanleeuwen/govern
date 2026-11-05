@@ -1,0 +1,20 @@
+# Explicit opt-in: never changes the ordinary loopback gateway or database ports.
+# Requires a certificate trusted by the iPhone and matching APP_ALLOWED_HOSTS.
+services:
+  studio-https:
+    image: caddy:2.10.2-alpine
+    ports:
+      - "${STUDIO_LAN_BIND:-127.0.0.1}:${STUDIO_HTTPS_PORT:-8443}:443"
+    environment:
+      STUDIO_LAN_HOST: ${STUDIO_LAN_HOST:-localhost}
+      NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,::1},app
+    volumes:
+      - ./docker/studio/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./local/studio-tls:/run/studio-tls:ro
+    tmpfs:
+      - /data
+      - /config
+    depends_on:
+      app:
+        condition: service_healthy
+    restart: unless-stopped

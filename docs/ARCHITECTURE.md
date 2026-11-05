@@ -1,5 +1,26 @@
 # Architectuur
 
+## Afzonderlijk live whiteboard
+
+`studio.php` biedt een aparte whiteboard-app binnen dezelfde beveiligde oorsprong.
+De bestaande werkplek heeft een optionele **Live notities**-weergave die dezelfde
+PostgreSQL-opslag volgt. `StudioService` bewaart kaarten, vectorstreken,
+verbindingen en onveranderde transcriptiebronnen in een afzonderlijk schema.
+De webapp gebruikt de bestaande authenticatie, CSRF, scopecontrole en beperkte
+database-adapter. Schema-aanmaak loopt uitsluitend via versiegebonden CLI-migraties.
+
+`StudioApi` en `StudioAudio` hangen aan de bestaande API. Canvasbatches gebruiken
+generaties, revisies en idempotente operatie-ID's. Audioverwerking controleert
+de opname voor en na de provideroproep; tijdens die oproep staat geen database-
+of onderhoudslock vast. `StudioTranscriber` gebruikt alleen serverconfiguratie.
+De optionele lokale faster-whisper-service leest een vooraf geïnstalleerd model.
+De browser verzendt zelfstandige WAV-fragmenten; andere clients halen snapshots
+via polling op. Audio is tijdelijk, transcriptie en bronmetadata blijven bewaard.
+
+Studio staat standaard uit. De gewone loopbackgateway blijft behouden; voor
+iPhone-opname is de afzonderlijke LAN-HTTPS-configuratie met een vertrouwd
+certificaat nodig. Zie [Studio](STUDIO.md) voor installatie en beperkingen.
+
 ## Startpagina en installatieaccounts
 
 `app/public/index.php` toont de publieke, responsive startpagina uit

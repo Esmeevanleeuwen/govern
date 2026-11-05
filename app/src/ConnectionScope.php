@@ -94,6 +94,8 @@ final class ConnectionScope
             && !in_array($action, ['bootstrap', 'schema', 'structure', 'browse', 'explore', 'record-map-records', 'record-map',
                 'row-editor', 'insert-row', 'update-row', 'delete-row', 'query', 'import-inspection',
                 'native-import-preview', 'native-import-execute', 'dataset-preview', 'dataset-import',
+                'studio-bootstrap', 'studio-board', 'studio-create-board', 'studio-mutate',
+                'studio-start-recording', 'studio-stop-recording', 'studio-audio',
                 'snapshots', 'create-snapshot', 'restore-snapshot', 'download-snapshot'], true)) {
             throw ApiException::fromCode('postgres_read_only', 403);
         }

@@ -11,6 +11,7 @@ import {mountRecordMap} from './record-map.js';
 import {resetRecordMapEvidence} from './record-map-model.js';
 import {createWorkspaceCompanion} from './companion-workspace.js';
 import {createWorkspaceTools} from './workspace-tools.js';
+import {mountStudioMonitor} from './studio-monitor.js';
 import {registerSelection} from './selection-registry.js';
 import {SelectionPointer} from './selection-pointer.js';
 import {createRowEditor} from './row-editor.js';
@@ -30,11 +31,13 @@ const routes = {
     schema: {labelKey: 'app.route.schema', icon: 'network'},
     verkennen: {labelKey: 'app.navigation.explore', icon: 'network'},
     onderzoeken: {labelKey: 'app.route.research', icon: 'search'},
+    studio: {labelKey: 'studioMonitor.title', icon: 'layers'},
     experimenten: {labelKey: 'app.route.experiments', icon: 'flask'},
     instellingen: {labelKey: 'app.route.settings', icon: 'settings'},
 };
 const state = {
     bootstrap: null,
+    studioBoardId: '',
     table: '',
     queryDraft: '',
     queryName: '',
@@ -271,7 +274,7 @@ function syncSidebar() {
 }
 
 function workspaceArea(name = route().name) {
-    return databaseViews.includes(name) ? 'database' : ({overzicht: 'overview', onderzoeken: 'research', experimenten: 'experiments', instellingen: 'settings'}[name]);
+    return databaseViews.includes(name) ? 'database' : ({overzicht: 'overview', onderzoeken: 'research', studio: 'studio', experimenten: 'experiments', instellingen: 'settings'}[name]);
 }
 
 function isRecordCanvas() { return route().name === 'verkennen'; }
@@ -283,6 +286,11 @@ function isExplorerOpen() {
 }
 
 function syncWorkspaceNavigation() {
+    const studioLink = navigation.querySelector('[data-area="studio"]');
+    if (state.bootstrap?.studio?.enabled && !studioLink) {
+        navigation.append(el('a', {class: 'nav-link', href: routeHash('studio'), 'data-route': 'studio', 'data-area': 'studio'},
+            icon('layers'), el('span', {'data-i18n': 'studioMonitor.title'}, t('studioMonitor.title'))));
+    } else if (!state.bootstrap?.studio?.enabled) studioLink?.remove();
     const area = workspaceArea();
     const hasContext = Object.hasOwn(state.contextOpen, area) && !isRecordCanvas();
     const expanded = hasContext && state.contextOpen[area];
@@ -304,7 +312,8 @@ function syncWorkspaceNavigation() {
     }
     document.querySelector('.rail-brand').href = routeHash('overzicht');
     for (const link of document.querySelectorAll('#navigation [data-area], #settings-link')) {
-        link.hidden = link.dataset.area === 'research' && !supports('query') || link.dataset.area === 'experiments' && !supports('snapshots');
+        link.hidden = link.dataset.area === 'research' && !supports('query') || link.dataset.area === 'experiments' && !supports('snapshots')
+            || link.dataset.area === 'studio' && !state.bootstrap?.studio?.enabled;
         const active = link.dataset.area === area || link === databaseLink && area === 'experiments';
         link.classList.toggle('active', active);
         if (active) link.setAttribute('aria-current', 'page'); else link.removeAttribute('aria-current');
@@ -733,6 +742,12 @@ async function refreshBootstrap(notify = false, {preserveFocus = false, focusFal
     }
 }
 
+async function renderStudio(scope) {
+    await mountStudioMonitor(page, {scopeKey: state.bootstrap?.studio?.scope_key, signal: scope.signal,
+        initialBoard: route().params.get('board') || state.studioBoardId,
+        onBoard: board => { state.studioBoardId = board; }});
+}
+
 function render() {
     const location = route();
     if (location.name !== 'verkennen') companion.select(null);
@@ -764,7 +779,7 @@ function render() {
     renderConnectionNotice();
     page.replaceChildren();
     contextContent.replaceChildren();
-    const views = {overzicht: renderOverview, gegevens: renderData, structuur: renderStructure, schema: renderSchema, verkennen: renderRecordMap, onderzoeken: renderResearch, experimenten: renderExperiments, instellingen: renderSettings};
+    const views = {overzicht: renderOverview, gegevens: renderData, structuur: renderStructure, schema: renderSchema, verkennen: renderRecordMap, onderzoeken: renderResearch, studio: renderStudio, experimenten: renderExperiments, instellingen: renderSettings};
     if (location.name === 'onderzoeken' && !supports('query') || location.name === 'experimenten' && !supports('snapshots') || location.name === 'verkennen' && !supports('record_map')) {
         page.append(unavailableFeature());
         return;

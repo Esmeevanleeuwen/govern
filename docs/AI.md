@@ -1,5 +1,10 @@
 # Lokale AI in Govern
 
+De optionele spraaktranscriptie van [Studio](STUDIO.md) heeft een afzonderlijke
+providerconfiguratie en staat standaard uit. Ze ontvangt na de expliciete
+microfoonstart korte audiofragmenten en bewaart oorspronkelijke transcripties.
+Deze uitbreiding wijzigt de bestaande AI-capabilities voor PostgreSQL niet.
+
 Govern heeft een optioneel AI-paneel voor uitleg over de gekozen database en
 geselecteerde onderdelen. De interface en backend vormen een eerste, beperkte
 koppeling met een lokale Ollama-installatie. AI staat standaard uit; de gewone
