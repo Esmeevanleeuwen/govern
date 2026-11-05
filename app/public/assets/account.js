@@ -82,7 +82,7 @@ function renderMode() {
         continueLink = document.createElement('a');
         continueLink.id = 'account-continue';
         continueLink.className = 'button button-primary account-submit';
-        continueLink.href = '/workspace.php';
+        continueLink.href = destination();
         form.after(continueLink);
     }
     if (continueLink) { continueLink.hidden = !state?.user; continueLink.textContent = t('account.openWorkspace'); }
@@ -108,6 +108,11 @@ async function load() {
 
 function destination() {
     if (new URLSearchParams(location.search).get('next') === 'account') return '/account.php';
+    if (new URLSearchParams(location.search).get('next') === 'studio') {
+        const board = new URLSearchParams(location.search).get('board');
+        return '/studio.php' + (board && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(board)
+            ? '?board=' + encodeURIComponent(board) : '');
+    }
     const legacyHash = /^#(?:overzicht|gegevens|structuur|schema|onderzoeken|experimenten|instellingen)(?:\?|$)/.test(location.hash) ? location.hash : '';
     return '/workspace.php' + legacyHash;
 }

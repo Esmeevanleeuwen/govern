@@ -82,7 +82,7 @@ try {
     }
     const tableCount = bootstrap.tables.length;
     assert.deepEqual(await page.locator('#navigation [data-area]').evaluateAll(links => links.map(link => link.dataset.area)),
-        ['overview', 'database', 'research']);
+        ['overview', 'database', 'research', ...(bootstrap.studio?.enabled ? ['studio'] : [])]);
     assert.equal(await page.locator('#workspace-context').isVisible(), false,
         'Overview opens directly, without another menu of the main areas.');
     assert.equal(await page.locator('#navigation [data-area="research"]').count(), 1);

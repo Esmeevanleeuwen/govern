@@ -12,7 +12,12 @@ final class Web
             Http::start(Config::fromEnvironment(), allowPageNavigation: true);
             $user = (new Auth())->currentUser();
             if ($user !== null) return $user;
-            header('Location: /auth.php?mode=login' . ($next === 'account' ? '&next=account' : ''), true, 303);
+            $destination = in_array($next, ['account', 'studio'], true) ? '&next=' . $next : '';
+            if ($next === 'studio' && is_string($_GET['board'] ?? null)
+                && preg_match('/\A[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\z/Di', $_GET['board'])) {
+                $destination .= '&board=' . rawurlencode($_GET['board']);
+            }
+            header('Location: /auth.php?mode=login' . $destination, true, 303);
             exit;
         } catch (\Throwable $exception) {
             $code = $exception instanceof ApiException ? $exception->errorCode : 'internal_error';

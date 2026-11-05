@@ -1,0 +1,6 @@
+.studio-monitor-content { margin-top: 1rem; min-width: 0; }
+.studio-monitor-content .table-scroll { max-width: 100%; overflow-x: auto; border-radius: 20px; }
+.studio-monitor-content table { width: 100%; }
+.studio-monitor-note, .studio-monitor-source { white-space: pre-wrap; overflow-wrap: anywhere; min-width: 12rem; max-width: 48rem; }
+.studio-monitor-content td { vertical-align: top; }
+.studio-monitor-content summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; }
