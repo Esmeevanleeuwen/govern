@@ -907,3 +907,25 @@ met conceptbehoud, import, API-teruglezing, ontbrekende CSRF en afsluiten.
 Herhalen: `python3 tests/dataset-readers.py`; voer de PHP-proef uitsluitend uit
 in een geïsoleerde testdatabase met `--confirm-database=<naam>` en de browserproef
 uitsluitend met `GOVERN_UI_WRITE_TESTS=1`. Productiedata worden niet gebruikt.
+
+## Dictation / GhostSketch boundary — 6 November 2026
+
+For this change, PHP 8.3 syntax checks passed for the new source service/endpoints
+and messages. `tests/dictation_audio_unit.php` passed using real ffmpeg/ffprobe:
+WAV/M4A/MP3 decoding, 6-second and final 1-second chunks, invalid audio and playlist
+rejection. The new SQL first-install body was exercised with the PostgreSQL WASM
+engine PGlite: table/view creation, bound inserts, reader permissions and duplicate
+sequence constraints passed. This does not exercise psql metacommands, Docker
+provisioning or native schema restore.
+
+In the separate GhostSketch repository, all 59 Python tests, 13 frontend tests,
+11 start-script tests, TypeScript checks and production build passed. A Chromium
+browser test used a labelled synthetic Govern feed with real GhostSketch HTTP and
+SQLite storage: import -> automatic notes -> edit page/section -> draw -> repeat
+import preserved one linked page and the user's additions. Desktop (1440), tablet
+(768) and mobile (375) layouts had no horizontal page overflow or page exceptions.
+
+A complete Govern session/upload -> PHP/PDO -> native PostgreSQL -> real Whisper
+model chain, the Docker/Windows provisioners and a physical iPhone have **not**
+been run in this environment. Real speech quality and speed remain unverified.
+These changes are proposed for review, not a claim of an updated running installation.

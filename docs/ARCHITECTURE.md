@@ -874,3 +874,13 @@ De voorbeeldgrafiek gebruikt alleen twintig voorbeeldrijen en zegt dat zichtbaar
 Deze fase maakt geen relaties op grond van kolomnamen, geen blijvende grafieken en
 geen geografische weergave. De bestaande catalogus toont geïmporteerde tabellen na
 sluiten van het databasevenster. SQL blijft bij officiële phpMyAdmin.
+
+## Dictation source boundary
+
+`DictationService` stores archived audio and immutable transcript fragments in the
+configured PostgreSQL namespace, separately from legacy Studio boards.
+`DictationAudio` decodes local uploads with ffmpeg/ffprobe and argument arrays.
+`dictation-api.php` uses installation sessions/CSRF for source management;
+`dictation-feed.php` exposes only transcript reads through a fixed-scope token and
+the reader connection. GhostSketch's separate backend uses that feed and owns
+notebook content. See DICTATION.md and API.md.

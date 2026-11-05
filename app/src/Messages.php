@@ -7,6 +7,14 @@ namespace Govern;
 final class Messages
 {
     private const TEXT = [
+        'dictation_decode' => ['nl' => 'Deze opname kan niet worden gelezen. Gebruik M4A, WAV of MP3 met een geldige audiostream.', 'en' => 'Cannot decode this recording. Use M4A, WAV or MP3 with a valid audio stream.'],
+        'dictation_limit' => ['nl' => 'Kies een opname van maximaal 16 MiB en 30 minuten.', 'en' => 'Choose a recording up to 16 MiB and 30 minutes.'],
+        'dictation_input' => ['nl' => 'Controleer de opnamegegevens.', 'en' => 'Check the recording input.'],
+        'dictation_missing' => ['nl' => 'Deze opname bestaat niet.', 'en' => 'This recording does not exist.'],
+        'dictation_busy' => ['nl' => 'Deze opname wordt al verwerkt. Probeer later opnieuw.', 'en' => 'This recording is being processed. Retry later.'],
+        'dictation_changed' => ['nl' => 'De bron is gewijzigd. Ververs voordat je verdergaat.', 'en' => 'The source changed. Refresh before continuing.'],
+        'dictation_access' => ['nl' => 'Geen toegang tot de transcriptiekoppeling.', 'en' => 'Transcript connection access denied.'],
+        'dictation_setup' => ['nl' => 'Richt de dictafoontabellen in met de Studio-provisioning en controleer PostgreSQL.', 'en' => 'Provision the dictation tables using Studio provisioning and check PostgreSQL.'],
         'studio_busy' => ['nl' => 'De werkruimte is tijdelijk bezet. Probeer de bewaarde wijziging opnieuw.', 'en' => 'The workspace is temporarily busy. Retry the retained change.'],
         'studio_disabled' => ['nl' => 'Whiteboard staat uit. Schakel STUDIO_ENABLED in op de server.', 'en' => 'Whiteboard is disabled. Enable STUDIO_ENABLED on the server.'],
         'studio_config_invalid' => ['nl' => 'Gebruik de ingestelde PostgreSQL-database en het whiteboardschema.', 'en' => 'Use the configured PostgreSQL database and whiteboard schema.'],

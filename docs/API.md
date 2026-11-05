@@ -1257,3 +1257,35 @@ Other stable errors include `studio_disabled`, `studio_config_invalid`,
 `studio_board_missing`, `studio_node_missing`, `studio_recording_missing`,
 `studio_recording_stopped`, `studio_busy`, `studio_recording_busy`,
 `studio_audio_invalid` and `studio_transcription_*` configuration/transport errors.
+
+## Dictation archive and read-only GhostSketch feed
+
+The separate `/dictation-api.php` retains the normal approved installation session,
+Host/Origin checks and CSRF boundary. Every request carries the packed explicit
+`database=postgres:<database>:<schema>` scope; only the configured Studio namespace
+is accepted. Tables are provisioned by the private CLI migration, never by a request.
+
+| Method/action | Input | Data |
+| --- | --- | --- |
+| GET `list` | explicit scope | `{csrf,recordings}` (latest 500) |
+| GET `recording` | scope, `id` UUID | metadata plus ordered `segments` |
+| POST `import` | scope, multipart `file`, `X-CSRF-Token` | saved recording, deduplicated by audio SHA-256 |
+| POST `transcribe` | scope, JSON `{id}`, `X-CSRF-Token` | recording after the next committed 6-second fragment |
+
+Import archives up to 16 MiB/30 minutes after ffprobe and actual audio decoding.
+Transcription releases the maintenance lock before the provider call and rechecks
+source checksum/progress under a row lock before commit. A private recording lock
+prevents overlapping model calls. Saved progress makes retries after a lost response
+resume from the next fragment. The original audio remains in PostgreSQL.
+
+`GET /dictation-feed.php` uses only `Authorization: Bearer <GHOSTSKETCH_READ_TOKEN>`
+(minimum 32 characters, disabled with an unset/short token) plus ordinary Host/Origin
+checks. It deliberately does not require a browser login. The token is authorized
+for this fixed configured transcript namespace only; query scope parameters do not
+change it. No CORS, SQL, mutations or audio-download operation. No id returns
+`{recordings:[{id,filename,sha256,duration_ms,next_ms,status,created_at}]}`; `?id=<uuid>`
+returns the same metadata plus `segments:[{id,sequence,start_ms,end_ms,text,provider,filename}]`.
+Responses retain Govern's `{ok,data}` envelope. Numeric database fields may be
+strings, consistently with the PostgreSQL adapter. The token client validates/coerces
+them. `pending` transcripts can be viewed in Govern; GhostSketch imports only `ready`.
+See [DICTATION.md](DICTATION.md) for setup and the separate-repository boundary.

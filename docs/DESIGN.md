@@ -969,3 +969,12 @@ preview and asks the user to inspect the table before retrying. Success identifi
 database, table and record count; closing refreshes the normal Govern catalog.
 This first phase adds tabular readers and a sample visualization, without a new
 top-level area, persisted charts or maps.
+
+## Dictation source management
+
+`/dictation.php` is the source-management screen: import audio, inspect recordings,
+start/resume transcription, read original fragments. The Studio monitor provides
+a Dictafoon / Voice recordings entry. Shared language settings, button styles,
+status feedback and a single-column mobile layout apply. Notebook pages and
+automatic note editing belong to the separate GhostSketch repository. Existing
+Studio screens remain compatible; there is no silent data migration.

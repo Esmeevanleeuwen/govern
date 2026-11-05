@@ -1,4 +1,8 @@
-# Live whiteboard met Govern als databeheer
+# Bestaande Studio-whiteboards
+
+Voor de nieuwe afgesproken verdeling (opnames in Govern, notitieboeken in de aparte
+GhostSketch-app) gebruik je [Dictafoon en GhostSketch](DICTATION.md). Onderstaande
+whiteboardroute blijft bestaan voor bestaande gegevens.
 
 `/studio.php` is een afzonderlijke whiteboard-webapp binnen dezelfde installatie.
 Je maakt whiteboards met notities, ideeën, verbindingen, penstreken en eenvoudige
