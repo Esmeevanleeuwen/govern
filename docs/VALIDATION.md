@@ -1,7 +1,62 @@
 # Validatie
 
-Stand van de controles: **3 november 2026**. Eerdere resultaten hieronder horen
+Stand van de controles: **5 november 2026**. Eerdere resultaten hieronder horen
 bij hun beschreven wijziging en zijn niet automatisch opnieuw uitgevoerd.
+
+## Afzonderlijk Studio-whiteboard en live notities
+
+De eerste Studio-versie is gecontroleerd op een geïsoleerde Docker-installatie
+met PHP 8.4, PostgreSQL 18, MariaDB 10.11 en Chromium. Testaccounts, databases,
+audio en transcriptieresultaten waren uitsluitend testgegevens.
+
+- Domeinintegratie: **52** controles voor kaarten, vectorstreken, schermsjablonen,
+  verbindingen, atomiciteit, echte foreign keys, rechten, revisies, idempotentie
+  en bronbehoud bij wijzigen/verwijderen/undo.
+- HTTP-keten: **59** controles voor login, CSRF, scope, twee clients, gelijktijdige
+  mutaties, audiovalidatie, retries, transcripties en dezelfde leesviews in Govern.
+- Native PostgreSQL-hersteltest: **17** controles met echte `pg_dump`/`pg_restore`
+  in een nieuw willekeurig testschema. Migratieherhaling behoudt inhoud; na
+  herstel worden alle oude schrijfverzoeken geweigerd en werkt een nieuwe
+  generatie. Het bestaande Studioschema werd hiervoor niet verwijderd.
+- Microfoon/worklet: **25** controles voor WAV-framing, tijdlijn, verzendvolgorde,
+  wachtrijgrenzen, bewaarde mislukte fragmenten, retry, stop/drain en lifecycle.
+- PHP-transcriptieprovider: **54** controles voor configuratie, begrensde invoer,
+  transport, Nederlands, geldige antwoorden en fouten zonder cloudfallback.
+- Lokale Python-provider: **11** tests met een fixturemodel, onder meer stilte,
+  bezet model, ongeldige audio, foutafhandeling en weigering zonder modelbestanden.
+  De serviceimage is met sessiespecifieke CA-trust gebouwd; offline imports en
+  de ontbrekend-model-startupfout zijn apart gecontroleerd.
+- HTTPS-ingang: **23** controles met Caddy 2.10.2, uitsluitend op loopback en een
+  expliciet vertrouwd testcertificaat. Secure/HttpOnly/Strict sessie, login,
+  Studio GET/POST, CSRF, daadwerkelijke opslag, Origin/poort/protocolafwijzing,
+  phpMyAdmin 404 en onjuiste Host 421 slagen.
+
+De echte browserketen doorloopt microfoonopname met synthetisch audiosignaal →
+multipart API → transcriptiefixture → PostgreSQL → kaart op een onafhankelijke
+tweede client. Handmatige tekst behoudt de oorspronkelijke transcriptie.
+Verder gecontroleerd: kaart-/lijn-/scherm-/penopslag, undo/redo,
+toetsenbordbediening, tweevingerzoom in tekenmodus zonder penartefacten en
+behoud van een gefocust tekstconcept tijdens binnenkomende wijzigingen.
+Geen JavaScriptfouten of mislukte API-verzoeken in deze gebruikersstroom.
+
+Nederlands en Engels zijn in Chromium gecontroleerd op 320, 375, 768, 1024 en
+1440 px, zonder horizontale pagina-overloop. Desktop- en mobiele screenshots
+gebruiken herkenbare voorbeeldgegevens uit dezelfde API/PostgreSQL-keten.
+
+Gerichte bestaande regressies slagen: backend-unit **15**, account-unit **42**,
+PostgreSQL-scope **103**, backendlokalisatie **269**, MariaDB-integratie **107**,
+voorkeuren **47**, verzoekscopes en frontendvertalingen (**1.591** berichten).
+De bestaande navigatie-browserproef slaagt inclusief databaseweergaven,
+schema, onderzoeksconcepten en 320/375/390 px bediening. PHP- en Studio-JavaScript-
+syntax en `git diff --check` slagen. De gewone navigatie blijft bij uitgeschakeld
+Studio ongewijzigd; de optionele ingang verschijnt pas na serverbootstrap.
+
+De nieuwe Studio-CI-workflow is toegevoegd en de Compose-combinaties zijn
+gevalideerd. GitHub Actions zelf is geen onderdeel van deze lokale uitslag.
+Een echt Nederlands spraakmodel, microfoonhardware, WebKit/een fysieke iPhone,
+Windows en de live website zijn niet getest. Zes-secondenfragmenten plus
+polling zijn geen woord-voor-woord-stream. Oorspronkelijke audio is tijdelijk,
+geen opnamearchief. Zie [STUDIO.md](STUDIO.md) voor configuratie en grenzen.
 
 ## Gelijke canvasvormgeving voor Schema en Explore
 

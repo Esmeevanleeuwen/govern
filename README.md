@@ -114,6 +114,17 @@ staan als je verder navigeert. Zie [Een tweede scherm voor Govern](docs/COMPANIO
 Meer over configuratie, schema's en de volgende bouwfasen:
 [PostgreSQL in Govern](docs/POSTGRESQL.md).
 
+## Live whiteboard naast Govern
+
+De optionele [Studio-webapp](docs/STUDIO.md) gebruikt dezelfde PostgreSQL-opslag
+en installatieaccounts. Je werkt op een afzonderlijk whiteboard met notities,
+verbindingen, penstreken en eenvoudige schermkaarten; **Live notities** in
+Govern volgt de opgeslagen inhoud. Met een expliciet ingestelde transcriptie-
+dienst kan de webapp tijdens het spreken nieuwe notitiekaartjes toevoegen.
+De eerste audio-invoer is de microfoon van de webapp, verwerkt in korte
+fragmenten. Zie de handleiding voor schema-inrichting, de lokale provider,
+optionele iPhone-toegang via HTTPS en de grenzen van deze eerste versie.
+
 ## Records en verbanden verkennen
 
 Database heeft drie vaste hoofdtaken: **Records**, **Explore** en **Schema**.

@@ -1,0 +1,20 @@
+# Isolated CI fixture only. Never include this override in a real installation.
+services:
+  transcriber:
+    image: python:3.12-slim-bookworm
+    entrypoint: [python, /fixture.py]
+    volumes:
+      - ./tests/fixtures/studio-transcriber.py:/fixture.py:ro
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/stats', timeout=2)"]
+      interval: 2s
+      timeout: 2s
+      retries: 10
+  app:
+    environment:
+      STUDIO_TRANSCRIPTION_ENABLED: "1"
+      STUDIO_TRANSCRIPTION_URL: http://transcriber:8080/v1/audio/transcriptions
+      STUDIO_TRANSCRIPTION_ALLOW_REMOTE: "0"
+    depends_on:
+      transcriber:
+        condition: service_healthy

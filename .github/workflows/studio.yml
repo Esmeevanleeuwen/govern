@@ -1,0 +1,73 @@
+name: Verify live whiteboard
+on: [push, pull_request]
+permissions:
+  contents: read
+concurrency:
+  group: studio-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  studio:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      PG_ENABLED: "1"
+      PG_DATABASE: govern_pg
+      PG_SCHEMAS: public,brainstorm
+      STUDIO_ENABLED: "1"
+      STUDIO_SCHEMA: brainstorm
+      BASE_URL: http://127.0.0.1:8080
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Dedicated test credentials
+        run: |
+          python3 - <<'PY'
+          import os, secrets
+          password = secrets.token_urlsafe(36)
+          print('::add-mask::' + password)
+          with open(os.environ['GITHUB_ENV'], 'a') as output:
+              output.write('GOVERN_TEST_EMAIL=studio-ci@example.test\n')
+              output.write('GOVERN_TEST_PASSWORD=' + password + '\n')
+          PY
+      - name: Start isolated stack and explicit test provider
+        run: |
+          sh start.sh
+          sh scripts/provision-studio.sh
+          docker compose --profile postgres -f compose.yaml -f tests/studio-compose.yaml up -d --wait
+          python3 tests/auth_http.py --initialize
+      - name: Domain, provider and capture contracts
+        run: |
+          for test in tests/studio-transcriber-unit.php tests/studio-integration.php; do
+            docker compose run --rm -T --no-deps --user www-data --entrypoint php \
+              -v "$PWD/tests:/repo/tests:ro" -v "$PWD/app/src:/repo/app/src:ro" app "/repo/$test" --confirm-database=govern_pg
+          done
+          node tests/studio-model-unit.mjs
+          node tests/studio-microphone-unit.mjs
+          python3 -m venv "$RUNNER_TEMP/studio-python"
+          "$RUNNER_TEMP/studio-python/bin/python" -m pip install fastapi==0.162.0 python-multipart==0.0.33 httpx==0.28.1
+          "$RUNNER_TEMP/studio-python/bin/python" tests/studio-transcriber-service.py
+          python3 tests/studio-http.py --confirm-database=govern_pg --fixture-transcriber
+      - name: Actual native schema restore rejects stale clients
+        run: |
+          python3 tests/studio-restore-integration.py --confirm-database=govern_pg \
+            --postgres-container "$(docker compose ps -q postgres)" --app-container "$(docker compose ps -q app)"
+      - name: Browser through microphone, API and database to second browser
+        run: |
+          npm install --no-save --ignore-scripts --prefix "$RUNNER_TEMP/studio-browser" playwright@1.62.1
+          export PLAYWRIGHT_MODULE="$RUNNER_TEMP/studio-browser/node_modules/playwright"
+          export BROWSER_BIN="$(command -v google-chrome)"
+          export STUDIO_FAKE_AUDIO="$RUNNER_TEMP/studio-microphone.wav"
+          python3 - <<'PY'
+          import math, os, struct, wave
+          with wave.open(os.environ['STUDIO_FAKE_AUDIO'], 'wb') as output:
+              output.setnchannels(1)
+              output.setsampwidth(2)
+              output.setframerate(16000)
+              output.writeframes(b''.join(struct.pack('<h', int(5000 * math.sin(2 * math.pi * 440 * i / 16000))) for i in range(160000)))
+          PY
+          node tests/studio-smoke.mjs
+      - name: Logs on failure
+        if: failure()
+        run: docker compose --profile postgres -f compose.yaml -f tests/studio-compose.yaml logs --tail=100
+      - name: Stop isolated stack
+        if: always()
+        run: docker compose --profile postgres -f compose.yaml -f tests/studio-compose.yaml down

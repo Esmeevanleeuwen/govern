@@ -1154,3 +1154,106 @@ Stable errors: `dataset_upload`, `dataset_invalid`, `dataset_unavailable`,
 `dataset_name`, `dataset_changed`, `dataset_exists`, plus ordinary CSRF/database
 errors. SQL files use the separate native SQL preflight/execution flow or the
 official phpMyAdmin import.
+
+## Live Studio whiteboards
+
+Studio is an opt-in domain API inside the existing `/api.php` boundary. It
+requires `STUDIO_ENABLED=1`, PostgreSQL and the exact server-configured
+`STUDIO_SCHEMA` in `PG_SCHEMAS`. Provisioning is a separate private CLI action;
+ordinary web requests never create tables. All requests require an approved
+installation account and explicit `connection=postgres&database=...&schema=...`.
+Every POST uses the ordinary CSRF header, including multipart audio.
+
+The separate UI is `/studio.php`; `/workspace.php#studio` is Govern's read-only
+live monitor. The `studio_boards`, `studio_notes` and `studio_transcripts` views
+are deliberately non-updatable and visible through the existing catalog.
+Underlying `_govern_studio_*` tables are application-internal. Approved accounts
+share access; these objects do not establish private projects or tenants.
+
+| Method / action | Input | Successful data |
+| --- | --- | --- |
+| GET `studio-bootstrap` | Explicit scope | `{csrf,enabled,ready,schema,scope_key,generation,boards,transcription,limits}` |
+| GET `studio-board` | URL `board:<uuid>` | `{generation,board,nodes,edges,segments,recordings}` |
+| POST `studio-create-board` | `{generation,id,title,operation_id}` | `{id,title,revision,created_at,updated_at}` |
+| POST `studio-mutate` | `{generation,board_id,base_revision,operation_id,changes}` | `{revision,operation_id}` |
+| POST `studio-start-recording` | `{generation,id,board_id,operation_id}` | `{id,board_id,status,revision}` |
+| POST `studio-stop-recording` | `{generation,id,board_id}` | `{id,status,revision}` |
+| POST `studio-audio` | Multipart fields below | `{revision,segment,duplicate}` |
+
+All externally supplied object and operation IDs are UUIDs. Every write requires
+the latest `generation`. It binds the database, physical board relation and
+migration installation identity. Govern's native schema restore recreates the
+relation, so stale clients fail with 409 `studio_generation_conflict` even if a
+restored revision happens to equal their old revision.
+
+`studio-mutate` accepts 1–100 ordered changes in one transaction:
+
+```json
+{
+  "generation": "<generation from bootstrap or board>",
+  "board_id": "<uuid>",
+  "base_revision": 4,
+  "operation_id": "<new uuid for this operation>",
+  "changes": [
+    {"type":"put-node","node":{"id":"<uuid>","kind":"note","text":"A new idea","x":40,"y":60,"width":280,"height":200,"data":{}}},
+    {"type":"delete-edge","id":"<uuid>"}
+  ]
+}
+```
+
+Change types are `put-node`, `delete-node`, `put-edge`, `delete-edge`.
+An edge is `{id,from_node_id,to_node_id,label}` and both endpoints must exist in
+the same board. Deleting a node removes its incident edges. Node kinds are
+`note`, `idea`, `screen` and `stroke`; source fields are server-owned and cannot
+be submitted by clients. Stroke data is
+`{points:[[x,y],...],color:"#RRGGBB",size:number}` with 2–2000 finite points.
+Screen data can select `layout:"form"|"dashboard"|"landing"`; note/idea data can
+contain an optional colour. Text is bounded to 8000 UTF-8 bytes; finite geometry,
+style fields, per-board content and snapshot sizes are checked server-side.
+
+The board row serializes mutations. An outdated `base_revision` returns 409
+`studio_revision_conflict`; no partial changes commit. Successful operation IDs
+bind the normalized request and stored response. An exact replay returns the
+original response, while reuse with other content returns 409
+`studio_operation_conflict`. Ordinary failed or uncertain writes must not be
+blindly replayed with a new ID. Audio-derived notes use the same board revision
+but append new objects, preserving manually edited cards.
+
+`studio-audio` accepts one file plus string fields `generation`, `board_id`,
+`recording_id`, `sequence`, `start_ms`, `end_ms`, `operation_id`. The file must
+be a complete PCM16 mono RIFF/WAVE, 8–48 kHz, at most 2 MiB and 12 seconds.
+The browser normally sends approximately six-second chunks. Sequence starts at
+zero and timing must be contiguous within one recording. Claimed duration is
+checked against actual WAV sample count. No filename or MIME declaration alone
+establishes valid audio; imported M4A/Dictafoon files are not this endpoint's
+input format.
+
+Before any provider call, the server checks generation, board, active recording,
+timeline and an existing segment. Exact recorded retries return the saved
+segment without retranscribing. Reuse of a sequence or operation ID with
+different audio/checksum or timing returns 409 `studio_segment_conflict` or
+`studio_operation_conflict`. Reusing a completed audio operation ID for a new
+sequence is rejected during preflight, before another provider call.
+The provider call holds neither a database transaction nor the maintenance
+lock. A short recording-specific processing lock prevents duplicate concurrent
+inference. Generation and recording status are checked again before commit.
+
+A segment contains its ID, recording ID, sequence, start/end milliseconds,
+original text, checksum, provider, operation ID and optional current node ID.
+Nonempty text creates a new note; silence creates no card. Original transcript
+text is immutable through this API. Editing or deleting its card does not
+change that source. Undo can restore its server-known source association.
+Audio bytes are temporary and are not archived or made downloadable.
+
+`transcription.enabled` describes server configuration, not successful model
+loading. The configured Whisper-compatible provider is local by default;
+external HTTPS requires separate explicit opt-in. There is no browser speech
+service or cloud fallback. The first version uses fragment transcription plus
+approximately 1.5-second snapshot polling, not word-level streaming or offline
+collaboration. See [STUDIO.md](STUDIO.md) for local model and HTTPS setup.
+
+Other stable errors include `studio_disabled`, `studio_config_invalid`,
+`studio_schema_unavailable`, `studio_input_invalid`, `studio_limit`,
+`studio_board_missing`, `studio_node_missing`, `studio_recording_missing`,
+`studio_recording_stopped`, `studio_busy`, `studio_recording_busy`,
+`studio_audio_invalid` and `studio_transcription_*` configuration/transport errors.

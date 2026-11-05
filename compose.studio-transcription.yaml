@@ -1,0 +1,29 @@
+# Explicit opt-in local provider. Install a model first; no automatic downloads.
+services:
+  transcriber:
+    build:
+      context: .
+      dockerfile: docker/studio-transcriber/Dockerfile
+    volumes:
+      - ./local/studio-model:/models/whisper:ro
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 60s
+    restart: unless-stopped
+  app:
+    environment:
+      STUDIO_TRANSCRIPTION_ENABLED: "1"
+      STUDIO_TRANSCRIPTION_URL: http://transcriber:8080/v1/audio/transcriptions
+      STUDIO_TRANSCRIPTION_MODEL: whisper-1
+      STUDIO_TRANSCRIPTION_ALLOW_REMOTE: "0"
+    depends_on:
+      transcriber:
+        condition: service_healthy
