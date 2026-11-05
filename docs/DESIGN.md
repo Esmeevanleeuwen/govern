@@ -969,3 +969,10 @@ preview and asks the user to inspect the table before retrying. Success identifi
 database, table and record count; closing refreshes the normal Govern catalog.
 This first phase adds tabular readers and a sample visualization, without a new
 top-level area, persisted charts or maps.
+
+## GhostSketch source inspection
+
+`/dictation.php` lists archived recordings and their transcript. Its help directs
+recording, importing, transcription and note linking to the separate GhostSketch app.
+The Studio menu retains access to this archive view. The old Live Whiteboard remains
+available for compatibility; GhostSketch has its own notebook/page interface.

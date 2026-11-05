@@ -34,4 +34,10 @@ if ($databaseName -cnotmatch '^[A-Za-z0-9_]{1,63}$' -or $schemas -cnotcontains $
 $migration = Get-Content -Raw -LiteralPath 'docker/postgres/studio/001-foundation.sql' -Encoding UTF8
 $migration | & docker compose --profile postgres exec -T -e "STUDIO_SCHEMA=$studioSchema" postgres psql -X --username postgres "--dbname=$databaseName" --set ON_ERROR_STOP=1 "--set=studio_schema=$studioSchema"
 if ($LASTEXITCODE -ne 0) { throw 'Studio provisioning failed. Review the error; existing data is not replaced.' }
+$migration = Get-Content -Raw -LiteralPath 'docker/postgres/studio/002-dictation.sql' -Encoding UTF8
+$migration | & docker compose --profile postgres exec -T -e "STUDIO_SCHEMA=$studioSchema" postgres psql -X --username postgres "--dbname=$databaseName" --set ON_ERROR_STOP=1 "--set=studio_schema=$studioSchema"
+if ($LASTEXITCODE -ne 0) { throw 'Studio provisioning failed. Review the error; existing data is not replaced.' }
+$migration = Get-Content -Raw -LiteralPath 'docker/postgres/studio/003-ghostsketch-storage.sql' -Encoding UTF8
+$migration | & docker compose --profile postgres exec -T -e "STUDIO_SCHEMA=$studioSchema" postgres psql -X --username postgres "--dbname=$databaseName" --set ON_ERROR_STOP=1 "--set=studio_schema=$studioSchema"
+if ($LASTEXITCODE -ne 0) { throw 'Studio provisioning failed. Review the error; existing data is not replaced.' }
 Write-Output 'Studio schema version 1 is ready. Existing data and account passwords were preserved.'

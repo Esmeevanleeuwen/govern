@@ -114,6 +114,14 @@ staan als je verder navigeert. Zie [Een tweede scherm voor Govern](docs/COMPANIO
 Meer over configuratie, schema's en de volgende bouwfasen:
 [PostgreSQL in Govern](docs/POSTGRESQL.md).
 
+## Dictafoon en GhostSketch
+
+Opnemen, audio importeren, transcriberen en koppelen aan notities gebeurt in de
+aparte GhostSketch-app. Govern bewaart de audio en oorspronkelijke transcripties
+in PostgreSQL; `/dictation.php` toont de opgeslagen bronnen.
+Zie [inrichten en gebruiken](docs/DICTATION.md).
+De bestaande Studio-whiteboards hieronder blijven beschikbaar voor bestaande gegevens.
+
 ## Live whiteboard naast Govern
 
 De optionele [Studio-webapp](docs/STUDIO.md) gebruikt dezelfde PostgreSQL-opslag

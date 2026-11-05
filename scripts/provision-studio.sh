@@ -28,4 +28,10 @@ case ",$pg_schemas," in *",$studio_schema,"*) :;; *) echo 'Include STUDIO_SCHEMA
 docker compose --profile postgres exec -T -e "STUDIO_SCHEMA=$studio_schema" postgres sh -c \
     'exec psql -X --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" --set ON_ERROR_STOP=1 --set studio_schema="$STUDIO_SCHEMA"' \
     < docker/postgres/studio/001-foundation.sql
+docker compose --profile postgres exec -T -e "STUDIO_SCHEMA=$studio_schema" postgres sh -c \
+    'exec psql -X --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" --set ON_ERROR_STOP=1 --set studio_schema="$STUDIO_SCHEMA"' \
+    < docker/postgres/studio/002-dictation.sql
+docker compose --profile postgres exec -T -e "STUDIO_SCHEMA=$studio_schema" postgres sh -c \
+    'exec psql -X --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" --set ON_ERROR_STOP=1 --set studio_schema="$STUDIO_SCHEMA"' \
+    < docker/postgres/studio/003-ghostsketch-storage.sql
 echo 'Studio schema version 1 is ready. Existing data and account passwords were preserved.'

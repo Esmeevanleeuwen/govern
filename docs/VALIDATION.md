@@ -907,3 +907,30 @@ met conceptbehoud, import, API-teruglezing, ontbrekende CSRF en afsluiten.
 Herhalen: `python3 tests/dataset-readers.py`; voer de PHP-proef uitsluitend uit
 in een geïsoleerde testdatabase met `--confirm-database=<naam>` en de browserproef
 uitsluitend met `GOVERN_UI_WRITE_TESTS=1`. Productiedata worden niet gebruikt.
+
+## GhostSketch recording and Govern storage boundary
+
+The final boundary puts recording/import, local transcription and notebook linking
+in the separate GhostSketch app. Govern archives original audio and transcripts;
+its recording screen is read-only. This replaces the earlier draft workflow that
+ran transcription from Govern.
+
+Validation performed on this revision:
+
+- PHP 8.3 syntax checks passed for Http, archive services and all four endpoints/pages.
+- `tests/dictation_audio_unit.php` passed with real ffmpeg/ffprobe for WAV/M4A/MP3,
+  bounded chunk timing, invalid input and playlist rejection. Shell and JS syntax passed.
+- PGlite (PostgreSQL WASM engine) exercised the schema, views, reader permissions,
+  duplicate sequence protection, repeated migration 003, long transcripts and the
+  512 KiB constraint. This does not run psql metacommands or Docker provisioning.
+- GhostSketch: 65 Python tests, 13 frontend tests, 11 launcher tests and the production
+  build/typecheck passed. New tests check archive-before-transcribe, failure retention,
+  retry from archived bytes, idempotency, checksum mismatches and requiring writable storage.
+- Chromium used synthetic Govern HTTP and model boundaries with real GhostSketch
+  HTTP/SQLite: audio import through the UI, pending-recording processing, source links,
+  page edits, drawing and repeat opening passed. Desktop/tablet/mobile (1440/768/375)
+  layouts had no horizontal overflow or page exceptions.
+
+A complete native PHP/PDO/PostgreSQL/Whisper chain, Docker/Windows provisioners and
+physical devices have not been run here. Speech quality/speed remain unverified.
+The PR does not update a running installation automatically.

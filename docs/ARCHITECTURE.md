@@ -874,3 +874,14 @@ De voorbeeldgrafiek gebruikt alleen twintig voorbeeldrijen en zegt dat zichtbaar
 Deze fase maakt geen relaties op grond van kolomnamen, geen blijvende grafieken en
 geen geografische weergave. De bestaande catalogus toont geïmporteerde tabellen na
 sluiten van het databasevenster. SQL blijft bij officiële phpMyAdmin.
+
+## GhostSketch source storage boundary
+
+GhostSketch owns capture, import, local transcription and notebook links.
+`DictationService` archives validated audio and immutable transcripts in PostgreSQL.
+The Bearer-authenticated `ghostsketch-storage.php` exposes a fixed-schema storage API;
+its upload path uses ffmpeg/ffprobe only for validation. Its completion transaction
+locks the source, checks checksum and existing text, and commits once.
+`dictation-api.php` and its page inspect sources using the normal installation session.
+The optional `dictation-feed.php` retains read-only compatibility. GhostSketch keeps
+notebook edits in SQLite and never exposes the storage token to its browser.
