@@ -9,6 +9,16 @@ zijn gewone lokale schermgegevens; ze maken geen databaseverbinding en voeren
 geen SQL uit. Oude werkplekhashes en hun queryparameters worden naar
 `workspace.php` doorgestuurd, zodat bestaande links hun betekenis behouden.
 
+De publieke productpagina gebruikt `https://governn.nl/` als canonical. Expliciete
+GET/HEAD-verzoeken naar `/index.php` en `/homepage.php` krijgen een permanente
+301-redirect naar `/`, met behoud van queryparameters. De browser behoudt de
+fragmentroute; de bestaande JavaScript-route voor werkpleklinks blijft gelden.
+`robots.txt` verwijst naar de statische sitemap met uitsluitend de homepage.
+Accountpagina's houden hun `noindex`; deze SEO-inrichting wijzigt geen toegang.
+De titel en beschrijving blijven na taalwisselen gelijkwaardig in EN/NL.
+Zie [publieke vindbaarheid en hosting](SEO.md) voor de aparte DNS/TLS- en
+www-inrichting en controles na publicatie.
+
 `workspace.php` bevat de bestaande applicatieshell en vraagt vóór uitvoer
 `Web::user()` om een goedgekeurde gebruiker. `Web.php` gebruikt dezelfde
 `Http::start()`- en `Auth`-grens als de API. Zonder sessie volgt een redirect naar

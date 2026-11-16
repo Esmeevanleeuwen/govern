@@ -1,11 +1,22 @@
+<?php
+// Keep one public homepage URL, including for old links with a database query.
+$homePath = explode('?', $_SERVER['REQUEST_URI'] ?? '/', 2)[0];
+if (in_array($homePath, ['/index.php', '/homepage.php'], true)
+    && in_array($_SERVER['REQUEST_METHOD'] ?? 'GET', ['GET', 'HEAD'], true)) {
+    $homeQuery = $_SERVER['QUERY_STRING'] ?? '';
+    header('Location: /' . ($homeQuery === '' ? '' : '?' . $homeQuery), true, 301);
+    exit;
+}
+?>
 <!doctype html>
 <html lang="en">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#f1f3f1">
-    <meta name="description" content="Your data. Your next idea. Explore real record relationships, compare records, import data and work with SQL in one local database workspace.">
-    <title>Govern — Your data. Your next idea.</title>
+    <meta name="description" content="Manage MariaDB and PostgreSQL databases with Govern. Explore tables and relationships, import datasets and run SQL in one local workspace.">
+    <title>Govern — Database management, SQL and data exploration</title>
+    <link rel="canonical" href="https://governn.nl/">
     <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
     <link rel="stylesheet" href="/assets/homepage.css">
     <link rel="stylesheet" href="/assets/modal-shell.css">

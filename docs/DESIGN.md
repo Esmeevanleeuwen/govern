@@ -6,6 +6,11 @@ The agreed visual direction is layered glass, soft shadows, custom colour and no
 
 ## Public homepage and account journey
 
+The document title and description explain database management, SQL and data
+exploration in both languages. The hero keeps its existing brand copy. The
+canonical URL is the official product homepage, `https://governn.nl/`; changing
+the interface language does not create a separate indexable page.
+
 The homepage at `/` introduces Govern with **Your data. Your next idea.** and
 an invitation to help shape the project: **Be here at the beginning.** Use
 oversized sans serif typography, the existing open geometric mark, and the

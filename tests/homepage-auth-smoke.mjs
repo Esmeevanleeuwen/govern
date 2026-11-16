@@ -60,6 +60,9 @@ try {
     page.on('request', trackPublicRequest);
     await page.goto(new URL('/', base).href, {waitUntil: 'networkidle'});
     assert.deepEqual(await page.locator('#home-title > span').allTextContents(), ['Your data.', 'Your next idea.']);
+    assert.equal(await page.title(), 'Govern — Database management, SQL and data exploration');
+    assert.equal(await page.locator('link[rel="canonical"]').getAttribute('href'), 'https://governn.nl/');
+    assert.match(await page.locator('meta[name="description"]').getAttribute('content'), /MariaDB and PostgreSQL/);
     assert.equal(await page.locator('.home-schema-card').count(), 4);
     await noOverflow(page, 'The desktop homepage must not overflow the viewport.');
     await shot(page, 'homepage-desktop');
@@ -126,6 +129,9 @@ try {
 
     await page.locator('#home-language').selectOption('nl');
     assert.deepEqual(await page.locator('#home-title > span').allTextContents(), ['Jouw data.', 'Jouw volgende idee.']);
+    assert.equal(await page.title(), 'Govern — Databasebeheer, SQL en gegevens verkennen');
+    assert.equal(await page.locator('link[rel="canonical"]').getAttribute('href'), 'https://governn.nl/');
+    assert.match(await page.locator('meta[name="description"]').getAttribute('content'), /MariaDB- en PostgreSQL-databases/);
     assert.equal(await page.locator('#home-tab-data').textContent(), 'Records');
     for (const width of [320, 768, 1440]) {
         await page.setViewportSize({width, height: width === 320 ? 844 : 1000});
@@ -140,6 +146,13 @@ try {
     await page.locator('#home-language').selectOption('en');
     assert.equal(await page.locator('#home-tab-data').textContent(), 'Records');
     await noOverflow(page, 'The English homepage must fit at 360px.');
+    for (const alias of ['/index.php', '/homepage.php']) {
+        await page.goto(new URL(alias + '?database=demo%20store#product', base).href, {waitUntil: 'networkidle'});
+        assert.equal(new URL(page.url()).pathname, '/');
+        assert.equal(new URL(page.url()).searchParams.get('database'), 'demo store');
+        assert.equal(new URL(page.url()).hash, '#product', 'Homepage redirects preserve bookmark fragments.');
+        assert.equal(await page.title(), 'Govern — Database management, SQL and data exploration');
+    }
     page.off('request', trackPublicRequest);
     assert.deepEqual(publicApiRequests, [], 'The public sample and guide never request private database APIs.');
 

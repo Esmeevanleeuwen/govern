@@ -10,11 +10,18 @@ import tempfile
 import time
 import urllib.error
 import urllib.request
+import urllib.robotparser
+import xml.etree.ElementTree as ET
 
 
 ROOT = Path(__file__).resolve().parents[1]
 PHP = os.environ.get('PHP_BIN', 'php')
 checks = 0
+
+
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *args, **kwargs):
+        return None
 
 
 def check(condition, message):
@@ -72,6 +79,41 @@ with tempfile.TemporaryDirectory(prefix='govern-auth-http-') as temporary:
                 raise RuntimeError('The isolated PHP HTTP server did not start.')
             check(status == 200 and body['data']['user'] is None and not body['data']['has_owner'], 'Guest status exposes no user.')
             csrf = body['data']['csrf']
+            # Public discovery must work without credentials or a work database.
+            public, _ = browser()
+            code, homepage, home_headers = request(public, '/')
+            check(code == 200 and '<h1 ' in homepage, 'The homepage has server-rendered public content.')
+            check('<link rel="canonical" href="https://governn.nl/">' in homepage,
+                  'The public homepage has the official canonical URL.')
+            check('noindex' not in homepage.lower() and 'noindex' not in home_headers.get('X-Robots-Tag', '').lower(),
+                  'The homepage does not exclude indexing.')
+            for alias in ('/index.php', '/homepage.php'):
+                for method in ('GET', 'HEAD'):
+                    req = urllib.request.Request(base + alias + '?database=demo%20store&source=test', method=method)
+                    # Observe the original redirect, rather than only its destination.
+                    try:
+                        response = urllib.request.build_opener(NoRedirect()).open(req, timeout=15)
+                    except urllib.error.HTTPError as error:
+                        response = error
+                    with response:
+                        check(response.code == 301 and response.headers.get('Location') == '/?database=demo%20store&source=test',
+                              f'{method} {alias} permanently redirects locally and preserves query parameters.')
+            code, robots, _ = request(public, '/robots.txt')
+            policy = urllib.robotparser.RobotFileParser()
+            policy.parse(robots.splitlines())
+            check(code == 200 and policy.site_maps() == ['https://governn.nl/sitemap.xml'],
+                  'robots.txt advertises the official sitemap.')
+            check(all(policy.can_fetch('Googlebot', base + path) for path in ('/', '/assets/homepage.js', '/auth.php')),
+                  'Google can fetch public content, render assets and read account noindex tags.')
+            check(not policy.can_fetch('Googlebot', base + '/api.php?action=bootstrap'), 'Data API crawling is excluded.')
+            code, sitemap, _ = request(public, '/sitemap.xml')
+            urls = ET.fromstring(sitemap).findall('{http://www.sitemaps.org/schemas/sitemap/0.9}url')
+            check(code == 200 and [url.find('{http://www.sitemaps.org/schemas/sitemap/0.9}loc').text for url in urls] == ['https://governn.nl/'],
+                  'The sitemap contains only the canonical public homepage.')
+            for path in ('/auth.php?mode=login', '/auth.php?mode=register'):
+                code, account_html, _ = request(public, path)
+                check(code == 200 and '<meta name="robots" content="noindex">' in account_html,
+                      f'{path} retains its account-page indexing exclusion.')
             check('no-store' in headers.get('Cache-Control', ''), 'Authentication responses are not cached.')
             check('HttpOnly' in headers.get('Set-Cookie', '') and 'SameSite=Strict' in headers.get('Set-Cookie', ''), 'The session cookie is HttpOnly and SameSite Strict.')
             check(request(owner, '/auth-check.php')[0] == 401, 'The phpMyAdmin session check denies guests.')
