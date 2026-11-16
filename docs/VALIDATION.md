@@ -3,6 +3,25 @@
 Stand van de controles: **3 november 2026**. Eerdere resultaten hieronder horen
 bij hun beschreven wijziging en zijn niet automatisch opnieuw uitgevoerd.
 
+## Publieke vindbaarheid — 16 november 2026
+
+De bestaande HTTP-integratieproef is uitgebreid met de publieke homepage,
+canonical, GET/HEAD-redirects met behoud van queryparameters, robotsregels,
+sitemap-XML en behoud van `noindex` op inloggen en registreren. Alle **65**
+HTTP-controles slagen met PHP 8.4.27 en een tijdelijke SQLite-accountopslag,
+zonder verbinding met een werkdatabase. De PHP-syntaxiscontrole,
+JavaScript-syntaxiscontrole, i18n-proef, **1.474** tweetalige berichten en
+`git diff --check` slagen eveneens.
+
+De bestaande browserproef bevat nu ook controles van de titel, beschrijving
+en canonical na EN/NL-taalwisseling en van query/fragmentbehoud bij de twee
+homepage-aliases. De lokale browserrun kon niet starten: Chromium werd door
+de uitvoeromgeving geblokkeerd bij het openen van een socket. Die browserchecks
+zijn hier dus niet geslaagd of uitgevoerd; ze blijven onderdeel van de CI-suite.
+De volledige Docker/database-suite is niet lokaal opnieuw uitgevoerd.
+Productiepublicatie, DNS/TLS voor www en de uiteindelijke Google-indexstatus
+vallen buiten deze lokale test. Zie [SEO.md](SEO.md) voor de publicatiecontrole.
+
 ## Gelijke canvasvormgeving voor Schema en Explore
 
 De echte frontendmodules zijn met vaste, geïsoleerde voorbeeldmetadata en

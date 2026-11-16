@@ -1,0 +1,10 @@
+# Public product information and rendering assets may be crawled.
+# Account pages keep their noindex tags; authentication protects workspace data.
+User-agent: *
+Disallow: /api.php
+Disallow: /auth-api.php
+Disallow: /auth-check.php
+Disallow: /phpmyadmin
+Allow: /
+
+Sitemap: https://governn.nl/sitemap.xml
